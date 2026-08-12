@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_dally_service_type_readonly,dally.service.type read-only,model_dally_service_type,dally_core.group_dally_readonly,1,0,0,0
+access_dally_service_type_manager,dally.service.type manager,model_dally_service_type,dally_core.group_dally_manager,1,1,1,0
+access_dally_service_type_admin,dally.service.type admin,model_dally_service_type,dally_core.group_dally_admin,1,1,1,1

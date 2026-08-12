@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="dally_api_request_view_list" model="ir.ui.view">
+        <field name="name">dally.api.request.list</field>
+        <field name="model">dally.api.request</field>
+        <field name="arch" type="xml">
+            <list string="API Requests" create="0" edit="0"
+                  decoration-danger="status_code >= 500"
+                  decoration-warning="status_code >= 400 and status_code &lt; 500"
+                  decoration-success="status_code &lt; 300">
+                <field name="create_date" string="When"/>
+                <field name="endpoint"/>
+                <field name="status_code"/>
+                <field name="request_uuid" optional="show"/>
+                <field name="api_key_id" optional="show"/>
+                <field name="source_ip" optional="hide"/>
+                <field name="res_model" optional="hide"/>
+                <field name="res_id" optional="hide"/>
+                <field name="error_message" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="dally_api_request_view_form" model="ir.ui.view">
+        <field name="name">dally.api.request.form</field>
+        <field name="model">dally.api.request</field>
+        <field name="arch" type="xml">
+            <form string="API Request" create="false" edit="false">
+                <header>
+                    <button name="action_open_record" type="object"
+                            string="Open Created Record" class="btn-primary"
+                            invisible="not res_id"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Request">
+                            <field name="create_date" readonly="1"/>
+                            <field name="endpoint" readonly="1"/>
+                            <field name="request_uuid" readonly="1"/>
+                            <field name="api_key_id" readonly="1"/>
+                            <field name="source_ip" readonly="1"/>
+                        </group>
+                        <group string="Outcome">
+                            <field name="status_code" readonly="1"/>
+                            <field name="res_model" readonly="1"/>
+                            <field name="res_id" readonly="1"/>
+                            <field name="error_message" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Payload" name="payload">
+                            <field name="payload" readonly="1" nolabel="1"/>
+                        </page>
+                        <page string="Response" name="response">
+                            <field name="response" readonly="1" nolabel="1"/>
+                        </page>
+                    </notebook>
+                    <div class="alert alert-warning" role="alert">
+                        This log contains data submitted by customers. It is restricted to
+                        administrators and managers, and never records API keys.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="dally_api_request_view_search" model="ir.ui.view">
+        <field name="name">dally.api.request.search</field>
+        <field name="model">dally.api.request</field>
+        <field name="arch" type="xml">
+            <search string="API Requests">
+                <field name="request_uuid"/>
+                <field name="endpoint"/>
+                <field name="api_key_id"/>
+                <field name="source_ip"/>
+                <separator/>
+                <filter name="filter_success" string="Successful"
+                        domain="[('status_code', '&gt;=', 200), ('status_code', '&lt;', 300)]"/>
+                <filter name="filter_client_error" string="Rejected (4xx)"
+                        domain="[('status_code', '&gt;=', 400), ('status_code', '&lt;', 500)]"/>
+                <filter name="filter_server_error" string="Failed (5xx)"
+                        domain="[('status_code', '&gt;=', 500)]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_by_endpoint" string="Endpoint"
+                            context="{'group_by': 'endpoint'}"/>
+                    <filter name="group_by_status" string="Status"
+                            context="{'group_by': 'status_code'}"/>
+                    <filter name="group_by_key" string="API Key"
+                            context="{'group_by': 'api_key_id'}"/>
+                    <filter name="group_by_date" string="Date"
+                            context="{'group_by': 'create_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="dally_api_request_action" model="ir.actions.act_window">
+        <field name="name">API Requests</field>
+        <field name="res_model">dally.api.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="dally_api_request_view_search"/>
+        <field name="context">{'search_default_filter_client_error': 0}</field>
+    </record>
+
+</odoo>

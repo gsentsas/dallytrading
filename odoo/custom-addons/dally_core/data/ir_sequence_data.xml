@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        noupdate="1": once in production these records must survive module
+        upgrades. Resetting number_next on an upgrade would re-issue references
+        that customers already hold.
+    -->
+    <data noupdate="1">
+
+        <!--
+            Generic DallyTrading reference: DT-2026-000001 (§37).
+
+            Same number on the website, in the CRM, in e-mails and on the
+            tracking page.
+
+            implementation="standard" rather than "no_gap": "no_gap" locks the
+            sequence row for the whole transaction, which serialises concurrent
+            website submissions. A missing number in the series is harmless for
+            a commercial reference; a slow or deadlocked quote form is not.
+        -->
+        <record id="seq_dally_reference" model="ir.sequence">
+            <field name="name">DallyTrading Reference</field>
+            <field name="code">dally.reference</field>
+            <field name="prefix">DT-%(year)s-</field>
+            <field name="padding">6</field>
+            <field name="number_next">1</field>
+            <field name="number_increment">1</field>
+            <field name="implementation">standard</field>
+            <field name="company_id" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

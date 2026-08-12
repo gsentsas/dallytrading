@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Security groups (§58).
+
+        Deliberately granular: a logistics operator has no business seeing
+        margins, and a salesperson has no business editing shipment statuses.
+        Rights are additive through implied_ids, so Manager automatically
+        receives everything the four operational roles have.
+
+        No group grants administrative rights on Odoo itself. Adding a user to
+        base.group_system stays a separate, deliberate act.
+    -->
+
+    <record id="module_category_dallytrading" model="ir.module.category">
+        <field name="name">DallyTrading</field>
+        <field name="description">Access rights for the DallyTrading business suite.</field>
+        <field name="sequence">20</field>
+    </record>
+
+    <!-- Read-only: reporting and consultation. The baseline every other
+         DallyTrading role builds on. -->
+    <record id="group_dally_readonly" model="res.groups">
+        <field name="name">Read Only</field>
+        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="comment">Consult DallyTrading records and reports. No modification.</field>
+    </record>
+
+    <!-- Commercial: leads, quotations, customers. -->
+    <record id="group_dally_commercial" model="res.groups">
+        <field name="name">Commercial</field>
+        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="implied_ids" eval="[(4, ref('group_dally_readonly'))]"/>
+        <field name="comment">Manage leads, opportunities, quotations and customers.</field>
+    </record>
+
+    <!-- Logistics: shipments, freight files, tracking events. -->
+    <record id="group_dally_logistics" model="res.groups">
+        <field name="name">Logistics</field>
+        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="implied_ids" eval="[(4, ref('group_dally_readonly'))]"/>
+        <field name="comment">Manage shipments, freight files and tracking events.</field>
+    </record>
+
+    <!-- Finance: invoicing and payments. -->
+    <record id="group_dally_finance" model="res.groups">
+        <field name="name">Finance</field>
+        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="implied_ids" eval="[(4, ref('group_dally_readonly'))]"/>
+        <field name="comment">Access invoicing, payments and financial reporting.</field>
+    </record>
+
+    <!-- Sourcing: supplier search and sourcing requests. -->
+    <record id="group_dally_sourcing" model="res.groups">
+        <field name="name">Sourcing</field>
+        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="implied_ids" eval="[(4, ref('group_dally_readonly'))]"/>
+        <field name="comment">Manage sourcing requests and supplier research.</field>
+    </record>
+
+    <!-- Manager: full operational scope across the four roles above. -->
+    <record id="group_dally_manager" model="res.groups">
+        <field name="name">Manager</field>
+        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="implied_ids" eval="[(4, ref('group_dally_commercial')),
+                                        (4, ref('group_dally_logistics')),
+                                        (4, ref('group_dally_finance')),
+                                        (4, ref('group_dally_sourcing'))]"/>
+        <field name="comment">Full operational scope, plus configuration of service types.</field>
+    </record>
+
+    <!-- Administrator: configuration and API keys. Not an Odoo sysadmin. -->
+    <record id="group_dally_admin" model="res.groups">
+        <field name="name">Administrator</field>
+        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="implied_ids" eval="[(4, ref('group_dally_manager'))]"/>
+        <field name="comment">Configure the DallyTrading suite, including API keys.
+This does NOT grant Odoo system administration rights.</field>
+    </record>
+
+</odoo>

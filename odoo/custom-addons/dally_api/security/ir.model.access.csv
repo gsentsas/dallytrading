@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_dally_api_key_admin,dally.api.key admin,model_dally_api_key,dally_core.group_dally_admin,1,1,1,1
+access_dally_api_request_admin,dally.api.request admin,model_dally_api_request,dally_core.group_dally_admin,1,0,0,0
+access_dally_api_request_manager,dally.api.request manager,model_dally_api_request,dally_core.group_dally_manager,1,0,0,0

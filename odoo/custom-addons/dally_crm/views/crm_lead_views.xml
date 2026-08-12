@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Form extension.
+
+        Two anchors only, both long-stable in the native lead form: the
+        <notebook> and the email_from field. Extending through many fragile
+        xpaths is the usual reason a custom module breaks on upgrade.
+    -->
+    <record id="crm_lead_view_form_dally" model="ir.ui.view">
+        <field name="name">crm.lead.form.dally</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='email_from']" position="after">
+                <field name="dally_whatsapp" widget="phone"/>
+            </xpath>
+
+            <xpath expr="//notebook" position="inside">
+                <page string="DallyTrading" name="dally_info">
+                    <group>
+                        <group string="Request">
+                            <field name="dally_reference" readonly="1"/>
+                            <field name="dally_service_type_id"/>
+                            <field name="dally_service_category" readonly="1"/>
+                        </group>
+                        <group string="Attribution">
+                            <field name="dally_source_url" widget="url"
+                                   readonly="1"/>
+                            <field name="dally_utm_source" readonly="1"/>
+                            <field name="dally_utm_medium" readonly="1"/>
+                            <field name="dally_utm_campaign" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Technical">
+                        <field name="dally_request_uuid" readonly="1"
+                               help="Idempotency key of the submission. Protected by a
+                                     unique constraint: a retry cannot duplicate the lead."/>
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!--
+        Dedicated views for website requests.
+
+        Standalone rather than inheriting the native lead list: it avoids
+        depending on native view external ids, which move between versions, and
+        it gives the commercial team a screen focused on inbound requests.
+    -->
+    <record id="dally_lead_view_list" model="ir.ui.view">
+        <field name="name">crm.lead.list.dally</field>
+        <field name="model">crm.lead</field>
+        <field name="arch" type="xml">
+            <list string="Website Requests" sample="1">
+                <field name="create_date" string="Received"/>
+                <field name="dally_reference"/>
+                <field name="dally_service_type_id"/>
+                <field name="contact_name"/>
+                <field name="partner_name"/>
+                <field name="email_from" optional="show"/>
+                <field name="phone" optional="show"/>
+                <field name="dally_whatsapp" optional="hide"/>
+                <field name="country_id" optional="show"/>
+                <field name="city" optional="hide"/>
+                <field name="user_id" widget="many2one_avatar_user"/>
+                <field name="stage_id" optional="hide"/>
+                <field name="dally_utm_source" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="dally_lead_view_search" model="ir.ui.view">
+        <field name="name">crm.lead.search.dally</field>
+        <field name="model">crm.lead</field>
+        <field name="arch" type="xml">
+            <search string="Website Requests">
+                <field name="dally_reference"/>
+                <field name="contact_name"/>
+                <field name="partner_name"/>
+                <field name="email_from"/>
+                <field name="phone"/>
+                <field name="dally_service_type_id"/>
+                <separator/>
+                <filter name="filter_unassigned" string="Unassigned"
+                        domain="[('user_id', '=', False)]"/>
+                <filter name="filter_my" string="My Requests"
+                        domain="[('user_id', '=', uid)]"/>
+                <separator/>
+                <filter name="filter_today" string="Today"
+                        domain="[('create_date', '&gt;=', datetime.datetime.now().replace(hour=0, minute=0, second=0))]"/>
+                <filter name="filter_this_month" string="This Month"
+                        domain="[('create_date', '&gt;=', (context_today().replace(day=1)).strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_by_service" string="Service"
+                            context="{'group_by': 'dally_service_type_id'}"/>
+                    <filter name="group_by_category" string="Service Category"
+                            context="{'group_by': 'dally_service_category'}"/>
+                    <filter name="group_by_country" string="Country"
+                            context="{'group_by': 'country_id'}"/>
+                    <filter name="group_by_salesperson" string="Salesperson"
+                            context="{'group_by': 'user_id'}"/>
+                    <filter name="group_by_source" string="Source"
+                            context="{'group_by': 'source_id'}"/>
+                    <filter name="group_by_creation" string="Received"
+                            context="{'group_by': 'create_date:week'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="dally_lead_action" model="ir.actions.act_window">
+        <field name="name">Website Requests</field>
+        <field name="res_model">crm.lead</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="dally_lead_view_search"/>
+        <!-- Only requests that came through our own channels. -->
+        <field name="domain">[('dally_service_type_id', '!=', False)]</field>
+        <field name="context">{'default_type': 'lead'}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No website request yet</p>
+            <p>
+                Requests submitted on dallytrading.com appear here automatically,
+                with their reference, the requested service and their attribution.
+            </p>
+        </field>
+    </record>
+
+    <!-- Force our list view first, keeping the native form for editing. -->
+    <record id="dally_lead_action_view_list" model="ir.actions.act_window.view">
+        <field name="sequence">10</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="dally_lead_view_list"/>
+        <field name="act_window_id" ref="dally_lead_action"/>
+    </record>
+
+    <record id="dally_lead_action_view_form" model="ir.actions.act_window.view">
+        <field name="sequence">20</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="crm.crm_lead_view_form"/>
+        <field name="act_window_id" ref="dally_lead_action"/>
+    </record>
+
+</odoo>

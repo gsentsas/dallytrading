@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Service catalogue, mirroring the activities listed in §33.
+
+        noupdate="1" so that a service renamed or reconfigured in production is
+        not silently reverted by the next module upgrade. Codes are contractual:
+        the website and the API address services by code.
+    -->
+    <data noupdate="1">
+
+        <record id="service_import_export" model="dally.service.type">
+            <field name="name">Import &amp; Export</field>
+            <field name="code">import_export</field>
+            <field name="category">import_export</field>
+            <field name="sequence">10</field>
+            <field name="requires_route" eval="True"/>
+            <field name="requires_cargo" eval="True"/>
+            <field name="description">Support for import and export operations, from sourcing to customs clearance.</field>
+        </record>
+
+        <record id="service_logistics" model="dally.service.type">
+            <field name="name">Logistics &amp; Transport</field>
+            <field name="code">logistics</field>
+            <field name="category">logistics</field>
+            <field name="sequence">20</field>
+            <field name="requires_route" eval="True"/>
+            <field name="requires_cargo" eval="True"/>
+            <field name="description">Transport, warehousing and distribution of goods.</field>
+        </record>
+
+        <record id="service_freight_sea" model="dally.service.type">
+            <field name="name">Sea Freight</field>
+            <field name="code">freight_sea</field>
+            <field name="category">freight</field>
+            <field name="sequence">30</field>
+            <field name="requires_route" eval="True"/>
+            <field name="requires_cargo" eval="True"/>
+            <field name="description">Full container, groupage and conventional sea freight.</field>
+        </record>
+
+        <record id="service_freight_air" model="dally.service.type">
+            <field name="name">Air Freight</field>
+            <field name="code">freight_air</field>
+            <field name="category">freight</field>
+            <field name="sequence">40</field>
+            <field name="requires_route" eval="True"/>
+            <field name="requires_cargo" eval="True"/>
+            <field name="description">Air freight for urgent and high-value shipments.</field>
+        </record>
+
+        <record id="service_freight_vehicle" model="dally.service.type">
+            <field name="name">Vehicle Transport</field>
+            <field name="code">freight_vehicle</field>
+            <field name="category">freight</field>
+            <field name="sequence">50</field>
+            <field name="requires_route" eval="True"/>
+            <field name="requires_cargo" eval="True"/>
+            <field name="description">Shipping of cars, utility vehicles and machinery.</field>
+        </record>
+
+        <record id="service_freight_groupage" model="dally.service.type">
+            <field name="name">Groupage</field>
+            <field name="code">freight_groupage</field>
+            <field name="category">freight</field>
+            <field name="sequence">60</field>
+            <field name="requires_route" eval="True"/>
+            <field name="requires_cargo" eval="True"/>
+            <field name="description">Shared container shipping for smaller volumes.</field>
+        </record>
+
+        <record id="service_trade" model="dally.service.type">
+            <field name="name">Trade &amp; Commerce</field>
+            <field name="code">trade</field>
+            <field name="category">trade</field>
+            <field name="sequence">70</field>
+            <field name="requires_route" eval="False"/>
+            <field name="requires_cargo" eval="True"/>
+            <field name="description">Trading, brokerage and commercial representation.</field>
+        </record>
+
+        <record id="service_sourcing" model="dally.service.type">
+            <field name="name">International Sourcing</field>
+            <field name="code">sourcing</field>
+            <field name="category">sourcing</field>
+            <field name="sequence">80</field>
+            <field name="requires_route" eval="False"/>
+            <field name="requires_cargo" eval="True"/>
+            <field name="description">Supplier and product search, negotiation and quality follow-up.</field>
+        </record>
+
+        <record id="service_ecommerce" model="dally.service.type">
+            <field name="name">E-commerce</field>
+            <field name="code">ecommerce</field>
+            <field name="category">ecommerce</field>
+            <field name="sequence">90</field>
+            <field name="requires_route" eval="False"/>
+            <field name="requires_cargo" eval="False"/>
+            <field name="description">Online sales and order fulfilment.</field>
+        </record>
+
+        <record id="service_agrobusiness" model="dally.service.type">
+            <field name="name">Agrobusiness</field>
+            <field name="code">agrobusiness</field>
+            <field name="category">agrobusiness</field>
+            <field name="sequence">100</field>
+            <field name="requires_route" eval="False"/>
+            <field name="requires_cargo" eval="True"/>
+            <field name="description">Agricultural products: sourcing, packaging, export and distribution.</field>
+        </record>
+
+        <record id="service_business_solutions" model="dally.service.type">
+            <field name="name">Business Solutions</field>
+            <field name="code">business_solutions</field>
+            <field name="category">other</field>
+            <field name="sequence">110</field>
+            <field name="requires_route" eval="False"/>
+            <field name="requires_cargo" eval="False"/>
+            <field name="description">Support for companies: partner search, representation and advisory.</field>
+        </record>
+
+        <record id="service_other" model="dally.service.type">
+            <field name="name">Other Request</field>
+            <field name="code">other</field>
+            <field name="category">other</field>
+            <field name="sequence">999</field>
+            <field name="requires_route" eval="False"/>
+            <field name="requires_cargo" eval="False"/>
+            <field name="description">Any request that does not fit the categories above.</field>
+        </record>
+
+    </data>
+</odoo>

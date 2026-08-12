@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Attribution records, so native CRM reporting by source and medium works
+        without further configuration (§27).
+
+        noupdate="1": these are referenced by leads already in production.
+        Letting an upgrade rewrite them would rewrite history.
+    -->
+    <data noupdate="1">
+
+        <record id="utm_source_dallytrading_website" model="utm.source">
+            <field name="name">DallyTrading.com</field>
+        </record>
+
+        <record id="utm_medium_website_form" model="utm.medium">
+            <field name="name">Website Form</field>
+        </record>
+
+    </data>
+</odoo>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Dedicated integration user.
+
+        The API acts as this user rather than as superuser, so its groups
+        actually bound what an endpoint can reach. Granting it exactly the rights
+        the endpoints need means a flaw in a controller cannot escalate beyond
+        creating leads.
+
+        No password is set, so this account cannot be used to log into the web
+        interface — it exists only as a rights envelope for the API.
+    -->
+    <data noupdate="1">
+
+        <record id="user_dally_api_integration" model="res.users">
+            <field name="name">DallyTrading API Integration</field>
+            <field name="login">dally_api_integration</field>
+            <field name="active" eval="True"/>
+            <field name="share" eval="False"/>
+            <field name="groups_id" eval="[(6, 0, [
+                ref('base.group_user'),
+                ref('sales_team.group_sale_salesman'),
+                ref('dally_core.group_dally_commercial'),
+            ])]"/>
+        </record>
+
+    </data>
+</odoo>

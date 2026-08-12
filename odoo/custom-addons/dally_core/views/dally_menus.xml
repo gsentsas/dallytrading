@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Root menu and the shells that downstream modules hang their entries on.
+
+        Only the containers live here. dally_crm, dally_freight and the others
+        add their own items, which keeps module dependencies one-directional:
+        dally_core never needs to know what exists downstream.
+
+        Native Odoo menus are not duplicated (§81): Sales, Purchase, Inventory
+        and Invoicing stay where users already expect them.
+    -->
+
+    <!-- web_icon is intentionally not set: pointing at a file that does not
+         exist yet would log an error on every module load. The app icon is a
+         phase-5 design asset. -->
+    <menuitem id="menu_dally_root"
+              name="DallyTrading"
+              sequence="10"
+              groups="dally_core.group_dally_readonly"/>
+
+    <!-- Operations: filled by dally_crm, dally_freight, dally_tracking, … -->
+    <menuitem id="menu_dally_operations"
+              name="Operations"
+              parent="menu_dally_root"
+              sequence="20"/>
+
+    <!-- Reporting: filled by downstream modules. -->
+    <menuitem id="menu_dally_reporting"
+              name="Reporting"
+              parent="menu_dally_root"
+              sequence="80"
+              groups="dally_core.group_dally_readonly"/>
+
+    <!-- Configuration: managers and administrators only. -->
+    <menuitem id="menu_dally_configuration"
+              name="Configuration"
+              parent="menu_dally_root"
+              sequence="90"
+              groups="dally_core.group_dally_manager"/>
+
+    <menuitem id="menu_dally_service_type"
+              name="Service Types"
+              parent="menu_dally_configuration"
+              action="dally_service_type_action"
+              sequence="10"
+              groups="dally_core.group_dally_manager"/>
+
+</odoo>

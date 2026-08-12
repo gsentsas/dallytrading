@@ -121,13 +121,48 @@ docker compose ps          # les deux services doivent être « healthy »
 
 ## 5. Tests
 
-À venir en phase 13. Cibles définies au §61 du cahier des charges :
-formulaire → lead Odoo, contact existant / nouveau, tracking valide / invalide,
-permissions client, double soumission, téléversement, authentification.
+### Modules Odoo
+
+Validation statique, sans Odoo — utilisable en CI :
+
+```bash
+python3 infrastructure/scripts/validate-addons.py odoo/custom-addons
+```
+
+Vérifie la cohérence vues ↔ modèles, les manifestes, les ACL, les identifiants
+externes et les imports. Les tests unitaires Odoo (`odoo/custom-addons/*/tests/`)
+requièrent une instance et n'ont **pas encore été exécutés** :
+
+```bash
+docker exec -it dally-odoo odoo -c /etc/odoo/odoo.conf \
+    -d dallytrading --test-enable --test-tags dally --stop-after-init
+```
+
+### Site Next.js
+
+```bash
+cd apps/web
+npm run verify        # typecheck + lint + tests
+```
 
 ## 6. Build
 
-Site Next.js — phase 5.
+```bash
+cd apps/web
+npm run build
+```
+
+⚠️ `next.config.mjs` fixe `output: 'standalone'` : **`next start` est alors
+inopérant** (Next l'annonce au démarrage). La commande de production est
+`node .next/standalone/server.js`. Détail dans
+[`docs/VPS-MIGRATION.md`](docs/VPS-MIGRATION.md) § 8.
+
+En développement, toujours lier le serveur à la loopback — cette machine est
+partagée :
+
+```bash
+npx next dev --hostname 127.0.0.1 --port 3010
+```
 
 ## 7. Odoo
 
@@ -187,11 +222,12 @@ exercice de restauration : [`docs/RESTORE.md`](docs/RESTORE.md).
 |---|---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture, décisions et arbitrages | ✅ |
 | [`docs/SECURITY-FINDINGS.md`](docs/SECURITY-FINDINGS.md) | Constats de l'audit | ✅ |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Déploiement pas à pas | ✅ |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Déploiement pas à pas (Plesk) | ✅ |
+| [`docs/VPS-MIGRATION.md`](docs/VPS-MIGRATION.md) | Déploiement et migration vers un VPS dédié | ✅ |
 | [`docs/BACKUPS.md`](docs/BACKUPS.md) | Stratégie de sauvegarde | ✅ |
 | [`docs/RESTORE.md`](docs/RESTORE.md) | Exercice de restauration | ✅ |
-| `docs/ODOO.md` | Exploitation Odoo, modules, droits | Phase 3 |
-| `docs/API.md` | Contrat d'API, OdooGateway | Phase 4 |
+| [`docs/API.md`](docs/API.md) | Contrat d'API, OdooGateway | ✅ |
+| `docs/ODOO.md` | Exploitation Odoo au quotidien | Phase 3 |
 | `docs/SECURITY.md` | Politique de sécurité applicative | Phase 8 |
 | `docs/OPERATIONS.md` | Runbooks d'exploitation | Phase 12 |
 

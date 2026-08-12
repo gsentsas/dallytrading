@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_dally_api_root"
+              name="API"
+              parent="dally_core.menu_dally_configuration"
+              sequence="50"
+              groups="dally_core.group_dally_admin"/>
+
+    <menuitem id="menu_dally_api_key"
+              name="API Keys"
+              parent="menu_dally_api_root"
+              action="dally_api_key_action"
+              sequence="10"
+              groups="dally_core.group_dally_admin"/>
+
+    <menuitem id="menu_dally_api_request"
+              name="Request Log"
+              parent="menu_dally_api_root"
+              action="dally_api_request_action"
+              sequence="20"
+              groups="dally_core.group_dally_manager"/>
+
+</odoo>

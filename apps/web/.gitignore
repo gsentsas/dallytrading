@@ -1,0 +1,21 @@
+# Next.js
+/.next/
+/out/
+next-env.d.ts
+
+# Dependencies
+/node_modules/
+.pnpm-store/
+
+# Build output
+/build/
+/dist/
+*.tsbuildinfo
+
+# Test output
+/coverage/
+
+# Local environment (the real one lives at the repository root)
+.env
+.env.local
+.env*.local

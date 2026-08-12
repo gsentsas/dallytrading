@@ -1,0 +1,100 @@
+@import 'tailwindcss';
+
+/*
+ * Brand tokens (§31).
+ *
+ * Tailwind v4 is configured from CSS: these custom properties generate the
+ * utilities (bg-navy-700, text-green-600, …). Defining the palette once here is
+ * what stops hex values from being pasted into components, which is how a brand
+ * drifts.
+ *
+ * Contrast is checked against WCAG AA (§53): navy-700 on white is ~12:1,
+ * green-700 on white ~4.6:1. Lighter greens are for surfaces, never for text.
+ */
+@theme {
+  /* Navy — primary brand colour. */
+  --color-navy-50: #eef2f7;
+  --color-navy-100: #d5dfeb;
+  --color-navy-200: #adc0d7;
+  --color-navy-300: #7f9bbe;
+  --color-navy-400: #5578a4;
+  --color-navy-500: #3a5c87;
+  --color-navy-600: #2b466a;
+  --color-navy-700: #1e3352;
+  --color-navy-800: #152439;
+  --color-navy-900: #0d1725;
+
+  /* Green — secondary, for progress and confirmation. */
+  --color-green-50: #edf7f1;
+  --color-green-100: #d2ebdc;
+  --color-green-200: #a6d7ba;
+  --color-green-300: #71bd93;
+  --color-green-400: #47a173;
+  --color-green-500: #2f855a;
+  --color-green-600: #256b48;
+  --color-green-700: #1d5437;
+  --color-green-800: #163f29;
+  --color-green-900: #0f2a1c;
+
+  /* Neutrals. */
+  --color-mist-50: #f8fafc;
+  --color-mist-100: #f1f5f9;
+  --color-mist-200: #e2e8f0;
+  --color-mist-300: #cbd5e1;
+  --color-mist-600: #475569;
+  --color-mist-700: #334155;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+}
+
+/*
+ * A visible focus ring on every interactive element. Removing outlines makes a
+ * site unusable by keyboard, and it is the single most common accessibility
+ * regression (§53).
+ */
+@layer base {
+  :focus-visible {
+    outline: 3px solid var(--color-green-500);
+    outline-offset: 2px;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Respect a user's reduced-motion preference. */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  body {
+    background-color: var(--color-mist-50);
+    color: var(--color-navy-800);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/*
+ * Honeypot field (see features/quote/schema.ts).
+ *
+ * Hidden without `display: none` and without `hidden`: some bots skip those, and
+ * a genuinely undisplayed field is also skipped by screen readers, which is what
+ * we want here. aria-hidden and tabindex="-1" keep it out of assistive tech.
+ */
+.dally-honeypot {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

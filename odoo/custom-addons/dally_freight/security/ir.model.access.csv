@@ -1,0 +1,10 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_dally_shipment_readonly,dally.shipment read-only,model_dally_shipment,dally_core.group_dally_readonly,1,0,0,0
+access_dally_shipment_commercial,dally.shipment commercial,model_dally_shipment,dally_core.group_dally_commercial,1,1,1,0
+access_dally_shipment_logistics,dally.shipment logistics,model_dally_shipment,dally_core.group_dally_logistics,1,1,1,0
+access_dally_shipment_finance,dally.shipment finance,model_dally_shipment,dally_core.group_dally_finance,1,1,0,0
+access_dally_shipment_manager,dally.shipment manager,model_dally_shipment,dally_core.group_dally_manager,1,1,1,1
+access_dally_package_readonly,dally.shipment.package read-only,model_dally_shipment_package,dally_core.group_dally_readonly,1,0,0,0
+access_dally_package_commercial,dally.shipment.package commercial,model_dally_shipment_package,dally_core.group_dally_commercial,1,1,1,1
+access_dally_package_logistics,dally.shipment.package logistics,model_dally_shipment_package,dally_core.group_dally_logistics,1,1,1,1
+access_dally_package_manager,dally.shipment.package manager,model_dally_shipment_package,dally_core.group_dally_manager,1,1,1,1

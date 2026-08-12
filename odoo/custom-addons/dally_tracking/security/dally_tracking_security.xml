@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!--
+            Dedicated group and user for the public tracking API.
+
+            Why a second integration user rather than reusing the one that creates
+            leads: that user holds group_dally_commercial, which implies
+            group_dally_readonly, which is exactly the group that gates
+            internal_notes. Reusing it would mean the ORM happily loads internal
+            notes for the tracking endpoint, leaving the field allowlist as the
+            only thing standing between an internal note and the internet.
+
+            With a user that is in NO DallyTrading group, the restricted fields —
+            supplier_cost, margin, internal_notes — are stripped by the ORM before
+            any controller code runs. The allowlist then becomes the second
+            independent layer rather than the only one.
+
+            dally.api.key.user_id exists precisely so a key can act with the
+            minimum rights its endpoints need.
+        -->
+
+        <record id="group_dally_tracking_api" model="res.groups">
+            <field name="name">Tracking API (read only)</field>
+            <field name="category_id" ref="dally_core.module_category_dallytrading"/>
+            <!-- Deliberately implies nothing. Any implied group would drag in
+                 group_dally_readonly and defeat the purpose. -->
+            <field name="comment">Read shipments and customer-visible tracking events
+for the public tracking endpoint. Grants no access to costs, margins or internal
+notes: those fields are removed by the ORM for this group.
+
+Reserved for the API integration user. Never assign it to a person.</field>
+        </record>
+
+        <record id="user_dally_api_tracking" model="res.users">
+            <field name="name">DallyTrading Tracking API</field>
+            <field name="login">dally_api_tracking</field>
+            <field name="active" eval="True"/>
+            <field name="share" eval="False"/>
+            <!-- base.group_user is required to be an internal user at all; the
+                 tracking group carries the actual permissions. No password is
+                 set, so this account cannot log into the web interface. -->
+            <field name="groups_id" eval="[(6, 0, [
+                ref('base.group_user'),
+                ref('group_dally_tracking_api'),
+            ])]"/>
+        </record>
+
+    </data>
+
+    <data noupdate="0">
+
+        <!--
+            Multi-company isolation on events, mirroring the shipment rule.
+        -->
+        <record id="dally_event_rule_company" model="ir.rule">
+            <field name="name">Tracking event: own company only</field>
+            <field name="model_id" ref="model_dally_shipment_event"/>
+            <field name="domain_force">
+                ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]
+            </field>
+            <field name="global" eval="True"/>
+        </record>
+
+        <!--
+            The tracking API user may only ever see customer-visible events.
+
+            This is the strongest guarantee in the module: it is not a filter a
+            controller has to remember to apply, it is a record rule. Even a
+            search with no domain returns only publishable events for this user.
+        -->
+        <record id="dally_event_rule_tracking_api" model="ir.rule">
+            <field name="name">Tracking event: API sees customer-visible events only</field>
+            <field name="model_id" ref="model_dally_shipment_event"/>
+            <field name="groups" eval="[(4, ref('group_dally_tracking_api'))]"/>
+            <field name="domain_force">[('visible_to_customer', '=', True)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

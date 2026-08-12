@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_dally_tracking_events"
+              name="Tracking Events"
+              parent="dally_core.menu_dally_operations"
+              action="dally_shipment_event_action"
+              sequence="30"
+              groups="dally_core.group_dally_logistics"/>
+
+</odoo>

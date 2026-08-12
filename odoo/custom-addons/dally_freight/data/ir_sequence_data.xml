@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        noupdate="1": resetting number_next on an upgrade would re-issue
+        references that customers already hold and quote to support.
+    -->
+    <data noupdate="1">
+
+        <!--
+            Shipment reference: DT-SHP-2026-000124 (§44).
+
+            This is the reference the customer types on the public tracking page,
+            so it must be readable over the phone: no ambiguous characters, no
+            case sensitivity, fixed width.
+
+            implementation="standard" rather than "no_gap": no_gap locks the
+            sequence row for the whole transaction. A gap in the series is
+            harmless; contention when several files are created at once is not.
+        -->
+        <record id="seq_dally_shipment" model="ir.sequence">
+            <field name="name">DallyTrading Shipment</field>
+            <field name="code">dally.shipment</field>
+            <field name="prefix">DT-SHP-%(year)s-</field>
+            <field name="padding">6</field>
+            <field name="number_next">1</field>
+            <field name="number_increment">1</field>
+            <field name="implementation">standard</field>
+            <field name="company_id" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

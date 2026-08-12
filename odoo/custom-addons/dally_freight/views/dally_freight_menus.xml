@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_dally_shipment"
+              name="Shipments"
+              parent="dally_core.menu_dally_operations"
+              action="dally_shipment_action"
+              sequence="20"
+              groups="dally_core.group_dally_readonly"/>
+
+    <menuitem id="menu_dally_shipment_late"
+              name="Late Shipments"
+              parent="dally_core.menu_dally_reporting"
+              action="dally_shipment_action_late"
+              sequence="10"
+              groups="dally_core.group_dally_readonly"/>
+
+    <menuitem id="menu_dally_shipment_analysis"
+              name="Shipment Analysis"
+              parent="dally_core.menu_dally_reporting"
+              action="dally_shipment_action"
+              sequence="20"
+              groups="dally_core.group_dally_readonly"/>
+
+</odoo>

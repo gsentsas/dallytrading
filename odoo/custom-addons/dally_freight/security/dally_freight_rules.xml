@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Record rules.
+
+            Deliberately restricted to multi-company isolation. Per-user ownership
+            rules ("a salesperson sees only their own files") are NOT implemented,
+            and that is a decision rather than an omission: DallyTrading operates
+            as a single small team where a freight file is routinely picked up by
+            whoever is available. A rule that hid colleagues' files would be
+            worked around by sharing an account, which is strictly worse than not
+            having the rule.
+
+            What genuinely needs enforcing is company isolation, because the
+            architecture is expected to grow to multi-company (§95). Getting that
+            in from the start means shipments never leak across companies later.
+        -->
+
+        <record id="dally_shipment_rule_company" model="ir.rule">
+            <field name="name">Shipment: own company only</field>
+            <field name="model_id" ref="model_dally_shipment"/>
+            <field name="domain_force">
+                ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]
+            </field>
+            <!-- global: applies to every user, including those added later.
+                 A rule attached to specific groups would silently not apply to a
+                 new group someone creates. -->
+            <field name="global" eval="True"/>
+        </record>
+
+        <record id="dally_package_rule_company" model="ir.rule">
+            <field name="name">Shipment package: own company only</field>
+            <field name="model_id" ref="model_dally_shipment_package"/>
+            <field name="domain_force">
+                ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]
+            </field>
+            <field name="global" eval="True"/>
+        </record>
+
+    </data>
+</odoo>

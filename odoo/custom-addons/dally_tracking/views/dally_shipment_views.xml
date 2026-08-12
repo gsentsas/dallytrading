@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Adds the timeline to the freight form. Inherits our own view, so there is
+        no dependency on a native external id.
+    -->
+    <record id="dally_shipment_view_form_tracking" model="ir.ui.view">
+        <field name="name">dally.shipment.form.tracking</field>
+        <field name="model">dally.shipment</field>
+        <field name="inherit_id" ref="dally_freight.dally_shipment_view_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//notebook" position="inside">
+                <page string="Tracking" name="tracking">
+                    <div class="alert alert-info" role="alert">
+                        Events are created automatically when the status changes.
+                        Only those marked <strong>Customer</strong> appear on
+                        <code>dallytrading.com/tracking</code>. Internal notes and
+                        attached documents are never published.
+                    </div>
+
+                    <field name="event_ids"
+                           context="{'default_status': state}">
+                        <list editable="bottom"
+                              decoration-success="visible_to_customer"
+                              decoration-muted="not visible_to_customer">
+                            <field name="event_date"/>
+                            <field name="status"/>
+                            <field name="description"/>
+                            <field name="location"/>
+                            <field name="visible_to_customer" string="Customer"
+                                   widget="boolean_toggle"/>
+                            <field name="internal_note" optional="hide"/>
+                            <field name="is_automatic" optional="hide"/>
+                        </list>
+                    </field>
+
+                    <group>
+                        <group>
+                            <field name="event_count" readonly="1"/>
+                            <field name="public_event_count" readonly="1"
+                                   string="Visible to Customer"/>
+                            <field name="last_public_event_id" readonly="1"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- Quick access to the events of one file, from the form header. -->
+    <record id="dally_shipment_view_form_tracking_button" model="ir.ui.view">
+        <field name="name">dally.shipment.form.tracking.button</field>
+        <field name="model">dally.shipment</field>
+        <field name="inherit_id" ref="dally_freight.dally_shipment_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_view_events" type="object"
+                        string="Tracking Events" class="btn-secondary"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

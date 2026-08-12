@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="dally_shipment_event_view_list" model="ir.ui.view">
+        <field name="name">dally.shipment.event.list</field>
+        <field name="model">dally.shipment.event</field>
+        <field name="arch" type="xml">
+            <!-- Visible events are highlighted: an operator must be able to see at
+                 a glance what the customer is reading. -->
+            <list string="Tracking Events" editable="bottom"
+                  decoration-success="visible_to_customer"
+                  decoration-muted="not visible_to_customer">
+                <field name="event_date"/>
+                <field name="shipment_id" optional="hide"/>
+                <field name="status"/>
+                <field name="description"/>
+                <field name="location"/>
+                <field name="visible_to_customer" widget="boolean_toggle"
+                       string="Customer"/>
+                <field name="internal_note" optional="hide"/>
+                <field name="is_automatic" optional="hide"/>
+                <field name="user_id" widget="many2one_avatar_user" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="dally_shipment_event_view_form" model="ir.ui.view">
+        <field name="name">dally.shipment.event.form</field>
+        <field name="model">dally.shipment.event</field>
+        <field name="arch" type="xml">
+            <form string="Tracking Event">
+                <sheet>
+                    <group>
+                        <group string="Event">
+                            <field name="shipment_id"
+                                   options="{'no_create': True}"/>
+                            <field name="event_date"/>
+                            <field name="status"/>
+                            <field name="location"
+                                   placeholder="e.g. Port of Dakar"/>
+                        </group>
+                        <group string="Publication">
+                            <field name="visible_to_customer"/>
+                            <field name="is_automatic" readonly="1"/>
+                            <field name="user_id" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <group string="Customer-Facing Description">
+                        <field name="description" nolabel="1"
+                               placeholder="Written as the customer should read it."/>
+                    </group>
+
+                    <div class="alert alert-success" role="alert"
+                         invisible="not visible_to_customer">
+                        <strong>Published.</strong> The description and the location
+                        above appear on the public tracking page, exactly as written.
+                        Attached documents are never published.
+                    </div>
+                    <div class="alert alert-secondary" role="alert"
+                         invisible="visible_to_customer">
+                        <strong>Internal only.</strong> This event does not appear on
+                        the public tracking page.
+                    </div>
+
+                    <group string="Internal Note">
+                        <div class="text-muted" colspan="2">
+                            Never published, whatever the setting above.
+                        </div>
+                        <field name="internal_note" nolabel="1" colspan="2"/>
+                    </group>
+
+                    <group string="Documents">
+                        <field name="attachment_ids" widget="many2many_binary"
+                               nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="dally_shipment_event_view_search" model="ir.ui.view">
+        <field name="name">dally.shipment.event.search</field>
+        <field name="model">dally.shipment.event</field>
+        <field name="arch" type="xml">
+            <search string="Tracking Events">
+                <field name="shipment_id"/>
+                <field name="description"/>
+                <field name="location"/>
+                <filter name="filter_public" string="Visible to Customer"
+                        domain="[('visible_to_customer', '=', True)]"/>
+                <filter name="filter_internal" string="Internal Only"
+                        domain="[('visible_to_customer', '=', False)]"/>
+                <separator/>
+                <filter name="filter_manual" string="Entered by Hand"
+                        domain="[('is_automatic', '=', False)]"/>
+                <filter name="filter_automatic" string="Automatic"
+                        domain="[('is_automatic', '=', True)]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_shipment" string="Shipment"
+                            context="{'group_by': 'shipment_id'}"/>
+                    <filter name="group_status" string="Status"
+                            context="{'group_by': 'status'}"/>
+                    <filter name="group_date" string="Date"
+                            context="{'group_by': 'event_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="dally_shipment_event_action" model="ir.actions.act_window">
+        <field name="name">Tracking Events</field>
+        <field name="res_model">dally.shipment.event</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="dally_shipment_event_view_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No tracking event yet</p>
+            <p>
+                Events are created automatically when a shipment's status changes,
+                and can also be added by hand. Only events marked
+                <strong>visible to customer</strong> appear on the public tracking
+                page.
+            </p>
+        </field>
+    </record>
+
+</odoo>

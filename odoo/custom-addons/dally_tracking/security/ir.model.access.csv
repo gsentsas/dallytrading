@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_dally_event_readonly,dally.shipment.event read-only,model_dally_shipment_event,dally_core.group_dally_readonly,1,0,0,0
+access_dally_event_commercial,dally.shipment.event commercial,model_dally_shipment_event,dally_core.group_dally_commercial,1,1,1,0
+access_dally_event_logistics,dally.shipment.event logistics,model_dally_shipment_event,dally_core.group_dally_logistics,1,1,1,1
+access_dally_event_manager,dally.shipment.event manager,model_dally_shipment_event,dally_core.group_dally_manager,1,1,1,1
+access_dally_event_tracking_api,dally.shipment.event tracking API,model_dally_shipment_event,dally_tracking.group_dally_tracking_api,1,0,0,0
+access_dally_shipment_tracking_api,dally.shipment tracking API,dally_freight.model_dally_shipment,dally_tracking.group_dally_tracking_api,1,0,0,0

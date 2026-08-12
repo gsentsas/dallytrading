@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ─── List ──────────────────────────────────────────────────── -->
+    <record id="dally_shipment_view_list" model="ir.ui.view">
+        <field name="name">dally.shipment.list</field>
+        <field name="model">dally.shipment</field>
+        <field name="arch" type="xml">
+            <list string="Shipments" sample="1"
+                  decoration-danger="is_late"
+                  decoration-muted="state == 'cancelled'"
+                  decoration-success="state == 'delivered'">
+                <field name="reference"/>
+                <field name="partner_id"/>
+                <field name="transport_mode"/>
+                <field name="route_summary" string="Route"/>
+                <field name="departure_date"/>
+                <field name="estimated_arrival"/>
+                <field name="weight_kg" sum="Total weight" optional="show"/>
+                <field name="volume_cbm" sum="Total CBM" optional="show"/>
+                <field name="chargeable_weight_kg" optional="hide"/>
+                <field name="packages_count" optional="hide"/>
+                <field name="user_id" widget="many2one_avatar_user" optional="show"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'delivered'"
+                       decoration-info="state in ('in_transit', 'departed')"/>
+                <field name="is_late" column_invisible="True"/>
+                <field name="company_id" groups="base.group_multi_company"
+                       optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ─── Form ──────────────────────────────────────────────────── -->
+    <record id="dally_shipment_view_form" model="ir.ui.view">
+        <field name="name">dally.shipment.form</field>
+        <field name="model">dally.shipment</field>
+        <field name="arch" type="xml">
+            <form string="Shipment">
+                <header>
+                    <!-- Only the milestones an operator moves between by hand are
+                         on the bar. All 14 states would make it unreadable. -->
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="request_received,goods_received,departed,in_transit,arrived,delivered"
+                           options="{'clickable': true}"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            class="btn-secondary"
+                            confirm="Cancel this shipment?"
+                            invisible="state in ('cancelled', 'delivered')"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Archived"
+                            bg_color="text-bg-danger" invisible="active"/>
+
+                    <div class="oe_title">
+                        <label for="reference"/>
+                        <h1><field name="reference" readonly="1"/></h1>
+                    </div>
+
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not is_late">
+                        This shipment is past its ETA and has not arrived.
+                    </div>
+
+                    <group>
+                        <group string="Customer">
+                            <field name="partner_id"
+                                   options="{'no_create_edit': True}"/>
+                            <field name="consignee_id"
+                                   options="{'no_create_edit': True}"/>
+                            <field name="user_id" widget="many2one_avatar_user"/>
+                            <field name="active" invisible="1"/>
+                            <field name="is_late" invisible="1"/>
+                            <field name="company_id"
+                                   groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Service">
+                            <field name="service_type_id"/>
+                            <field name="transport_mode"/>
+                            <field name="direction"/>
+                            <field name="carrier_name"/>
+                            <field name="carrier_tracking_number"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <group string="Origin">
+                            <field name="origin_country_id"
+                                   options="{'no_create': True}"/>
+                            <field name="origin_city"/>
+                            <field name="origin_location"/>
+                        </group>
+                        <group string="Destination">
+                            <field name="destination_country_id"
+                                   options="{'no_create': True}"/>
+                            <field name="destination_city"/>
+                            <field name="destination_location"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <group string="Schedule">
+                            <field name="request_date"/>
+                            <field name="departure_date"/>
+                            <field name="estimated_arrival"/>
+                            <field name="actual_arrival"/>
+                            <field name="delivery_date"/>
+                        </group>
+                        <group string="Container">
+                            <field name="container_type"/>
+                            <field name="container_number"
+                                   invisible="container_type in ('none', 'lcl')"/>
+                            <field name="declared_value"/>
+                            <field name="currency_id" invisible="1"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Cargo" name="cargo">
+                            <field name="goods_description"
+                                   placeholder="Nature of the goods. Shown to the customer."/>
+
+                            <separator string="Packages"/>
+                            <field name="package_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="package_type"/>
+                                    <field name="description"/>
+                                    <field name="quantity"/>
+                                    <field name="unit_weight_kg"/>
+                                    <field name="length_cm"/>
+                                    <field name="width_cm"/>
+                                    <field name="height_cm"/>
+                                    <field name="unit_volume_cbm"/>
+                                    <field name="total_weight_kg" sum="Weight"/>
+                                    <field name="total_volume_cbm" sum="CBM"/>
+                                </list>
+                            </field>
+
+                            <group>
+                                <group string="Totals">
+                                    <field name="packages_count"/>
+                                    <field name="weight_kg"/>
+                                    <field name="volume_cbm"/>
+                                    <field name="chargeable_weight_kg" readonly="1"/>
+                                </group>
+                            </group>
+                            <div class="alert alert-info" role="alert">
+                                Totals are derived from the package lines when they
+                                exist, and can be entered by hand otherwise.
+                                <strong>Chargeable weight</strong> is the greater of
+                                gross weight and volumetric weight for the mode —
+                                it is what freight is billed on.
+                            </div>
+                        </page>
+
+                        <page string="Commercial" name="commercial">
+                            <group>
+                                <group string="Documents">
+                                    <field name="sale_order_id"/>
+                                    <field name="invoice_id"/>
+                                </group>
+                                <!-- Finance only. The ORM removes these fields
+                                     entirely for anyone else — they are not
+                                     merely hidden in the interface. -->
+                                <group string="Costs and Margin"
+                                       groups="dally_core.group_dally_finance">
+                                    <field name="supplier_cost"/>
+                                    <field name="margin" readonly="1"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <page string="Internal Notes" name="internal">
+                            <div class="alert alert-danger" role="alert">
+                                <strong>Internal only.</strong> Never shown to the
+                                customer and never returned by the public tracking
+                                API.
+                            </div>
+                            <field name="internal_notes" nolabel="1"
+                                   placeholder="Internal working notes."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ─── Search ────────────────────────────────────────────────── -->
+    <record id="dally_shipment_view_search" model="ir.ui.view">
+        <field name="name">dally.shipment.search</field>
+        <field name="model">dally.shipment</field>
+        <field name="arch" type="xml">
+            <search string="Shipments">
+                <field name="reference"
+                       filter_domain="['|', ('reference', 'ilike', self), ('carrier_tracking_number', 'ilike', self)]"
+                       string="Reference or carrier number"/>
+                <field name="partner_id"/>
+                <field name="container_number"/>
+                <field name="user_id"/>
+                <field name="origin_country_id"/>
+                <field name="destination_country_id"/>
+
+                <filter name="filter_mine" string="My Shipments"
+                        domain="[('user_id', '=', uid)]"/>
+                <filter name="filter_unassigned" string="Unassigned"
+                        domain="[('user_id', '=', False)]"/>
+                <separator/>
+                <filter name="filter_active_files" string="In Progress"
+                        domain="[('state', 'not in', ('draft', 'delivered', 'cancelled'))]"/>
+                <filter name="filter_late" string="Late"
+                        domain="[('is_late', '=', True)]"/>
+                <filter name="filter_delivered" string="Delivered"
+                        domain="[('state', '=', 'delivered')]"/>
+                <separator/>
+                <filter name="filter_sea" string="Sea"
+                        domain="[('transport_mode', '=', 'sea')]"/>
+                <filter name="filter_air" string="Air"
+                        domain="[('transport_mode', '=', 'air')]"/>
+                <separator/>
+                <filter name="filter_archived" string="Archived"
+                        domain="[('active', '=', False)]"/>
+
+                <group expand="0" string="Group By">
+                    <filter name="group_state" string="Status"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_mode" string="Transport Mode"
+                            context="{'group_by': 'transport_mode'}"/>
+                    <filter name="group_direction" string="Direction"
+                            context="{'group_by': 'direction'}"/>
+                    <filter name="group_partner" string="Customer"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_user" string="Responsible"
+                            context="{'group_by': 'user_id'}"/>
+                    <filter name="group_origin" string="Origin Country"
+                            context="{'group_by': 'origin_country_id'}"/>
+                    <filter name="group_destination" string="Destination Country"
+                            context="{'group_by': 'destination_country_id'}"/>
+                    <filter name="group_departure" string="Departure Month"
+                            context="{'group_by': 'departure_date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ─── Kanban, grouped by status ─────────────────────────────── -->
+    <record id="dally_shipment_view_kanban" model="ir.ui.view">
+        <field name="name">dally.shipment.kanban</field>
+        <field name="model">dally.shipment</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state" sample="1"
+                    quick_create="false">
+                <field name="state"/>
+                <field name="is_late"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="oe_kanban_details">
+                            <strong><field name="reference"/></strong>
+                            <div><field name="partner_id"/></div>
+                            <div class="text-muted">
+                                <field name="route_summary"/>
+                            </div>
+                            <div class="mt-1">
+                                <field name="transport_mode" widget="badge"/>
+                                <span t-if="record.is_late.raw_value"
+                                      class="badge text-bg-danger">Late</span>
+                            </div>
+                            <div class="mt-1 text-muted">
+                                ETA: <field name="estimated_arrival"/>
+                            </div>
+                            <field name="user_id" widget="many2one_avatar_user"/>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- ─── Reporting ─────────────────────────────────────────────── -->
+    <record id="dally_shipment_view_pivot" model="ir.ui.view">
+        <field name="name">dally.shipment.pivot</field>
+        <field name="model">dally.shipment</field>
+        <field name="arch" type="xml">
+            <pivot string="Shipment Analysis" sample="1">
+                <field name="transport_mode" type="row"/>
+                <field name="state" type="col"/>
+                <field name="weight_kg" type="measure"/>
+                <field name="volume_cbm" type="measure"/>
+                <field name="chargeable_weight_kg" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="dally_shipment_view_graph" model="ir.ui.view">
+        <field name="name">dally.shipment.graph</field>
+        <field name="model">dally.shipment</field>
+        <field name="arch" type="xml">
+            <graph string="Shipments" type="bar" sample="1">
+                <field name="transport_mode"/>
+                <field name="chargeable_weight_kg" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <!-- ─── Actions ───────────────────────────────────────────────── -->
+    <record id="dally_shipment_action" model="ir.actions.act_window">
+        <field name="name">Shipments</field>
+        <field name="res_model">dally.shipment</field>
+        <field name="view_mode">list,kanban,form,pivot,graph</field>
+        <field name="search_view_id" ref="dally_shipment_view_search"/>
+        <field name="context">{'search_default_filter_active_files': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Create a shipment</p>
+            <p>
+                A freight file covers every mode: sea, air, road, vehicles and
+                groupage. Its reference is what the customer uses on the public
+                tracking page.
+            </p>
+        </field>
+    </record>
+
+    <record id="dally_shipment_action_late" model="ir.actions.act_window">
+        <field name="name">Late Shipments</field>
+        <field name="res_model">dally.shipment</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="dally_shipment_view_search"/>
+        <field name="domain">[('is_late', '=', True)]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Nothing is late</p>
+            <p>Every shipment is within its estimated arrival date.</p>
+        </field>
+    </record>
+
+</odoo>

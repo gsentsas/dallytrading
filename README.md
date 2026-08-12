@@ -65,7 +65,11 @@ platform/
 │   ├── config/odoo.conf.template       Modèle versionné
 │   ├── config/odoo.conf                GÉNÉRÉ — 0600, hors Git
 │   └── custom-addons/                  Modules DallyTrading
-├── apps/web/                            Next.js (phase 5)
+├── apps/web/                            Next.js
+│   ├── src/app/                         pages : /, /devis, /tracking, /api/leads
+│   ├── src/features/                    quote (formulaire multi-étapes), tracking
+│   ├── src/services/odoo/               OdooGateway + adaptateurs
+│   └── src/lib/                         env, logger, rate-limit
 ├── docs/
 └── .env                                 GÉNÉRÉ — 0600, hors Git
 ```
@@ -178,14 +182,14 @@ Le core Odoo n'est **jamais** modifié. Tout vit dans `odoo/custom-addons/` :
 
 | Module | Rôle |
 |---|---|
-| `dally_core` | Socle : séquences `DT-YYYY-NNNNNN`, mixins, paramètres |
-| `dally_crm` | Extension `crm.lead` : UTM, service, WhatsApp, anti-doublon |
-| `dally_freight` | Maritime, aérien, routier, véhicules, groupage, CBM, conteneurs |
-| `dally_tracking` | `dally.shipment` + `dally.shipment.event` |
+| `dally_core` | ✅ Socle : séquences `DT-YYYY-NNNNNN`, mixins, paramètres |
+| `dally_crm` | ✅ Extension `crm.lead` : UTM, service, WhatsApp, anti-doublon |
+| `dally_freight` | ✅ `dally.shipment` + lignes de colis : maritime, aérien, routier, véhicules, groupage, CBM, conteneurs, **poids taxable** |
+| `dally_tracking` | ✅ `dally.shipment.event`, timeline publique, frontière de confidentialité à trois couches |
 | `dally_sourcing` | `dally.sourcing.request` et son workflow |
 | `dally_trade` | `dally.trade.opportunity` |
 | `dally_agrobusiness` | Socle extensible, minimal au MVP |
-| `dally_api` | Points d'accès REST versionnés `/api/v1/*` |
+| `dally_api` | ✅ Points d'accès REST versionnés `/api/v1/*` |
 
 SEN CONTAINERS est traité comme un **partenaire externe standard** (`res.partner`), au
 même titre que tout autre fournisseur. Aucun champ ni module dédié dans le cœur.
@@ -226,7 +230,7 @@ exercice de restauration : [`docs/RESTORE.md`](docs/RESTORE.md).
 | [`docs/VPS-MIGRATION.md`](docs/VPS-MIGRATION.md) | Déploiement et migration vers un VPS dédié | ✅ |
 | [`docs/BACKUPS.md`](docs/BACKUPS.md) | Stratégie de sauvegarde | ✅ |
 | [`docs/RESTORE.md`](docs/RESTORE.md) | Exercice de restauration | ✅ |
-| [`docs/API.md`](docs/API.md) | Contrat d'API, OdooGateway | ✅ |
+| [`docs/API.md`](docs/API.md) | Contrat d'API, OdooGateway, tracking public | ✅ |
 | `docs/ODOO.md` | Exploitation Odoo au quotidien | Phase 3 |
 | `docs/SECURITY.md` | Politique de sécurité applicative | Phase 8 |
 | `docs/OPERATIONS.md` | Runbooks d'exploitation | Phase 12 |

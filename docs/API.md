@@ -216,6 +216,100 @@ gratuitement un attaquant sur la présence d'Odoo et le nom de la base.
 
 ---
 
+## 3 bis. `GET /api/v1/tracking/{reference}` — suivi public
+
+Périmètre `tracking:read`. Consommé par la page `/tracking` du site.
+
+```http
+GET /api/v1/tracking/DT-SHP-2026-000124
+X-API-Key: <clé>
+```
+
+**200** — la charge utile est **exhaustivement** définie par `PUBLIC_PAYLOAD_KEYS`
+dans `dally_tracking` :
+
+```json
+{
+  "success": true,
+  "data": {
+    "reference": "DT-SHP-2026-000124",
+    "transportMode": "sea",
+    "transportModeLabel": "Fret maritime",
+    "origin": "Le Havre, France",
+    "destination": "Dakar, Sénégal",
+    "status": "in_transit",
+    "statusLabel": "En transit",
+    "departureDate": "2026-08-01",
+    "estimatedArrival": "2026-08-25",
+    "actualArrival": null,
+    "lastUpdate": "2026-08-03T09:12:00",
+    "carrierTrackingNumber": "MSCU1234567",
+    "containerNumber": "MSCU7654321",
+    "goodsDescription": "Pièces automobiles",
+    "packagesCount": 12,
+    "timeline": [
+      {
+        "date": "2026-08-01T14:00:00",
+        "status": "departed",
+        "statusLabel": "Parti",
+        "location": "Le Havre",
+        "description": "Marchandise chargée, navire parti."
+      }
+    ]
+  }
+}
+```
+
+**404** — référence inconnue, mal formée, archivée ou appartenant à une autre
+société : **une seule et même réponse**, pour que l'endpoint ne puisse pas être
+sondé.
+
+### Ce qui ne peut structurellement pas sortir
+
+Trois couches indépendantes, et non une seule :
+
+| Couche | Mécanisme | Ce qu'elle empêche |
+|---|---|---|
+| 1 | `groups=` sur `supplier_cost`, `margin`, `internal_notes` | L'ORM ne charge jamais ces colonnes pour l'utilisateur d'API |
+| 2 | Record rule sur `dally.shipment.event` | Même une recherche sans domaine ne retourne que `visible_to_customer = True` |
+| 3 | Liste blanche `_dally_public_payload` | Un champ ajouté demain n'apparaît pas par accident |
+
+`sudo()` n'est **volontairement pas utilisé** dans ce chemin : il contournerait les
+couches 1 et 2 et ne laisserait que la troisième.
+
+Une **deuxième clé et un deuxième utilisateur d'intégration** sont requis :
+`user_dally_api_tracking`, membre d'aucun groupe métier DallyTrading. Réutiliser
+la clé des leads fonctionnerait, mais son utilisateur porte
+`group_dally_commercial`, qui implique `group_dally_readonly` — précisément le
+groupe qui garde `internal_notes`.
+
+Ne sortent jamais : identité du client, valeur déclarée, coût fournisseur, marge,
+notes internes (dossier **et** événement), devis, facture, responsable, pièces
+jointes, et tout identifiant de base.
+
+### Énumération des références — compromis assumé
+
+Les références `DT-SHP-YYYY-NNNNNN` sont séquentielles et le §44 demande une
+recherche par référence seule : la série est donc parcourable. Accepté en
+connaissance de cause, sur deux fondements :
+
+- la charge utile ne contient rien de confidentiel ; le pire cas est d'apprendre
+  qu'une expédition existe et vers où elle va ;
+- limitation de débit à **10 recherches/min/IP** sur la page `/tracking`, plus le
+  proxy.
+
+Durcissement possible si DallyTrading le juge nécessaire : exiger un second
+facteur (nom du client, ou jeton dans les liens de notification). C'est une
+décision produit — elle change ce que le client doit saisir — signalée ici plutôt
+qu'implémentée en silence.
+
+> ⚠️ La limitation `limit_req` de nginx exige un `limit_req_zone` dans le bloc
+> `http`, inaccessible depuis le champ « directives additionnelles » de Plesk qui
+> écrit dans le bloc `server`. Elle nécessite un fichier dans
+> `/etc/nginx/conf.d/`, à créer par l'administrateur. **Non appliqué à ce jour.**
+
+---
+
 ## 4. Ce que l'API ne fait pas — et ne fera pas
 
 - **Aucun accès générique aux modèles.** Il n'existe aucun moyen de nommer un

@@ -33,6 +33,32 @@ interface LeadResponse {
   status: string;
 }
 
+/** Shape returned by GET /api/v1/tracking/<reference>. */
+interface TrackingResponse {
+  reference: string;
+  transportMode: string;
+  transportModeLabel: string;
+  origin: string | null;
+  destination: string | null;
+  status: string;
+  statusLabel: string;
+  departureDate: string | null;
+  estimatedArrival: string | null;
+  actualArrival: string | null;
+  lastUpdate: string | null;
+  carrierTrackingNumber: string | null;
+  containerNumber: string | null;
+  goodsDescription: string | null;
+  packagesCount: number;
+  timeline?: ReadonlyArray<{
+    date: string;
+    status: string;
+    statusLabel: string;
+    location: string | null;
+    description: string | null;
+  }>;
+}
+
 /** Map Odoo's error codes onto the gateway's stable set. */
 function mapErrorCode(status: number, apiCode?: string): OdooErrorCode {
   switch (apiCode) {
@@ -224,16 +250,51 @@ export class DallyApiAdapter implements OdooGateway {
   }
 
   async getShipmentByTracking(
-    _reference: string,
-    _correlationId: string,
+    reference: string,
+    correlationId: string,
   ): Promise<PublicShipment | null> {
-    // Phase 7 endpoint. Declared so the interface is fully implemented and the
-    // gap is an explicit, typed failure rather than a silent undefined.
-    throw new OdooGatewayError(
-      'unavailable',
-      'Shipment tracking is not available yet (phase 7).',
-      501,
-    );
+    // Normalised here as well as in Odoo, so a reference pasted with a
+    // non-breaking space does not become a pointless round trip.
+    const normalised = reference.replace(/\s+/g, '').toUpperCase();
+    if (!normalised) {
+      return null;
+    }
+
+    try {
+      const data = await this.call<TrackingResponse>(
+        `/api/v1/tracking/${encodeURIComponent(normalised)}`,
+        { method: 'GET' },
+        correlationId,
+      );
+
+      return {
+        reference: data.reference,
+        transportMode: data.transportMode,
+        transportModeLabel: data.transportModeLabel,
+        origin: data.origin,
+        destination: data.destination,
+        status: data.status,
+        statusLabel: data.statusLabel,
+        departureDate: data.departureDate,
+        estimatedArrival: data.estimatedArrival,
+        actualArrival: data.actualArrival,
+        lastUpdate: data.lastUpdate,
+        carrierTrackingNumber: data.carrierTrackingNumber,
+        containerNumber: data.containerNumber,
+        goodsDescription: data.goodsDescription,
+        packagesCount: data.packagesCount,
+        timeline: data.timeline ?? [],
+      };
+    } catch (error) {
+      // An unknown reference is a normal outcome of a customer typing one in, not
+      // an error condition. Returning null keeps the page from treating "not
+      // found" as a failure — and keeps "unknown" indistinguishable from
+      // "exists but not yours", so the endpoint cannot be used to enumerate.
+      if (error instanceof OdooGatewayError && error.code === 'not_found') {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async listServiceTypes(

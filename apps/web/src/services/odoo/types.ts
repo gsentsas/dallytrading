@@ -39,17 +39,34 @@ export interface LeadRef {
   readonly status: 'received';
 }
 
-/** Public tracking view of a shipment. Phase 7. */
+/**
+ * Public tracking view of a shipment.
+ *
+ * Mirrors `PUBLIC_PAYLOAD_KEYS` in the `dally_tracking` module exactly. Both
+ * sides are deliberately explicit: this type is the front end's statement of what
+ * it expects, and the module's allowlist is the server's statement of what it
+ * emits. If they diverge, that is a change someone made on purpose.
+ *
+ * Note what is absent: customer identity, declared value, supplier cost, margin,
+ * internal notes, sales order, invoice, and any database id.
+ */
 export interface PublicShipment {
   readonly reference: string;
   readonly transportMode: string;
-  readonly origin: string;
-  readonly destination: string;
+  readonly transportModeLabel: string;
+  readonly origin: string | null;
+  readonly destination: string | null;
   readonly status: string;
   readonly statusLabel: string;
   readonly departureDate: string | null;
   readonly estimatedArrival: string | null;
+  readonly actualArrival: string | null;
   readonly lastUpdate: string | null;
+  /** The customer's own shipment identifiers, printed on their documents. */
+  readonly carrierTrackingNumber: string | null;
+  readonly containerNumber: string | null;
+  readonly goodsDescription: string | null;
+  readonly packagesCount: number;
   readonly timeline: ReadonlyArray<PublicShipmentEvent>;
 }
 

@@ -1,0 +1,57 @@
+# ── Secrets — ne JAMAIS versionner (critère §91 : aucun secret dans Git) ──────
+.env
+.env.*
+!.env.example
+# Généré depuis odoo.conf.template — contient le mot de passe de la base.
+# Aucun commentaire en fin de ligne : .gitignore ne les interprète pas et
+# le motif serait pris littéralement, commentaire compris.
+odoo/config/odoo.conf
+*.pem
+*.key
+*.crt
+secrets/
+
+# ── Sauvegardes et données ────────────────────────────────────────────────────
+backups/
+*.dump
+*.sql
+*.sql.gz
+*.tar.gz
+*.sha256
+filestore/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Node / Next.js ────────────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+build/
+dist/
+.turbo/
+*.tsbuildinfo
+.pnpm-store/
+coverage/
+.vercel/
+
+# ── Python / Odoo ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ── Système / éditeurs ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# ── Plesk / hébergement (hors périmètre du dépôt) ─────────────────────────────
+.claude.json
+.imunify_patch_id
+.myimunify_id

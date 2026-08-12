@@ -1,0 +1,149 @@
+####################################################################
+# DALLYTRADING — Stack Odoo 19 + PostgreSQL 16
+#
+# Instance TOTALEMENT INDÉPENDANTE. Aucun lien, aucune dépendance et
+# aucune communication avec l'instance Odoo 18 « sen_containers_crm »
+# qui tourne par ailleurs sur ce serveur (ports 18069/18072).
+#
+# Le reverse proxy est le nginx de Plesk — il n'y a volontairement PAS
+# de service proxy ici : publier sur 80/443 couperait les ~20 domaines
+# en production sur cette machine.
+#
+# Usage :
+#   docker compose --env-file ../.env -f docker-compose.yml \
+#                  -f docker-compose.production.yml up -d
+####################################################################
+
+name: ${COMPOSE_PROJECT_NAME:-dally}
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+
+  # ─────────────────────────────────────────────────────────────────
+  # PostgreSQL — joignable uniquement depuis le réseau interne.
+  # Aucun port publié sur l'hôte (§7, §13, critère §88).
+  # ─────────────────────────────────────────────────────────────────
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    container_name: dally-postgres
+    hostname: dally-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB requis}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER requis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis}
+      # Le rôle est créé sans SUPERUSER ni CREATEDB : la base est
+      # pré-créée par l'entrypoint et Odoo s'y initialise. Il n'a donc
+      # jamais besoin de créer une base lui-même.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+      TZ: ${TZ:-Africa/Dakar}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=3GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=100
+      - -c
+      - log_min_duration_statement=2000
+      - -c
+      - listen_addresses=*
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - dally_private
+    shm_size: ${POSTGRES_SHM_SIZE:-1g}
+    mem_limit: ${POSTGRES_MEM_LIMIT:-4g}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    logging: *default-logging
+
+  # ─────────────────────────────────────────────────────────────────
+  # Odoo 19 Community
+  #
+  # entrypoint surchargé volontairement : l'entrypoint de l'image
+  # officielle passe --db_password en argument de ligne de commande,
+  # ce qui rend le mot de passe lisible par tout utilisateur via
+  # `ps aux`. Constaté sur l'autre instance de ce serveur. On lance
+  # donc odoo directement, tous les secrets restant dans odoo.conf
+  # (0600) ; la synchronisation au démarrage est assurée par
+  # depends_on: service_healthy.
+  # ─────────────────────────────────────────────────────────────────
+  odoo:
+    image: ${ODOO_IMAGE:-odoo:19.0}
+    container_name: dally-odoo
+    hostname: dally-odoo
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["odoo"]
+    command: ["-c", "/etc/odoo/odoo.conf"]
+    environment:
+      TZ: ${TZ:-Africa/Dakar}
+    volumes:
+      # Filestore Odoo (pièces jointes). À sauvegarder AVEC la base,
+      # dans la même sauvegarde logique (§14).
+      - odoo-filestore:/var/lib/odoo
+      # Config générée depuis odoo.conf.template — montée en lecture seule.
+      - ../odoo/config/odoo.conf:/etc/odoo/odoo.conf:ro
+      # Modules DallyTrading. Le core Odoo n'est jamais modifié (§3).
+      - ../odoo/custom-addons:/mnt/extra-addons:ro
+    ports:
+      # Bind sur la loopback UNIQUEMENT : seul le nginx de Plesk y accède.
+      # Odoo n'est jamais joignable directement depuis Internet (§5).
+      - "127.0.0.1:${ODOO_HTTP_PORT:-18169}:8069"
+      - "127.0.0.1:${ODOO_LONGPOLLING_PORT:-18172}:8072"
+    networks:
+      - dally_private
+      - dally_public
+    mem_limit: ${ODOO_MEM_LIMIT:-9g}
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - |
+          import sys, urllib.request
+          try:
+              r = urllib.request.urlopen("http://localhost:8069/web/health", timeout=5)
+              sys.exit(0 if r.status == 200 else 1)
+          except Exception:
+              sys.exit(1)
+      interval: 30s
+      timeout: 10s
+      retries: 4
+      start_period: 120s
+    logging: *default-logging
+
+networks:
+  # Réseau isolé : pas de route vers l'extérieur. Porte le trafic Odoo ↔ DB.
+  dally_private:
+    name: dally_private
+    driver: bridge
+    internal: true
+  # Réseau de sortie : accès sortant (SMTP, mises à jour) et publication
+  # des ports sur la loopback de l'hôte.
+  dally_public:
+    name: dally_public
+    driver: bridge
+
+volumes:
+  postgres-data:
+    name: dally_postgres_data
+  odoo-filestore:
+    name: dally_odoo_filestore

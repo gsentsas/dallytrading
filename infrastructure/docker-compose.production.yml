@@ -1,0 +1,57 @@
+####################################################################
+# DALLYTRADING — Surcouche PRODUCTION
+#
+# À combiner avec docker-compose.yml :
+#   docker compose --env-file ../.env \
+#                  -f docker-compose.yml \
+#                  -f docker-compose.production.yml up -d
+#
+# Ce fichier ne fait que durcir. Il ne définit aucun nouveau service.
+####################################################################
+
+services:
+
+  postgres:
+    # `no-new-privileges` empêche un binaire setuid d'élever ses droits
+    # à l'intérieur du conteneur.
+    security_opt:
+      - no-new-privileges:true
+    # PostgreSQL a besoin d'écrire dans son datadir : pas de read_only
+    # sur le rootfs, mais /tmp est en tmpfs non exécutable.
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: ${POSTGRES_MEM_LIMIT:-4g}
+        reservations:
+          memory: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  odoo:
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=1g
+    # Odoo écrit dans /var/lib/odoo (volume) et /tmp (tmpfs) uniquement.
+    deploy:
+      resources:
+        limits:
+          # 4 workers + 2 threads cron : on plafonne à 6 CPU pour laisser
+          # de la marge aux autres services du serveur mutualisé.
+          cpus: "6.0"
+          memory: ${ODOO_MEM_LIMIT:-9g}
+        reservations:
+          memory: 2g
+    # En production, Odoo doit redémarrer indéfiniment en cas de crash.
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"

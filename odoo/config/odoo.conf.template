@@ -1,0 +1,82 @@
+####################################################################
+# DALLYTRADING — Modèle de configuration Odoo 19
+#
+# NE PAS ÉDITER odoo.conf directement : il est GÉNÉRÉ depuis ce
+# modèle et écrasé à chaque rendu.
+#
+#   ./infrastructure/scripts/render-config.sh
+#
+# odoo.conf contient le mot de passe de la base : il est en 0600 et
+# exclu de Git (.gitignore).
+####################################################################
+
+[options]
+
+# ─── Sécurité ─────────────────────────────────────────────────────
+# Master password. Le Database Manager est désactivé ci-dessous, mais
+# ce secret doit rester fort : il protège toute opération sur les bases.
+admin_passwd = ${ODOO_ADMIN_PASSWD}
+
+# Database Manager INTERDIT (§9, §91). Empêche depuis Internet :
+# lister, créer, dupliquer, supprimer ou restaurer une base.
+list_db = False
+
+# Une seule base servie, verrouillée par expression exacte. Même si
+# une autre base existait sur ce cluster, Odoo refuserait de la servir.
+dbfilter = ^${ODOO_DB_NAME}$
+
+# ─── Base de données ──────────────────────────────────────────────
+# Rôle non-superuser, sans CREATEDB. La base est pré-créée par
+# l'entrypoint PostgreSQL et appartient à ce rôle (§7).
+db_host = ${POSTGRES_HOST}
+db_port = ${POSTGRES_PORT}
+db_user = ${POSTGRES_USER}
+db_password = ${POSTGRES_PASSWORD}
+db_name = ${ODOO_DB_NAME}
+# 4 workers + 2 threads cron : 32 connexions suffisent largement et
+# bornent la consommation côté PostgreSQL (max_connections=100).
+db_maxconn = 32
+db_template = template0
+
+# ─── Chemins ──────────────────────────────────────────────────────
+# custom-addons AVANT le core : les modules DallyTrading peuvent
+# étendre le comportement natif sans jamais modifier le core (§3).
+addons_path = /mnt/extra-addons,/usr/lib/python3/dist-packages/odoo/addons
+data_dir = /var/lib/odoo
+
+# ─── Réseau / proxy ───────────────────────────────────────────────
+# OBLIGATOIRE derrière le nginx de Plesk : sans cela Odoo génère des
+# URL en http:// et fait confiance à la mauvaise IP source.
+proxy_mode = True
+http_enable = True
+http_interface = 0.0.0.0
+http_port = 8069
+# Depuis Odoo 16, longpolling_port est remplacé par gevent_port.
+gevent_port = 8072
+
+# ─── Dimensionnement ──────────────────────────────────────────────
+# Valeurs calculées pour CE serveur : 12 vCPU, ~17 Gi disponibles,
+# partagé avec Plesk, ~20 domaines et une autre instance Odoo.
+# Volontairement pas (2×vCPU)+1, qui supposerait une machine dédiée.
+workers = ${ODOO_WORKERS}
+max_cron_threads = ${ODOO_MAX_CRON_THREADS}
+
+# Soft : le worker termine la requête puis se recycle proprement.
+# Hard : arrêt immédiat. Pire cas ≈ workers × hard ≈ 8 Gi.
+limit_memory_soft = ${ODOO_LIMIT_MEMORY_SOFT}
+limit_memory_hard = ${ODOO_LIMIT_MEMORY_HARD}
+limit_time_cpu = ${ODOO_LIMIT_TIME_CPU}
+limit_time_real = ${ODOO_LIMIT_TIME_REAL}
+limit_request = 8192
+
+# ─── Journalisation ───────────────────────────────────────────────
+# Pas de logfile : sortie standard captée par Docker (json-file avec
+# rotation), donc consultable via `docker compose logs`.
+log_level = ${ODOO_LOG_LEVEL}
+log_handler = :INFO
+logrotate = False
+
+# ─── Divers ───────────────────────────────────────────────────────
+# Aucune donnée de démonstration en production.
+without_demo = all
+server_wide_modules = base,web

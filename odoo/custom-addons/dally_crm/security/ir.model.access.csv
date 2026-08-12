@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_dally_quote_request_readonly,dally.quote.request read-only,model_dally_quote_request,dally_core.group_dally_readonly,1,0,0,0
+access_dally_quote_request_commercial,dally.quote.request commercial,model_dally_quote_request,dally_core.group_dally_commercial,1,1,1,0
+access_dally_quote_request_sourcing,dally.quote.request sourcing,model_dally_quote_request,dally_core.group_dally_sourcing,1,1,1,0
+access_dally_quote_request_manager,dally.quote.request manager,model_dally_quote_request,dally_core.group_dally_manager,1,1,1,1

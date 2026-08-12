@@ -59,14 +59,21 @@ class TestTrackingEndpoint(HttpCase):
         })
         self.raw_key = self.key.key_to_display
 
-    def _get(self, reference, api_key=None):
+    def _get(self, reference, api_key=None, token=None):
+        """Supplies the shipment's own token unless a test overrides it.
+
+        The reference alone is never sufficient, so every test that expects a
+        result must carry a token.
+        """
         headers = {}
         key = self.raw_key if api_key is None else api_key
         if key:
             headers["X-API-Key"] = key
-        return self.url_open(
-            "/api/v1/tracking/%s" % reference, headers=headers, timeout=30
-        )
+        effective = self.shipment.public_tracking_token if token is None else token
+        url = "/api/v1/tracking/%s" % reference
+        if effective:
+            url = "%s?token=%s" % (url, effective)
+        return self.url_open(url, headers=headers, timeout=30)
 
     # ─── Authentication ──────────────────────────────────────────────
 
@@ -167,8 +174,11 @@ class TestTrackingEndpoint(HttpCase):
             "direction": "export",
             "company_id": other_company.id,
         })
-        response = self._get(foreign.reference)
+        response = self._get(
+            foreign.reference, token=foreign.public_tracking_token
+        )
         self.assertEqual(
             response.status_code, 404,
-            "The multi-company rule must apply to the public endpoint too",
+            "The multi-company rule must apply to the public endpoint too, even "
+            "with the correct token",
         )

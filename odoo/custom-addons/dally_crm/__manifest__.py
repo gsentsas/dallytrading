@@ -27,14 +27,22 @@ Adds:
     # utm arrives through crm, but it is declared explicitly because this module
     # references utm.source and utm.medium directly. Relying on a transitive
     # dependency would break silently if crm ever drops it.
+    # sale is required because a qualified request raises a native sale.order.
+    # The dependency is deliberate: the alternative would be a parallel quotation
+    # model, which is exactly what §70 forbids.
     "depends": [
         "dally_core",
         "crm",
         "utm",
+        "sale",
     ],
     "data": [
+        "security/ir.model.access.csv",
+        "security/dally_crm_rules.xml",
         "data/utm_data.xml",
         "views/crm_lead_views.xml",
+        "views/dally_quote_request_views.xml",
+        "views/sale_order_views.xml",
         "views/dally_crm_menus.xml",
     ],
     "installable": True,

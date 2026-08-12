@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Shows which public request a quotation answers. One anchor, on a
+        long-stable native field, rather than several fragile xpaths.
+    -->
+    <record id="sale_order_view_form_dally" model="ir.ui.view">
+        <field name="name">sale.order.form.dally</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="dally_quote_request_id"
+                       options="{'no_create': True}"
+                       readonly="state != 'draft'"/>
+                <field name="dally_reference" readonly="1"
+                       invisible="not dally_reference"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

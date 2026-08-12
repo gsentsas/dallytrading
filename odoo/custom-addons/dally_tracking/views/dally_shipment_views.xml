@@ -37,13 +37,33 @@
                     </field>
 
                     <group>
-                        <group>
+                        <group string="Events">
                             <field name="event_count" readonly="1"/>
                             <field name="public_event_count" readonly="1"
                                    string="Visible to Customer"/>
                             <field name="last_public_event_id" readonly="1"/>
                         </group>
+                        <group string="Customer Link">
+                            <field name="public_tracking_url" readonly="1"
+                                   widget="CopyClipboardChar"/>
+                            <button name="action_rotate_tracking_token"
+                                    type="object" string="Rotate Token"
+                                    class="btn-link"
+                                    confirm="Rotating the token invalidates every
+                                             tracking link already sent to this
+                                             customer, including the one in their
+                                             inbox. Continue?"/>
+                        </group>
                     </group>
+
+                    <div class="alert alert-warning" role="alert">
+                        The tracking link contains an unpredictable token. The
+                        reference alone is <strong>not</strong> enough to read this
+                        shipment through the API: references are sequential, and
+                        accepting them on their own would let the whole series be
+                        enumerated. Send the full link — never the reference alone —
+                        by e-mail or WhatsApp.
+                    </div>
                 </page>
             </xpath>
 

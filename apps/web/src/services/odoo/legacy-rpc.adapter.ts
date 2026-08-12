@@ -35,6 +35,8 @@ import {
   type LeadInput,
   type LeadRef,
   type PublicShipment,
+  type QuoteInput,
+  type QuoteRef,
   type ServiceType,
 } from './types';
 
@@ -52,8 +54,17 @@ export class LegacyRpcAdapter implements OdooGateway {
     throw new OdooGatewayError('unavailable', NOT_IMPLEMENTED, 501);
   }
 
+  async createQuoteRequest(
+    _input: QuoteInput,
+    _idempotencyKey: string,
+    _correlationId: string,
+  ): Promise<QuoteRef> {
+    throw new OdooGatewayError('unavailable', NOT_IMPLEMENTED, 501);
+  }
+
   async getShipmentByTracking(
     _reference: string,
+    _token: string,
     _correlationId: string,
   ): Promise<PublicShipment | null> {
     throw new OdooGatewayError('unavailable', NOT_IMPLEMENTED, 501);

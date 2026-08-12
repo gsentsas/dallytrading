@@ -30,6 +30,7 @@ type Outcome =
   | { kind: 'found'; shipment: PublicShipment }
   | { kind: 'not_found' }
   | { kind: 'malformed' }
+  | { kind: 'token_missing' }
   | { kind: 'rate_limited' }
   | { kind: 'unavailable' };
 
@@ -50,13 +51,14 @@ type Outcome =
 export default async function TrackingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ref?: string }>;
+  searchParams: Promise<{ ref?: string; t?: string }>;
 }) {
   const params = await searchParams;
   const raw = (params.ref ?? '').trim();
   const normalised = raw.replace(/\s+/g, '').toUpperCase();
+  const token = (params.t ?? '').trim();
 
-  const outcome = await resolve(normalised);
+  const outcome = await resolve(normalised, token);
 
   return (
     <main id="contenu" className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
@@ -64,8 +66,10 @@ export default async function TrackingPage({
         Suivre mon expédition
       </h1>
       <p className="mt-4 text-mist-600">
-        Saisissez la référence figurant sur votre confirmation, au format
-        <span className="font-mono"> DT-SHP-2026-000124</span>.
+        Utilisez le lien de suivi complet reçu par e-mail ou WhatsApp. Il contient
+        votre référence, au format
+        <span className="font-mono"> DT-SHP-2026-000124</span>, ainsi qu’un code de
+        suivi qui protège votre expédition.
       </p>
 
       {/* GET, so the result is bookmarkable and the page needs no JavaScript. */}
@@ -91,6 +95,10 @@ export default async function TrackingPage({
             aria-describedby={outcome.kind === 'idle' ? undefined : 'tracking-message'}
             className="min-w-64 flex-1 rounded-lg border border-mist-300 p-3 font-mono"
           />
+          {/* The token travels with the form so a customer can correct a typo in
+              the reference without going back to their e-mail. It is never
+              displayed: a code visible on screen ends up in screenshots. */}
+          <input type="hidden" name="t" value={token} />
           <button
             type="submit"
             className="rounded-lg bg-green-500 px-6 py-3 font-semibold text-white hover:bg-green-600"
@@ -124,11 +132,12 @@ function message(kind: Exclude<Outcome['kind'], 'idle' | 'found'>): string {
   switch (kind) {
     case 'malformed':
       return 'Cette référence n’a pas le format attendu. Vérifiez votre saisie : elle ressemble à DT-SHP-2026-000124.';
+    case 'token_missing':
+      return 'Pour consulter une expédition, utilisez le lien de suivi complet qui vous a été envoyé par e-mail ou WhatsApp. La référence seule ne suffit pas : cette restriction protège les expéditions de nos clients.';
     case 'not_found':
-      // Same wording as a malformed reference would be tempting, but the
-      // distinction is harmless here: neither confirms nor denies the existence of
-      // any other shipment.
-      return 'Aucune expédition ne correspond à cette référence. Vérifiez votre saisie, ou contactez-nous si le problème persiste.';
+      // Wrong token and unknown reference give the same answer, on purpose: the
+      // page must not confirm which references exist.
+      return 'Aucune expédition ne correspond à cette référence et à ce code de suivi. Vérifiez le lien reçu, ou contactez-nous en indiquant votre référence.';
     case 'rate_limited':
       return 'Trop de recherches successives. Merci de patienter une minute avant de réessayer.';
     case 'unavailable':
@@ -136,7 +145,7 @@ function message(kind: Exclude<Outcome['kind'], 'idle' | 'found'>): string {
   }
 }
 
-async function resolve(reference: string): Promise<Outcome> {
+async function resolve(reference: string, token: string): Promise<Outcome> {
   if (!reference) {
     return { kind: 'idle' };
   }
@@ -145,6 +154,13 @@ async function resolve(reference: string): Promise<Outcome> {
   // before it can consume the caller's rate-limit budget.
   if (!REFERENCE_RE.test(reference)) {
     return { kind: 'malformed' };
+  }
+
+  // The reference alone is deliberately not enough. References are sequential, so
+  // accepting them on their own would let the whole series be walked. Answered
+  // before any lookup, so a walker learns nothing and spends no budget.
+  if (!token) {
+    return { kind: 'token_missing' };
   }
 
   const correlationId = newCorrelationId();
@@ -164,7 +180,7 @@ async function resolve(reference: string): Promise<Outcome> {
 
   try {
     const shipment = await getOdooGateway().getShipmentByTracking(
-      reference, correlationId,
+      reference, token, correlationId,
     );
     if (!shipment) {
       logger.info('Tracking lookup miss', { correlationId, reference });

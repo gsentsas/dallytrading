@@ -1,42 +1,41 @@
 'use client';
 
 /**
- * Multi-step quote form (§36, §79).
+ * Multi-step quote form, driven by the service catalogue Odoo publishes.
  *
- * Design notes:
+ * There is no per-service logic in this file. Which steps appear and which fields
+ * they contain is derived entirely from the `requires_*` flags on the service —
+ * adding a service in Odoo, or changing what it needs, changes this form with no
+ * front-end deployment. That is the point of making Odoo the source of truth.
  *
- * * **The idempotency key is generated once**, when the form mounts, and reused on
- *   every retry. That is what makes a double-click or a flaky connection safe: the
- *   server recognises the second attempt as the same submission (§41).
- * * **Steps adapt to the service.** A sourcing prospect is never asked for a port
- *   of loading — irrelevant questions are how a form gets abandoned.
- * * **Client validation is convenience only.** The same zod schema runs on the
- *   server, which is the authority; this copy exists to give immediate feedback.
- * * **Errors are announced.** Messages carry `role="alert"` and inputs are wired
- *   with `aria-invalid` / `aria-describedby`, so a screen-reader user learns what
- *   went wrong instead of silently failing to submit (§53).
+ * The idempotency key is generated once, when the form mounts, and reused on every
+ * retry: that is what makes a double-click or a flaky connection safe (§41).
  */
 
 import { useMemo, useState } from 'react';
+import type { ServiceType } from '@/services/odoo/types';
 import {
-  QUOTE_SERVICES,
   STEP_LABELS,
-  findService,
+  quoteRequestSchema,
   stepsForService,
   type QuoteStepId,
-} from './services';
-import { quoteFormSchema } from './schema';
+} from './quote-schema';
 
 interface FormState {
   serviceCode: string;
-  originCountry: string;
+  originCountryCode: string;
   originCity: string;
-  destinationCountry: string;
+  destinationCountryCode: string;
   destinationCity: string;
-  goods: string;
-  weight: string;
-  volume: string;
-  packages: string;
+  goodsDescription: string;
+  quantity: string;
+  weightKg: string;
+  volumeCbm: string;
+  packagesCount: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehicleYear: string;
+  budget: string;
   firstName: string;
   lastName: string;
   companyName: string;
@@ -46,15 +45,17 @@ interface FormState {
   city: string;
   countryCode: string;
   message: string;
-  /** Honeypot. Hidden from users; a value here means an automated submission. */
   website: string;
 }
 
 const EMPTY: FormState = {
   serviceCode: '',
-  originCountry: '', originCity: '',
-  destinationCountry: '', destinationCity: '',
-  goods: '', weight: '', volume: '', packages: '',
+  originCountryCode: '', originCity: '',
+  destinationCountryCode: '', destinationCity: '',
+  goodsDescription: '', quantity: '', weightKg: '', volumeCbm: '',
+  packagesCount: '',
+  vehicleMake: '', vehicleModel: '', vehicleYear: '',
+  budget: '',
   firstName: '', lastName: '', companyName: '',
   email: '', phone: '', whatsapp: '',
   city: '', countryCode: '', message: '',
@@ -63,9 +64,13 @@ const EMPTY: FormState = {
 
 type Status = 'editing' | 'submitting' | 'sent' | 'error';
 
-export function QuoteForm() {
-  // Generated once per mounted form, not per attempt. Regenerating it on retry
-  // would defeat idempotency and create a duplicate lead.
+export function QuoteForm({
+  services,
+  catalogueStale,
+}: {
+  services: ReadonlyArray<ServiceType>;
+  catalogueStale: boolean;
+}) {
   const requestUuid = useMemo(() => crypto.randomUUID(), []);
 
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -75,17 +80,15 @@ export function QuoteForm() {
   const [reference, setReference] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const steps = useMemo(
-    () => stepsForService(form.serviceCode || null),
-    [form.serviceCode],
+  const service = useMemo(
+    () => services.find((entry) => entry.code === form.serviceCode),
+    [services, form.serviceCode],
   );
+  const steps = useMemo(() => stepsForService(service), [service]);
   const currentStep: QuoteStepId = steps[stepIndex] ?? 'service';
-  const service = findService(form.serviceCode);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((previous) => ({ ...previous, [key]: value }));
-    // Clear the message for a field as soon as the user edits it: keeping a stale
-    // error next to a corrected field is confusing.
     setErrors((previous) => {
       if (!previous[key]) return previous;
       const next = { ...previous };
@@ -94,12 +97,32 @@ export function QuoteForm() {
     });
   }
 
-  /** Validate only the fields belonging to the current step. */
+  function selectService(code: string) {
+    // Changing service can remove the step the user is on, so the index is reset
+    // rather than left pointing at a step that no longer exists.
+    setForm((previous) => ({ ...previous, serviceCode: code }));
+    setErrors({});
+    setStepIndex(0);
+  }
+
   function validateStep(): boolean {
     const stepErrors: Record<string, string> = {};
 
     if (currentStep === 'service' && !form.serviceCode) {
       stepErrors.serviceCode = 'Veuillez sélectionner un service.';
+    }
+
+    if (currentStep === 'route' && service) {
+      if (service.requires_origin && !form.originCity && !form.originCountryCode) {
+        stepErrors.originCity = 'L’origine est requise pour ce service.';
+      }
+      if (
+        service.requires_destination &&
+        !form.destinationCity &&
+        !form.destinationCountryCode
+      ) {
+        stepErrors.destinationCity = 'La destination est requise pour ce service.';
+      }
     }
 
     if (currentStep === 'contact') {
@@ -109,22 +132,20 @@ export function QuoteForm() {
       if (!form.email.trim() && !form.phone.trim()) {
         stepErrors.email = 'Indiquez au moins un e-mail ou un téléphone.';
       }
-      // Reuse the shared schema for the email shape, so the client and the server
-      // never disagree about what a valid address looks like.
+      // The shared schema decides what a valid address looks like, so the client
+      // and the server can never disagree about it.
       if (form.email.trim()) {
-        const probe = quoteFormSchema.safeParse({
+        const probe = quoteRequestSchema.safeParse({
           requestUuid,
           serviceCode: form.serviceCode || 'other',
           lastName: form.lastName || 'x',
           email: form.email,
         });
         if (!probe.success) {
-          const emailIssue = probe.error.issues.find((issue) =>
-            issue.path.includes('email'),
+          const issue = probe.error.issues.find((entry) =>
+            entry.path.includes('email'),
           );
-          if (emailIssue) {
-            stepErrors.email = emailIssue.message;
-          }
+          if (issue) stepErrors.email = issue.message;
         }
       }
     }
@@ -149,26 +170,8 @@ export function QuoteForm() {
     setStatus('submitting');
     setSubmitError(null);
 
-    // Route and cargo answers are folded into the message: they are freight
-    // details a human reads, not structured lead fields. Once a shipment is
-    // created from the lead they are captured properly on dally.shipment.
-    const details: string[] = [];
-    if (service?.requiresRoute) {
-      if (form.originCity || form.originCountry) {
-        details.push(`Origine : ${[form.originCity, form.originCountry].filter(Boolean).join(', ')}`);
-      }
-      if (form.destinationCity || form.destinationCountry) {
-        details.push(`Destination : ${[form.destinationCity, form.destinationCountry].filter(Boolean).join(', ')}`);
-      }
-    }
-    if (service?.requiresCargo) {
-      if (form.goods) details.push(`Marchandise : ${form.goods}`);
-      if (form.weight) details.push(`Poids : ${form.weight} kg`);
-      if (form.volume) details.push(`Volume : ${form.volume} m³`);
-      if (form.packages) details.push(`Colis : ${form.packages}`);
-    }
-    if (form.message) details.push(`Message : ${form.message}`);
-
+    // Structured fields go to structured fields — unlike the earlier lead form,
+    // which folded them into a message. The server has somewhere to put them now.
     const payload = {
       requestUuid,
       serviceCode: form.serviceCode,
@@ -180,13 +183,30 @@ export function QuoteForm() {
       whatsapp: form.whatsapp || undefined,
       city: form.city || undefined,
       countryCode: form.countryCode || undefined,
-      message: details.join('\n') || undefined,
+      originCountryCode: form.originCountryCode || undefined,
+      originCity: form.originCity || undefined,
+      destinationCountryCode: form.destinationCountryCode || undefined,
+      destinationCity: form.destinationCity || undefined,
+      goodsDescription: form.goodsDescription || undefined,
+      quantity: form.quantity || undefined,
+      weightKg: form.weightKg || undefined,
+      volumeCbm: form.volumeCbm || undefined,
+      packagesCount: form.packagesCount || undefined,
+      vehicleMake: form.vehicleMake || undefined,
+      vehicleModel: form.vehicleModel || undefined,
+      vehicleYear: form.vehicleYear || undefined,
+      budget: form.budget || undefined,
+      message: form.message || undefined,
       sourceUrl: typeof window !== 'undefined' ? window.location.href : undefined,
+      referrerUrl:
+        typeof document !== 'undefined' && document.referrer
+          ? document.referrer
+          : undefined,
       website: form.website || undefined,
     };
 
     try {
-      const response = await fetch('/api/leads', {
+      const response = await fetch('/api/quotes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -208,8 +228,8 @@ export function QuoteForm() {
       setReference(body.data.reference);
       setStatus('sent');
     } catch {
-      // Network failure. The same requestUuid is kept, so pressing "réessayer"
-      // cannot create a second lead if the first call in fact reached the server.
+      // The same requestUuid is kept, so pressing "réessayer" cannot create a
+      // second request if the first call in fact reached the server.
       setSubmitError(
         'Connexion interrompue. Vérifiez votre réseau et réessayez : votre demande ne sera pas envoyée deux fois.',
       );
@@ -217,7 +237,6 @@ export function QuoteForm() {
     }
   }
 
-  // ─── Confirmation ─────────────────────────────────────────────────
   if (status === 'sent' && reference) {
     return (
       <div
@@ -227,14 +246,16 @@ export function QuoteForm() {
       >
         <h2 className="text-xl font-bold text-green-700">Demande enregistrée</h2>
         <p className="mt-3 text-navy-800">
-          Merci. Votre demande a bien été transmise à notre équipe.
+          Merci. Votre demande a bien été transmise à notre équipe commerciale.
         </p>
         <p className="mt-4 text-navy-800">
           Votre référence :{' '}
           <strong className="font-mono text-lg">{reference}</strong>
         </p>
         <p className="mt-2 text-sm text-mist-600">
-          Conservez-la : elle identifie votre demande dans tous nos échanges.
+          Conservez-la : elle identifie votre demande dans tous nos échanges. Pour
+          nous transmettre des documents, répondez à notre e-mail ou écrivez-nous
+          sur WhatsApp en indiquant cette référence.
         </p>
       </div>
     );
@@ -244,8 +265,16 @@ export function QuoteForm() {
 
   return (
     <div>
-      {/* Progress. aria-hidden because the same information is announced in the
-          step heading below — reading it twice is noise for a screen reader. */}
+      {catalogueStale && (
+        <div
+          className="mb-6 rounded-lg border border-mist-300 bg-mist-100 p-3 text-sm text-mist-700"
+          role="status"
+        >
+          Notre catalogue de services est momentanément affiché depuis une copie
+          récente. Vous pouvez envoyer votre demande normalement.
+        </div>
+      )}
+
       <ol className="mb-8 flex flex-wrap gap-2" aria-hidden="true">
         {steps.map((step, index) => (
           <li
@@ -274,7 +303,7 @@ export function QuoteForm() {
               Quel service vous intéresse ?
             </legend>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {QUOTE_SERVICES.map((option) => (
+              {services.map((option) => (
                 <label
                   key={option.code}
                   className={`cursor-pointer rounded-lg border p-4 ${
@@ -288,15 +317,17 @@ export function QuoteForm() {
                     name="serviceCode"
                     value={option.code}
                     checked={form.serviceCode === option.code}
-                    onChange={() => update('serviceCode', option.code)}
+                    onChange={() => selectService(option.code)}
                     className="sr-only"
                   />
                   <span className="block font-medium text-navy-700">
-                    {option.label}
+                    {option.name}
                   </span>
-                  <span className="mt-1 block text-sm text-mist-600">
-                    {option.description}
-                  </span>
+                  {option.description && (
+                    <span className="mt-1 block text-sm text-mist-600">
+                      {option.description}
+                    </span>
+                  )}
                 </label>
               ))}
             </div>
@@ -308,32 +339,96 @@ export function QuoteForm() {
           </fieldset>
         )}
 
-        {currentStep === 'route' && (
+        {currentStep === 'route' && service && (
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Pays d’origine" value={form.originCountry}
-                   onChange={(v) => update('originCountry', v)} />
-            <Field label="Ville d’origine" value={form.originCity}
-                   onChange={(v) => update('originCity', v)} />
-            <Field label="Pays de destination" value={form.destinationCountry}
-                   onChange={(v) => update('destinationCountry', v)} />
-            <Field label="Ville de destination" value={form.destinationCity}
-                   onChange={(v) => update('destinationCity', v)} />
+            {service.requires_origin && (
+              <>
+                <Field label="Ville d’origine" value={form.originCity}
+                       onChange={(v) => update('originCity', v)}
+                       error={errors.originCity}
+                       required />
+                <Field label="Pays d’origine (code ISO)"
+                       value={form.originCountryCode}
+                       onChange={(v) => update('originCountryCode', v)}
+                       placeholder="FR" />
+              </>
+            )}
+            {service.requires_destination && (
+              <>
+                <Field label="Ville de destination" value={form.destinationCity}
+                       onChange={(v) => update('destinationCity', v)}
+                       error={errors.destinationCity}
+                       required />
+                <Field label="Pays de destination (code ISO)"
+                       value={form.destinationCountryCode}
+                       onChange={(v) => update('destinationCountryCode', v)}
+                       placeholder="SN" />
+              </>
+            )}
           </div>
         )}
 
-        {currentStep === 'cargo' && (
+        {currentStep === 'cargo' && service && (
           <div className="space-y-5">
-            <Field label="Nature de la marchandise" value={form.goods}
-                   onChange={(v) => update('goods', v)}
-                   placeholder="Ex. pièces automobiles, textile, denrées" />
+            {service.requires_goods && (
+              <>
+                <Field label="Nature de la marchandise"
+                       value={form.goodsDescription}
+                       onChange={(v) => update('goodsDescription', v)}
+                       placeholder="Ex. pièces automobiles, textile, riz" />
+                <Field label="Quantité" value={form.quantity}
+                       onChange={(v) => update('quantity', v)}
+                       placeholder="Ex. 3 palettes, 2 tonnes, 500 unités" />
+              </>
+            )}
             <div className="grid gap-5 sm:grid-cols-3">
-              <Field label="Poids (kg)" value={form.weight} type="number"
-                     onChange={(v) => update('weight', v)} />
-              <Field label="Volume (m³)" value={form.volume} type="number"
-                     onChange={(v) => update('volume', v)} />
-              <Field label="Nombre de colis" value={form.packages} type="number"
-                     onChange={(v) => update('packages', v)} />
+              {service.requires_weight && (
+                <Field label="Poids (kg)" value={form.weightKg} type="number"
+                       onChange={(v) => update('weightKg', v)}
+                       error={errors.weightKg} />
+              )}
+              {service.requires_volume && (
+                <>
+                  <Field label="Volume (m³)" value={form.volumeCbm} type="number"
+                         onChange={(v) => update('volumeCbm', v)}
+                         error={errors.volumeCbm} />
+                  <Field label="Nombre de colis" value={form.packagesCount}
+                         type="number"
+                         onChange={(v) => update('packagesCount', v)}
+                         error={errors.packagesCount} />
+                </>
+              )}
             </div>
+            <p className="text-sm text-mist-600">
+              Ces informations sont facultatives si vous ne les connaissez pas
+              encore : nous les préciserons ensemble.
+            </p>
+          </div>
+        )}
+
+        {currentStep === 'vehicle' && (
+          <div className="grid gap-5 sm:grid-cols-3">
+            <Field label="Marque" value={form.vehicleMake}
+                   onChange={(v) => update('vehicleMake', v)}
+                   placeholder="Ex. Toyota" />
+            <Field label="Modèle" value={form.vehicleModel}
+                   onChange={(v) => update('vehicleModel', v)}
+                   placeholder="Ex. Hilux" />
+            <Field label="Année" value={form.vehicleYear}
+                   onChange={(v) => update('vehicleYear', v)}
+                   placeholder="Ex. 2019" />
+          </div>
+        )}
+
+        {currentStep === 'commercial' && (
+          <div className="space-y-5">
+            <Field label="Budget ou prix cible" value={form.budget}
+                   onChange={(v) => update('budget', v)}
+                   placeholder="Ex. environ 2 000 000 FCFA, ou 3000 EUR / tonne" />
+            <p className="text-sm text-mist-600">
+              Indiquez un ordre de grandeur, dans la devise et l’unité qui vous
+              conviennent. Cela nous permet d’orienter la recherche.
+            </p>
           </div>
         )}
 
@@ -378,20 +473,32 @@ export function QuoteForm() {
               Vérifiez votre demande avant de l’envoyer.
             </p>
             <dl className="divide-y divide-mist-200 rounded-lg border border-mist-200 bg-white">
-              <Summary label="Service" value={service?.label ?? '—'} />
-              {service?.requiresRoute && (
-                <>
-                  <Summary label="Origine"
-                           value={[form.originCity, form.originCountry].filter(Boolean).join(', ') || '—'} />
-                  <Summary label="Destination"
-                           value={[form.destinationCity, form.destinationCountry].filter(Boolean).join(', ') || '—'} />
-                </>
+              <Summary label="Service" value={service?.name ?? '—'} />
+              {service?.requires_origin && (
+                <Summary label="Origine"
+                         value={[form.originCity, form.originCountryCode]
+                           .filter(Boolean).join(', ') || '—'} />
               )}
-              {service?.requiresCargo && (
-                <Summary label="Marchandise" value={form.goods || '—'} />
+              {service?.requires_destination && (
+                <Summary label="Destination"
+                         value={[form.destinationCity, form.destinationCountryCode]
+                           .filter(Boolean).join(', ') || '—'} />
+              )}
+              {service?.requires_goods && (
+                <Summary label="Marchandise"
+                         value={form.goodsDescription || '—'} />
+              )}
+              {service?.requires_vehicle && (
+                <Summary label="Véhicule"
+                         value={[form.vehicleMake, form.vehicleModel,
+                                 form.vehicleYear].filter(Boolean).join(' ') || '—'} />
+              )}
+              {service?.requires_budget && (
+                <Summary label="Budget" value={form.budget || '—'} />
               )}
               <Summary label="Contact"
-                       value={[form.firstName, form.lastName].filter(Boolean).join(' ') || '—'} />
+                       value={[form.firstName, form.lastName]
+                         .filter(Boolean).join(' ') || '—'} />
               <Summary label="Société" value={form.companyName || '—'} />
               <Summary label="E-mail" value={form.email || '—'} />
               <Summary label="Téléphone" value={form.phone || '—'} />
@@ -399,15 +506,11 @@ export function QuoteForm() {
           </div>
         )}
 
-        {/* Honeypot: positioned off-screen by CSS, hidden from assistive tech,
-            and skipped by keyboard navigation. A real user never fills it. */}
+        {/* Honeypot: off-screen, out of tab order, hidden from assistive tech. */}
         <div className="dally-honeypot" aria-hidden="true">
           <label htmlFor="website">Site web</label>
           <input
-            id="website"
-            name="website"
-            type="text"
-            tabIndex={-1}
+            id="website" name="website" type="text" tabIndex={-1}
             autoComplete="off"
             value={form.website}
             onChange={(event) => update('website', event.target.value)}
@@ -427,9 +530,7 @@ export function QuoteForm() {
       <div className="mt-8 flex flex-wrap gap-3">
         {stepIndex > 0 && (
           <button
-            type="button"
-            onClick={goBack}
-            disabled={status === 'submitting'}
+            type="button" onClick={goBack} disabled={status === 'submitting'}
             className="rounded-lg border border-navy-300 px-5 py-3 font-medium text-navy-700 disabled:opacity-50"
           >
             Retour
@@ -437,17 +538,14 @@ export function QuoteForm() {
         )}
         {!isLastStep ? (
           <button
-            type="button"
-            onClick={goNext}
+            type="button" onClick={goNext}
             className="rounded-lg bg-navy-700 px-6 py-3 font-semibold text-white hover:bg-navy-600"
           >
             Continuer
           </button>
         ) : (
           <button
-            type="button"
-            onClick={submit}
-            disabled={status === 'submitting'}
+            type="button" onClick={submit} disabled={status === 'submitting'}
             className="rounded-lg bg-green-500 px-6 py-3 font-semibold text-white hover:bg-green-600 disabled:opacity-60"
           >
             {status === 'submitting' ? 'Envoi en cours…' : 'Envoyer ma demande'}

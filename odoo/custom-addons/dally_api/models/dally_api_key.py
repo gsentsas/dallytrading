@@ -22,6 +22,7 @@ PREFIX_LENGTH = 8
 #: Scopes an endpoint can require. Deliberately coarse: one per business area,
 #: split by read vs write. Fine-grained scopes tend to be granted wholesale.
 AVAILABLE_SCOPES = [
+    "services:read",
     "leads:write",
     "quotes:write",
     "sourcing:write",

@@ -14,8 +14,13 @@
             <field name="code">import_export</field>
             <field name="category">import_export</field>
             <field name="sequence">10</field>
-            <field name="requires_route" eval="True"/>
-            <field name="requires_cargo" eval="True"/>
+            <field name="requires_origin" eval="True"/>
+            <field name="requires_destination" eval="True"/>
+            <field name="requires_weight" eval="True"/>
+            <field name="requires_volume" eval="True"/>
+            <field name="requires_vehicle" eval="False"/>
+            <field name="requires_budget" eval="False"/>
+            <field name="requires_goods" eval="True"/>
             <field name="description">Support for import and export operations, from sourcing to customs clearance.</field>
         </record>
 
@@ -24,8 +29,13 @@
             <field name="code">logistics</field>
             <field name="category">logistics</field>
             <field name="sequence">20</field>
-            <field name="requires_route" eval="True"/>
-            <field name="requires_cargo" eval="True"/>
+            <field name="requires_origin" eval="True"/>
+            <field name="requires_destination" eval="True"/>
+            <field name="requires_weight" eval="True"/>
+            <field name="requires_volume" eval="True"/>
+            <field name="requires_vehicle" eval="False"/>
+            <field name="requires_budget" eval="False"/>
+            <field name="requires_goods" eval="True"/>
             <field name="description">Transport, warehousing and distribution of goods.</field>
         </record>
 
@@ -34,8 +44,13 @@
             <field name="code">freight_sea</field>
             <field name="category">freight</field>
             <field name="sequence">30</field>
-            <field name="requires_route" eval="True"/>
-            <field name="requires_cargo" eval="True"/>
+            <field name="requires_origin" eval="True"/>
+            <field name="requires_destination" eval="True"/>
+            <field name="requires_weight" eval="True"/>
+            <field name="requires_volume" eval="True"/>
+            <field name="requires_vehicle" eval="False"/>
+            <field name="requires_budget" eval="False"/>
+            <field name="requires_goods" eval="True"/>
             <field name="description">Full container, groupage and conventional sea freight.</field>
         </record>
 
@@ -44,8 +59,13 @@
             <field name="code">freight_air</field>
             <field name="category">freight</field>
             <field name="sequence">40</field>
-            <field name="requires_route" eval="True"/>
-            <field name="requires_cargo" eval="True"/>
+            <field name="requires_origin" eval="True"/>
+            <field name="requires_destination" eval="True"/>
+            <field name="requires_weight" eval="True"/>
+            <field name="requires_volume" eval="False"/>
+            <field name="requires_vehicle" eval="False"/>
+            <field name="requires_budget" eval="False"/>
+            <field name="requires_goods" eval="True"/>
             <field name="description">Air freight for urgent and high-value shipments.</field>
         </record>
 
@@ -54,8 +74,13 @@
             <field name="code">freight_vehicle</field>
             <field name="category">freight</field>
             <field name="sequence">50</field>
-            <field name="requires_route" eval="True"/>
-            <field name="requires_cargo" eval="True"/>
+            <field name="requires_origin" eval="True"/>
+            <field name="requires_destination" eval="True"/>
+            <field name="requires_weight" eval="False"/>
+            <field name="requires_volume" eval="False"/>
+            <field name="requires_vehicle" eval="True"/>
+            <field name="requires_budget" eval="False"/>
+            <field name="requires_goods" eval="False"/>
             <field name="description">Shipping of cars, utility vehicles and machinery.</field>
         </record>
 
@@ -64,8 +89,13 @@
             <field name="code">freight_groupage</field>
             <field name="category">freight</field>
             <field name="sequence">60</field>
-            <field name="requires_route" eval="True"/>
-            <field name="requires_cargo" eval="True"/>
+            <field name="requires_origin" eval="True"/>
+            <field name="requires_destination" eval="True"/>
+            <field name="requires_weight" eval="True"/>
+            <field name="requires_volume" eval="True"/>
+            <field name="requires_vehicle" eval="False"/>
+            <field name="requires_budget" eval="False"/>
+            <field name="requires_goods" eval="True"/>
             <field name="description">Shared container shipping for smaller volumes.</field>
         </record>
 
@@ -74,8 +104,13 @@
             <field name="code">trade</field>
             <field name="category">trade</field>
             <field name="sequence">70</field>
-            <field name="requires_route" eval="False"/>
-            <field name="requires_cargo" eval="True"/>
+            <field name="requires_origin" eval="True"/>
+            <field name="requires_destination" eval="True"/>
+            <field name="requires_weight" eval="False"/>
+            <field name="requires_volume" eval="False"/>
+            <field name="requires_vehicle" eval="False"/>
+            <field name="requires_budget" eval="True"/>
+            <field name="requires_goods" eval="True"/>
             <field name="description">Trading, brokerage and commercial representation.</field>
         </record>
 
@@ -84,8 +119,13 @@
             <field name="code">sourcing</field>
             <field name="category">sourcing</field>
             <field name="sequence">80</field>
-            <field name="requires_route" eval="False"/>
-            <field name="requires_cargo" eval="True"/>
+            <field name="requires_origin" eval="False"/>
+            <field name="requires_destination" eval="False"/>
+            <field name="requires_weight" eval="False"/>
+            <field name="requires_volume" eval="False"/>
+            <field name="requires_vehicle" eval="False"/>
+            <field name="requires_budget" eval="True"/>
+            <field name="requires_goods" eval="True"/>
             <field name="description">Supplier and product search, negotiation and quality follow-up.</field>
         </record>
 
@@ -94,8 +134,13 @@
             <field name="code">ecommerce</field>
             <field name="category">ecommerce</field>
             <field name="sequence">90</field>
-            <field name="requires_route" eval="False"/>
-            <field name="requires_cargo" eval="False"/>
+            <field name="requires_origin" eval="False"/>
+            <field name="requires_destination" eval="False"/>
+            <field name="requires_weight" eval="False"/>
+            <field name="requires_volume" eval="False"/>
+            <field name="requires_vehicle" eval="False"/>
+            <field name="requires_budget" eval="False"/>
+            <field name="requires_goods" eval="False"/>
             <field name="description">Online sales and order fulfilment.</field>
         </record>
 
@@ -104,8 +149,13 @@
             <field name="code">agrobusiness</field>
             <field name="category">agrobusiness</field>
             <field name="sequence">100</field>
-            <field name="requires_route" eval="False"/>
-            <field name="requires_cargo" eval="True"/>
+            <field name="requires_origin" eval="True"/>
+            <field name="requires_destination" eval="True"/>
+            <field name="requires_weight" eval="True"/>
+            <field name="requires_volume" eval="False"/>
+            <field name="requires_vehicle" eval="False"/>
+            <field name="requires_budget" eval="True"/>
+            <field name="requires_goods" eval="True"/>
             <field name="description">Agricultural products: sourcing, packaging, export and distribution.</field>
         </record>
 
@@ -114,8 +164,13 @@
             <field name="code">business_solutions</field>
             <field name="category">other</field>
             <field name="sequence">110</field>
-            <field name="requires_route" eval="False"/>
-            <field name="requires_cargo" eval="False"/>
+            <field name="requires_origin" eval="False"/>
+            <field name="requires_destination" eval="False"/>
+            <field name="requires_weight" eval="False"/>
+            <field name="requires_volume" eval="False"/>
+            <field name="requires_vehicle" eval="False"/>
+            <field name="requires_budget" eval="False"/>
+            <field name="requires_goods" eval="False"/>
             <field name="description">Support for companies: partner search, representation and advisory.</field>
         </record>
 
@@ -124,8 +179,13 @@
             <field name="code">other</field>
             <field name="category">other</field>
             <field name="sequence">999</field>
-            <field name="requires_route" eval="False"/>
-            <field name="requires_cargo" eval="False"/>
+            <field name="requires_origin" eval="False"/>
+            <field name="requires_destination" eval="False"/>
+            <field name="requires_weight" eval="False"/>
+            <field name="requires_volume" eval="False"/>
+            <field name="requires_vehicle" eval="False"/>
+            <field name="requires_budget" eval="False"/>
+            <field name="requires_goods" eval="False"/>
             <field name="description">Any request that does not fit the categories above.</field>
         </record>
 

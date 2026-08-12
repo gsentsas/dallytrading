@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="dally_quote_request_view_list" model="ir.ui.view">
+        <field name="name">dally.quote.request.list</field>
+        <field name="model">dally.quote.request</field>
+        <field name="arch" type="xml">
+            <list string="Quote Requests" sample="1"
+                  decoration-muted="state == 'spam'"
+                  decoration-success="state == 'won'"
+                  decoration-warning="state == 'new' and not user_id">
+                <field name="create_date" string="Received"/>
+                <field name="reference"/>
+                <field name="service_type_id"/>
+                <field name="contact_name"/>
+                <field name="company_name"/>
+                <field name="email" optional="show"/>
+                <field name="phone" optional="show"/>
+                <field name="partner_id" optional="show"/>
+                <field name="user_id" widget="many2one_avatar_user"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'won'"
+                       decoration-info="state == 'qualified'"
+                       decoration-danger="state == 'lost'"/>
+                <field name="sale_order_count" optional="hide"/>
+                <field name="utm_source" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="dally_quote_request_view_form" model="ir.ui.view">
+        <field name="name">dally.quote.request.form</field>
+        <field name="model">dally.quote.request</field>
+        <field name="arch" type="xml">
+            <form string="Quote Request">
+                <header>
+                    <button name="action_mark_qualified" type="object"
+                            string="Qualify" class="btn-primary"
+                            invisible="state != 'new'"/>
+                    <button name="action_create_partner" type="object"
+                            string="Create Contact" class="btn-secondary"
+                            invisible="partner_id"/>
+                    <button name="action_create_quotation" type="object"
+                            string="Create Quotation" class="btn-primary"
+                            invisible="state in ('new', 'spam', 'lost')"/>
+                    <button name="action_mark_spam" type="object"
+                            string="Mark as Spam" class="btn-secondary"
+                            confirm="Mark as spam and archive this request?"
+                            invisible="state == 'spam'"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="new,qualified,quoted,won"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Spam"
+                            bg_color="text-bg-danger" invisible="state != 'spam'"/>
+
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_lead" type="object"
+                                class="oe_stat_button" icon="fa-star"
+                                invisible="not lead_id">
+                            <span class="o_stat_text">Opportunity</span>
+                        </button>
+                        <button name="action_view_quotations" type="object"
+                                class="oe_stat_button" icon="fa-file-text-o"
+                                invisible="sale_order_count == 0">
+                            <field name="sale_order_count" widget="statinfo"
+                                   string="Quotations"/>
+                        </button>
+                    </div>
+
+                    <div class="oe_title">
+                        <label for="reference"/>
+                        <h1><field name="reference" readonly="1"/></h1>
+                    </div>
+
+                    <div class="alert alert-info" role="alert"
+                         invisible="partner_id or state == 'spam'">
+                        No existing contact matched this request. Create one during
+                        qualification — nothing is created automatically, so the
+                        address book does not fill with prospects who never answer.
+                    </div>
+
+                    <group>
+                        <group string="Request">
+                            <field name="service_type_id"
+                                   options="{'no_create': True}"/>
+                            <field name="user_id" widget="many2one_avatar_user"/>
+                            <field name="lead_id" readonly="1"
+                                   invisible="not lead_id"/>
+                            <field name="active" invisible="1"/>
+                            <field name="company_id"
+                                   groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Contact">
+                            <field name="partner_id"
+                                   options="{'no_create_edit': True}"/>
+                            <field name="contact_name"/>
+                            <field name="company_name"/>
+                            <field name="email" widget="email"/>
+                            <field name="phone" widget="phone"/>
+                            <field name="whatsapp" widget="phone"/>
+                            <field name="city"/>
+                            <field name="country_id"
+                                   options="{'no_create': True}"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Details" name="details">
+                            <group>
+                                <group string="Route"
+                                       invisible="not origin_city and not origin_country_id and not destination_city and not destination_country_id">
+                                    <field name="origin_country_id"
+                                           options="{'no_create': True}"/>
+                                    <field name="origin_city"/>
+                                    <field name="destination_country_id"
+                                           options="{'no_create': True}"/>
+                                    <field name="destination_city"/>
+                                </group>
+                                <group string="Cargo">
+                                    <field name="goods_description"/>
+                                    <field name="quantity"/>
+                                    <field name="weight_kg"/>
+                                    <field name="volume_cbm"/>
+                                    <field name="packages_count"/>
+                                </group>
+                            </group>
+                            <group>
+                                <group string="Vehicle"
+                                       invisible="not vehicle_make and not vehicle_model">
+                                    <field name="vehicle_make"/>
+                                    <field name="vehicle_model"/>
+                                    <field name="vehicle_year"/>
+                                </group>
+                                <group string="Commercial">
+                                    <field name="budget"/>
+                                </group>
+                            </group>
+                            <group string="Message">
+                                <field name="message" nolabel="1" readonly="1"/>
+                            </group>
+                            <div class="alert alert-secondary" role="alert">
+                                The fields above are the customer's own words, as
+                                submitted. They are not edited during
+                                qualification: the request is the record of what
+                                was asked, the opportunity is where the deal moves.
+                            </div>
+                        </page>
+
+                        <page string="Attribution" name="attribution">
+                            <group>
+                                <group>
+                                    <field name="source_url" widget="url"
+                                           readonly="1"/>
+                                    <field name="referrer_url" widget="url"
+                                           readonly="1"/>
+                                </group>
+                                <group>
+                                    <field name="utm_source" readonly="1"/>
+                                    <field name="utm_medium" readonly="1"/>
+                                    <field name="utm_campaign" readonly="1"/>
+                                </group>
+                            </group>
+                            <group string="Technical">
+                                <field name="request_uuid" readonly="1"
+                                       help="Idempotency key. A unique constraint on
+                                             this column is what prevents a retry
+                                             from creating a second request."/>
+                            </group>
+                        </page>
+
+                        <page string="Internal Notes" name="internal">
+                            <div class="alert alert-danger" role="alert">
+                                <strong>Internal only.</strong> Never returned by any
+                                public endpoint.
+                            </div>
+                            <field name="internal_notes" nolabel="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="dally_quote_request_view_search" model="ir.ui.view">
+        <field name="name">dally.quote.request.search</field>
+        <field name="model">dally.quote.request</field>
+        <field name="arch" type="xml">
+            <search string="Quote Requests">
+                <field name="reference"/>
+                <field name="contact_name"/>
+                <field name="company_name"/>
+                <field name="email"/>
+                <field name="phone"/>
+                <field name="service_type_id"/>
+                <field name="partner_id"/>
+
+                <filter name="filter_new" string="New"
+                        domain="[('state', '=', 'new')]"/>
+                <filter name="filter_unassigned" string="Unassigned"
+                        domain="[('user_id', '=', False)]"/>
+                <filter name="filter_mine" string="Mine"
+                        domain="[('user_id', '=', uid)]"/>
+                <separator/>
+                <filter name="filter_open" string="Open"
+                        domain="[('state', 'in', ('new', 'qualified', 'quoted'))]"/>
+                <filter name="filter_no_contact" string="No Contact Linked"
+                        domain="[('partner_id', '=', False)]"/>
+                <separator/>
+                <filter name="filter_spam" string="Spam"
+                        domain="[('state', '=', 'spam')]"/>
+                <filter name="filter_archived" string="Archived"
+                        domain="[('active', '=', False)]"/>
+
+                <group expand="0" string="Group By">
+                    <filter name="group_state" string="Status"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_service" string="Service"
+                            context="{'group_by': 'service_type_id'}"/>
+                    <filter name="group_user" string="Salesperson"
+                            context="{'group_by': 'user_id'}"/>
+                    <filter name="group_source" string="UTM Source"
+                            context="{'group_by': 'utm_source'}"/>
+                    <filter name="group_created" string="Received"
+                            context="{'group_by': 'create_date:week'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="dally_quote_request_action" model="ir.actions.act_window">
+        <field name="name">Quote Requests</field>
+        <field name="res_model">dally.quote.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="dally_quote_request_view_search"/>
+        <field name="context">{'search_default_filter_open': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No quote request yet</p>
+            <p>
+                Requests submitted on dallytrading.com arrive here with their
+                reference and their attribution. Qualify them, then raise a
+                quotation — no commercial document is created automatically.
+            </p>
+        </field>
+    </record>
+
+</odoo>

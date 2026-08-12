@@ -27,12 +27,18 @@ Security model
 Endpoints
 ---------
 
-* ``POST /api/v1/leads`` — quote and contact requests
+* ``GET  /api/v1/services`` — public service catalogue, the source of truth for
+  which fields the website's quote form must ask for
+* ``POST /api/v1/quotes`` — quote requests; creates a qualifiable
+  ``dally.quote.request`` and a CRM opportunity, and deliberately no
+  ``sale.order``, ``res.partner`` or ``dally.shipment``
+* ``POST /api/v1/leads`` — simple contact requests
+* ``GET  /api/v1/tracking/<reference>`` — public shipment tracking, requiring a
+  reference *and* an unpredictable token
 * ``GET  /api/v1/health`` — authenticated health probe for monitoring
 
-Planned in later phases: ``/api/v1/quotes``, ``/api/v1/sourcing``,
-``/api/v1/trading``, ``/api/v1/shipments``, ``/api/v1/tracking``,
-``/api/v1/customers``.
+Planned in later phases: ``/api/v1/sourcing``, ``/api/v1/trading``,
+``/api/v1/shipments``, ``/api/v1/customers``.
 """,
     "author": "DallyTrading",
     "website": "https://dallytrading.com",

@@ -16,6 +16,8 @@ import {
   type LeadRef,
   type OdooErrorCode,
   type PublicShipment,
+  type QuoteInput,
+  type QuoteRef,
   type ServiceType,
 } from './types';
 
@@ -31,6 +33,24 @@ interface LeadResponse {
   reference: string;
   service: string | null;
   status: string;
+}
+
+/** Shape returned by GET /api/v1/services. */
+interface ServicesResponse {
+  services: ReadonlyArray<{
+    code: string;
+    name: string;
+    description: string;
+    active: boolean;
+    sort_order: number;
+    requires_origin: boolean;
+    requires_destination: boolean;
+    requires_weight: boolean;
+    requires_volume: boolean;
+    requires_vehicle: boolean;
+    requires_budget: boolean;
+    requires_goods: boolean;
+  }>;
 }
 
 /** Shape returned by GET /api/v1/tracking/<reference>. */
@@ -251,18 +271,22 @@ export class DallyApiAdapter implements OdooGateway {
 
   async getShipmentByTracking(
     reference: string,
+    token: string,
     correlationId: string,
   ): Promise<PublicShipment | null> {
     // Normalised here as well as in Odoo, so a reference pasted with a
     // non-breaking space does not become a pointless round trip.
     const normalised = reference.replace(/\s+/g, '').toUpperCase();
-    if (!normalised) {
+    // No token means no lookup: the reference alone is never sufficient, and
+    // sending a tokenless request would only produce a 404 round trip.
+    if (!normalised || !token) {
       return null;
     }
 
     try {
       const data = await this.call<TrackingResponse>(
-        `/api/v1/tracking/${encodeURIComponent(normalised)}`,
+        `/api/v1/tracking/${encodeURIComponent(normalised)}` +
+          `?token=${encodeURIComponent(token)}`,
         { method: 'GET' },
         correlationId,
       );
@@ -298,13 +322,91 @@ export class DallyApiAdapter implements OdooGateway {
   }
 
   async listServiceTypes(
-    _correlationId: string,
+    correlationId: string,
   ): Promise<ReadonlyArray<ServiceType>> {
-    throw new OdooGatewayError(
-      'unavailable',
-      'The service catalogue endpoint is not available yet (phase 6).',
-      501,
+    const data = await this.call<ServicesResponse>(
+      '/api/v1/services',
+      { method: 'GET' },
+      correlationId,
     );
+
+    // Sorted here rather than trusting the wire order: the contract publishes
+    // sort_order precisely so display order is Odoo's decision, and relying on
+    // array order would make it depend on the serialiser instead.
+    return [...(data.services ?? [])]
+      .map((service) => ({
+        code: service.code,
+        name: service.name,
+        description: service.description ?? '',
+        active: Boolean(service.active),
+        sort_order: service.sort_order ?? 0,
+        requires_origin: Boolean(service.requires_origin),
+        requires_destination: Boolean(service.requires_destination),
+        requires_weight: Boolean(service.requires_weight),
+        requires_volume: Boolean(service.requires_volume),
+        requires_vehicle: Boolean(service.requires_vehicle),
+        requires_budget: Boolean(service.requires_budget),
+        requires_goods: Boolean(service.requires_goods),
+      }))
+      .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+  }
+
+  async createQuoteRequest(
+    input: QuoteInput,
+    idempotencyKey: string,
+    correlationId: string,
+  ): Promise<QuoteRef> {
+    // camelCase to snake_case happens here, once. Nothing outside this adapter
+    // needs to know the wire format.
+    const payload: Record<string, unknown> = {
+      request_uuid: idempotencyKey,
+      service_code: input.serviceCode,
+      first_name: input.firstName ?? '',
+      last_name: input.lastName,
+      company_name: input.companyName ?? '',
+      email: input.email ?? '',
+      phone: input.phone ?? '',
+      whatsapp: input.whatsapp ?? '',
+      city: input.city ?? '',
+      country_code: input.countryCode ?? '',
+      origin_country_code: input.originCountryCode ?? '',
+      origin_city: input.originCity ?? '',
+      destination_country_code: input.destinationCountryCode ?? '',
+      destination_city: input.destinationCity ?? '',
+      goods_description: input.goodsDescription ?? '',
+      quantity: input.quantity ?? '',
+      vehicle_make: input.vehicleMake ?? '',
+      vehicle_model: input.vehicleModel ?? '',
+      vehicle_year: input.vehicleYear ?? '',
+      budget: input.budget ?? '',
+      message: input.message ?? '',
+      source_url: input.sourceUrl ?? '',
+      referrer_url: input.referrerUrl ?? '',
+      utm_source: input.utmSource ?? '',
+      utm_medium: input.utmMedium ?? '',
+      utm_campaign: input.utmCampaign ?? '',
+    };
+
+    // Numbers are omitted rather than sent as 0 when absent: a zero weight is a
+    // statement ("it weighs nothing"), an absent one is an admission ("not known
+    // yet"), and an operator needs to tell them apart.
+    if (input.weightKg !== undefined) payload.weight_kg = input.weightKg;
+    if (input.volumeCbm !== undefined) payload.volume_cbm = input.volumeCbm;
+    if (input.packagesCount !== undefined) {
+      payload.packages_count = input.packagesCount;
+    }
+
+    const data = await this.call<LeadResponse>(
+      '/api/v1/quotes',
+      { method: 'POST', body: payload },
+      correlationId,
+    );
+
+    return {
+      reference: data.reference,
+      serviceCode: data.service,
+      status: 'received',
+    };
   }
 
   async healthCheck(

@@ -51,7 +51,15 @@ class DallyApiController(http.Controller):
     # ─── Responses ───────────────────────────────────────────────────
 
     @staticmethod
-    def _json_response(body, status=200, request_id=None):
+    def _json_response(body, status=200, request_id=None, cache_control=None):
+        """Serialise a response.
+
+        ``cache_control`` defaults to ``no-store``: almost every endpoint here
+        returns per-customer data, and a cached tracking result served to the wrong
+        visitor would be a data breach. Only genuinely public, identical-for-everyone
+        responses — the service catalogue — override it, and they must do so
+        explicitly.
+        """
         payload = dict(body)
         if request_id:
             payload["request_id"] = request_id
@@ -60,9 +68,7 @@ class DallyApiController(http.Controller):
             status=status,
             headers=[
                 ("Content-Type", "application/json; charset=utf-8"),
-                # API responses are per-request and must never be cached by an
-                # intermediary.
-                ("Cache-Control", "no-store"),
+                ("Cache-Control", cache_control or "no-store"),
                 ("X-Content-Type-Options", "nosniff"),
             ],
         )

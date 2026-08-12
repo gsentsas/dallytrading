@@ -5,8 +5,17 @@
         Hooks into the shells created by dally_core. Native CRM menus are left
         untouched: the sales team keeps using the Odoo pipeline as-is (§81).
     -->
+
+    <!-- The queue an operator opens first: what came in and is not yet handled. -->
+    <menuitem id="menu_dally_quote_request"
+              name="Quote Requests"
+              parent="dally_core.menu_dally_operations"
+              action="dally_quote_request_action"
+              sequence="5"
+              groups="dally_core.group_dally_commercial"/>
+
     <menuitem id="menu_dally_website_requests"
-              name="Website Requests"
+              name="Website Leads"
               parent="dally_core.menu_dally_operations"
               action="dally_lead_action"
               sequence="10"

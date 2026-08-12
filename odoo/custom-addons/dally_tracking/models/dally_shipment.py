@@ -12,7 +12,14 @@ somebody deliberately publishes it. The test suite asserts the payload's keys ar
 a subset of the declared set, so the guarantee is enforced, not just intended.
 """
 
+import hmac
+import secrets
+
 from odoo import _, api, fields, models
+
+#: Bytes of entropy in the public tracking token. 32 bytes = 256 bits, which is
+#: not walkable at any rate.
+TRACKING_TOKEN_BYTES = 32
 
 #: Every key the public tracking payload may contain. The single source of truth
 #: for what leaves the server, asserted by the tests.
@@ -50,6 +57,11 @@ FORBIDDEN_PUBLIC_FIELDS = frozenset({
     "partner_id",
     "consignee_id",
     "id",
+    # The token is the capability that grants access. Echoing it back in the
+    # payload would be harmless for the holder and useless to anyone else, but it
+    # would end up in browser history, proxy logs and screenshots — so it stays
+    # out.
+    "public_tracking_token",
 })
 
 
@@ -74,6 +86,36 @@ class DallyShipment(models.Model):
         help="What the customer currently sees as the latest news.",
     )
 
+    # ─── Public tracking capability ──────────────────────────────────
+    #
+    # The reference stays human-readable and quotable over the phone
+    # (DT-SHP-2026-000123) — but readable means sequential, and sequential means
+    # walkable. The token is the part that makes a lookup a capability rather than
+    # a guess: 256 bits of CSPRNG output, so the series cannot be enumerated even
+    # though the references can.
+    #
+    # It is stored in clear on purpose. This is a capability URL, like Odoo's own
+    # portal access_token: the links sent by e-mail and WhatsApp must remain
+    # regenerable, which a hash would prevent. It is never in a public payload,
+    # never logged, and the ORM keeps it away from users outside the group.
+    public_tracking_token = fields.Char(
+        string="Public Tracking Token",
+        readonly=True,
+        copy=False,
+        index=True,
+        groups="dally_core.group_dally_readonly,dally_tracking.group_dally_tracking_api",
+        help="Unpredictable identifier required to read this shipment through the "
+             "public tracking API. Include it in notification links. Rotating it "
+             "invalidates every link already sent.",
+    )
+    public_tracking_url = fields.Char(
+        string="Tracking Link",
+        compute="_compute_public_tracking_url",
+        groups="dally_core.group_dally_readonly",
+        help="Ready-to-send link, reference and token included. This is what goes "
+             "into a customer e-mail or WhatsApp message.",
+    )
+
     @api.depends("event_ids", "event_ids.visible_to_customer")
     def _compute_event_counts(self):
         for shipment in self:
@@ -90,6 +132,69 @@ class DallyShipment(models.Model):
             shipment.last_public_event_id = visible.sorted(
                 key=lambda e: (e.event_date, e.id), reverse=True
             )[:1]
+
+    @api.depends("reference", "public_tracking_token")
+    def _compute_public_tracking_url(self):
+        base = self.env["ir.config_parameter"].sudo().get_param(
+            "dally.website_base_url", "https://dallytrading.com"
+        ).rstrip("/")
+        for shipment in self:
+            if shipment.reference and shipment.public_tracking_token:
+                shipment.public_tracking_url = "%s/tracking?ref=%s&t=%s" % (
+                    base, shipment.reference, shipment.public_tracking_token,
+                )
+            else:
+                shipment.public_tracking_url = False
+
+    # ─── Token lifecycle ─────────────────────────────────────────────
+
+    @api.model
+    def _dally_new_tracking_token(self):
+        """Generate a token.
+
+        ``secrets`` rather than ``random``: the latter is a Mersenne Twister seeded
+        predictably, and its output can be reconstructed from a handful of
+        observed values. That would hand an attacker every shipment.
+        """
+        return secrets.token_urlsafe(TRACKING_TOKEN_BYTES)
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            # Every shipment gets a token at creation. Generating it lazily would
+            # mean a shipment could be notified to a customer before it had one.
+            vals.setdefault("public_tracking_token", self._dally_new_tracking_token())
+        return super().create(vals_list)
+
+    def action_rotate_tracking_token(self):
+        """Issue a new token, invalidating every link already sent.
+
+        The response to a leaked link: whoever holds the old URL loses access.
+        Guarded by a confirmation in the view, because it also breaks the link in
+        the customer's own inbox.
+        """
+        for shipment in self:
+            shipment.public_tracking_token = self._dally_new_tracking_token()
+            shipment.message_post(
+                body=_("Public tracking token rotated. Links sent previously no "
+                       "longer work.")
+            )
+        return True
+
+    def _dally_token_matches(self, candidate):
+        """Constant-time comparison of a supplied token.
+
+        A short-circuiting ``==`` leaks how many leading characters were correct
+        through response timing, which turns 256 bits of entropy into a character-
+        by-character search.
+        """
+        self.ensure_one()
+        if not candidate or not isinstance(candidate, str):
+            return False
+        stored = self.public_tracking_token or ""
+        if not stored:
+            return False
+        return hmac.compare_digest(stored, candidate)
 
     # ─── Automatic events on status change ───────────────────────────
 
@@ -187,18 +292,33 @@ class DallyShipment(models.Model):
         return "".join(reference.split()).upper()
 
     @api.model
-    def _dally_find_for_tracking(self, reference):
-        """Resolve a public reference to a shipment, or an empty recordset.
+    def _dally_find_for_tracking(self, reference, token):
+        """Resolve a reference **and** a matching token, or an empty recordset.
+
+        Both are required. The reference alone is not sufficient and never will be
+        through this path: references are sequential, so accepting them alone would
+        let the whole series be walked. The token is what turns a lookup into a
+        capability.
 
         Only the shipment's own reference is matched. The carrier's number is
-        deliberately *not* searchable here: it is not ours, it is not unique
-        across carriers, and matching on it would let someone probe for shipments
-        using numbers printed on any bill of lading they hold.
+        deliberately not searchable: it is not ours, not unique across carriers,
+        and matching on it would let anyone holding a bill of lading probe for
+        shipments that are not theirs.
+
+        Returns an empty recordset for an unknown reference *and* for a wrong
+        token, so the two are indistinguishable to a caller — otherwise the
+        endpoint would confirm which references exist.
         """
         normalised = self._dally_normalise_reference(reference)
-        if not normalised:
+        if not normalised or not token:
             return self.browse()
-        return self.search([("reference", "=", normalised)], limit=1)
+
+        shipment = self.search([("reference", "=", normalised)], limit=1)
+        if not shipment:
+            return self.browse()
+        if not shipment._dally_token_matches(token):
+            return self.browse()
+        return shipment
 
     def _dally_public_payload(self):
         """Build the customer-facing view of this shipment.

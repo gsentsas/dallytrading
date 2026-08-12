@@ -47,7 +47,95 @@ paraît terminé, passe la revue, et échoue en production.
 
 ---
 
-## 2. `POST /api/leads` — endpoint public
+## 2. `GET /api/v1/services` — catalogue, source de vérité
+
+Odoo est la source de vérité. **Le site ne maintient plus aucune liste métier** :
+les drapeaux renvoyés ici décident des étapes et des champs du formulaire de devis.
+
+```http
+GET /api/v1/services
+X-API-Key: <clé>          # périmètre services:read
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "services": [
+      {
+        "code": "freight_air",
+        "name": "Fret aérien",
+        "description": "Solution rapide pour les expéditions urgentes.",
+        "active": true,
+        "sort_order": 40,
+        "requires_origin": true,
+        "requires_destination": true,
+        "requires_weight": true,
+        "requires_volume": false,
+        "requires_vehicle": false,
+        "requires_budget": false,
+        "requires_goods": true
+      }
+    ]
+  }
+}
+```
+
+Seuls les services **actifs et publiés** sont renvoyés : un service archivé ne doit
+pas être proposable, personne ne pourrait chiffrer le résultat. `category` et
+`published` sont absents — organisation interne, hors contrat.
+
+**Seul endpoint cacheable de l'API** (`Cache-Control: public, max-age=300`) : il est
+identique pour tous les appelants. Tous les autres restent en `no-store`.
+
+### Cache et repli côté site
+
+| Situation | Comportement |
+|---|---|
+| Cache frais (< 5 min) | servi sans appel |
+| Cache expiré | un seul appel partagé entre requêtes concurrentes |
+| Odoo injoignable, copie < 24 h | copie servie avec un bandeau discret |
+| Odoo injoignable, aucune copie | formulaire indisponible, message d'attente |
+| Catalogue vide renvoyé | traité comme un échec, non mis en cache |
+
+**Aucune liste de repli codée en dur.** Ce serait la seconde liste métier que ce
+design supprime, et elle proposerait des services retirés.
+
+## 3. `POST /api/v1/quotes` — demandes de devis
+
+Périmètre `quotes:write`. Crée une `dally.quote.request` **qualifiable** et son
+opportunité CRM.
+
+Ne crée **ni** `sale.order`, **ni** `res.partner`, **ni** `dally.shipment` :
+
+| Objet | Pourquoi pas automatiquement |
+|---|---|
+| `sale.order` | Un devis porte un numéro qui ressemble à un engagement. En créer un par formulaire remplirait le pipeline de brouillons non chiffrés |
+| `res.partner` | Un contact par soumission remplit le carnet d'adresses de prospects qui ne répondront jamais |
+| `dally.shipment` | Une expédition est un objet opérationnel ; en créer une pour un prospect qui n'achètera pas pollue le module fret |
+
+Chacun devient une décision humaine pendant la qualification :
+
+```text
+formulaire → dally.quote.request → crm.lead (opportunité)
+           → qualification → sale.order → confirmation → dally.shipment
+```
+
+La demande et l'opportunité **partagent la même référence** `DT-YYYY-NNNNNN` : le
+client détient un seul numéro, quel que soit l'objet qui le stocke. Aucun second
+numéro de séquence n'est consommé.
+
+### Exigences vérifiées côté serveur
+
+Le formulaire s'adapte, mais le formulaire n'est pas l'autorité : cet endpoint est
+joignable avec curl. Origine et destination sont donc **exigées** quand le service
+les déclare.
+
+Poids, volume et budget ne le sont **pas** : ils sont réellement souvent inconnus au
+stade de la demande, et refuser un prospect parce qu'il ignore encore son tonnage
+écarterait de vraies affaires.
+
+## 4. `POST /api/leads` — endpoint public
 
 Appelé par le formulaire de devis. Même origine, pas d'authentification.
 
@@ -149,7 +237,7 @@ technique ; le détail part dans les journaux serveur avec le `requestId`.
 
 ---
 
-## 3. `POST /api/v1/leads` — endpoint Odoo privé
+## 5. `POST /api/v1/leads` — endpoint Odoo privé
 
 ### Authentification
 
@@ -216,7 +304,7 @@ gratuitement un attaquant sur la présence d'Odoo et le nom de la base.
 
 ---
 
-## 3 bis. `GET /api/v1/tracking/{reference}` — suivi public
+## 6. `GET /api/v1/tracking/{reference}` — suivi public
 
 Périmètre `tracking:read`. Consommé par la page `/tracking` du site.
 
@@ -287,30 +375,48 @@ Ne sortent jamais : identité du client, valeur déclarée, coût fournisseur, m
 notes internes (dossier **et** événement), devis, facture, responsable, pièces
 jointes, et tout identifiant de base.
 
-### Énumération des références — compromis assumé
+### Durcissement : token public obligatoire
 
-Les références `DT-SHP-YYYY-NNNNNN` sont séquentielles et le §44 demande une
-recherche par référence seule : la série est donc parcourable. Accepté en
-connaissance de cause, sur deux fondements :
+Le compromis précédent — recherche par référence seule — **a été supprimé**.
 
-- la charge utile ne contient rien de confidentiel ; le pire cas est d'apprendre
-  qu'une expédition existe et vers où elle va ;
-- limitation de débit à **10 recherches/min/IP** sur la page `/tracking`, plus le
-  proxy.
+La référence reste lisible et dictée au téléphone (`DT-SHP-2026-000123`), mais
+lisible veut dire séquentiel, et séquentiel veut dire parcourable. La lecture exige
+donc **référence + token** :
 
-Durcissement possible si DallyTrading le juge nécessaire : exiger un second
-facteur (nom du client, ou jeton dans les liens de notification). C'est une
-décision produit — elle change ce que le client doit saisir — signalée ici plutôt
-qu'implémentée en silence.
+```http
+GET /api/v1/tracking/DT-SHP-2026-000123?token=<43 caractères>
+```
 
-> ⚠️ La limitation `limit_req` de nginx exige un `limit_req_zone` dans le bloc
-> `http`, inaccessible depuis le champ « directives additionnelles » de Plesk qui
-> écrit dans le bloc `server`. Elle nécessite un fichier dans
-> `/etc/nginx/conf.d/`, à créer par l'administrateur. **Non appliqué à ce jour.**
+| Propriété | Mise en œuvre |
+|---|---|
+| Entropie | `secrets.token_urlsafe(32)` — 256 bits |
+| Comparaison | `hmac.compare_digest`, temps constant |
+| Génération | à la création de l'expédition, jamais en différé |
+| Rotation | bouton dédié ; invalide tous les liens déjà envoyés |
+| Copie | un duplicata reçoit son propre token |
+| Exposition | jamais dans la charge utile, jamais journalisé |
+| Identifiant Odoo | **jamais** utilisé comme secret |
 
----
+Token erroné, référence inconnue, référence mal formée et expédition d'une autre
+société renvoient **la même** réponse 404 : l'endpoint ne confirme même pas quelles
+références existent.
 
-## 4. Ce que l'API ne fait pas — et ne fera pas
+Le token voyage dans les liens envoyés par e-mail et WhatsApp. Odoo expose
+`public_tracking_url`, prêt à coller.
+
+> **Arbitrage d'expérience à valider.** Un client qui ne dispose que de sa
+> référence, sans le lien, ne peut plus consulter son suivi : la page l'invite à
+> utiliser le lien reçu ou à nous contacter. C'est le prix de la non-énumérabilité.
+> Si cette friction est jugée excessive, la voie de sortie est un second facteur que
+> le client connaît — son e-mail ou son téléphone — vérifié côté serveur sans être
+> renvoyé. Cela change ce que le client doit saisir : c'est une décision produit,
+> signalée plutôt qu'implémentée d'office.
+
+Le token est stocké en clair, comme l'`access_token` du portail Odoo : c'est une
+URL de capacité, et les liens doivent rester régénérables, ce qu'un hachage
+interdirait. Il est protégé par `groups=` au niveau de l'ORM.
+
+## 7. Ce que l'API ne fait pas — et ne fera pas
 
 - **Aucun accès générique aux modèles.** Il n'existe aucun moyen de nommer un
   modèle ou une méthode depuis l'extérieur (§40). Chaque endpoint est une
@@ -326,7 +432,7 @@ qu'implémentée en silence.
 
 ---
 
-## 5. Endpoints à venir
+## 8. Endpoints à venir
 
 | Endpoint | Phase | Périmètre |
 |---|---|---|

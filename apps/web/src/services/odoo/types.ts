@@ -85,13 +85,69 @@ export interface PublicShipmentEvent {
   readonly description: string | null;
 }
 
-/** A service offered, as published by Odoo. */
+/**
+ * A service offered, as published by `GET /api/v1/services`.
+ *
+ * Odoo is the source of truth: these flags are what decide which steps and fields
+ * the quote form shows. The website holds no second business list.
+ *
+ * Field names mirror the API payload (snake_case) rather than being camelised.
+ * The contract is stated once, in Odoo, and repeating it here in a different
+ * spelling would mean two names for every flag and a mapping layer to keep in
+ * step — for no gain.
+ */
 export interface ServiceType {
   readonly code: string;
   readonly name: string;
-  readonly category: string;
-  readonly requiresRoute: boolean;
-  readonly requiresCargo: boolean;
+  readonly description: string;
+  readonly active: boolean;
+  readonly sort_order: number;
+  readonly requires_origin: boolean;
+  readonly requires_destination: boolean;
+  readonly requires_weight: boolean;
+  readonly requires_volume: boolean;
+  readonly requires_vehicle: boolean;
+  readonly requires_budget: boolean;
+  readonly requires_goods: boolean;
+}
+
+/** A quote request submitted from the public site. */
+export interface QuoteInput {
+  readonly serviceCode: string;
+  readonly firstName?: string;
+  readonly lastName: string;
+  readonly companyName?: string;
+  readonly email?: string;
+  readonly phone?: string;
+  readonly whatsapp?: string;
+  readonly city?: string;
+  readonly countryCode?: string;
+  readonly originCountryCode?: string;
+  readonly originCity?: string;
+  readonly destinationCountryCode?: string;
+  readonly destinationCity?: string;
+  readonly goodsDescription?: string;
+  readonly quantity?: string;
+  readonly weightKg?: number;
+  readonly volumeCbm?: number;
+  readonly packagesCount?: number;
+  readonly vehicleMake?: string;
+  readonly vehicleModel?: string;
+  readonly vehicleYear?: string;
+  readonly budget?: string;
+  readonly message?: string;
+  readonly sourceUrl?: string;
+  readonly referrerUrl?: string;
+  readonly utmSource?: string;
+  readonly utmMedium?: string;
+  readonly utmCampaign?: string;
+}
+
+/** What the customer is shown after submitting a quote request. */
+export interface QuoteRef {
+  readonly reference: string;
+  readonly serviceCode: string | null;
+  readonly status: 'received';
 }
 
 /** Stable error codes the UI can branch on without parsing messages. */

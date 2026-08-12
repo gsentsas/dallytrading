@@ -12,8 +12,13 @@
                 <field name="code"/>
                 <field name="category"/>
                 <field name="published"/>
-                <field name="requires_route" optional="hide"/>
-                <field name="requires_cargo" optional="hide"/>
+                <field name="requires_origin" optional="hide"/>
+                <field name="requires_destination" optional="hide"/>
+                <field name="requires_weight" optional="hide"/>
+                <field name="requires_volume" optional="hide"/>
+                <field name="requires_vehicle" optional="hide"/>
+                <field name="requires_budget" optional="hide"/>
+                <field name="requires_goods" optional="hide"/>
                 <field name="active" column_invisible="True"/>
             </list>
         </field>
@@ -40,10 +45,27 @@
                         </group>
                         <group string="Public Website">
                             <field name="published"/>
-                            <field name="requires_route"/>
-                            <field name="requires_cargo"/>
                         </group>
                     </group>
+                    <group string="What the Quote Form Must Ask">
+                        <div class="text-muted" colspan="2">
+                            These flags drive the public form: only the steps and
+                            fields a service actually needs are shown. Published
+                            through GET /api/v1/services.
+                        </div>
+                        <group>
+                            <field name="requires_origin"/>
+                            <field name="requires_destination"/>
+                            <field name="requires_weight"/>
+                            <field name="requires_volume"/>
+                        </group>
+                        <group>
+                            <field name="requires_vehicle"/>
+                            <field name="requires_goods"/>
+                            <field name="requires_budget"/>
+                        </group>
+                    </group>
+
                     <group string="Description">
                         <field name="description" nolabel="1"
                                placeholder="Shown to customers on the website."/>

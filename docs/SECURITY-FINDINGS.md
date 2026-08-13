@@ -120,6 +120,12 @@ par **tout utilisateur du serveur**, y compris les comptes d'hébergement mutual
 
 Constaté depuis un compte non privilégié (`uid=10016`, groupe `psacln`), sans `sudo`.
 
+> **La valeur réelle est délibérément absente de ce document.** Il s'agit d'un
+> identifiant de production appartenant à un abonnement tiers, et ce dépôt est publié
+> sur GitHub : l'y recopier transformerait un constat de sécurité en divulgation.
+> Le constat ne dépend pas de la valeur — il porte sur le fait qu'elle soit lisible.
+> Elle est reproductible en une commande par l'administrateur du serveur.
+
 ### Cause
 
 L'`entrypoint.sh` de l'image Docker Odoo officielle lit les paramètres de connexion

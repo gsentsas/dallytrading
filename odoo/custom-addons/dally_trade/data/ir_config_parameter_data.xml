@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!--
+            Approval thresholds, created EMPTY on purpose.
+
+            An empty value means "no threshold", not "use a default". Shipping
+            0.15 or 10000 here would be inventing DallyTrading's risk policy, and
+            the first deal it blocked or waved through would be governed by a number
+            nobody chose.
+
+            The parameters exist so an administrator can find and set them in
+            Settings → Technical → System Parameters without knowing the key names.
+        -->
+        <record id="param_trade_approval_revenue_threshold" model="ir.config_parameter">
+            <field name="key">dally_trade.approval_revenue_threshold</field>
+            <field name="value"></field>
+        </record>
+
+        <record id="param_trade_approval_min_margin_rate" model="ir.config_parameter">
+            <field name="key">dally_trade.approval_min_margin_rate</field>
+            <field name="value"></field>
+        </record>
+
+    </data>
+</odoo>

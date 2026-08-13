@@ -67,11 +67,12 @@ platform/
 │   └── custom-addons/                  Modules DallyTrading
 ├── apps/web/                            Next.js
 │   ├── src/app/                         /, /a-propos, /activites, /devis,
-│   │                                    /sourcing, /tracking, /contact,
-│   │                                    sitemap, robots
+│   │                                    /sourcing, /trading, /tracking,
+│   │                                    /contact, sitemap, robots
 │   ├── src/components/                  brand (logo), layout, ui, seo
 │   ├── src/config/                      site (coordonnées), activities (contenu)
-│   ├── src/features/                    quote, contact, tracking
+│   ├── src/features/                    quote, contact, tracking,
+│   │                                    sourcing, trade
 │   ├── src/services/odoo/               OdooGateway + adaptateurs
 │   └── src/lib/                         env, logger, rate-limit
 ├── docs/
@@ -198,7 +199,7 @@ Le core Odoo n'est **jamais** modifié. Tout vit dans `odoo/custom-addons/` :
 | `dally_freight` | ✅ `dally.shipment` + lignes de colis : maritime, aérien, routier, véhicules, groupage, CBM, conteneurs, **poids taxable** |
 | `dally_tracking` | ✅ `dally.shipment.event`, timeline publique, frontière de confidentialité à trois couches |
 | `dally_sourcing` | ✅ Demande, fournisseurs candidats, offres internes, propositions client ; workflow 16 états, prix validé explicitement, conversions achat et vente à lignes réelles |
-| `dally_trade` | `dally.trade.opportunity` |
+| `dally_trade` | ✅ `dally.trade.opportunity` : 6 types d'opération, workflow 16 états, lignes à double prix, coûts, commissions, marge multi-devises sans soustraction naïve, approbation à seuils configurables |
 | `dally_agrobusiness` | Socle extensible, minimal au MVP |
 | `dally_api` | ✅ Points d'accès REST versionnés `/api/v1/*` |
 
@@ -243,6 +244,7 @@ exercice de restauration : [`docs/RESTORE.md`](docs/RESTORE.md).
 | [`docs/RESTORE.md`](docs/RESTORE.md) | Exercice de restauration | ✅ |
 | [`docs/API.md`](docs/API.md) | Contrat d'API, OdooGateway, tracking public | ✅ |
 | [`docs/SOURCING.md`](docs/SOURCING.md) | Sous-système sourcing : modèles, workflow, confidentialité | ✅ |
+| [`docs/TRADING.md`](docs/TRADING.md) | Sous-système trading : types d'opération, marge multi-devises, approbation, confidentialité | ✅ |
 | `docs/ODOO.md` | Exploitation Odoo au quotidien | Phase 3 |
 | `docs/SECURITY.md` | Politique de sécurité applicative | Phase 8 |
 | `docs/OPERATIONS.md` | Runbooks d'exploitation | Phase 12 |

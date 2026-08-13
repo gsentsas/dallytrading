@@ -40,6 +40,8 @@ import {
   type ServiceType,
   type SourcingRequestInput,
   type SourcingRequestRef,
+  type TradeOpportunityInput,
+  type TradeOpportunityRef,
 } from './types';
 
 const NOT_IMPLEMENTED =
@@ -69,6 +71,14 @@ export class LegacyRpcAdapter implements OdooGateway {
     _idempotencyKey: string,
     _correlationId: string,
   ): Promise<SourcingRequestRef> {
+    throw new OdooGatewayError('unavailable', NOT_IMPLEMENTED, 501);
+  }
+
+  async createTradeOpportunity(
+    _input: TradeOpportunityInput,
+    _idempotencyKey: string,
+    _correlationId: string,
+  ): Promise<TradeOpportunityRef> {
     throw new OdooGatewayError('unavailable', NOT_IMPLEMENTED, 501);
   }
 

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            One field added to each native form, next to the existing origin. Nothing
+            else: Purchase and Sales remain native applications.
+        -->
+        <record id="view_purchase_order_form_dally_trade" model="ir.ui.view">
+            <field name="name">purchase.order.form.dally.trade</field>
+            <field name="model">purchase.order</field>
+            <field name="inherit_id" ref="purchase.purchase_order_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='partner_id']" position="after">
+                    <field name="dally_trade_opportunity_id" readonly="1"
+                           options="{'no_create': True}"
+                           invisible="not dally_trade_opportunity_id"/>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="view_sale_order_form_dally_trade" model="ir.ui.view">
+            <field name="name">sale.order.form.dally.trade</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_order_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='partner_id']" position="after">
+                    <field name="dally_trade_opportunity_id" readonly="1"
+                           options="{'no_create': True}"
+                           invisible="not dally_trade_opportunity_id"/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>

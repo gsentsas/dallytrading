@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!--
+            DT-TRD-YYYY-NNNNNN, consumed by dally.reference.mixin.
+
+            implementation="standard" rather than "no_gap": no_gap locks the sequence
+            row for the whole transaction, and public intake means concurrent web
+            submissions. A gap in a reference is cosmetic; a lock contention under
+            load is an outage.
+        -->
+        <record id="seq_dally_trade_opportunity" model="ir.sequence">
+            <field name="name">DallyTrading Trade Opportunity</field>
+            <field name="code">dally.trade.opportunity</field>
+            <field name="prefix">DT-TRD-%(year)s-</field>
+            <field name="padding">6</field>
+            <field name="number_next">1</field>
+            <field name="number_increment">1</field>
+            <field name="implementation">standard</field>
+            <field name="company_id" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

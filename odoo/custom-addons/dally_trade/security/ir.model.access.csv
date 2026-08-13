@@ -1,0 +1,18 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_trade_opportunity_readonly,dally.trade.opportunity read-only,model_dally_trade_opportunity,dally_core.group_dally_readonly,1,0,0,0
+access_trade_opportunity_user,dally.trade.opportunity trade user,model_dally_trade_opportunity,dally_trade.group_dally_trade_user,1,1,1,0
+access_trade_opportunity_manager,dally.trade.opportunity trade manager,model_dally_trade_opportunity,dally_trade.group_dally_trade_manager,1,1,1,1
+access_trade_opportunity_dally_manager,dally.trade.opportunity manager,model_dally_trade_opportunity,dally_core.group_dally_manager,1,1,1,1
+access_trade_opportunity_finance,dally.trade.opportunity finance,model_dally_trade_opportunity,dally_core.group_dally_finance,1,0,0,0
+access_trade_opportunity_api,dally.trade.opportunity api,model_dally_trade_opportunity,dally_trade.group_dally_trade_api,1,0,1,0
+access_trade_line_readonly,dally.trade.line read-only,model_dally_trade_line,dally_core.group_dally_readonly,1,0,0,0
+access_trade_line_user,dally.trade.line trade user,model_dally_trade_line,dally_trade.group_dally_trade_user,1,1,1,1
+access_trade_line_manager,dally.trade.line trade manager,model_dally_trade_line,dally_trade.group_dally_trade_manager,1,1,1,1
+access_trade_line_dally_manager,dally.trade.line manager,model_dally_trade_line,dally_core.group_dally_manager,1,1,1,1
+access_trade_line_finance,dally.trade.line finance,model_dally_trade_line,dally_core.group_dally_finance,1,0,0,0
+access_trade_cost_manager,dally.trade.cost trade manager,model_dally_trade_cost,dally_trade.group_dally_trade_manager,1,1,1,1
+access_trade_cost_dally_manager,dally.trade.cost manager,model_dally_trade_cost,dally_core.group_dally_manager,1,1,1,1
+access_trade_cost_finance,dally.trade.cost finance,model_dally_trade_cost,dally_core.group_dally_finance,1,1,1,1
+access_trade_commission_manager,dally.trade.commission trade manager,model_dally_trade_commission,dally_trade.group_dally_trade_manager,1,1,1,1
+access_trade_commission_dally_manager,dally.trade.commission manager,model_dally_trade_commission,dally_core.group_dally_manager,1,1,1,1
+access_trade_commission_finance,dally.trade.commission finance,model_dally_trade_commission,dally_core.group_dally_finance,1,1,1,1

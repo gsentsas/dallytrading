@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <menuitem id="menu_dally_trade_root"
+                  name="Trading"
+                  sequence="26"
+                  groups="dally_trade.group_dally_trade_user,dally_core.group_dally_readonly"/>
+
+        <menuitem id="menu_dally_trade_operations"
+                  name="Opérations"
+                  parent="menu_dally_trade_root"
+                  sequence="10"/>
+
+        <menuitem id="menu_dally_trade_opportunity"
+                  name="Opérations de trading"
+                  parent="menu_dally_trade_operations"
+                  action="action_dally_trade_opportunity"
+                  sequence="10"/>
+
+        <menuitem id="menu_dally_trade_internal"
+                  name="Coûts et commissions"
+                  parent="menu_dally_trade_root"
+                  sequence="20"
+                  groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance"/>
+
+        <menuitem id="menu_dally_trade_cost"
+                  name="Coûts"
+                  parent="menu_dally_trade_internal"
+                  action="action_dally_trade_cost"
+                  sequence="10"/>
+
+        <menuitem id="menu_dally_trade_commission"
+                  name="Commissions"
+                  parent="menu_dally_trade_internal"
+                  action="action_dally_trade_commission"
+                  sequence="20"/>
+
+        <menuitem id="menu_dally_trade_reporting_root"
+                  name="Analyse"
+                  parent="menu_dally_trade_root"
+                  sequence="30"/>
+
+        <menuitem id="menu_dally_trade_reporting"
+                  name="Analyse trading"
+                  parent="menu_dally_trade_reporting_root"
+                  action="action_dally_trade_reporting"
+                  sequence="10"/>
+
+    </data>
+</odoo>

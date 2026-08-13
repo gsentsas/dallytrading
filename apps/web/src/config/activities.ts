@@ -349,6 +349,11 @@ export const ACTIVITIES: ReadonlyArray<Activity> = [
       },
     ],
     serviceCode: 'trade',
+    // Sends the conversion intent to /trading rather than to the generic quote form.
+    // The activity page explains the business; /trading is where a deal is proposed.
+    // Without this split the two pages compete for the same query and Google picks
+    // one — usually not the one that converts.
+    requestHref: '/trading',
     keywords: [
       'trading Sénégal',
       'négoce international Sénégal',

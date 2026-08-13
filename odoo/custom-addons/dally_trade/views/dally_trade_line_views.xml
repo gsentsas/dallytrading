@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Standalone views for the line. The line is normally edited inline on the
+            opportunity, but a standalone list is what makes "every line we ever
+            bought this product on" answerable.
+        -->
+        <record id="view_dally_trade_line_list" model="ir.ui.view">
+            <field name="name">dally.trade.line.list</field>
+            <field name="model">dally.trade.line</field>
+            <field name="arch" type="xml">
+                <list string="Lignes de trading">
+                    <field name="opportunity_id"/>
+                    <field name="product_id"/>
+                    <field name="description"/>
+                    <field name="quantity"/>
+                    <field name="uom_id" optional="show"/>
+                    <field name="purchase_unit_price" optional="hide"/>
+                    <field name="purchase_currency_id" column_invisible="True"/>
+                    <field name="sale_unit_price"/>
+                    <field name="sale_currency_id" column_invisible="True"/>
+                    <field name="sale_subtotal" sum="Total vente"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_dally_trade_line_form" model="ir.ui.view">
+            <field name="name">dally.trade.line.form</field>
+            <field name="model">dally.trade.line</field>
+            <field name="arch" type="xml">
+                <form string="Ligne de trading">
+                    <sheet>
+                        <group>
+                            <group string="Article">
+                                <field name="opportunity_id"/>
+                                <field name="product_id"/>
+                                <field name="description"/>
+                                <field name="quantity"/>
+                                <field name="uom_id"/>
+                            </group>
+                            <group string="Prix">
+                                <field name="purchase_unit_price"/>
+                                <field name="purchase_currency_id" readonly="1"/>
+                                <field name="purchase_subtotal" readonly="1"/>
+                                <field name="sale_unit_price"/>
+                                <field name="sale_currency_id" readonly="1"/>
+                                <field name="sale_subtotal" readonly="1"/>
+                            </group>
+                        </group>
+                        <group string="Spécifications">
+                            <field name="specifications" nolabel="1"/>
+                        </group>
+                        <group string="Notes" groups="dally_core.group_dally_readonly">
+                            <field name="notes" nolabel="1"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+    </data>
+</odoo>

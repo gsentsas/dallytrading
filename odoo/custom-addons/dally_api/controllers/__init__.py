@@ -4,3 +4,4 @@ from . import services
 from . import leads
 from . import quotes
 from . import sourcing
+from . import trade

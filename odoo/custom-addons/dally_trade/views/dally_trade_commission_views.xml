@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="view_dally_trade_commission_list" model="ir.ui.view">
+            <field name="name">dally.trade.commission.list</field>
+            <field name="model">dally.trade.commission</field>
+            <field name="arch" type="xml">
+                <list string="Commissions">
+                    <field name="opportunity_id"/>
+                    <field name="direction"/>
+                    <field name="name"/>
+                    <field name="partner_id"/>
+                    <field name="basis"/>
+                    <field name="rate" optional="show"/>
+                    <field name="computed_amount" sum="Total"/>
+                    <field name="currency_id"/>
+                    <field name="is_settled" widget="boolean_toggle"/>
+                    <field name="settlement_date" optional="hide"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_dally_trade_commission_form" model="ir.ui.view">
+            <field name="name">dally.trade.commission.form</field>
+            <field name="model">dally.trade.commission</field>
+            <field name="arch" type="xml">
+                <form string="Commission">
+                    <sheet>
+                        <group>
+                            <group string="Nature">
+                                <field name="opportunity_id"/>
+                                <field name="direction"/>
+                                <field name="name"/>
+                                <field name="partner_id"/>
+                            </group>
+                            <group string="Calcul">
+                                <field name="basis"/>
+                                <field name="fixed_amount"
+                                       invisible="basis != 'fixed'"
+                                       required="basis == 'fixed'"/>
+                                <field name="rate" invisible="basis != 'percentage'"
+                                       required="basis == 'percentage'"/>
+                                <field name="base_field"
+                                       invisible="basis != 'percentage'"
+                                       required="basis == 'percentage'"/>
+                                <field name="custom_base_amount"
+                                       invisible="basis != 'percentage' or base_field != 'custom'"/>
+                                <field name="currency_id"/>
+                                <field name="conversion_rate"/>
+                                <field name="computed_amount" readonly="1"
+                                       class="oe_subtotal_footer_separator"/>
+                            </group>
+                        </group>
+                        <group string="Règlement">
+                            <field name="is_settled"/>
+                            <field name="settlement_date" invisible="not is_settled"/>
+                        </group>
+                        <group string="Notes">
+                            <field name="notes" nolabel="1"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_dally_trade_commission_search" model="ir.ui.view">
+            <field name="name">dally.trade.commission.search</field>
+            <field name="model">dally.trade.commission</field>
+            <field name="arch" type="xml">
+                <search string="Commissions">
+                    <field name="name"/>
+                    <field name="opportunity_id"/>
+                    <field name="partner_id"/>
+                    <filter name="receivable" string="À recevoir"
+                            domain="[('direction', '=', 'receivable')]"/>
+                    <filter name="payable" string="À verser"
+                            domain="[('direction', '=', 'payable')]"/>
+                    <separator/>
+                    <filter name="unsettled" string="Non réglées"
+                            domain="[('is_settled', '=', False)]"/>
+                    <group expand="0" string="Regrouper par">
+                        <filter name="group_direction" string="Sens"
+                                context="{'group_by': 'direction'}"/>
+                        <filter name="group_partner" string="Contrepartie"
+                                context="{'group_by': 'partner_id'}"/>
+                        <filter name="group_deal" string="Opération"
+                                context="{'group_by': 'opportunity_id'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_dally_trade_commission" model="ir.actions.act_window">
+            <field name="name">Commissions</field>
+            <field name="res_model">dally.trade.commission</field>
+            <field name="view_mode">list,form</field>
+            <field name="search_view_id" ref="view_dally_trade_commission_search"/>
+        </record>
+
+    </data>
+</odoo>

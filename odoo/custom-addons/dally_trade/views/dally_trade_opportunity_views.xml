@@ -1,0 +1,606 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ═══ List ═══ -->
+        <record id="view_dally_trade_opportunity_list" model="ir.ui.view">
+            <field name="name">dally.trade.opportunity.list</field>
+            <field name="model">dally.trade.opportunity</field>
+            <field name="arch" type="xml">
+                <list string="Opérations de trading"
+                      decoration-danger="state == 'lost'"
+                      decoration-muted="state in ('cancelled', 'closed')"
+                      decoration-warning="state == 'approval_pending'">
+                    <field name="reference"/>
+                    <field name="name"/>
+                    <field name="operation_type"/>
+                    <field name="customer_id" optional="show"/>
+                    <field name="supplier_id" optional="hide"/>
+                    <field name="sale_subtotal" sum="Total vente"/>
+                    <field name="sale_currency_id" column_invisible="True"/>
+                    <!-- Restricted at ORM level: absent from the query for anyone
+                         outside trade management and finance, not merely hidden. -->
+                    <field name="net_margin" optional="hide" sum="Marge nette"/>
+                    <field name="analysis_currency_id" column_invisible="True"/>
+                    <field name="margin_computable" optional="hide" widget="boolean_toggle"/>
+                    <field name="responsible_id" optional="show" widget="many2one_avatar_user"/>
+                    <field name="expected_close_date" optional="show"/>
+                    <field name="state" widget="badge"
+                           decoration-success="state in ('contracted', 'closed')"
+                           decoration-info="state == 'approved'"
+                           decoration-warning="state == 'approval_pending'"
+                           decoration-danger="state == 'lost'"/>
+                    <field name="priority" widget="priority" optional="show"/>
+                    <field name="activity_ids" widget="list_activity" optional="show"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- ═══ Kanban, grouped by state ═══ -->
+        <record id="view_dally_trade_opportunity_kanban" model="ir.ui.view">
+            <field name="name">dally.trade.opportunity.kanban</field>
+            <field name="model">dally.trade.opportunity</field>
+            <field name="arch" type="xml">
+                <kanban default_group_by="state" quick_create="false"
+                        sample="1" class="o_kanban_small_column">
+                    <field name="state"/>
+                    <field name="operation_type"/>
+                    <field name="sale_currency_id"/>
+                    <field name="activity_state"/>
+                    <templates>
+                        <t t-name="card">
+                            <div class="o_kanban_record_top mb-2">
+                                <div class="o_kanban_record_headings">
+                                    <strong class="o_kanban_record_title">
+                                        <field name="name"/>
+                                    </strong>
+                                    <small class="o_kanban_record_subtitle text-muted">
+                                        <field name="reference"/>
+                                    </small>
+                                </div>
+                                <field name="priority" widget="priority"/>
+                            </div>
+                            <div class="mb-1">
+                                <span class="badge text-bg-secondary">
+                                    <field name="operation_type"/>
+                                </span>
+                            </div>
+                            <div t-if="record.customer_id.raw_value" class="text-muted small">
+                                <i class="fa fa-user me-1" title="Client"/>
+                                <field name="customer_id"/>
+                            </div>
+                            <div class="mt-2">
+                                <field name="sale_subtotal" widget="monetary"
+                                       options="{'currency_field': 'sale_currency_id'}"/>
+                            </div>
+                            <div class="o_kanban_record_bottom mt-2">
+                                <div class="oe_kanban_bottom_left">
+                                    <field name="activity_ids" widget="kanban_activity"/>
+                                    <field name="expected_close_date" widget="remaining_days"/>
+                                </div>
+                                <div class="oe_kanban_bottom_right">
+                                    <field name="responsible_id"
+                                           widget="many2one_avatar_user"/>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+
+        <!-- ═══ Form ═══ -->
+        <record id="view_dally_trade_opportunity_form" model="ir.ui.view">
+            <field name="name">dally.trade.opportunity.form</field>
+            <field name="model">dally.trade.opportunity</field>
+            <field name="arch" type="xml">
+                <form string="Opération de trading">
+                    <header>
+                        <button name="action_qualify" type="object" string="Qualifier"
+                                class="btn-primary" invisible="state != 'draft'"/>
+                        <button name="action_structure" type="object"
+                                string="Structurer" class="btn-primary"
+                                invisible="state != 'qualifying'"/>
+                        <button name="action_start_pricing" type="object"
+                                string="Chiffrer" class="btn-primary"
+                                invisible="state != 'structuring'"/>
+                        <button name="action_request_approval" type="object"
+                                string="Demander l'approbation" class="btn-primary"
+                                invisible="state != 'pricing'"/>
+                        <button name="action_approve" type="object" string="Approuver"
+                                class="btn-primary"
+                                groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_manager"
+                                invisible="state not in ('pricing', 'approval_pending')"/>
+                        <button name="action_refuse_approval" type="object"
+                                string="Refuser" class="btn-secondary"
+                                groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_manager"
+                                invisible="state != 'approval_pending'"/>
+                        <button name="action_send_proposal" type="object"
+                                string="Proposition envoyée" class="btn-primary"
+                                invisible="state != 'approved'"/>
+                        <button name="action_start_negotiation" type="object"
+                                string="Négocier" class="btn-secondary"
+                                invisible="state != 'proposal_sent'"/>
+                        <button name="action_contract" type="object"
+                                string="Contractualiser" class="btn-primary"
+                                invisible="state not in ('proposal_sent', 'negotiating')"/>
+                        <button name="action_start_purchasing" type="object"
+                                string="Lancer l'achat" class="btn-primary"
+                                invisible="state != 'contracted'"/>
+                        <button name="action_start_execution" type="object"
+                                string="Exécuter" class="btn-primary"
+                                invisible="state not in ('contracted', 'purchasing')"/>
+                        <button name="action_start_settlement" type="object"
+                                string="Régler" class="btn-primary"
+                                invisible="state != 'executing'"/>
+                        <button name="action_close" type="object" string="Clôturer"
+                                class="btn-primary" invisible="state != 'settling'"/>
+                        <button name="action_put_on_hold" type="object"
+                                string="Mettre en pause" class="btn-secondary"
+                                invisible="state in ('draft', 'on_hold', 'closed', 'cancelled', 'lost')"/>
+                        <button name="action_resume" type="object" string="Reprendre"
+                                class="btn-primary" invisible="state != 'on_hold'"/>
+                        <button name="action_mark_lost" type="object" string="Perdue"
+                                class="btn-secondary"
+                                confirm="Marquer cette opération comme perdue ?"
+                                invisible="state in ('draft', 'contracted', 'purchasing', 'executing', 'settling', 'closed', 'cancelled', 'lost')"/>
+                        <button name="action_cancel" type="object" string="Annuler"
+                                class="btn-secondary"
+                                confirm="Annuler cette opération ?"
+                                invisible="state in ('cancelled', 'closed', 'lost')"/>
+                        <button name="action_reopen" type="object" string="Réouvrir"
+                                class="btn-secondary"
+                                groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_manager"
+                                invisible="state not in ('closed', 'cancelled', 'lost')"/>
+                        <field name="state" widget="statusbar"
+                               statusbar_visible="qualifying,structuring,pricing,approved,contracted,executing,closed"/>
+                    </header>
+                    <sheet>
+                        <widget name="web_ribbon" title="Archivée"
+                                bg_color="text-bg-danger" invisible="active"/>
+
+                        <div class="oe_button_box" name="button_box">
+                            <button name="action_view_purchase_orders" type="object"
+                                    class="oe_stat_button" icon="fa-shopping-cart"
+                                    groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance"
+                                    invisible="purchase_order_count == 0">
+                                <field name="purchase_order_count" widget="statinfo"
+                                       string="Achats"/>
+                            </button>
+                            <button name="action_view_sale_orders" type="object"
+                                    class="oe_stat_button" icon="fa-file-text-o"
+                                    invisible="sale_order_count == 0">
+                                <field name="sale_order_count" widget="statinfo"
+                                       string="Ventes"/>
+                            </button>
+                            <button name="action_view_shipments" type="object"
+                                    class="oe_stat_button" icon="fa-ship"
+                                    invisible="shipment_count == 0">
+                                <field name="shipment_count" widget="statinfo"
+                                       string="Expéditions"/>
+                            </button>
+                        </div>
+
+                        <div class="oe_title">
+                            <label for="reference" class="oe_edit_only"/>
+                            <h1><field name="reference" readonly="1"/></h1>
+                            <h2><field name="name" placeholder="Objet de l'opération"/></h2>
+                        </div>
+
+                        <!-- The approval banner. Shown before anything else, because
+                             it is the one thing that stops the deal moving. -->
+                        <div class="alert alert-warning" role="alert"
+                             groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance"
+                             invisible="not approval_required or approval_status == 'approved'">
+                            <strong>Approbation requise.</strong>
+                            <field name="approval_reason" readonly="1" nolabel="1"
+                                   class="d-inline"/>
+                        </div>
+                        <div class="alert alert-info" role="alert"
+                             groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance"
+                             invisible="margin_computable or not line_ids">
+                            <strong>Marge non calculée.</strong>
+                            <field name="margin_blocker" readonly="1" nolabel="1"
+                                   class="d-inline"/>
+                        </div>
+
+                        <group>
+                            <group string="Opération">
+                                <field name="operation_type"/>
+                                <field name="operation_type_help" readonly="1"
+                                       nolabel="1" colspan="2"
+                                       class="text-muted fst-italic"/>
+                                <field name="service_id"/>
+                                <field name="priority" widget="priority"/>
+                            </group>
+                            <group string="Suivi">
+                                <field name="responsible_id"
+                                       widget="many2one_avatar_user"/>
+                                <field name="team_id"/>
+                                <field name="expected_close_date"/>
+                                <field name="actual_close_date" readonly="1"
+                                       invisible="not actual_close_date"/>
+                                <field name="company_id" groups="base.group_multi_company"/>
+                                <field name="active" invisible="1"/>
+                            </group>
+                        </group>
+
+                        <notebook>
+                            <page string="Vue d'ensemble" name="overview">
+                                <group>
+                                    <field name="description" nolabel="1"
+                                           placeholder="Ce que couvre l'opération"/>
+                                </group>
+                                <group>
+                                    <group string="Besoin exprimé">
+                                        <field name="customer_requirements" nolabel="1"
+                                               colspan="2"/>
+                                    </group>
+                                    <group string="Flux">
+                                        <field name="origin_country_id"/>
+                                        <field name="destination_country_id"/>
+                                    </group>
+                                </group>
+                            </page>
+
+                            <page string="Parties" name="parties">
+                                <group>
+                                    <group string="Contreparties">
+                                        <field name="customer_id"/>
+                                        <field name="supplier_id"/>
+                                        <field name="principal_id"/>
+                                    </group>
+                                    <group string="Contact tel que reçu">
+                                        <field name="contact_name"/>
+                                        <field name="contact_company"/>
+                                        <field name="contact_email" widget="email"/>
+                                        <field name="contact_phone" widget="phone"/>
+                                        <field name="contact_whatsapp"/>
+                                        <field name="contact_country_id"/>
+                                    </group>
+                                </group>
+                                <div class="mt-2">
+                                    <button name="action_create_customer" type="object"
+                                            string="Créer ou rattacher le client"
+                                            class="btn-secondary"
+                                            invisible="customer_id"/>
+                                </div>
+                            </page>
+
+                            <page string="Lignes" name="lines">
+                                <field name="line_ids" nolabel="1">
+                                    <list editable="bottom">
+                                        <field name="sequence" widget="handle"/>
+                                        <field name="product_id"/>
+                                        <field name="description" required="1"/>
+                                        <field name="quantity"/>
+                                        <field name="uom_id" optional="show"/>
+                                        <field name="purchase_unit_price"/>
+                                        <field name="purchase_currency_id"
+                                               column_invisible="True"/>
+                                        <field name="purchase_subtotal"
+                                               sum="Total achat"/>
+                                        <field name="sale_unit_price"/>
+                                        <field name="sale_currency_id"
+                                               column_invisible="True"/>
+                                        <field name="sale_subtotal" sum="Total vente"/>
+                                    </list>
+                                </field>
+                                <field name="line_count" invisible="1"/>
+                            </page>
+
+                            <page string="Volet achat" name="purchase_side"
+                                  groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance">
+                                <group>
+                                    <group string="Conditions d'achat">
+                                        <field name="purchase_currency_id"/>
+                                        <field name="purchase_incoterm_id"/>
+                                        <field name="purchase_payment_terms"/>
+                                    </group>
+                                    <group string="Montants">
+                                        <field name="purchase_subtotal" readonly="1"/>
+                                    </group>
+                                </group>
+                                <div class="mt-2">
+                                    <button name="action_create_purchase_order"
+                                            type="object"
+                                            string="Créer la commande d'achat"
+                                            class="btn-primary"
+                                            invisible="state not in ('contracted', 'purchasing', 'executing') or purchase_order_count &gt; 0"/>
+                                </div>
+                                <field name="purchase_order_ids" nolabel="1"
+                                       readonly="1" invisible="purchase_order_count == 0">
+                                    <list>
+                                        <field name="name"/>
+                                        <field name="partner_id"/>
+                                        <field name="date_order"/>
+                                        <field name="amount_untaxed"/>
+                                        <field name="currency_id" column_invisible="True"/>
+                                        <field name="state"/>
+                                    </list>
+                                </field>
+                            </page>
+
+                            <page string="Volet vente" name="sale_side">
+                                <group>
+                                    <group string="Conditions de vente">
+                                        <field name="sale_currency_id"/>
+                                        <field name="sale_incoterm_id"/>
+                                        <field name="sale_payment_terms"/>
+                                    </group>
+                                    <group string="Montants">
+                                        <field name="sale_subtotal" readonly="1"/>
+                                    </group>
+                                </group>
+                                <div class="mt-2">
+                                    <button name="action_create_sale_order"
+                                            type="object"
+                                            string="Créer la commande de vente"
+                                            class="btn-primary"
+                                            invisible="state not in ('contracted', 'purchasing', 'executing', 'settling') or sale_order_count &gt; 0"/>
+                                </div>
+                                <field name="sale_order_ids" nolabel="1" readonly="1"
+                                       invisible="sale_order_count == 0">
+                                    <list>
+                                        <field name="name"/>
+                                        <field name="partner_id"/>
+                                        <field name="date_order"/>
+                                        <field name="amount_untaxed"/>
+                                        <field name="currency_id" column_invisible="True"/>
+                                        <field name="state"/>
+                                    </list>
+                                </field>
+                            </page>
+
+                            <page string="Coûts" name="costs"
+                                  groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance">
+                                <field name="cost_ids" nolabel="1">
+                                    <list editable="bottom">
+                                        <field name="category"/>
+                                        <field name="name" required="1"/>
+                                        <field name="partner_id" optional="show"/>
+                                        <field name="amount"/>
+                                        <field name="currency_id"/>
+                                        <field name="conversion_rate" optional="hide"/>
+                                        <field name="is_estimate" widget="boolean_toggle"/>
+                                        <field name="invoice_reference" optional="hide"/>
+                                        <field name="incurred_date" optional="hide"/>
+                                    </list>
+                                </field>
+                            </page>
+
+                            <page string="Commissions" name="commissions"
+                                  groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance">
+                                <field name="commission_ids" nolabel="1">
+                                    <list editable="bottom">
+                                        <field name="direction"/>
+                                        <field name="name" required="1"/>
+                                        <field name="partner_id"/>
+                                        <field name="basis"/>
+                                        <field name="fixed_amount"
+                                               column_invisible="False"/>
+                                        <field name="rate"/>
+                                        <field name="base_field"/>
+                                        <field name="custom_base_amount" optional="hide"/>
+                                        <field name="computed_amount" readonly="1"/>
+                                        <field name="currency_id"/>
+                                        <field name="conversion_rate" optional="hide"/>
+                                        <field name="is_settled" widget="boolean_toggle"/>
+                                    </list>
+                                </field>
+                            </page>
+
+                            <page string="Marge" name="margin"
+                                  groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance">
+                                <group>
+                                    <group string="Devises et conversion">
+                                        <field name="analysis_currency_id"/>
+                                        <field name="conversion_currency_id"/>
+                                        <field name="conversion_date"/>
+                                        <field name="conversion_rate_source"/>
+                                        <field name="purchase_conversion_rate"
+                                               invisible="conversion_rate_source != 'manual'"/>
+                                        <field name="sale_conversion_rate"
+                                               invisible="conversion_rate_source != 'manual'"/>
+                                    </group>
+                                    <group string="Résultat">
+                                        <field name="margin_computable" readonly="1"/>
+                                        <field name="margin_blocker" readonly="1"
+                                               invisible="margin_computable"/>
+                                        <field name="revenue_analysis" readonly="1"
+                                               invisible="not margin_computable"/>
+                                        <field name="gross_margin" readonly="1"
+                                               invisible="not margin_computable"/>
+                                        <field name="cost_total_analysis" readonly="1"
+                                               invisible="not margin_computable"/>
+                                        <field name="commission_total_analysis"
+                                               readonly="1"
+                                               invisible="not margin_computable"/>
+                                        <field name="net_margin" readonly="1"
+                                               invisible="not margin_computable"
+                                               class="oe_subtotal_footer_separator"/>
+                                        <field name="margin_rate" readonly="1"
+                                               widget="percentage"
+                                               invisible="not margin_computable"/>
+                                    </group>
+                                </group>
+                                <group string="Approbation">
+                                    <group>
+                                        <field name="approval_required" readonly="1"/>
+                                        <field name="approval_reason" readonly="1"
+                                               invisible="not approval_required"/>
+                                        <field name="approval_status" readonly="1"/>
+                                    </group>
+                                    <group>
+                                        <field name="approved_by_id" readonly="1"
+                                               invisible="not approved_by_id"/>
+                                        <field name="approved_on" readonly="1"
+                                               invisible="not approved_on"/>
+                                        <field name="approval_notes"
+                                               placeholder="Ce qui a motivé la décision"/>
+                                    </group>
+                                </group>
+                            </page>
+
+                            <page string="Logistique" name="logistics">
+                                <div class="mb-2 text-muted">
+                                    Le fret est géré dans DallyTrading Freight : poids,
+                                    colis, conteneurs et suivi y vivent. Cette page
+                                    n'en est que le point d'entrée.
+                                </div>
+                                <button name="action_create_shipment" type="object"
+                                        string="Créer l'expédition" class="btn-primary"
+                                        invisible="shipment_count &gt; 0 or state in ('draft', 'qualifying')"/>
+                                <field name="shipment_ids" nolabel="1" readonly="1"
+                                       invisible="shipment_count == 0">
+                                    <list>
+                                        <field name="reference"/>
+                                        <field name="partner_id"/>
+                                        <field name="state"/>
+                                    </list>
+                                </field>
+                            </page>
+
+                            <page string="CRM et origine" name="crm">
+                                <group>
+                                    <group string="CRM">
+                                        <field name="crm_lead_id" readonly="1"/>
+                                        <button name="action_create_crm_opportunity"
+                                                type="object"
+                                                string="Créer l'opportunité CRM"
+                                                class="btn-secondary"
+                                                invisible="crm_lead_id"/>
+                                    </group>
+                                    <group string="Origine">
+                                        <field name="sourcing_request_id"/>
+                                        <field name="request_uuid" readonly="1"
+                                               invisible="not request_uuid"/>
+                                    </group>
+                                </group>
+                            </page>
+
+                            <page string="Notes internes" name="internal"
+                                  groups="dally_core.group_dally_readonly">
+                                <group>
+                                    <field name="negotiation_notes" nolabel="1"
+                                           placeholder="Ce qui a été concédé, ce qui a été refusé, et par qui"
+                                           groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance"/>
+                                    <field name="internal_notes" nolabel="1"
+                                           placeholder="Notes internes"/>
+                                </group>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    <chatter/>
+                </form>
+            </field>
+        </record>
+
+        <!-- ═══ Search ═══ -->
+        <record id="view_dally_trade_opportunity_search" model="ir.ui.view">
+            <field name="name">dally.trade.opportunity.search</field>
+            <field name="model">dally.trade.opportunity</field>
+            <field name="arch" type="xml">
+                <search string="Opérations de trading">
+                    <field name="reference"/>
+                    <field name="name"/>
+                    <field name="customer_id"/>
+                    <field name="supplier_id"/>
+                    <field name="principal_id"/>
+                    <field name="responsible_id"/>
+
+                    <filter name="my_deals" string="Mes opérations"
+                            domain="[('responsible_id', '=', uid)]"/>
+                    <filter name="unassigned" string="Non assignées"
+                            domain="[('responsible_id', '=', False)]"/>
+                    <separator/>
+                    <filter name="open" string="En cours"
+                            domain="[('state', 'not in', ['closed', 'cancelled', 'lost'])]"/>
+                    <filter name="awaiting_approval" string="En attente d'approbation"
+                            domain="[('state', '=', 'approval_pending')]"/>
+                    <filter name="needs_approval" string="Approbation requise"
+                            domain="[('approval_required', '=', True), ('approval_status', '!=', 'approved')]"
+                            groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance"/>
+                    <filter name="margin_not_computable" string="Marge non calculable"
+                            domain="[('margin_computable', '=', False)]"
+                            groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance"/>
+                    <filter name="on_hold" string="En pause"
+                            domain="[('state', '=', 'on_hold')]"/>
+                    <separator/>
+                    <filter name="late" string="Clôture dépassée"
+                            domain="[('expected_close_date', '&lt;', context_today().strftime('%Y-%m-%d')), ('state', 'not in', ['closed', 'cancelled', 'lost'])]"/>
+                    <separator/>
+                    <filter name="archived" string="Archivées"
+                            domain="[('active', '=', False)]"/>
+
+                    <group expand="0" string="Regrouper par">
+                        <filter name="group_state" string="État"
+                                context="{'group_by': 'state'}"/>
+                        <filter name="group_type" string="Type d'opération"
+                                context="{'group_by': 'operation_type'}"/>
+                        <filter name="group_responsible" string="Responsable"
+                                context="{'group_by': 'responsible_id'}"/>
+                        <filter name="group_customer" string="Client"
+                                context="{'group_by': 'customer_id'}"/>
+                        <filter name="group_service" string="Activité"
+                                context="{'group_by': 'service_id'}"/>
+                        <filter name="group_close_month" string="Mois de clôture"
+                                context="{'group_by': 'expected_close_date:month'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- ═══ Reporting: native pivot and graph, no custom aggregation ═══ -->
+        <record id="view_dally_trade_opportunity_pivot" model="ir.ui.view">
+            <field name="name">dally.trade.opportunity.pivot</field>
+            <field name="model">dally.trade.opportunity</field>
+            <field name="arch" type="xml">
+                <pivot string="Analyse trading" sample="1">
+                    <field name="operation_type" type="row"/>
+                    <field name="state" type="col"/>
+                    <field name="sale_subtotal" type="measure"/>
+                    <field name="net_margin" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_dally_trade_opportunity_graph" model="ir.ui.view">
+            <field name="name">dally.trade.opportunity.graph</field>
+            <field name="model">dally.trade.opportunity</field>
+            <field name="arch" type="xml">
+                <graph string="Analyse trading" type="bar" sample="1">
+                    <field name="operation_type"/>
+                    <field name="sale_subtotal" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <!-- ═══ Actions ═══ -->
+        <record id="action_dally_trade_opportunity" model="ir.actions.act_window">
+            <field name="name">Opérations de trading</field>
+            <field name="res_model">dally.trade.opportunity</field>
+            <field name="view_mode">kanban,list,form,pivot,graph</field>
+            <field name="search_view_id" ref="view_dally_trade_opportunity_search"/>
+            <field name="context">{'search_default_open': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Créer une opération de trading
+                </p>
+                <p>
+                    Achat-revente, courtage, commission, distribution, import-export ou
+                    représentation commerciale. Le type choisi détermine quels volets
+                    existent : un courtage ne donne pas lieu à une commande d'achat.
+                </p>
+            </field>
+        </record>
+
+        <record id="action_dally_trade_reporting" model="ir.actions.act_window">
+            <field name="name">Analyse trading</field>
+            <field name="res_model">dally.trade.opportunity</field>
+            <field name="view_mode">pivot,graph,list</field>
+            <field name="search_view_id" ref="view_dally_trade_opportunity_search"/>
+        </record>
+
+    </data>
+</odoo>

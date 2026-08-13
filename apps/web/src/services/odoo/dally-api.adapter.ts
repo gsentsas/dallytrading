@@ -21,6 +21,9 @@ import {
   type ServiceType,
   type SourcingRequestInput,
   type SourcingRequestRef,
+  type TradeOperationType,
+  type TradeOpportunityInput,
+  type TradeOpportunityRef,
 } from './types';
 
 /** Envelope every dally_api endpoint returns. */
@@ -29,6 +32,11 @@ interface ApiEnvelope<T> {
   data?: T;
   error?: { code: string; message: string };
   request_id?: string;
+}
+
+interface TradeResponse {
+  readonly reference: string;
+  readonly operationType: TradeOperationType;
 }
 
 interface LeadResponse {
@@ -332,6 +340,53 @@ export class DallyApiAdapter implements OdooGateway {
     return {
       reference: data.reference,
       serviceCode: data.service,
+      status: 'received',
+    };
+  }
+
+  async createTradeOpportunity(
+    input: TradeOpportunityInput,
+    idempotencyKey: string,
+    correlationId: string,
+  ): Promise<TradeOpportunityRef> {
+    // camelCase to snake_case happens here, once. Nothing outside this adapter knows
+    // the wire format — which is the whole reason the gateway exists.
+    //
+    // Note what this payload cannot carry: there is no key for a cost, a margin, a
+    // supplier or a commission, because the input type has no such field. The leak
+    // is prevented at compile time, not filtered at runtime.
+    const payload: Record<string, unknown> = {
+      request_uuid: idempotencyKey,
+      operation_type: input.operationType,
+      subject: input.subject,
+      description: input.description ?? '',
+      requirements: input.requirements ?? '',
+      service_code: input.serviceCode ?? '',
+      contact: {
+        name: input.contact.name,
+        company: input.contact.company ?? '',
+        email: input.contact.email ?? '',
+        phone: input.contact.phone ?? '',
+        whatsapp: input.contact.whatsapp ?? '',
+        country: input.contact.country ?? '',
+      },
+      origin_country: input.originCountry ?? '',
+      destination_country: input.destinationCountry ?? '',
+      source_url: input.sourceUrl ?? '',
+      referrer_url: input.referrerUrl ?? '',
+    };
+
+    const data = await this.call<TradeResponse>(
+      '/api/v1/trade/opportunities',
+      { method: 'POST', body: payload },
+      correlationId,
+    );
+
+    return {
+      reference: data.reference,
+      // Echoed from the server rather than from the input: the server is the
+      // authority on what was actually recorded.
+      operationType: data.operationType,
       status: 'received',
     };
   }

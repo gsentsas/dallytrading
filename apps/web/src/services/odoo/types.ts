@@ -203,6 +203,53 @@ export interface SourcingRequestRef {
   readonly status: 'received';
 }
 
+/**
+ * A trade enquiry, as the public site may express it.
+ *
+ * Note what is absent, and why. There is no purchase price, no cost, no margin, no
+ * commission and no supplier: those exist only inside Odoo, on fields the trade API
+ * user cannot load. If one of them ever appears in this interface, the leak happened
+ * at design time, not at runtime.
+ *
+ * `operationType` mirrors the six types the module declares. It is a union rather
+ * than a string so a typo is a compile error instead of a 422 in production.
+ */
+export type TradeOperationType =
+  | 'purchase_resale'
+  | 'brokerage'
+  | 'commission'
+  | 'distribution'
+  | 'import_export'
+  | 'commercial_representation';
+
+export interface TradeOpportunityInput {
+  readonly operationType: TradeOperationType;
+  readonly subject: string;
+  readonly description?: string;
+  readonly requirements?: string;
+  readonly serviceCode?: string;
+  readonly contact: {
+    readonly name: string;
+    readonly company?: string;
+    readonly email?: string;
+    readonly phone?: string;
+    readonly whatsapp?: string;
+    readonly country?: string;
+  };
+  readonly originCountry?: string;
+  readonly destinationCountry?: string;
+  readonly sourceUrl?: string;
+  readonly referrerUrl?: string;
+}
+
+/** What the enquirer is shown after submitting. */
+export interface TradeOpportunityRef {
+  /** Business reference, e.g. DT-TRD-2026-000031. */
+  readonly reference: string;
+  readonly operationType: TradeOperationType;
+  readonly status: 'received';
+}
+
 /** Stable error codes the UI can branch on without parsing messages. */
 export type OdooErrorCode =
   | 'unauthorized'

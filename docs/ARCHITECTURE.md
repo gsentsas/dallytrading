@@ -283,6 +283,67 @@ quasi-doublons que personne n'a arbitrés, et cette dette ne se rembourse pas.
 deux actions restent idempotentes. L'unité de mesure de la ligne est omise
 volontairement : Odoo la dérive du produit, qui en est la source de vérité.
 
+### ADR-014 — Les règles par type d'opération sont des données, pas des branches
+
+**Contexte.** `dally_trade` traite six types d'opération qui n'engagent pas les mêmes
+responsabilités : un courtage n'achète jamais la marchandise, une commission n'a pas de
+prix d'achat à retrancher. L'implémentation immédiate est un `if operation_type == ...`
+partout où le comportement diffère.
+
+**Décision.** Toutes les règles sont déclarées dans
+`models/dally_trade_rules.py` — volet achat, volet vente, commande d'achat autorisée,
+modèle de revenu, parties requises — et lues par chaque modèle via `operation_rules()`.
+`operation_rules()` lève sur un type inconnu au lieu de retourner un défaut.
+
+**Motif.** Des branches dispersées rendent impossible d'énumérer ce qu'il faut changer
+pour ajouter un septième type, et le premier oubli fait qu'un courtage se voit émettre
+une commande d'achat — enregistrant une dette qui n'existe pas. Un repli silencieux sur
+un type inconnu produirait la même chose en pire, puisque rien ne signalerait l'erreur.
+
+**Conséquences.** Un test vérifie que chaque type porte un jeu de règles complet, et un
+autre que les types qui n'achètent pas ne peuvent pas produire de commande d'achat. Les
+règles restent structurelles : elles ne portent aucun montant, aucun taux et aucun
+seuil, qui sont des décisions commerciales et relèvent de la configuration.
+
+### ADR-015 — Pas de marge multi-devises sans conversion déclarée
+
+**Contexte.** Une opération achetée en CNY et revendue en EUR est banale. Le calcul de
+marge le plus simple soustrait les deux nombres.
+
+**Décision.** Les champs de marge ne sont calculés que si tous les montants sont déjà
+dans la devise d'analyse, ou si une conversion complète est déclarée : devise, date et
+source de taux. Sinon `margin_computable` vaut `False` et `margin_blocker` indique
+précisément ce qui manque. `_dally_conversion_rate()` retourne `None`, jamais `1.0`.
+
+**Motif.** Un chiffre produit en mélangeant des devises est pire que pas de chiffre,
+parce qu'il ressemble à une réponse : quelqu'un s'engage sur un prix parce que l'écran
+affichait un bénéfice. Un repli à 1.0 traiterait 100 CNY comme 100 EUR. Une marge vide
+accompagnée d'un motif se corrige ; une marge fausse est utilisée.
+
+**Conséquences.** Une étape de saisie supplémentaire dès que les devises diffèrent,
+assumée. Une conversion incomplète est refusée à l'écriture : un taux sans date n'est
+pas auditable, donc ce n'est pas une conversion. Chaque coût et chaque commission
+conserve sa devise d'origine, pour que le chiffre initial et le taux employé restent
+visibles.
+
+### ADR-016 — Deux pages trading, deux intentions de recherche
+
+**Contexte.** `/activites/commerce-trading` explique le métier de négoce.
+`/trading` demande à un prospect de proposer une opération. Les deux parlent de trading.
+
+**Décision.** Deux pages distinctes, avec des titres, des descriptions et des H1
+différents, et `requestHref: '/trading'` sur la fiche activité pour que son appel à
+l'action envoie l'intention de conversion vers la page dédiée.
+
+**Motif.** Deux pages visant la même intention se partagent le signal de classement, et
+Google en choisit une — généralement pas celle qui convertit. Le mécanisme
+`requestHref` existait déjà pour `/sourcing` (ADR implicite dans `config/activities.ts`)
+et est réutilisé tel quel plutôt que redécidé.
+
+**Conséquences.** La page activité ne porte plus d'appel à l'action vers `/devis`, ce
+qui est voulu : une opération de trading ne se chiffre pas avec le formulaire de devis
+fret.
+
 ---
 
 ## 3. Vue d'ensemble

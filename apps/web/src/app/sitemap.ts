@@ -59,6 +59,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
+      // Same reasoning as /sourcing: a conversion page in its own right, distinct
+      // from /activites/commerce-trading which serves the informational intent.
+      url: absoluteUrl('/trading'),
+      lastModified,
+      changeFrequency: 'monthly',
+      priority: 0.9,
+    },
+    {
       url: absoluteUrl('/a-propos'),
       lastModified,
       changeFrequency: 'yearly',

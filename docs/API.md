@@ -268,6 +268,59 @@ demande saisie par le personnel.
 portail client, rien ne le consomme, et une surface de lecture publique sans
 consommateur est de la surface d'attaque pour rien.
 
+## 4 ter. `POST /api/v1/trade/opportunities` — opérations de trading
+
+Scope **`trading:write`** — celui qui existait déjà dans `AVAILABLE_SCOPES`. Pas de
+`trade:write` : deux orthographes pour une permission signifient qu'une clé accordée sur
+l'une échoue silencieusement sur l'autre.
+
+Crée une `dally.trade.opportunity` en `draft` et **rien d'autre** : ni contact, ni
+opportunité CRM, ni bon de commande, ni commande de vente, ni expédition. Plusieurs de
+ces documents n'existent d'ailleurs que pour certains types d'opération.
+
+Charge utile et réponse détaillées dans [`TRADING.md`](TRADING.md) § 13.
+
+Idempotent sur `request_uuid`, **archives comprises** : une soumission archivée comme
+spam puis rejouée toucherait sinon la contrainte unique et remonterait en 500 au lieu
+d'un rejeu.
+
+### Champs internes refusés, pas ignorés
+
+`internal_cost`, `purchase_margin`, `internal_margin`, `supplier_score`,
+`internal_commission`, `negotiation_notes`, `approval_status` — et les champs de
+workflow `state`, `responsible_id`, `company_id` — reçoivent un `422 forbidden_field`
+**nommant le champ**, à n'importe quel niveau d'imbrication.
+
+Le refus est délibéré plutôt qu'un abandon silencieux : un appelant qui envoie
+`internal_margin` est soit dans l'erreur sur le contrat, soit en train de le sonder.
+Répondre 201 ne lui apprendrait rien dans le premier cas et le récompenserait dans le
+second.
+
+La liste blanche `FLAT_FIELDS` reste ce qui protège réellement le modèle. La liste des
+refus existe par-dessus, pour la qualité du message.
+
+Le **BFF applique le même refus**, avant validation. Zod supprime les clés inconnues par
+défaut : sans ce contrôle, une demande portant `internal_margin` recevrait un 201 — rien
+n'atteindrait Odoo, mais l'appelant s'entendrait dire que sa soumission était correcte.
+Constaté au premier passage du test fonctionnel, puis corrigé.
+
+### Ce qui ne peut structurellement pas sortir
+
+Les coûts et les commissions vivent sur des modèles auxquels l'utilisateur d'API trading
+**n'a aucun accès** — pas un filtre, une absence d'ACL. Un quatrième utilisateur
+d'intégration dédié (`user_dally_api_trade`), membre d'aucun groupe métier, garantit que
+l'ORM retire `internal_notes`, `supplier_id`, `purchase_subtotal`, `net_margin` et le
+reste avant tout code de contrôleur.
+
+Une record rule le limite à ses **propres** enregistrements (`create_uid = user.id`) :
+la surface d'exposition d'une clé fuitée est bornée à ce que cette clé a créé.
+
+### Pas d'endpoint de lecture
+
+Aucun `GET` sur une opération. Un dossier porte des contreparties, des conditions
+négociées et un état d'avancement ; l'exposer supposerait un mécanisme de capacité
+comparable au `public_tracking_token` du suivi, et rien ne le consomme aujourd'hui.
+
 ## 5. `POST /api/v1/leads` — endpoint Odoo privé
 
 ### Authentification
@@ -470,8 +523,8 @@ interdirait. Il est protégé par `groups=` au niveau de l'ORM.
 | `GET /api/v1/services` | 6 | `customers:read` |
 | `POST /api/v1/quotes` | 6 | `quotes:write` |
 | `GET /api/v1/tracking/{reference}` | 7 | `tracking:read` |
+| `POST /api/v1/trade/opportunities` | 10 | `trading:write` — **livré** |
 | `GET /api/v1/shipments` | 7 | `shipments:read` |
-| `POST /api/v1/trading` | 10 | `trading:write` |
 | `GET /api/v1/customers/me` | 9 | `customers:read` |
 
 Le versionnement est dans le chemin. Une évolution incompatible crée

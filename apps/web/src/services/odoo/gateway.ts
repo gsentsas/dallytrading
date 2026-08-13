@@ -24,6 +24,8 @@ import type {
   ServiceType,
   SourcingRequestInput,
   SourcingRequestRef,
+  TradeOpportunityInput,
+  TradeOpportunityRef,
 } from './types';
 
 export interface OdooGateway {
@@ -69,6 +71,21 @@ export interface OdooGateway {
     idempotencyKey: string,
     correlationId: string,
   ): Promise<SourcingRequestRef>;
+
+  /**
+   * Create a trade opportunity from a public enquiry.
+   *
+   * Produces a qualifiable deal in `draft` — never a purchase order, a sales order,
+   * a contact or a shipment. Those follow human qualification, and several of them
+   * only ever exist for some operation types.
+   *
+   * Must be idempotent on `idempotencyKey`, like the other write paths.
+   */
+  createTradeOpportunity(
+    input: TradeOpportunityInput,
+    idempotencyKey: string,
+    correlationId: string,
+  ): Promise<TradeOpportunityRef>;
 
   /**
    * Look up a shipment by reference **and** tracking token.

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="view_dally_trade_cost_list" model="ir.ui.view">
+            <field name="name">dally.trade.cost.list</field>
+            <field name="model">dally.trade.cost</field>
+            <field name="arch" type="xml">
+                <list string="Coûts de trading">
+                    <field name="opportunity_id"/>
+                    <field name="category"/>
+                    <field name="name"/>
+                    <field name="partner_id" optional="show"/>
+                    <field name="amount" sum="Total"/>
+                    <field name="currency_id"/>
+                    <field name="is_estimate" widget="boolean_toggle"/>
+                    <field name="invoice_reference" optional="hide"/>
+                    <field name="incurred_date" optional="show"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_dally_trade_cost_form" model="ir.ui.view">
+            <field name="name">dally.trade.cost.form</field>
+            <field name="model">dally.trade.cost</field>
+            <field name="arch" type="xml">
+                <form string="Coût de trading">
+                    <sheet>
+                        <group>
+                            <group string="Nature">
+                                <field name="opportunity_id"/>
+                                <field name="category"/>
+                                <field name="name"/>
+                                <field name="partner_id"/>
+                            </group>
+                            <group string="Montant">
+                                <field name="amount"/>
+                                <field name="currency_id"/>
+                                <field name="conversion_rate"/>
+                                <field name="is_estimate"/>
+                                <field name="invoice_reference"/>
+                                <field name="incurred_date"/>
+                            </group>
+                        </group>
+                        <group string="Notes">
+                            <field name="notes" nolabel="1"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_dally_trade_cost_search" model="ir.ui.view">
+            <field name="name">dally.trade.cost.search</field>
+            <field name="model">dally.trade.cost</field>
+            <field name="arch" type="xml">
+                <search string="Coûts">
+                    <field name="name"/>
+                    <field name="opportunity_id"/>
+                    <field name="partner_id"/>
+                    <filter name="estimates" string="Estimations"
+                            domain="[('is_estimate', '=', True)]"/>
+                    <filter name="confirmed" string="Confirmés"
+                            domain="[('is_estimate', '=', False)]"/>
+                    <group expand="0" string="Regrouper par">
+                        <filter name="group_category" string="Catégorie"
+                                context="{'group_by': 'category'}"/>
+                        <filter name="group_deal" string="Opération"
+                                context="{'group_by': 'opportunity_id'}"/>
+                        <filter name="group_partner" string="Prestataire"
+                                context="{'group_by': 'partner_id'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_dally_trade_cost" model="ir.actions.act_window">
+            <field name="name">Coûts de trading</field>
+            <field name="res_model">dally.trade.cost</field>
+            <field name="view_mode">list,form</field>
+            <field name="search_view_id" ref="view_dally_trade_cost_search"/>
+        </record>
+
+    </data>
+</odoo>

@@ -1,8 +1,8 @@
 # Architecture
 
 **Projet :** DallyTrading — site public + ERP/CRM
-**Date :** 12 août 2026
-**Statut :** architecture validée, phase 1 (infrastructure) en cours
+**Date :** 13 août 2026
+**Statut :** production opérationnelle, recette et restauration isolée validées
 
 ---
 
@@ -45,9 +45,9 @@ ont été constatées et signalées sans intervention : voir
 
 | Domaine | DNS | HTTP→HTTPS | HTTPS | Constat |
 |---|---|---|---|---|
-| `dallytrading.com` | ✅ | ✅ 301 | ⚠️ 403 | vhost + certificat OK, `httpdocs` vide |
-| `www.dallytrading.com` | ❌ **absent** | — | ❌ | enregistrement A à créer |
-| `crm.dallytrading.com` | ✅ | ✅ 301 | ❌ TLS 18 | vhost présent, **certificat manquant** |
+| `dallytrading.com` | ✅ | ✅ 301 | ✅ 200 | Next.js via Plesk, HTTPS et HSTS actifs |
+| `www.dallytrading.com` | ✅ | ✅ 301 | ✅ 301 | Redirection permanente vers `https://dallytrading.com` |
+| `crm.dallytrading.com` | ✅ | ✅ 301 | ✅ 303/200 | Odoo 19 via Plesk, certificat valide, health 200 |
 
 ---
 
@@ -133,9 +133,7 @@ Les secrets restent dans `odoo.conf` en `0600`, généré depuis un modèle par
 base est pré-créée par l'entrypoint PostgreSQL et lui appartient ; Odoo s'y initialise
 sans jamais avoir besoin de créer une base.
 
-**Conséquences.** `verify-backup.sh --deep` a besoin de `CREATEDB` pour sa base jetable :
-le droit est accordé temporairement pendant l'exercice de restauration, puis retiré.
-Procédure dans [`RESTORE.md`](RESTORE.md).
+**Conséquences.** Les restaurations de test utilisent un PostgreSQL, des volumes et un réseau interne dédiés. Le rôle de production ne reçoit jamais `CREATEDB`. Procédure dans [`RESTORE.md`](RESTORE.md).
 
 ### ADR-006 — Dimensionnement calculé, non recopié
 
@@ -156,8 +154,7 @@ ajustable sans modifier le code.
 **Motif.** §4 : pas de technologie sans justification. Odoo 19 n'a pas besoin de Redis
 (cache en base et en mémoire de processus) ; un Redis tourne déjà sur l'hôte si le besoin
 apparaît. Un conteneur de sauvegarde devrait de toute façon appeler `docker exec` sur ses
-voisins, ce qui suppose de lui monter le socket Docker — soit un accès root — pour
-remplacer un simple `cron`. Les sauvegardes sont donc des scripts hôte planifiés.
+voisins, ce qui suppose de lui monter le socket Docker — soit un accès root — pour exécuter un timer systemd hôte. Les sauvegardes restent des scripts hôte, avec verrou, vérification et journalisation.
 
 ### ADR-008 — Abstraction `OdooGateway`
 
@@ -168,10 +165,7 @@ trois implémentations interchangeables : `Json2Adapter` (cible), `DallyApiAdapt
 **Motif.** Odoo 19 introduit l'API JSON-2 et annonce la dépréciation de XML-RPC /
 JSON-RPC. Coupler le site à un protocole voué à disparaître créerait une dette immédiate.
 
-**Réserve honnête.** La disponibilité effective de JSON-2 dans les conditions de ce
-projet n'a **pas encore été vérifiée** sur une installation réelle : elle repose sur la
-documentation. Validation empirique prévue en phase 3, avant d'en faire la voie primaire.
-L'abstraction rend ce point non bloquant.
+**État réel.** La production utilise `DallyApiAdapter`, validé de bout en bout contre Odoo 19. JSON-2 reste volontairement non implémenté : il ne constitue ni une dépendance ni une promesse de production.
 
 **Conséquences.** Aucun appel Odoo ne peut exister hors de `services/odoo/`. Les DTO
 publics sont des listes blanches explicites de champs : le suivi public ne peut pas
@@ -434,19 +428,8 @@ second ERP : il ne conserve que sa session utilisateur et un cache de présentat
 | §85 | Phase 0 corrective sur l'instance voisine | Supprimée | Instance hors périmètre ; constats signalés par écrit |
 | §85 | Sauvegardes en fin de parcours | Remontées en phase 8 | Sauvegarder après accumulation de données réelles serait trop tard |
 
-## 8. Plan par phases
+## 8. État de mise en production
 
-| Phase | Contenu | Statut |
-|---|---|---|
-| 1 | Dépôt, arborescence, Compose, `odoo.conf`, scripts, nginx, documentation | 🔄 En cours |
-| 2 | Démarrage de la stack, durcissement, vhost, critères §88 | ⛔ Requiert accès Docker |
-| 3 | Base `dallytrading`, modules natifs, groupes + ACL, validation JSON-2 | ⏳ |
-| 4 | `dally_core`, `dally_crm`, `dally_api`, tests | ⏳ |
-| 5 | Next.js : socle, design, accueil, activités, contact, SEO | ⏳ |
-| 6 | Formulaire de devis multi-étapes → `crm.lead`, idempotence, critères §89 | ⏳ |
-| 7 | `dally_freight`, `dally_tracking`, page `/tracking`, critères §90 | ⏳ |
-| 8 | Sauvegardes planifiées, exercice de restauration, supervision, critères §91 | ⏳ |
-| 9 | Espace client `/mon-compte` | ⏳ |
-| 10 | `dally_sourcing` ✅ · `dally_trade` ⏳ | 🔄 |
-| 11 | Boutique, CI/CD, staging | ⏳ |
-| 12 | Documentation complète et runbooks | ⏳ |
+Au 13 août 2026 : stack Docker DallyTrading saine, Odoo 19 et ses sept modules opérationnels, frontend Next.js sous systemd, HTTPS/HSTS actifs, suivi public testé sans fuite, sauvegarde réelle vérifiée et restauration isolée réussie. La suite Odoo complète passe avec 587 méthodes, 0 échec et 0 erreur ; le frontend passe 189 tests.
+
+Restent hors du déploiement applicatif : installation root du timer systemd fourni, stockage hors serveur et ajout de swap. Les évolutions produit (espace client, boutique, CI/CD) restent hors périmètre de cette clôture.

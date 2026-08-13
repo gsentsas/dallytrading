@@ -222,12 +222,25 @@ cohérence base ↔ filestore d'Odoo.
 
 ### Traitement côté DallyTrading
 
-Sauvegarde atomique base + filestore, empreintes SHA-256, manifeste, rétention
-échelonnée et copie distante chiffrée :
+Sauvegarde atomique base + filestore, empreintes SHA-256, manifeste et rétention échelonnée. La copie distante chiffrée est optionnelle et reste inactive sans configuration S3 complète :
 [`backup.sh`](../infrastructure/scripts/backup.sh),
 [`verify-backup.sh`](../infrastructure/scripts/verify-backup.sh),
 [`restore.sh`](../infrastructure/scripts/restore.sh).
-Procédure d'exercice de restauration : [`RESTORE.md`](RESTORE.md).
+Procédure exercice de restauration : [`RESTORE.md`](RESTORE.md). Le 13 août 2026, le backup réel `production-release/20260813T192539Z` a passé ses contrôles puis a été restauré en 13 s dans des volumes, une base et un réseau dédiés, sans port publié ni accès aux ressources de production.
+
+---
+
+## DT-006 — Token de tracking présent dans les journaux URL
+
+| | |
+|---|---|
+| **Gravité** | 🟡 Moyenne |
+| **Système** | Tracking public DallyTrading |
+| **Statut** | ⚠️ Risque restant documenté |
+
+Le lien de capacité utilise actuellement les paramètres `ref` et `t`. Odoo et les reverse proxies peuvent journaliser la query string complète dans leurs logs accès. Aucun token ne figure dans le payload public, mais un opérateur ayant accès aux logs peut retrouver un lien encore valide. Le token de expédition synthétique utilisé pendant la recette a été tourné immédiatement après le constat, rendant la valeur observée inutilisable.
+
+Traitement recommandé hors clôture : transporter le secret hors URL ou appliquer une politique de redaction des query strings sur Plesk et Odoo, protéger la lecture des logs, réduire leur rétention et tourner tout token suspect.
 
 ---
 

@@ -1,6 +1,6 @@
 # Déploiement
 
-Procédure de mise en place de l'instance Odoo 19 DallyTrading sur le serveur
+Procédure de référence et état validé de mise en place de l'instance Odoo 19 DallyTrading sur le serveur
 `217.154.121.244` (Plesk Obsidian, Ubuntu 24.04).
 
 Chaque étape indique le **niveau de privilège requis**. Les étapes marquées 🔒 ne
@@ -16,9 +16,9 @@ appartenant à un autre abonnement (`crm.sen-containers.com`, ports `18069`/`180
 
 - ❌ Ne jamais publier un conteneur sur les ports **80** ou **443** — Plesk les possède.
 - ❌ Ne jamais utiliser les ports **18069** / **18072** — occupés.
-- ❌ Ne jamais exécuter `docker compose down -v` : `-v` détruit les volumes, donc la
+- ❌ Ne jamais exécuter `docker compose -p dallytrading down -v` : `-v` détruit les volumes, donc la
   base et le filestore.
-- ✅ Toujours passer `--env-file ../.env` et les **deux** fichiers compose.
+- ✅ Toujours passer `-p dallytrading`, `--env-file ../.env` et les **deux** fichiers Compose.
 
 ---
 
@@ -45,55 +45,24 @@ free -h
 
 ## Étape 2 — 🔒 DNS
 
-`www.dallytrading.com` ne résout pas aujourd'hui : l'enregistrement est absent.
-
-Dans **Plesk → Domaines → dallytrading.com → DNS**, ajouter :
-
-| Type | Nom | Valeur |
-|---|---|---|
-| A | `www.dallytrading.com` | `217.154.121.244` |
-
-`dallytrading.com` et `crm.dallytrading.com` pointent déjà correctement — ne pas y
-toucher.
-
-Contrôle :
-
-```bash
-dig +short www.dallytrading.com    # attendu : 217.154.121.244
-```
+État validé le 13 août 2026 : `dallytrading.com`, `www.dallytrading.com` et `crm.dallytrading.com` résolvent. Ne modifier les enregistrements que pendant une intervention DNS planifiée.
 
 ## Étape 3 — 🔒 Certificats HTTPS
 
-`crm.dallytrading.com` échoue actuellement en TLS (erreur 18 : certificat ne couvrant
-pas le nom). C'est la cause du HTTPS inopérant sur le sous-domaine.
-
-**Plesk → Domaines → *domaine* → Certificats SSL/TLS → Installer Let's Encrypt**
-
-| Domaine | Noms à couvrir |
-|---|---|
-| `dallytrading.com` | `dallytrading.com` + `www.dallytrading.com` |
-| `crm.dallytrading.com` | `crm.dallytrading.com` |
-
-Activer **« Rediriger de HTTP vers HTTPS »** sur les deux (déjà actif : les deux
-domaines renvoient bien un 301).
-
-Ne **pas** activer HSTS à ce stade (§12) : une fois envoyé, l'en-tête est mémorisé par
-les navigateurs pour toute sa durée. À activer après validation complète.
-
-Contrôle — `ssl_verify_result` doit valoir `0` :
+État validé le 13 août 2026 : certificats valides sur les trois noms, redirection HTTP vers HTTPS et HSTS actifs. Contrôle :
 
 ```bash
-curl -o /dev/null -w '%{http_code} ssl=%{ssl_verify_result}\n' https://crm.dallytrading.com/
+curl -sI https://dallytrading.com/
+curl -sI https://crm.dallytrading.com/web/health
 ```
 
 ## Étape 4 — 🔒 Redirection www
 
-**Plesk → dallytrading.com → Hébergement → Redirection** :
-`www.dallytrading.com` → `https://dallytrading.com` en **301 permanent**.
+État validé : `https://www.dallytrading.com/<chemin>` répond 301 vers `https://dallytrading.com/<chemin>` en conservant la query string. Le réglage se trouve dans Plesk, domaine `www.dallytrading.com`, type Hébergement = Redirection permanente 301.
 
 ## Étape 5 — 🔒 Accès Docker
 
-Le compte d'hébergement n'appartient pas au groupe `docker` et n'a pas de `sudo`.
+Le compte applicatif dispose désormais de l’accès Docker nécessaire. Les commandes restent strictement limitées au projet `dallytrading`; le compte ne dispose pas de sudo.
 
 Deux options :
 
@@ -133,16 +102,16 @@ git status --short                      # aucun secret ne doit apparaître
 
 ```bash
 cd /var/www/vhosts/dallytrading.com/platform/infrastructure
-docker compose --env-file ../.env \
+docker compose -p dallytrading --env-file ../.env \
   -f docker-compose.yml -f docker-compose.production.yml config >/dev/null   # valide la syntaxe
-docker compose --env-file ../.env \
+docker compose -p dallytrading --env-file ../.env \
   -f docker-compose.yml -f docker-compose.production.yml up -d
 ```
 
 Attendre que les deux services soient `healthy` (PostgreSQL ~30 s, Odoo jusqu'à 120 s) :
 
 ```bash
-docker compose ps
+docker compose -p dallytrading ps
 docker logs --tail 50 dallytrading-odoo
 ```
 
@@ -158,13 +127,7 @@ Le rôle PostgreSQL est volontairement **sans `CREATEDB` ni `SUPERUSER`** : la b
 pré-créée par l'entrypoint PostgreSQL et lui appartient, Odoo n'a donc jamais besoin de
 créer une base lui-même (§7).
 
-> `verify-backup.sh --deep` crée une base jetable et requiert `CREATEDB`. Pour un
-> exercice de restauration, accorder le droit temporairement puis le retirer :
-> ```bash
-> docker exec dallytrading-postgres psql -U postgres -c 'ALTER ROLE odoo_dally CREATEDB;'
-> # … exercice …
-> docker exec dallytrading-postgres psql -U postgres -c 'ALTER ROLE odoo_dally NOCREATEDB;'
-> ```
+Le test de restauration utilise le PostgreSQL dédié décrit dans [`RESTORE.md`](RESTORE.md). Aucun privilège de production temporaire est requis.
 
 ## Étape 9 — Contrôles de sécurité Odoo
 
@@ -196,9 +159,7 @@ Changer le mot de passe de l'utilisateur `admin` Odoo dès la première connexio
    dans **« Directives nginx additionnelles »**.
 3. Appliquer. Plesk valide la syntaxe et refuse une configuration invalide.
 
-Ne configurer `dallytrading.com` (fichier
-[`dallytrading.com.conf`](../infrastructure/nginx/dallytrading.com.conf)) **qu'une fois
-Next.js démarré** sur le port 3010 — sinon le site renverra 502 au lieu du 403 actuel.
+Les deux reverse proxies sont appliqués et validés : Next.js sur `127.0.0.1:3010`, Odoo sur `127.0.0.1:18169` et websocket sur `127.0.0.1:18172`.
 
 ## Étape 11 — Validation de bout en bout
 
@@ -215,28 +176,14 @@ curl -o /dev/null -w 'manager : %{http_code}\n' https://crm.dallytrading.com/web
 # PostgreSQL non joignable publiquement
 nc -zv -w3 217.154.121.244 5432    # doit échouer
 
-# Persistance après redémarrage
-docker compose restart && sleep 60 && curl -sf http://127.0.0.1:18169/web/health && echo OK
+# Redémarrage ciblé du seul service Odoo
+docker compose -p dallytrading --env-file ../.env -f docker-compose.yml -f docker-compose.production.yml restart odoo
+sleep 60 && curl -sf http://127.0.0.1:18169/web/health && echo OK
 ```
 
 ## Étape 12 — Sauvegardes planifiées
 
-```bash
-./infrastructure/scripts/backup.sh
-./infrastructure/scripts/verify-backup.sh --deep
-```
-
-Planification (crontab du compte propriétaire, ou 🔒 systemd timer) :
-
-```cron
-15 2 * * *  cd /var/www/vhosts/dallytrading.com/platform && ./infrastructure/scripts/backup.sh --tag daily   >> logs/backup.log 2>&1
-30 3 * * 0  cd /var/www/vhosts/dallytrading.com/platform && ./infrastructure/scripts/backup.sh --tag weekly  >> logs/backup.log 2>&1
-45 4 1 * *  cd /var/www/vhosts/dallytrading.com/platform && ./infrastructure/scripts/backup.sh --tag monthly >> logs/backup.log 2>&1
-0  5 * * 1  cd /var/www/vhosts/dallytrading.com/platform && ./infrastructure/scripts/verify-backup.sh        >> logs/backup.log 2>&1
-```
-
-La mise en production n'est validée qu'après un **exercice de restauration réussi** :
-[`RESTORE.md`](RESTORE.md).
+La sauvegarde réelle `production-release/20260813T192539Z` et sa restauration isolée sont validées. Le timer systemd quotidien fourni sauvegarde, vérifie, journalise et applique la rétention. Son installation root est décrite exactement dans [`BACKUPS.md`](BACKUPS.md). Ne pas installer une tâche cron concurrente.
 
 ---
 
@@ -258,7 +205,7 @@ l'étape 5 réglée.
 
 ```bash
 # Arrêt SANS destruction de données — jamais l'option -v
-docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.production.yml down
+docker compose -p dallytrading --env-file ../.env -f docker-compose.yml -f docker-compose.production.yml down
 
 # Les volumes dallytrading_postgres_data et dallytrading_odoo_filestore survivent
 docker volume ls | grep dally

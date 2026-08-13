@@ -54,6 +54,7 @@ class DallyTrackingController(DallyApiController):
         "/api/v1/tracking/<string:reference>",
         type="http",
         auth="none",
+        readonly=False,
         methods=["GET"],
         csrf=False,
         save_session=False,

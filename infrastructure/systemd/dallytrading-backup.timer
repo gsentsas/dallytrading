@@ -1,0 +1,13 @@
+[Unit]
+Description=DallyTrading — sauvegarde quotidienne
+Documentation=file:/var/www/vhosts/dallytrading.com/platform/docs/BACKUPS.md
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 UTC
+Persistent=true
+RandomizedDelaySec=15m
+AccuracySec=1m
+Unit=dallytrading-backup.service
+
+[Install]
+WantedBy=timers.target

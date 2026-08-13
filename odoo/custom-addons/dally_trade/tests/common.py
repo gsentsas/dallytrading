@@ -13,6 +13,9 @@ class TradeCase(TransactionCase):
 
     def setUp(self):
         super().setUp()
+        self.env.user.write({"group_ids": [(4, self.env.ref(
+            "dally_trade.group_dally_trade_manager"
+        ).id)]})
         self.Deal = self.env["dally.trade.opportunity"]
         self.customer = self.env["res.partner"].create({
             "name": "Trade Customer", "email": "trade.customer@example.com",
@@ -30,7 +33,7 @@ class TradeCase(TransactionCase):
         })
         self.company_currency = self.env.company.currency_id
         self.other_currency = self.env["res.currency"].search(
-            [("name", "=", "USD")], limit=1,
+            [("id", "!=", self.company_currency.id)], limit=1,
         ) or self.env["res.currency"].create({"name": "TST", "symbol": "T"})
 
     def _deal(self, **overrides):

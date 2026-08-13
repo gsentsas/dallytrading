@@ -1,0 +1,36 @@
+[Unit]
+Description=DallyTrading — sauvegarde PostgreSQL et filestore vérifiée
+Documentation=file:/var/www/vhosts/dallytrading.com/platform/docs/BACKUPS.md
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=dallytrading.com_02xd20o36s7
+Group=psacln
+UMask=0077
+WorkingDirectory=/var/www/vhosts/dallytrading.com/platform
+ExecStart=/var/www/vhosts/dallytrading.com/platform/infrastructure/scripts/backup-daily.sh
+TimeoutStartSec=2h
+
+StandardOutput=append:/var/www/vhosts/dallytrading.com/platform/logs/backup.log
+StandardError=append:/var/www/vhosts/dallytrading.com/platform/logs/backup.log
+SyslogIdentifier=dallytrading-backup
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/var/www/vhosts/dallytrading.com/platform/backups
+ReadWritePaths=/var/www/vhosts/dallytrading.com/platform/logs
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

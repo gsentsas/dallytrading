@@ -1,0 +1,74 @@
+####################################################################
+# DALLYTRADING — Environnement éphémère de restauration isolée
+#
+# À utiliser SEUL, avec un projet Compose explicite :
+#   docker compose -p dallytrading-restore --env-file ../.env \
+#     -f docker-compose.restore.yml up -d
+#
+# Aucun port n'est publié. Les deux services ne rejoignent qu'un réseau
+# interne dédié et ne montent aucun volume de production.
+####################################################################
+
+name: ${RESTORE_COMPOSE_PROJECT_NAME:-dallytrading-restore}
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    container_name: ${RESTORE_PG_CONTAINER:-dallytrading-restore-postgres}
+    hostname: ${RESTORE_PG_CONTAINER:-dallytrading-restore-postgres}
+    labels:
+      com.dallytrading.restore: "true"
+    environment:
+      POSTGRES_USER: ${RESTORE_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis}
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+      TZ: ${TZ:-Africa/Dakar}
+    volumes:
+      - restore-postgres-data:/var/lib/postgresql/data
+    networks:
+      - restore-private
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: "no"
+
+  odoo:
+    image: ${ODOO_IMAGE:-odoo:19.0}
+    container_name: ${RESTORE_ODOO_CONTAINER:-dallytrading-restore-odoo}
+    hostname: ${RESTORE_ODOO_CONTAINER:-dallytrading-restore-odoo}
+    labels:
+      com.dallytrading.restore: "true"
+    # Neutralise le VOLUME implicite /mnt/extra-addons de image Odoo.
+    tmpfs:
+      - /mnt/extra-addons:rw,noexec,nosuid,size=16m
+    # Conteneur support : il expose le filestore restauré aux contrôles,
+    # mais ne démarre pas l'application et ne publie aucun port.
+    entrypoint: ["sh", "-c"]
+    command: ["trap : TERM INT; sleep infinity & wait"]
+    volumes:
+      - restore-filestore:/var/lib/odoo
+    networks:
+      - restore-private
+    restart: "no"
+
+networks:
+  restore-private:
+    name: ${RESTORE_NETWORK:-dallytrading_restore_private}
+    driver: bridge
+    internal: true
+    labels:
+      com.dallytrading.restore: "true"
+
+volumes:
+  restore-postgres-data:
+    name: ${RESTORE_POSTGRES_VOLUME:-dallytrading_restore_postgres_data}
+    labels:
+      com.dallytrading.restore: "true"
+  restore-filestore:
+    name: ${RESTORE_FILESTORE_VOLUME:-dallytrading_restore_odoo_filestore}
+    labels:
+      com.dallytrading.restore: "true"

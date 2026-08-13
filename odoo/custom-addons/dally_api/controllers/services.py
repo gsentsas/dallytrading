@@ -26,6 +26,7 @@ class DallyServicesController(DallyApiController):
         "/api/v1/services",
         type="http",
         auth="none",
+        readonly=False,
         methods=["GET"],
         csrf=False,
         save_session=False,

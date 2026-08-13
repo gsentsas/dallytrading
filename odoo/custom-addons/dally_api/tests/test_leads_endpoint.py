@@ -94,7 +94,7 @@ class TestLeadsEndpoint(HttpCase):
         self.assertEqual(response.json()["error"]["code"], "invalid_json")
 
     def test_rejects_empty_body(self):
-        response = self._post(None, raw_body="")
+        response = self._post(None, raw_body=" ")
         self.assertEqual(response.status_code, 400)
 
     def test_rejects_json_array(self):

@@ -1,197 +1,107 @@
-# Restauration et exercice de reprise
+# Restauration et exercice isolé
 
-Deux usages distincts :
+## Principes de sécurité
 
-1. **Exercice de restauration** — obligatoire avant la mise en production (§62, §91).
-   Se déroule sur une base jetable, sans jamais toucher la production.
-2. **Restauration réelle** — après incident, perte de données ou migration.
+`restore.sh` ne choisit jamais une cible implicitement. Une invocation doit préciser
+`--isolated-test` ou `--production`. Une simple option `--target-db` ne suffit
+pas et ne modifie jamais un filestore.
 
----
+Le remplacement du filestore exige simultanément :
 
-## Partie 1 — Exercice de restauration (obligatoire)
+- `--replace-filestore` ;
+- `--confirm-filestore-volume <nom exact>`.
 
-### Objectif
+En mode production, il faut aussi répéter le nom de base avec
+`--confirm-production-db`, puis saisir une phrase complète au clavier. Le mode
+production refuse tout nom de conteneur, volume ou réseau différent de ceux déclarés
+pour DallyTrading et produit d'abord une sauvegarde complète `pre-restore`.
 
-Prouver qu'une sauvegarde est effectivement restaurable. Tant que cet exercice n'a pas
-réussi, la mise en production n'est pas validée.
+## Exercice obligatoire dans des ressources dédiées
 
-### Procédure
+Depuis la racine du projet :
 
 ```bash
 cd /var/www/vhosts/dallytrading.com/platform
+
+docker compose -p dallytrading-restore \
+  --env-file .env \
+  -f infrastructure/docker-compose.restore.yml \
+  up -d
 ```
 
-**1. Produire une sauvegarde de référence**
+Ce Compose crée uniquement :
 
-```bash
-./infrastructure/scripts/backup.sh --tag daily
-BACKUP=$(find backups/daily -mindepth 1 -maxdepth 1 -type d | sort -r | head -1)
-echo "Sauvegarde de référence : ${BACKUP}"
-```
-
-**2. Contrôles d'intégrité**
-
-```bash
-./infrastructure/scripts/verify-backup.sh "${BACKUP}"
-```
-
-Attendu : `RÉSULTAT : contrôles rapides OK.`
-
-**3. Accorder temporairement `CREATEDB`**
-
-Le rôle applicatif n'a pas ce droit en exploitation normale, par principe de moindre
-privilège. L'exercice en a besoin pour créer une base jetable.
-
-```bash
-docker exec dallytrading-postgres psql -U postgres -c 'ALTER ROLE odoo_dally CREATEDB;'
-```
-
-**4. Restauration réelle en base jetable**
-
-```bash
-./infrastructure/scripts/verify-backup.sh "${BACKUP}" --deep
-```
-
-Le script crée `verify_<horodatage>_<pid>`, y restaure le dump, compte les tables,
-vérifie la présence d'utilisateurs, de contacts et de modules, puis **supprime la base**.
-La production n'est jamais touchée.
-
-Attendu : `RÉSULTAT : sauvegarde VALIDE et restaurabilité PROUVÉE.`
-
-**5. Restauration complète sur une base de test nommée**
-
-Contrairement à `--deep`, cette étape restaure **aussi le filestore**, seul moyen de
-valider la cohérence base ↔ pièces jointes.
-
-```bash
-./infrastructure/scripts/restore.sh "${BACKUP}" --target-db essai_restauration --skip-filestore
-```
-
-> `--skip-filestore` est utilisé ici car le filestore est partagé par le volume Odoo :
-> le restaurer écraserait celui de la base de production. La validation complète
-> base + filestore se fait à l'étape 6, sur un environnement isolé.
-
-**6. Validation base + filestore en environnement isolé**
-
-Seul montage qui valide l'ensemble de la chaîne. Sur une machine ou un projet Docker
-séparé :
-
-```bash
-export COMPOSE_PROJECT_NAME=dally_restore_test
-cd infrastructure
-docker compose --env-file ../.env -f docker-compose.yml up -d postgres
-# volumes distincts grâce au préfixe de projet
-cd ..
-./infrastructure/scripts/restore.sh "${BACKUP}" --yes
-```
-
-Contrôles fonctionnels, à effectuer manuellement dans l'interface :
-
-- [ ] Connexion avec un compte utilisateur réel
-- [ ] Ouverture d'une fiche contact
-- [ ] Ouverture d'un devis / d'une commande
-- [ ] **Téléchargement d'une pièce jointe** ← valide la cohérence base ↔ filestore
-- [ ] Ouverture d'une expédition et de sa chronologie d'événements
-- [ ] Aucune erreur dans `docker logs dallytrading-odoo`
-
-**7. Retirer `CREATEDB`**
-
-```bash
-docker exec dallytrading-postgres psql -U postgres -c 'ALTER ROLE odoo_dally NOCREATEDB;'
-```
-
-**8. Nettoyer l'environnement de test**
-
-```bash
-docker exec dallytrading-postgres psql -U postgres -d postgres \
-  -c 'DROP DATABASE IF EXISTS essai_restauration;'
-```
-
-### Consignation
-
-À archiver après chaque exercice (au minimum trimestriel) :
-
-| Champ | Valeur |
+| Type | Nom par défaut |
 |---|---|
-| Date de l'exercice | |
-| Sauvegarde utilisée | |
-| Taille base / filestore | |
-| Durée de la restauration | |
-| Contrôles fonctionnels | ✅ / ❌ |
-| Anomalies rencontrées | |
-| Opérateur | |
+| Conteneur PostgreSQL | `dallytrading-restore-postgres` |
+| Conteneur support filestore | `dallytrading-restore-odoo` |
+| Volume PostgreSQL | `dallytrading_restore_postgres_data` |
+| Volume filestore | `dallytrading_restore_odoo_filestore` |
+| Réseau interne | `dallytrading_restore_private` |
+| Base restaurée | `dallytrading_restore` |
 
----
+Aucun port n'est publié. Les conteneurs ne rejoignent que le réseau interne dédié. Ils
+portent le label `com.dallytrading.restore=true`, comme leurs volumes et leur réseau.
+`restore.sh` vérifie ces faits, les montages exacts et l'absence de toute ressource
+production avant le premier `DROP DATABASE`.
 
-## Partie 2 — Restauration réelle en production
-
-> ⚠️ **Opération destructive.** Écrase la base **et** le filestore de production.
-
-### Garde-fous intégrés à `restore.sh`
-
-1. **Vérification préalable** — les empreintes SHA-256 et le marqueur `.complete` sont
-   contrôlés *avant* toute écriture. Une sauvegarde corrompue est refusée.
-2. **Sauvegarde de sécurité automatique** — l'état actuel est dumpé dans
-   `backups/pre-restore/`. Si ce dump échoue et que la cible est la production,
-   **la restauration est refusée**.
-3. **Confirmation explicite** — en production, il faut saisir exactement le nom de la
-   base. Un `[o/N]` serait trop facile à valider par réflexe.
-4. **Arrêt d'Odoo** — restaurer sous une instance active corrompt le cache et laisse des
-   verrous incohérents. Odoo est redémarré en sortie quoi qu'il arrive (`trap`).
-
-### Procédure
+Restauration complète :
 
 ```bash
-cd /var/www/vhosts/dallytrading.com/platform
+BACKUP=backups/daily/<timestamp>
 
-# 1. Choisir la sauvegarde
-find backups -mindepth 2 -maxdepth 2 -type d | sort -r | head -10
+./infrastructure/scripts/restore.sh "$BACKUP" \
+  --isolated-test \
+  --replace-filestore \
+  --confirm-filestore-volume dallytrading_restore_odoo_filestore \
+  --yes
 
-# 2. La vérifier AVANT de restaurer
-./infrastructure/scripts/verify-backup.sh backups/daily/20260812T021500Z
-
-# 3. Restaurer
-./infrastructure/scripts/restore.sh backups/daily/20260812T021500Z
+./infrastructure/scripts/verify-backup.sh "$BACKUP" --deep
 ```
 
-Le script enchaîne : vérification → confirmation → sauvegarde de sécurité → arrêt
-d'Odoo → restauration de la base → restauration du filestore → redémarrage → contrôle
-de disponibilité sur `/web/health` (jusqu'à 180 s).
+Le mode profond contrôle en lecture seule le nombre de tables, les modules
+`dally_*`, les utilisateurs, les partenaires, les tables métier, la lisibilité du
+filestore et l'isolation réseau/volumes/ports.
 
-### Contrôles post-restauration
+Nettoyage après validation :
 
 ```bash
-curl -sf http://127.0.0.1:18169/web/health && echo OK
-docker logs --tail 100 dallytrading-odoo | grep -iE 'error|traceback' || echo "aucune erreur"
-curl -o /dev/null -w '%{http_code}\n' https://crm.dallytrading.com/
+docker compose -p dallytrading-restore \
+  --env-file .env \
+  -f infrastructure/docker-compose.restore.yml \
+  down --volumes --remove-orphans
 ```
 
-Puis, dans l'interface : connexion, ouverture d'un enregistrement, **téléchargement
-d'une pièce jointe**.
+Cette commande cible seulement le projet éphémère `dallytrading-restore`. Aucun
+`prune`, arrêt global ou suppression globale n'est autorisé.
 
-### Retour arrière
+## Exercice réellement exécuté le 13 août 2026
 
-Si la restauration produit un état pire que l'initial, la sauvegarde de sécurité prise à
-l'étape 3 permet de revenir en arrière :
+Le backup `production-release/20260813T192539Z` a été restauré en **13 secondes** dans les ressources `dallytrading-restore-*` décrites ci-dessus : 436 tables, 7 modules DallyTrading, 16 tables métier et 923 fichiers lisibles. La base isolée comptait 8 utilisateurs et 9 partenaires. Aucun port, volume, conteneur, réseau ou nom de base de production ne figurait dans la cible. Les ressources de cet exercice ont ensuite été supprimées avec le `down --volumes` explicitement borné au projet `dallytrading-restore`, sans prune.
+
+## Restauration de production
+
+Opération de dernier recours, destructive, à exécuter pendant une fenêtre de
+maintenance :
 
 ```bash
-ls -lt backups/pre-restore/
-./infrastructure/scripts/restore.sh backups/pre-restore/<horodatage>-dallytrading --skip-filestore
+./infrastructure/scripts/restore.sh backups/daily/<timestamp> \
+  --production \
+  --confirm-production-db dallytrading \
+  --replace-filestore \
+  --confirm-filestore-volume dallytrading_odoo_filestore
 ```
 
----
+Le filestore restauré remplace uniquement
+`/var/lib/odoo/filestore/dallytrading`, jamais tout le volume. Une restauration de
+base seule est refusée sauf ajout de `--acknowledge-db-only`, car elle peut
+désynchroniser les pièces jointes.
 
-## Objectifs de reprise
+La restauration de production arrête et redémarre uniquement
+`dallytrading-odoo`; elle ne touche jamais `odoo_crm` ni `odoo_crm_db`.
 
-| Indicateur | Cible | Fondement |
-|---|---|---|
-| **RPO** (perte de données maximale) | 24 h | Sauvegarde quotidienne à 02h15 |
-| **RTO** (délai de rétablissement) | < 1 h | À confirmer par chronométrage lors de l'exercice |
+## Objectifs
 
-Ces valeurs restent des **hypothèses** jusqu'au premier exercice chronométré. Le RTO
-dépend directement de la taille du filestore, qui croîtra avec les documents de fret.
-À réévaluer à chaque exercice trimestriel.
-
-Pour un RPO inférieur à 24 h, il faudrait activer l'archivage WAL en continu sur
-PostgreSQL — non retenu au MVP, la volumétrie et la criticité initiales ne le
-justifiant pas.
+La cible reste un RPO de 24 h avec sauvegarde quotidienne. Le RTO doit être remplacé
+par la durée réellement mesurée lors de chaque exercice isolé et consignée dans le
+checkpoint de production.

@@ -446,7 +446,7 @@ BACKUP=$(find backups/migration -mindepth 1 -maxdepth 1 -type d | sort -r | head
 
 # 5. Vérifier AVANT de transférer : une sauvegarde corrompue découverte
 #    sur la cible signifie recommencer la coupure.
-./infrastructure/scripts/verify-backup.sh "$BACKUP" --deep
+./infrastructure/scripts/verify-backup.sh "$BACKUP"
 
 # 6. Transfert
 rsync -avz --progress "$BACKUP/" dally@NOUVEAU_VPS:/opt/dallytrading/backups/migration/final/
@@ -454,20 +454,18 @@ rsync -avz --progress "$BACKUP/" dally@NOUVEAU_VPS:/opt/dallytrading/backups/mig
 # ─── Sur le nouveau VPS ──────────────────────────────────────────
 cd /opt/dallytrading/platform
 
-# 7. Démarrer PostgreSQL seul : restaurer sous un Odoo actif corrompt le cache.
-docker compose --env-file ../.env -f infrastructure/docker-compose.yml \
-  -f infrastructure/docker-compose.vps.yml up -d postgres
-
-# 8. Restaurer
-./infrastructure/scripts/restore.sh /opt/dallytrading/backups/migration/final --yes
-
-# 9. Démarrer le reste
-docker compose --env-file ../.env -f infrastructure/docker-compose.yml \
+# 7. Démarrer explicitement le projet cible, puis restaurer avec les confirmations fortes.
+docker compose -p dallytrading --env-file ../.env -f infrastructure/docker-compose.yml \
   -f infrastructure/docker-compose.vps.yml up -d
+
+# 8. Restaurer uniquement DallyTrading (confirmation interactive obligatoire).
+./infrastructure/scripts/restore.sh /opt/dallytrading/backups/migration/final \
+  --production --confirm-production-db dallytrading \
+  --replace-filestore --confirm-filestore-volume dallytrading_odoo_filestore
 
 # 10. Contrôles avant bascule DNS, via /etc/hosts
 curl -sf http://127.0.0.1:8069/web/health && echo "Odoo OK"
-docker compose ps
+docker compose -p dallytrading ps
 ```
 
 ### Contrôles fonctionnels obligatoires avant la bascule DNS

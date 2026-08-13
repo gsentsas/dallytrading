@@ -254,19 +254,28 @@ class TestPublicPayload(TransactionCase):
         ):
             with self.subTest(typed=typed):
                 self.assertEqual(
-                    Shipment._dally_find_for_tracking(typed), self.shipment
+                    Shipment._dally_find_for_tracking(
+                        typed, self.shipment.public_tracking_token
+                    ),
+                    self.shipment,
                 )
 
     def test_unknown_reference_returns_empty_recordset(self):
         Shipment = self.env["dally.shipment"]
         for typed in ("DT-SHP-2026-999999", "", None, "garbage", 12345):
             with self.subTest(typed=typed):
-                self.assertFalse(Shipment._dally_find_for_tracking(typed))
+                self.assertFalse(
+                    Shipment._dally_find_for_tracking(
+                        typed, self.shipment.public_tracking_token
+                    )
+                )
 
     def test_carrier_number_is_not_searchable_for_tracking(self):
         """Matching a carrier's number would let anyone holding a bill of lading
         probe for shipments that are not theirs."""
         self.shipment.carrier_tracking_number = "MSCU1234567"
         self.assertFalse(
-            self.env["dally.shipment"]._dally_find_for_tracking("MSCU1234567")
+            self.env["dally.shipment"]._dally_find_for_tracking(
+                "MSCU1234567", self.shipment.public_tracking_token
+            )
         )

@@ -29,6 +29,10 @@ Documentation=https://github.com/gsentsas/dallytrading
 After=network-online.target
 Wants=network-online.target
 
+# Stop after five crashes in 60 seconds on this shared host.
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
 [Service]
 Type=simple
 
@@ -57,12 +61,6 @@ ExecStart=/var/www/vhosts/dallytrading.com/.nodenv/versions/22/bin/node .next/st
 
 Restart=always
 RestartSec=5
-# Au-delà de 5 échecs en 60 s, systemd cesse de relancer : une boucle de
-# redémarrage sur une configuration cassée consomme le CPU d'une machine partagée
-# sans jamais réussir, et masque la cause dans un flot de journaux.
-StartLimitBurst=5
-StartLimitIntervalSec=60
-
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=dallytrading-web

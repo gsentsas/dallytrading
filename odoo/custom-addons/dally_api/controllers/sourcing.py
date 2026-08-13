@@ -103,6 +103,7 @@ class DallySourcingController(DallyApiController):
         "/api/v1/sourcing/requests",
         type="http",
         auth="none",
+        readonly=False,
         methods=["POST"],
         csrf=False,
         save_session=False,
@@ -205,7 +206,8 @@ class DallySourcingController(DallyApiController):
                     )
                 if number < 0:
                     raise DallyApiError(
-                        422, "invalid_field_value",
+                        422, ("invalid_quantity" if name == "quantity"
+                              else "invalid_field_value"),
                         _("Field '%s' cannot be negative.", name),
                     )
                 if number > NUMERIC_LIMITS[name]:

@@ -161,6 +161,11 @@ class DallyTradeLine(models.Model):
                     )
                 )
 
+    @api.constrains("opportunity_id", "purchase_unit_price", "sale_unit_price")
+    def _check_prices_match_operation_type(self):
+        """Run the parent-side rule when a line itself is created or edited."""
+        self.mapped("opportunity_id")._check_lines_match_operation_type()
+
     # ─── Conversion into order lines ─────────────────────────────────
 
     def _dally_order_line_blockers(self, side):

@@ -14,8 +14,11 @@ readable by administrators only, and never records credentials.
 """
 
 import json
+import logging
 
 from odoo import _, api, fields, models
+
+_logger = logging.getLogger(__name__)
 
 #: Characters of stored payload/response kept. Enough to diagnose, bounded so a
 #: large upload cannot bloat the table.
@@ -127,16 +130,24 @@ class DallyApiRequest(models.Model):
         # transaction PostgreSQL. Le `except` ci-dessous rattrapait bien l'exception,
         # mais le curseur restait inutilisable et empoisonnait la suite de la requête.
         try:
-            with self.env.cr.savepoint():
+            # Odoo 19: a regular savepoint flushes every pending model through
+            # the auth="none" default environment (uid None). Flush only this log.
+            with self.env.cr.savepoint(flush=False):
                 existing = self.sudo().search([
                     ("request_uuid", "=", values["request_uuid"]),
                     ("endpoint", "=", endpoint),
                 ], limit=1) if values["request_uuid"] else self.browse()
                 if existing:
                     existing.write(values)
+                    existing.flush_recordset()
                     return existing
-                return self.sudo().create(values)
+                logged = self.sudo().create(values)
+                logged.flush_recordset()
+                return logged
         except Exception:  # noqa: BLE001
+            _logger.exception(
+                "API request logging failed for %s", endpoint,
+            )
             # Course entre deux requêtes concurrentes : la contrainte a fait son
             # office. Le savepoint garantit que le curseur reste utilisable, donc
             # qu'une opération métier réussie n'est pas transformée en erreur.

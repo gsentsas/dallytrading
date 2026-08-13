@@ -94,10 +94,11 @@ class DallyShipment(models.Model):
     # a guess: 256 bits of CSPRNG output, so the series cannot be enumerated even
     # though the references can.
     #
-    # It is stored in clear on purpose. This is a capability URL, like Odoo's own
-    # portal access_token: the links sent by e-mail and WhatsApp must remain
-    # regenerable, which a hash would prevent. It is never in a public payload,
-    # never logged, and the ORM keeps it away from users outside the group.
+    # It is stored in clear on purpose. This is a capability URL, like the Odoo
+    # portal access token: links sent by e-mail and WhatsApp must remain
+    # regenerable, which a hash would prevent. It is never emitted in the public
+    # payload and the ORM limits access. Because it travels in a URL, proxy and
+    # application access logs must be protected; rotating it invalidates a leak.
     public_tracking_token = fields.Char(
         string="Public Tracking Token",
         readonly=True,

@@ -460,7 +460,7 @@ class DallyTradeOpportunity(models.Model):
     )
     margin_rate = fields.Float(
         string="Taux de marge",
-        digits=(5, 4),
+        digits=(16, 6),
         compute="_compute_margin",
         store=True,
         groups=INTERNAL_GROUPS,
@@ -1065,10 +1065,10 @@ class DallyTradeOpportunity(models.Model):
         """
         self._dally_check_approval_rights()
         for deal in self:
-            if deal.approval_required and not deal.margin_computable:
+            if not deal.margin_computable:
                 raise UserError(
                     _(
-                        "L'opération %(reference)s exige une approbation mais sa "
+                        "L'opération %(reference)s ne peut pas être approuvée car sa "
                         "marge n'est pas calculable : %(blocker)s\n\n"
                         "Approuver un dossier dont on ne peut pas établir la marge "
                         "revient à approuver un chiffre inconnu.",

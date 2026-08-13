@@ -30,8 +30,8 @@ services:
   # ─────────────────────────────────────────────────────────────────
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:16-alpine}
-    container_name: dallytrading-postgres
-    hostname: dallytrading-postgres
+    container_name: ${PG_CONTAINER:-dallytrading-postgres}
+    hostname: ${PG_CONTAINER:-dallytrading-postgres}
     restart: unless-stopped
     environment:
       # Rôle d'AMORÇAGE, celui qu'initdb crée. Il est TOUJOURS
@@ -98,8 +98,8 @@ services:
   # ─────────────────────────────────────────────────────────────────
   odoo:
     image: ${ODOO_IMAGE:-odoo:19.0}
-    container_name: dallytrading-odoo
-    hostname: dallytrading-odoo
+    container_name: ${ODOO_CONTAINER:-dallytrading-odoo}
+    hostname: ${ODOO_CONTAINER:-dallytrading-odoo}
     # Aligné sur le propriétaire de odoo.conf, qui reste en 0600.
     # L'alternative — élargir les droits du fichier — exposerait le mot de passe
     # de la base à tous les comptes d'hébergement de cette machine partagée.
@@ -150,17 +150,17 @@ services:
 networks:
   # Réseau isolé : pas de route vers l'extérieur. Porte le trafic Odoo ↔ DB.
   dallytrading_private:
-    name: dallytrading_private
+    name: ${PRIVATE_NETWORK:-dallytrading_private}
     driver: bridge
     internal: true
   # Réseau de sortie : accès sortant (SMTP, mises à jour) et publication
   # des ports sur la loopback de l'hôte.
   dallytrading_public:
-    name: dallytrading_public
+    name: ${PUBLIC_NETWORK:-dallytrading_public}
     driver: bridge
 
 volumes:
   postgres-data:
-    name: dallytrading_postgres_data
+    name: ${POSTGRES_VOLUME:-dallytrading_postgres_data}
   odoo-filestore:
-    name: dallytrading_odoo_filestore
+    name: ${ODOO_FILESTORE_VOLUME:-dallytrading_odoo_filestore}

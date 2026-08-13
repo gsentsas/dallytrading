@@ -392,7 +392,9 @@ class DallyQuoteRequest(models.Model):
         if medium:
             values["medium_id"] = medium.id
 
-        lead = Lead.create(values)
+        lead = Lead.with_context(
+            dally_preserve_partner_contact=True
+        ).create(values)
         self.lead_id = lead
         return lead
 

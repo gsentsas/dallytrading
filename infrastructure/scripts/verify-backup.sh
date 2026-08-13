@@ -1,22 +1,11 @@
 #!/usr/bin/env bash
 #
-# DALLYTRADING — Vérification d'une sauvegarde
+# DALLYTRADING — Vérification non destructive d'une sauvegarde.
 #
-# Vérifie l'intégrité SANS TOUCHER à la production. Deux niveaux :
-#
-#   rapide (défaut) : présence des fichiers, empreintes SHA-256,
-#                     manifeste, lisibilité de l'en-tête du dump,
-#                     intégrité de l'archive du filestore.
-#
-#   --deep          : restaure réellement le dump dans une base
-#                     JETABLE, compte les tables et les enregistrements
-#                     clés, puis supprime la base. Seul niveau qui
-#                     prouve qu'une sauvegarde est restaurable (§62).
-#
-# Usage :
-#   ./verify-backup.sh                            # vérifie la plus récente
-#   ./verify-backup.sh <chemin_sauvegarde>
-#   ./verify-backup.sh <chemin_sauvegarde> --deep
+# Le mode rapide vérifie fichiers, manifeste, horodatages, empreintes,
+# archive et catalogue pg_restore. Le mode --deep ne restaure rien :
+# il contrôle une restauration déjà effectuée dans l'environnement
+# dédié créé par docker-compose.restore.yml.
 #
 set -euo pipefail
 
@@ -26,184 +15,264 @@ ENV_FILE="${ROOT_DIR}/.env"
 
 BACKUP_PATH=""
 DEEP=0
+TARGET_PG_CONTAINER=""
+TARGET_ODOO_CONTAINER=""
+TARGET_PG_VOLUME=""
+TARGET_FILESTORE_VOLUME=""
+TARGET_NETWORK=""
+TARGET_DB=""
+TARGET_DB_USER=""
+
 while (( $# > 0 )); do
   case "$1" in
     --deep) DEEP=1; shift ;;
-    *)      BACKUP_PATH="$1"; shift ;;
+    --pg-container) TARGET_PG_CONTAINER="${2:?valeur requise}"; shift 2 ;;
+    --odoo-container) TARGET_ODOO_CONTAINER="${2:?valeur requise}"; shift 2 ;;
+    --pg-volume) TARGET_PG_VOLUME="${2:?valeur requise}"; shift 2 ;;
+    --filestore-volume) TARGET_FILESTORE_VOLUME="${2:?valeur requise}"; shift 2 ;;
+    --network) TARGET_NETWORK="${2:?valeur requise}"; shift 2 ;;
+    --target-db) TARGET_DB="${2:?valeur requise}"; shift 2 ;;
+    --db-user) TARGET_DB_USER="${2:?valeur requise}"; shift 2 ;;
+    -*) printf 'Option inconnue : %s\n' "$1" >&2; exit 2 ;;
+    *)
+      [[ -z "${BACKUP_PATH}" ]] || {
+        printf 'Un seul chemin de sauvegarde est accepté.\n' >&2
+        exit 2
+      }
+      BACKUP_PATH="$1"
+      shift
+      ;;
   esac
 done
 
 log()  { printf '[verify] %s\n' "$*"; }
 ok()   { printf '[verify]   ✓ %s\n' "$*"; }
-bad()  { printf '[verify]   ✗ %s\n' "$*" >&2; FAILURES=$((FAILURES+1)); }
+bad()  { printf '[verify]   ✗ %s\n' "$*" >&2; FAILURES=$((FAILURES + 1)); }
 fail() { printf '[verify] ERREUR : %s\n' "$*" >&2; exit 1; }
 
+valid_identifier() {
+  [[ "$1" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]
+}
+
+container_mount() {
+  docker inspect "$1" --format "{{range .Mounts}}{{if eq .Destination \"$2\"}}{{.Name}}{{end}}{{end}}" 2>/dev/null
+}
+
+container_networks() {
+  docker inspect "$1" --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' 2>/dev/null
+}
+
 FAILURES=0
-
 [[ -f "${ENV_FILE}" ]] || fail ".env introuvable."
+# shellcheck disable=SC1090
 set -a; source "${ENV_FILE}"; set +a
-BACKUP_DIR="${BACKUP_DIR:-${ROOT_DIR}/backups}"
-PG_CONTAINER="${PG_CONTAINER:-dally-postgres}"
 
-# Sauvegarde la plus récente, toutes étiquettes confondues.
+BACKUP_DIR="${BACKUP_DIR:-${ROOT_DIR}/backups}"
+PROD_PROJECT="${COMPOSE_PROJECT_NAME:-dallytrading}"
+PROD_PG_CONTAINER="${PG_CONTAINER:-dallytrading-postgres}"
+PROD_ODOO_CONTAINER="${ODOO_CONTAINER:-dallytrading-odoo}"
+PROD_PG_VOLUME="${POSTGRES_VOLUME:-dallytrading_postgres_data}"
+PROD_FILESTORE_VOLUME="${ODOO_FILESTORE_VOLUME:-dallytrading_odoo_filestore}"
+PROD_PRIVATE_NETWORK="${PRIVATE_NETWORK:-dallytrading_private}"
+PROD_PUBLIC_NETWORK="${PUBLIC_NETWORK:-dallytrading_public}"
+
 if [[ -z "${BACKUP_PATH}" ]]; then
-  BACKUP_PATH="$(find "${BACKUP_DIR}" -mindepth 2 -maxdepth 2 -type d 2>/dev/null | sort -r | head -1)"
-  [[ -n "${BACKUP_PATH}" ]] || fail "aucune sauvegarde trouvée dans ${BACKUP_DIR}"
-  log "sauvegarde la plus récente : ${BACKUP_PATH}"
+  BACKUP_PATH="$(find "${BACKUP_DIR}" -mindepth 2 -maxdepth 2 -type d 2>/dev/null |
+    sort -r | head -1)"
+  [[ -n "${BACKUP_PATH}" ]] || fail "aucune sauvegarde trouvée dans ${BACKUP_DIR}."
 fi
 
 [[ -d "${BACKUP_PATH}" ]] || fail "introuvable : ${BACKUP_PATH}"
+[[ ! -L "${BACKUP_PATH}" ]] || fail "un chemin symbolique est refusé."
 log "vérification de ${BACKUP_PATH}"
-echo
 
-# ─── 1. Complétude ────────────────────────────────────────────────
 log "1/5 — complétude"
-if [[ -f "${BACKUP_PATH}/.complete" ]]; then
-  ok "marqueur de complétude présent"
-else
-  bad "marqueur .complete ABSENT — sauvegarde interrompue, ne pas s'y fier"
-fi
-
-for f in database.dump filestore.tar.gz manifest.json SHA256SUMS; do
-  if [[ -s "${BACKUP_PATH}/${f}" ]]; then
-    ok "${f} présent ($(numfmt --to=iec "$(stat -c %s "${BACKUP_PATH}/${f}")"))"
+for file in .complete database.dump filestore.tar.gz manifest.json SHA256SUMS; do
+  if [[ -f "${BACKUP_PATH}/${file}" && ( "${file}" == ".complete" || -s "${BACKUP_PATH}/${file}" ) ]]; then
+    ok "${file} présent"
   else
-    bad "${f} absent ou vide"
+    bad "${file} absent ou vide"
   fi
 done
 
-# ─── 2. Empreintes ────────────────────────────────────────────────
-echo; log "2/5 — empreintes SHA-256"
-if [[ -f "${BACKUP_PATH}/SHA256SUMS" ]]; then
-  if ( cd "${BACKUP_PATH}" && sha256sum -c SHA256SUMS >/dev/null 2>&1 ); then
-    ok "toutes les empreintes concordent"
-  else
-    bad "EMPREINTE INVALIDE — corruption des données"
-    ( cd "${BACKUP_PATH}" && sha256sum -c SHA256SUMS 2>&1 | grep -v ': OK$' >&2 || true )
-  fi
-else
-  bad "SHA256SUMS absent : intégrité invérifiable"
-fi
+log "2/5 — manifeste et cohérence logique"
+if python3 - "${BACKUP_PATH}" <<'PY'
+import json
+import os
+import re
+import sys
 
-# ─── 3. Manifeste ─────────────────────────────────────────────────
-echo; log "3/5 — manifeste"
-if [[ -f "${BACKUP_PATH}/manifest.json" ]]; then
-  if command -v python3 >/dev/null; then
-    if python3 -c "import json,sys; json.load(open('${BACKUP_PATH}/manifest.json'))" 2>/dev/null; then
-      ok "JSON valide"
-      python3 - "${BACKUP_PATH}/manifest.json" <<'PY'
-import json, sys
-m = json.load(open(sys.argv[1]))
-print(f"[verify]     base       : {m['database']['name']}")
-print(f"[verify]     horodatage : {m['timestamp']}")
-print(f"[verify]     Odoo       : {m['versions']['odoo']}")
-print(f"[verify]     PostgreSQL : {m['versions']['postgresql']}")
+path = sys.argv[1]
+with open(os.path.join(path, "manifest.json"), encoding="utf-8") as handle:
+    manifest = json.load(handle)
+timestamp = manifest.get("timestamp")
+assert isinstance(timestamp, str) and re.fullmatch(r"\d{8}T\d{6}Z", timestamp)
+assert os.path.basename(os.path.realpath(path)) == timestamp
+assert manifest.get("schema_version") == 2
+database = manifest["database"]
+filestore = manifest["filestore"]
+assert database["dump_file"] == "database.dump"
+assert database["dump_format"] == "pg_dump-custom"
+assert filestore["archive"] == "filestore.tar.gz"
+assert filestore["layout"] == "database-directory-contents-v1"
+assert database["name"] == filestore["database"]
+assert database["captured_at"] == timestamp
+assert filestore["captured_at"] == timestamp
+assert database["size_bytes"] == os.path.getsize(os.path.join(path, "database.dump"))
+assert filestore["size_bytes"] == os.path.getsize(os.path.join(path, "filestore.tar.gz"))
+expected = {"database.dump", "filestore.tar.gz", "manifest.json"}
+seen = set()
+with open(os.path.join(path, "SHA256SUMS"), encoding="utf-8") as handle:
+    for line in handle:
+        parts = line.rstrip("\n").split(maxsplit=1)
+        assert len(parts) == 2
+        name = parts[1].lstrip("*")
+        assert name in expected and "/" not in name
+        seen.add(name)
+assert seen == expected
+print(f"[verify]     base={database['name']} timestamp={timestamp}")
 PY
-    else
-      bad "manifeste JSON illisible"
-    fi
-  fi
+then
+  ok "manifeste v2 valide ; PostgreSQL et filestore partagent le même timestamp"
 else
-  bad "manifest.json absent"
+  bad "manifeste invalide ou incohérent"
 fi
 
-# ─── 4. Lisibilité des artefacts ──────────────────────────────────
-echo; log "4/5 — lisibilité"
-if docker inspect -f '{{.State.Running}}' "${PG_CONTAINER}" 2>/dev/null | grep -q true; then
-  # pg_restore --list lit l'en-tête sans rien écrire : non destructif.
-  if TABLES="$(docker exec -i "${PG_CONTAINER}" pg_restore --list < "${BACKUP_PATH}/database.dump" 2>/dev/null | grep -c 'TABLE DATA' || true)"; then
-    if [[ "${TABLES:-0}" -gt 0 ]]; then
-      ok "dump lisible — ${TABLES} tables contenant des données"
-    else
-      bad "dump lisible mais AUCUNE table de données : sauvegarde vide"
-    fi
+log "3/5 — empreintes SHA-256"
+if (
+  cd "${BACKUP_PATH}"
+  sha256sum -c SHA256SUMS >/dev/null 2>&1
+); then
+  ok "toutes les empreintes concordent"
+else
+  bad "empreinte invalide"
+fi
+
+log "4/5 — lisibilité des artefacts"
+if (( DEEP )); then
+  READ_CONTAINER="${TARGET_PG_CONTAINER:-${RESTORE_PG_CONTAINER:-dallytrading-restore-postgres}}"
+  [[ "${READ_CONTAINER}" != "${PROD_PG_CONTAINER}" ]] ||
+    fail "--deep refuse le conteneur PostgreSQL de production."
+  READ_IDENTITY_OK="$(docker inspect -f '{{index .Config.Labels "com.dallytrading.restore"}}' "${READ_CONTAINER}" 2>/dev/null)"
+  EXPECTED_IDENTITY="true"
+else
+  READ_CONTAINER="${PROD_PG_CONTAINER}"
+  READ_IDENTITY_OK="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "${READ_CONTAINER}" 2>/dev/null)"
+  EXPECTED_IDENTITY="${PROD_PROJECT}"
+fi
+
+if [[ "$(docker inspect -f '{{.State.Running}}' "${READ_CONTAINER}" 2>/dev/null)" == "true" ]]; then
+  if [[ "${READ_IDENTITY_OK}" != "${EXPECTED_IDENTITY}" ]]; then
+    bad "identité Docker inattendue pour ${READ_CONTAINER}"
+  elif TABLES="$(docker exec -i "${READ_CONTAINER}" pg_restore --list < "${BACKUP_PATH}/database.dump" 2>/dev/null | grep -c 'TABLE DATA' || true)" &&
+      [[ "${TABLES:-0}" -gt 0 ]]; then
+    ok "dump lisible — ${TABLES} entrées TABLE DATA"
   else
-    bad "pg_restore ne parvient pas à lire le dump"
+    bad "catalogue pg_restore illisible ou vide"
   fi
 else
-  log "   (conteneur ${PG_CONTAINER} arrêté — contrôle du dump ignoré)"
+  bad "conteneur de lecture ${READ_CONTAINER} arrêté"
 fi
 
 if gzip -t "${BACKUP_PATH}/filestore.tar.gz" 2>/dev/null; then
-  COUNT="$(tar -tzf "${BACKUP_PATH}/filestore.tar.gz" 2>/dev/null | wc -l)"
-  ok "archive filestore intègre — ${COUNT} entrées"
-else
-  bad "archive filestore CORROMPUE"
-fi
-
-# ─── 5. Restauration réelle (--deep) ──────────────────────────────
-echo; log "5/5 — restauration réelle"
-if (( DEEP == 0 )); then
-  log "   ignorée (utilisez --deep). Sans ce contrôle, la restaurabilité n'est PAS prouvée."
-else
-  docker inspect -f '{{.State.Running}}' "${PG_CONTAINER}" 2>/dev/null | grep -q true \
-    || fail "--deep exige que ${PG_CONTAINER} soit démarré."
-
-  TEST_DB="verify_$(date -u +%Y%m%d%H%M%S)_$$"
-  log "   base de test jetable : ${TEST_DB}"
-
-  # La base de production n'est jamais touchée : on écrit exclusivement
-  # dans TEST_DB, systématiquement supprimée en sortie.
-  cleanup_test_db() {
-    log "   suppression de la base de test ${TEST_DB}"
-    docker exec "${PG_CONTAINER}" psql -U "${POSTGRES_USER}" -d postgres \
-      -c "DROP DATABASE IF EXISTS \"${TEST_DB}\";" >/dev/null 2>&1 || true
-  }
-  trap cleanup_test_db EXIT
-
-  if ! docker exec "${PG_CONTAINER}" psql -U "${POSTGRES_USER}" -d postgres \
-        -c "CREATE DATABASE \"${TEST_DB}\";" >/dev/null 2>&1; then
-    bad "impossible de créer la base de test (le rôle a-t-il CREATEDB ?)"
+  UNSAFE=0
+  COUNT=0
+  while IFS= read -r member; do
+    COUNT=$((COUNT + 1))
+    case "${member}" in
+      /*|../*|*/../*|*/..) UNSAFE=1 ;;
+    esac
+  done < <(tar -tzf "${BACKUP_PATH}/filestore.tar.gz")
+  if (( UNSAFE )); then
+    bad "archive filestore contenant un chemin dangereux"
   else
-    ok "base de test créée"
-
-    # pg_restore signale des avertissements bénins (extensions, rôles) :
-    # on juge sur le résultat, pas sur le code de sortie.
-    docker exec -i "${PG_CONTAINER}" pg_restore \
-        -U "${POSTGRES_USER}" -d "${TEST_DB}" \
-        --no-owner --no-privileges --exit-on-error \
-        < "${BACKUP_PATH}/database.dump" >/dev/null 2>&1 \
-      && ok "dump restauré sans erreur" \
-      || bad "la restauration a échoué (--exit-on-error)"
-
-    query() {
-      docker exec "${PG_CONTAINER}" psql -U "${POSTGRES_USER}" -d "${TEST_DB}" \
-        -tAc "$1" 2>/dev/null | tr -d '[:space:]'
-    }
-
-    NB_TABLES="$(query "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';")"
-    if [[ "${NB_TABLES:-0}" -gt 50 ]]; then
-      ok "${NB_TABLES} tables restaurées"
-    else
-      bad "seulement ${NB_TABLES:-0} tables : une base Odoo en compte plusieurs centaines"
-    fi
-
-    # Contrôles métier : une base Odoo restaurée doit contenir ces données.
-    for check in "res_users:utilisateurs" "res_partner:contacts" "ir_module_module:modules"; do
-      table="${check%%:*}"; label="${check##*:}"
-      n="$(query "SELECT count(*) FROM ${table};")"
-      if [[ -n "${n}" && "${n}" -gt 0 ]]; then
-        ok "${label} : ${n} enregistrement(s)"
-      else
-        bad "${label} : table ${table} vide ou absente"
-      fi
-    done
+    ok "archive filestore intègre et sûre — ${COUNT} entrée(s)"
   fi
-
-  cleanup_test_db
-  trap - EXIT
+else
+  bad "archive filestore corrompue"
 fi
 
-# ─── Verdict ──────────────────────────────────────────────────────
-echo
-if (( FAILURES == 0 )); then
-  if (( DEEP == 1 )); then
-    log "RÉSULTAT : sauvegarde VALIDE et restaurabilité PROUVÉE."
+log "5/5 — validation profonde de la cible isolée"
+if (( DEEP == 0 )); then
+  log "   non demandée ; utilisez --deep après restore.sh --isolated-test."
+else
+  TARGET_PG_CONTAINER="${TARGET_PG_CONTAINER:-${RESTORE_PG_CONTAINER:-dallytrading-restore-postgres}}"
+  TARGET_ODOO_CONTAINER="${TARGET_ODOO_CONTAINER:-${RESTORE_ODOO_CONTAINER:-dallytrading-restore-odoo}}"
+  TARGET_PG_VOLUME="${TARGET_PG_VOLUME:-${RESTORE_POSTGRES_VOLUME:-dallytrading_restore_postgres_data}}"
+  TARGET_FILESTORE_VOLUME="${TARGET_FILESTORE_VOLUME:-${RESTORE_FILESTORE_VOLUME:-dallytrading_restore_odoo_filestore}}"
+  TARGET_NETWORK="${TARGET_NETWORK:-${RESTORE_NETWORK:-dallytrading_restore_private}}"
+  TARGET_DB="${TARGET_DB:-${RESTORE_DB_NAME:-dallytrading_restore}}"
+  TARGET_DB_USER="${TARGET_DB_USER:-${RESTORE_DB_USER:-postgres}}"
+
+  valid_identifier "${TARGET_DB}" || fail "base cible invalide."
+  valid_identifier "${TARGET_DB_USER}" || fail "utilisateur cible invalide."
+  [[ "${TARGET_DB}" != "${ODOO_DB_NAME}" ]] || fail "la cible profonde ne peut pas être la base production."
+  [[ "${TARGET_PG_CONTAINER}" != "${PROD_PG_CONTAINER}" &&
+     "${TARGET_ODOO_CONTAINER}" != "${PROD_ODOO_CONTAINER}" &&
+     "${TARGET_PG_VOLUME}" != "${PROD_PG_VOLUME}" &&
+     "${TARGET_FILESTORE_VOLUME}" != "${PROD_FILESTORE_VOLUME}" &&
+     "${TARGET_NETWORK}" != "${PROD_PRIVATE_NETWORK}" &&
+     "${TARGET_NETWORK}" != "${PROD_PUBLIC_NETWORK}" ]] ||
+    fail "une ressource profonde recoupe la production."
+
+  for container in "${TARGET_PG_CONTAINER}" "${TARGET_ODOO_CONTAINER}"; do
+    [[ "$(docker inspect -f '{{.State.Running}}' "${container}" 2>/dev/null)" == "true" ]] ||
+      fail "conteneur isolé absent : ${container}"
+    [[ "$(docker inspect -f '{{index .Config.Labels "com.dallytrading.restore"}}' "${container}" 2>/dev/null)" == "true" ]] ||
+      fail "label restore absent sur ${container}"
+    PORTS="$(docker inspect -f '{{json .HostConfig.PortBindings}}' "${container}")"
+    [[ "${PORTS}" == "{}" || "${PORTS}" == "null" ]] ||
+      fail "port publié sur ${container}"
+    for network in $(container_networks "${container}"); do
+      [[ "${network}" == "${TARGET_NETWORK}" ]] ||
+        fail "réseau inattendu ${network} sur ${container}"
+    done
+  done
+
+  [[ "$(container_mount "${TARGET_PG_CONTAINER}" /var/lib/postgresql/data)" == "${TARGET_PG_VOLUME}" ]] ||
+    fail "volume PostgreSQL isolé inattendu."
+  [[ "$(container_mount "${TARGET_ODOO_CONTAINER}" /var/lib/odoo)" == "${TARGET_FILESTORE_VOLUME}" ]] ||
+    fail "volume filestore isolé inattendu."
+  [[ "$(docker network inspect -f '{{.Internal}}' "${TARGET_NETWORK}" 2>/dev/null)" == "true" ]] ||
+    fail "réseau isolé non interne."
+
+  query() {
+    docker exec "${TARGET_PG_CONTAINER}" psql -U "${TARGET_DB_USER}" -d "${TARGET_DB}"       -tAc "$1" 2>/dev/null | tr -d '[:space:]'
+  }
+
+  NB_TABLES="$(query "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';")"
+  MODULES="$(query "SELECT count(*) FROM ir_module_module WHERE name LIKE 'dally_%' AND state='installed';")"
+  USERS="$(query "SELECT count(*) FROM res_users;")"
+  PARTNERS="$(query "SELECT count(*) FROM res_partner;")"
+  BUSINESS_TABLES="$(query "SELECT count(*) FROM pg_class WHERE relkind='r' AND relname LIKE 'dally_%';")"
+
+  [[ "${NB_TABLES:-0}" -gt 50 ]] && ok "${NB_TABLES} tables restaurées" ||
+    bad "nombre de tables insuffisant : ${NB_TABLES:-0}"
+  [[ "${MODULES:-0}" -gt 0 ]] && ok "${MODULES} module(s) dally_* installé(s)" ||
+    bad "aucun module dally_* installé"
+  [[ "${USERS:-0}" -gt 0 && "${PARTNERS:-0}" -gt 0 ]] &&
+    ok "objets essentiels : ${USERS} utilisateur(s), ${PARTNERS} partenaire(s)" ||
+    bad "objets Odoo essentiels absents"
+  [[ "${BUSINESS_TABLES:-0}" -gt 0 ]] && ok "${BUSINESS_TABLES} table(s) métier dally_*" ||
+    bad "tables métier dally_* absentes"
+
+  if docker exec "${TARGET_ODOO_CONTAINER}" test -r "/var/lib/odoo/filestore/${TARGET_DB}"; then
+    FS_ENTRIES="$(docker exec "${TARGET_ODOO_CONTAINER}" sh -c       "find '/var/lib/odoo/filestore/${TARGET_DB}' -mindepth 1 -print | wc -l" |
+      tr -d '[:space:]')"
+    ok "filestore lisible — ${FS_ENTRIES:-0} entrée(s)"
   else
-    log "RÉSULTAT : contrôles rapides OK. Restaurabilité non prouvée — relancez avec --deep."
+    bad "filestore cible illisible"
+  fi
+  ok "isolation : aucun conteneur, volume, réseau ou port de production utilisé"
+fi
+
+if (( FAILURES == 0 )); then
+  if (( DEEP )); then
+    log "RÉSULTAT : sauvegarde et restauration isolée VALIDÉES."
+  else
+    log "RÉSULTAT : contrôles rapides OK."
   fi
   exit 0
-else
-  log "RÉSULTAT : ${FAILURES} ÉCHEC(S). Cette sauvegarde n'est pas fiable."
-  exit 1
 fi
+log "RÉSULTAT : ${FAILURES} ÉCHEC(S)."
+exit 1

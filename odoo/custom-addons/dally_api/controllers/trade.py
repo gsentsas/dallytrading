@@ -133,6 +133,7 @@ class DallyTradeController(DallyApiController):
         "/api/v1/trade/opportunities",
         type="http",
         auth="none",
+        readonly=False,
         methods=["POST"],
         csrf=False,
         save_session=False,

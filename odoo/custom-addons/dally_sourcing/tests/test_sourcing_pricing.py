@@ -26,6 +26,9 @@ class TestSourcingPricing(TransactionCase):
 
     def setUp(self):
         super().setUp()
+        self.env.user.write({"group_ids": [(4, self.env.ref(
+            "dally_sourcing.group_dally_sourcing_manager"
+        ).id)]})
         self.Request = self.env["dally.sourcing.request"]
         self.customer = self.env["res.partner"].create({
             "name": "Pricing Customer", "email": "pricing@example.com",

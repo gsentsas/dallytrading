@@ -3,8 +3,7 @@
 Le sous-système sourcing porte un dossier du besoin client jusqu'à l'achat et la
 vente. Ce n'est pas un formulaire adossé à quelques champs.
 
-> ⚠️ **Les tests Odoo de ce module n'ont pas été exécutés.** Ils exigent une instance
-> Odoo 19 DallyTrading dédiée, qui n'existe pas encore. Leur passage reste à prouver.
+> **Validation Odoo 19 réelle — 13 août 2026.** La suite complète passe avec 587 méthodes, 0 échec et 0 erreur. `dally_sourcing` représente 157 résultats de module, 41,02 s et 33 310 requêtes.
 
 ---
 
@@ -65,7 +64,7 @@ Offre fournisseur (dally.sourcing.offer)
    coût unitaire, transport, assurance, douane, scores, notes
         │
         │  _dally_draft_from_offer  ← le seul pont
-        │  ne fait traverser qu'un prix de vente dérivé
+        │  ne fait traverser que `cost_basis`; le prix de vente reste vide jusqu’à validation humaine
         ▼
 Proposition client (dally.sourcing.proposal)
    prix de vente, transport estimé, frais de service, conditions
@@ -331,7 +330,7 @@ jetable et reconstruit à chaque déploiement.
 
 | Limite | Raison |
 |---|---|
-| **Tests Odoo non exécutés** | Aucune instance Odoo 19 DallyTrading |
+| Tests Odoo | 157 résultats de module passants dans la suite complète Odoo 19 isolée |
 | Pas d'e-mail transactionnel | SMTP relève de l'administrateur ; `action_send` enregistre le fait plutôt que de simuler un envoi |
 | Pas de conversion multi-devises automatique entre offres | Convertir en silence masquerait le taux employé ; chaque offre garde sa devise et la comparaison est humaine |
 | Pas de marge par défaut | Une politique tarifaire n'est pas une constante Python. Le brouillon part sans prix, et le prix doit être saisi puis validé explicitement |

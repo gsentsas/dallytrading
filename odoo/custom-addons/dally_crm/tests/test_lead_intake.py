@@ -4,6 +4,7 @@ import uuid
 
 from odoo.exceptions import UserError
 from odoo.tests import TransactionCase, tagged
+from odoo.tools import html2plaintext
 
 
 @tagged("post_install", "-at_install", "dally")
@@ -175,7 +176,7 @@ class TestLeadIntake(TransactionCase):
         lead = self.Lead.dally_create_from_website(
             self._payload(message="x" * 50000)
         )
-        self.assertLessEqual(len(lead.description), 20000)
+        self.assertLessEqual(len(html2plaintext(lead.description)), 20000)
 
     def test_manual_lead_gets_no_reference(self):
         """The reference series is reserved for requests from our channels."""

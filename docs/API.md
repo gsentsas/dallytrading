@@ -25,18 +25,13 @@ implémentations interchangeables (ADR-008) :
 | Adaptateur | État | Rôle |
 |---|---|---|
 | `DallyApiAdapter` | ✅ **actif** | Endpoints `/api/v1/*` du module `dally_api` |
-| `Json2Adapter` | ⛔ non implémenté | API JSON-2 d'Odoo 19, à valider en phase 3 |
+| `Json2Adapter` | ⛔ non implémenté | Alternative volontairement inactive ; la production validée utilise `DallyApiAdapter` |
 | `LegacyRpcAdapter` | ⛔ non implémenté | Échappatoire XML-RPC / JSON-RPC, confinée (§39) |
 
 Le choix se fait par `ODOO_GATEWAY_ADAPTER` dans `.env`. Aucun code applicatif ne
 change.
 
-Les deux adaptateurs non implémentés **lèvent une erreur explicite** plutôt que de
-contenir une implémentation plausible mais non vérifiée. Pour `Json2Adapter`, la
-raison est documentée dans le fichier : la disponibilité de JSON-2 sur une
-installation Odoo 19 Community auto-hébergée n'a pas été vérifiée, faute
-d'instance. Écrire du code contre une API non testée produirait quelque chose qui
-paraît terminé, passe la revue, et échoue en production.
+Les deux adaptateurs non implémentés lèvent une erreur explicite. La production Odoo 19 utilise exclusivement `DallyApiAdapter`, validé avec les écritures contact, devis, sourcing, trading et avec le suivi public. JSON-2 reste une alternative hors périmètre, non nécessaire au fonctionnement actuel.
 
 ### Règles imposées aux implémentations
 

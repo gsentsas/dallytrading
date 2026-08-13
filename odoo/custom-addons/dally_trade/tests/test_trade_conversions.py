@@ -10,7 +10,7 @@ module from a duplicated sourcing: a courtage must not be able to produce a purc
 order.
 """
 
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 from .common import TradeCase
 from odoo.tests import tagged
@@ -155,10 +155,8 @@ class TestTradeConversions(TradeCase):
     def test_sale_order_refused_with_a_zero_price(self):
         deal = self._deal()
         self._line(deal, sale_unit_price=0.0)
-        self._to_contracted(deal)
-
         with self.assertRaises(UserError):
-            deal.action_create_sale_order()
+            self._to_contracted(deal)
 
         self.assertFalse(deal.sale_order_ids)
 
@@ -166,10 +164,11 @@ class TestTradeConversions(TradeCase):
         deal = self._deal(operation_type="purchase_resale")
         self._line(deal)
         self._to_contracted(deal)
-        deal.customer_id = False
+        with self.assertRaises(ValidationError):
+            deal.customer_id = False
 
-        with self.assertRaises(UserError):
-            deal.action_create_sale_order()
+        self.assertTrue(deal.customer_id)
+        self.assertFalse(deal.sale_order_ids)
 
     def test_sale_conversion_is_idempotent(self):
         deal = self._deal()

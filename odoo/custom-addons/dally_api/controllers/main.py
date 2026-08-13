@@ -151,6 +151,10 @@ class DallyApiController(http.Controller):
         cls._check_rate_limit(api_key)
 
         env = request.env(user=api_key.user_id.id)
+        # Odoo 19 flushes the transaction through default_env. auth="none"
+        # installs an environment with no user, which cannot compute monetary
+        # fields or group-dependent values at the end of the request.
+        env.transaction.default_env = env
         # La clé a été résolue dans l'environnement NON authentifié (auth="none",
         # donc uid None). La rebasculer sur l'utilisateur agissant est nécessaire :
         # `_register_use()` écrit dessus, et une écriture dans un environnement sans
@@ -367,7 +371,8 @@ class DallyApiController(http.Controller):
                 log_env = request.env(user=api_key.user_id.id)
             else:
                 log_env = request.env(user=SUPERUSER_ID)
-            with request.env.cr.savepoint():
+            log_env.transaction.default_env = log_env
+            with request.env.cr.savepoint(flush=False):
                 log_env["dally.api.request"].sudo().log(
                     request_uuid=request_uuid,
                     endpoint=endpoint,

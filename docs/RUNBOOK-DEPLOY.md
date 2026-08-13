@@ -1,13 +1,6 @@
 # Runbook — mise en service DallyTrading
 
-Procédure exacte pour rendre `dallytrading.com` et `crm.dallytrading.com`
-réellement opérationnels.
-
-> **Ce document existe parce que le compte applicatif ne peut pas exécuter ces
-> commandes.** L'audit du 13/08/2026 a établi que `dallytrading.com_02xd20o36s7`
-> (uid 10016, groupe `psacln`) n'a ni `sudo` utilisable en non-interactif, ni accès au
-> socket Docker, ni droit d'exécuter `plesk bin`. Tout ce qui pouvait être préparé sans
-> privilèges l'a été ; ce qui suit demande un administrateur.
+État opérationnel et procédure de maintenance de `dallytrading.com` et `crm.dallytrading.com`. Production validée le 13 août 2026 : Docker DallyTrading, Odoo 19, frontend systemd, HTTPS/HSTS, tracking, backup et restauration isolée.
 
 ---
 
@@ -22,7 +15,7 @@ Trois interdits absolus :
 | Interdit | Conséquence si transgressé |
 |---|---|
 | Publier un conteneur sur les ports 80 ou 443 | Coupe **tous** les domaines de la machine |
-| `docker compose down -v` | Détruit les volumes, donc la base |
+| `docker compose -p dallytrading down -v` | Détruit les volumes, donc la base |
 | Toucher aux conteneurs, volumes ou base SEN CONTAINERS | Incident sur un abonnement tiers |
 
 Contrôle de pré-vol, **en lecture seule**, à lancer avant et après :
@@ -31,37 +24,13 @@ Contrôle de pré-vol, **en lecture seule**, à lancer avant et après :
 cd /var/www/vhosts/dallytrading.com/platform && bash infrastructure/scripts/preflight.sh
 ```
 
-État au 13/08/2026 : **28 contrôles OK, 1 bloquant** — l'accès Docker, qui est
-précisément l'objet de ce runbook.
+État au 13/08/2026 : accès Docker opérationnel. Le swap, le stockage hors serveur et l’installation root du timer restent à traiter séparément.
 
 ---
 
-## 1. Débloquer le compte applicatif
+## 1. Accès applicatif
 
-Deux façons ; la première est préférable.
-
-### Option A — donner l'accès Docker au compte projet (recommandé)
-
-```bash
-sudo usermod -aG docker dallytrading.com_02xd20o36s7
-```
-
-L'appartenance ne prend effet qu'à la prochaine session. Vérifier ensuite,
-**depuis le compte projet** :
-
-```bash
-docker info >/dev/null && echo "accès Docker OK"
-```
-
-> Le groupe `docker` équivaut à un accès root sur la machine. C'est un choix
-> délibéré et réversible (`sudo gpasswd -d dallytrading.com_02xd20o36s7 docker`),
-> à ne faire que si vous acceptez cette équivalence. Les comptes
-> `sen-containers` et `sen-trafic.com_tdvsu2xs6sq` y figurent déjà.
-
-### Option B — l'administrateur exécute tout
-
-Ne rien changer aux droits, et exécuter chaque commande ci-dessous en `sudo`.
-Plus sûr, mais chaque itération de correction repasse par vous.
+Le compte projet a accès au démon Docker. Toute commande Compose doit inclure explicitement `-p dallytrading`; aucune commande globale et aucun `prune` ne sont permis. Le compte reste sans sudo, ce qui borne les modifications systemd et Plesk aux interventions administrateur.
 
 ---
 
@@ -90,9 +59,9 @@ initialisation empêcherait Odoo de se connecter.
 
 ```bash
 cd /var/www/vhosts/dallytrading.com/platform/infrastructure
-docker compose --env-file ../.env \
+docker compose -p dallytrading --env-file ../.env \
   -f docker-compose.yml -f docker-compose.production.yml up -d
-docker compose ps
+docker compose -p dallytrading ps
 ```
 
 Attendu : `dallytrading-postgres` et `dallytrading-odoo` en `healthy`.
@@ -154,39 +123,9 @@ docker restart dallytrading-odoo
 
 ## 6. Exécuter les tests Odoo
 
-**C'est l'étape que rien n'a encore prouvée.** Les 109 tests de `dally_sourcing` et
-`dally_trade` sont écrits mais n'ont jamais tourné sur une instance Odoo 19.
+Ne jamais lancer les tests sur la base de production. La recette du 13 août 2026 a utilisé une base, un volume PostgreSQL, un filestore et un réseau éphémères dédiés, sans port publié. Résultat : **587 méthodes en 134,69 s, 0 échec, 0 erreur** ; 79 713 requêtes. Les résultats par module sont consignés dans le checkpoint de production.
 
-Module par module :
-
-```bash
-for M in dally_core dally_crm dally_api dally_freight dally_sourcing dally_tracking dally_trade; do
-  echo "════ tests : $M"
-  docker exec dallytrading-odoo odoo -c /etc/odoo/odoo.conf \
-    -d dallytrading -u "$M" --test-enable --test-tags "/$M" \
-    --stop-after-init --log-level=test 2>&1 | tail -30
-done
-```
-
-Puis la suite complète marquée `dally` :
-
-```bash
-docker exec dallytrading-odoo odoo -c /etc/odoo/odoo.conf \
-  -d dallytrading --test-enable --test-tags dally --stop-after-init \
-  --log-level=test 2>&1 | tee /tmp/dally-tests.log
-grep -E '(FAIL|ERROR|failed|tests? in)' /tmp/dally-tests.log
-```
-
-> **Un test qui échoue doit être analysé, pas neutralisé.** Si Odoo 19 a changé une
-> API, adapter le code. Si le comportement métier est faux, corriger le code — pas le
-> test. Les points les plus susceptibles de diverger de nos hypothèses statiques :
-> `_sql_constraints`, la signature `product_uom` / `product_uom_id` sur les lignes de
-> commande, `res.users.has_group`, la syntaxe `<chatter/>` des vues, et le
-> comportement exact de `groups=` sur un champ lu explicitement.
-
----
-
-## 7. Créer la clé d'API
+## 7. Créer la clé API
 
 Dans Odoo : **Paramètres → Technique → DallyTrading API → Clés d'API**.
 
@@ -283,8 +222,7 @@ Plesk → Domaines → `dallytrading.com` → **Paramètres Apache & nginx** :
    [`infrastructure/nginx/dallytrading.com.conf`](../infrastructure/nginx/dallytrading.com.conf) ;
 3. appliquer.
 
-**Ne pas activer avant que le service ne tourne** : le site renverrait 502 au lieu du
-403 actuel.
+État validé : le service tourne sur `127.0.0.1:3010`, le proxy est appliqué et la page publique répond 200.
 
 Pour `www` : Plesk → `www.dallytrading.com` → redirection permanente 301 vers
 `https://dallytrading.com`. Le DNS `www` existe déjà et le certificat wildcard le
@@ -297,23 +235,10 @@ curl -sI https://www.dallytrading.com/  | head -3   # 301 attendu
 
 ---
 
-## 11. Recette d'intégration
+## 11. Recette intégration
 
-À faire depuis un navigateur, avec le vrai Odoo — plus de faux Odoo à ce stade.
+Recette réelle validée le 13 août 2026. Objets créés puis contrôlés dans Odoo : contact `DT-2026-000065`, devis `DT-2026-000066`, sourcing `DT-SRC-2026-000122`, trading `DT-TRD-2026-000084`. Le suivi `DT-SHP-2026-000249` retourne uniquement la liste blanche publique avec le bon token. Le token synthétique de recette a ensuite été tourné ; token incorrect, absent, référence inconnue et énumération sont refusés sans révéler événements internes, notes, coûts, fournisseur, marge ni identifiants sensibles.
 
-| Page | Action | Vérification dans Odoo |
-|---|---|---|
-| `/contact` | Envoyer une demande | Une `crm.lead` apparaît |
-| `/devis` | Le catalogue de services se remplit | Il vient de `dally.service.type`, pas d'un repli en dur |
-| `/devis` | Déposer une demande | `dally.quote.request` avec référence `DT-…` |
-| `/devis` | Renvoyer le même formulaire | **Aucun doublon** (idempotence sur `request_uuid`) |
-| `/sourcing` | Déposer une demande | `dally.sourcing.request`, référence `DT-SRC-…` |
-| `/trading` | Proposer une opération | `dally.trade.opportunity`, référence `DT-TRD-…` |
-| `/tracking` | Suivre une expédition de test | Timeline publique, **aucun** événement interne |
-
-Pour le suivi : créer une `dally.shipment` dans Odoo, y ajouter un événement public et
-un événement interne, relever `reference` et `public_tracking_token`, puis vérifier que
-seul l'événement public ressort.
 
 ---
 
@@ -346,30 +271,20 @@ Commercial, Finance, utilisateur d'API, utilisateur sans groupe.
 ```bash
 cd /var/www/vhosts/dallytrading.com/platform
 ./infrastructure/scripts/backup.sh
-# verify-backup.sh attend le chemin de la sauvegarde à contrôler.
-# Sans --deep, il ne vérifie que la forme : la restaurabilité n'est PAS prouvée.
+./infrastructure/scripts/verify-backup.sh <chemin_de_la_sauvegarde>
+```
+
+Base et filestore forment une seule sauvegarde logique. La restauration complète se fait uniquement avec le Compose isolé décrit dans [`RESTORE.md`](RESTORE.md).
+
+```bash
+docker compose -p dallytrading-restore --env-file .env -f infrastructure/docker-compose.restore.yml up -d
+./infrastructure/scripts/restore.sh <chemin_de_la_sauvegarde> --isolated-test --replace-filestore --confirm-filestore-volume dallytrading_restore_odoo_filestore --yes
 ./infrastructure/scripts/verify-backup.sh <chemin_de_la_sauvegarde> --deep
 ```
 
-Base et filestore forment **une seule sauvegarde logique** : un dump sans son filestore
-produit des pièces jointes orphelines.
+Le mode `--isolated-test` est impératif pour cet exercice ; `--target-db` seul est refusé.
 
-Puis prouver la restauration sur une base jetable — une sauvegarde dont la restauration
-n'a jamais été testée n'est pas une sauvegarde :
-
-```bash
-./infrastructure/scripts/restore.sh <chemin_de_la_sauvegarde> \
-  --target-db dallytrading_restore_test
-```
-
-`--target-db` est impératif : sans lui, la restauration écrase `dallytrading`.
-
-Planifier ensuite le quotidien :
-
-```bash
-sudo crontab -e
-# 0 3 * * * /var/www/vhosts/dallytrading.com/platform/infrastructure/scripts/backup.sh
-```
+Planifier ensuite le quotidien avec les unités `dallytrading-backup.service` et `dallytrading-backup.timer`, selon [`BACKUPS.md`](BACKUPS.md). Ne pas ajouter de cron concurrent.
 
 ---
 
@@ -394,33 +309,13 @@ Puis la revue manuelle :
 
 ---
 
-## 15. GitHub
+## 15. Git
 
-Le dépôt local n'a **jamais été poussé**. Une clé de déploiement a été générée sur le
-compte projet ; elle doit être autorisée sur `gsentsas/dallytrading` :
-
-```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP5l3HnxQSDVsArFwChg6pK7JLfzbOhiic05Y5KJm86O dallytrading-deploy@friendly-brahmagupta
-```
-
-GitHub → dépôt → **Settings → Deploy keys → Add deploy key**, en cochant
-**Allow write access**.
-
-Puis, depuis le compte projet :
+Les changements de clôture sont commités et poussés uniquement sur `feature/sourcing-closure-and-trade`. Avant toute proposition vers `main`, exécuter :
 
 ```bash
-cd /var/www/vhosts/dallytrading.com/platform
-ssh -T git@github.com                       # doit saluer, pas refuser
-git push -u origin main
-git push -u origin feature/sourcing-closure-and-trade
+git merge-base origin/main HEAD
+git log --graph --oneline --decorate --all --max-count=40
 ```
 
-> **L'historique a été réécrit** avant ce premier push : il contenait le mot de passe
-> PostgreSQL de production de SEN CONTAINERS, recopié dans le constat DT-003. Comme
-> rien n'avait jamais été poussé, la purge était sans conséquence. Les empreintes ont
-> changé : `206b4f9 → f6e31f6`, `2e4c118 → c252e6b`, `d721ea2 → b5b3da9`. Une
-> sauvegarde de l'état antérieur existe hors du dépôt, dans le répertoire de travail
-> temporaire de la session.
-
-Le merge vers `main` n'intervient qu'après les étapes 6, 9 et 11 : tests Odoo passants,
-frontend en service, intégration démontrée. Jamais de `--force` sur `main`.
+Si aucun ancêtre commun existe, arrêter : ne pas créer de merge artificiel, ne pas utiliser `--allow-unrelated-histories` et ne jamais forcer `main`. Un merge exige une autorisation explicite.

@@ -52,6 +52,7 @@ class DallyLeadsController(DallyApiController):
         "/api/v1/leads",
         type="http",
         auth="none",
+        readonly=False,
         methods=["POST"],
         csrf=False,
         # No session cookie for API calls: they are stateless and a cookie would

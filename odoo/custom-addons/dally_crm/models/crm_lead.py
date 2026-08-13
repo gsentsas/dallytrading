@@ -94,6 +94,18 @@ class CrmLead(models.Model):
                 )
         return super().create(vals_list)
 
+    def _inverse_email_from(self):
+        # Une saisie publique peut rattacher une demande, jamais modifier sa fiche.
+        if self.env.context.get("dally_preserve_partner_contact"):
+            return
+        return super()._inverse_email_from()
+
+    def _inverse_phone(self):
+        # Le contexte est limité aux créations issues des formulaires DallyTrading.
+        if self.env.context.get("dally_preserve_partner_contact"):
+            return
+        return super()._inverse_phone()
+
     def action_dally_assign_reference(self):
         """Give an existing lead a reference, for leads created before the module."""
         for lead in self:
@@ -207,7 +219,9 @@ class CrmLead(models.Model):
                 return existing
 
         values = self._dally_prepare_lead_values(payload)
-        lead = self.create(values)
+        lead = self.with_context(
+            dally_preserve_partner_contact=True
+        ).create(values)
 
         # Log the raw attribution in the chatter: it survives field changes and
         # gives support the exact context of the submission.

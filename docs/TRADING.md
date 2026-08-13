@@ -3,9 +3,7 @@
 Sous-système `dally_trade` : les opérations commerciales de DallyTrading, du premier
 contact au règlement.
 
-> **Les tests Odoo n'ont pas été exécutés.**
-> Ils sont écrits mais leur passage reste à prouver sur l'instance Odoo 19
-> DallyTrading.
+> **Validation Odoo 19 réelle — 13 août 2026.** La suite complète passe avec 587 méthodes, 0 échec et 0 erreur. `dally_trade` représente 104 résultats de module, 25,83 s et 19 278 requêtes.
 
 ---
 
@@ -454,7 +452,7 @@ le type `TradeOpportunityInput` n'a pas ces clés, donc il n'y a rien à masquer
 | Vitest | 189 tests |
 | Build Next | OK |
 | Test fonctionnel bout en bout contre un faux Odoo | 27 contrôles, 0 échec |
-| **Tests Odoo** | **Non exécutés.** Écrits, mais leur passage reste à prouver sur l'instance Odoo 19 DallyTrading |
+| **Tests Odoo** | **104 résultats de module passants ; suite complète 587 méthodes, 0 échec, 0 erreur** |
 
 Le test fonctionnel démarre un faux Odoo et le serveur Next, **tous deux liés à
 127.0.0.1 uniquement** — cette machine héberge une vingtaine de domaines en production,
@@ -478,7 +476,7 @@ qu'ils détecteraient une vraie fuite plutôt que de passer sur une page vide.
 
 | Limite | Raison |
 |---|---|
-| **Tests Odoo non exécutés** | Aucune instance Odoo 19 DallyTrading disponible |
+| Tests Odoo | Suite Odoo 19 isolée validée : 104 résultats de module, 0 échec |
 | Pas de seuil d'approbation livré | Une politique de risque n'est pas une constante ; les paramètres existent, vides |
 | Pas de marge ni de commission par défaut | Même raison : un chiffre par défaut est un chiffre que personne n'a décidé |
 | Pas de conversion automatique entre devises | Convertir en silence masquerait le taux ; la conversion est déclarée et datée |

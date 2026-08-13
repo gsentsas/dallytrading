@@ -263,6 +263,9 @@ class TestSourcingProposalAndConversion(TransactionCase):
 
     def setUp(self):
         super().setUp()
+        self.env.user.write({"group_ids": [(4, self.env.ref(
+            "dally_sourcing.group_dally_sourcing_manager"
+        ).id)]})
         self.Request = self.env["dally.sourcing.request"]
         self.Proposal = self.env["dally.sourcing.proposal"]
         self.customer = self.env["res.partner"].create({
@@ -271,8 +274,12 @@ class TestSourcingProposalAndConversion(TransactionCase):
         self.factory = self.env["res.partner"].create({
             "name": "Proposal Factory", "is_company": True,
         })
+        self.product = self.env["product.product"].create({
+            "name": "Water pumps", "type": "consu",
+        })
         self.request = self.Request.create({
             "product_name": "Water pumps",
+            "product_id": self.product.id,
             "quantity": 50.0,
             "contact_email": "proposal@example.com",
             "customer_id": self.customer.id,
@@ -303,6 +310,7 @@ class TestSourcingProposalAndConversion(TransactionCase):
             "selling_unit_price": 250.0,
             "validity_date": "2999-01-01",
         })
+        proposal.action_validate_price()
         request.action_send_proposal()
         request.action_accept()
         return proposal
@@ -316,16 +324,12 @@ class TestSourcingProposalAndConversion(TransactionCase):
         })
         self.assertRegex(proposal.reference, self.PROPOSAL_RE)
 
-    def test_draft_from_offer_derives_a_selling_price(self):
+    def test_draft_from_offer_requires_a_human_selling_price(self):
         self.offer.action_create_proposal()
         proposal = self.request.proposal_ids
         self.assertEqual(len(proposal), 1)
-        # Landed unit cost = (50 × 200 + 1000) / 50 = 220; +15% = 253
-        self.assertAlmostEqual(proposal.selling_unit_price, 253.0, places=2)
-        self.assertGreater(
-            proposal.selling_unit_price, self.offer.landed_unit_cost,
-            "A drafted proposal must never start below cost",
-        )
+        self.assertEqual(proposal.selling_unit_price, 0.0)
+        self.assertAlmostEqual(proposal.cost_basis, self.offer.total_landed_cost)
 
     def test_draft_from_offer_copies_no_cost_line(self):
         """The one bridge across the boundary copies a derived price, nothing else."""
@@ -371,6 +375,7 @@ class TestSourcingProposalAndConversion(TransactionCase):
             "quantity": 1.0, "selling_unit_price": 100.0,
             "validity_date": "2999-01-01",
         })
+        proposal.action_validate_price()
         proposal.action_mark_ready()
         self.assertEqual(proposal.state, "ready")
         proposal.action_send()
@@ -425,6 +430,10 @@ class TestSourcingProposalAndConversion(TransactionCase):
         self.assertEqual(order.partner_id, self.factory)
         self.assertEqual(order.dally_sourcing_request_id, self.request)
         self.assertEqual(order.dally_sourcing_reference, self.request.reference)
+        self.assertEqual(len(order.order_line), 1)
+        self.assertEqual(order.order_line.product_id, self.product)
+        self.assertEqual(order.order_line.product_qty, self.offer.quantity)
+        self.assertEqual(order.order_line.price_unit, self.offer.unit_price)
         self.assertEqual(self.request.state, "purchasing")
 
     def test_no_second_purchase_order(self):
@@ -461,10 +470,10 @@ class TestSourcingProposalAndConversion(TransactionCase):
         self.assertEqual(order.partner_id, self.customer)
         self.assertEqual(order.dally_sourcing_request_id, self.request)
         self.assertEqual(proposal.sale_order_id, order)
-        self.assertEqual(
-            len(order.order_line), 0,
-            "Lines are left empty: a pre-filled guess would be invoiced by mistake",
-        )
+        self.assertEqual(len(order.order_line), 1)
+        self.assertEqual(order.order_line.product_id, self.product)
+        self.assertEqual(order.order_line.product_uom_qty, proposal.quantity)
+        self.assertEqual(order.order_line.price_unit, proposal.selling_unit_price)
 
     def test_no_second_sale_order(self):
         proposal = self._advance_to_accepted()

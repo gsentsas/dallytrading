@@ -93,13 +93,16 @@ class ResPartner(models.Model):
             # Le paramètre `mobile` de cette méthode est conservé : les appelants
             # en passent un, et un numéro de mobile reste un numéro à rapprocher.
             # Il est simplement comparé aux mêmes colonnes que les autres.
+            #
+            # Le LIKE porte sur la version normalisée. Un numéro formaté ne se
+            # termine pas littéralement par ses neuf chiffres significatifs.
+            # WhatsApp n'a pas de colonne normalisée : confirmation faite en Python.
             possible = self.search(
                 [
                     "|",
-                    ("phone", "like", tail),
-                    ("dally_whatsapp", "like", tail),
-                ],
-                limit=20,
+                    ("phone_sanitized", "like", tail),
+                    ("dally_whatsapp", "!=", False),
+                ]
             )
             for partner in possible:
                 stored = {

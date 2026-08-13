@@ -86,6 +86,7 @@ class DallyQuotesController(DallyApiController):
         "/api/v1/quotes",
         type="http",
         auth="none",
+        readonly=False,
         methods=["POST"],
         csrf=False,
         save_session=False,

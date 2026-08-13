@@ -25,7 +25,7 @@ vingtaine d'autres domaines en production.
    appartient à un autre abonnement. **Ne pas la modifier, la lire, l'interroger ni s'y
    connecter.** L'instance DallyTrading utilise les ports `18169`/`18172` et une base
    distincte.
-3. **Aucune commande destructive** (`docker compose down -v`, `DROP DATABASE`,
+3. **Aucune commande destructive** (`docker compose -p dallytrading down -v`, `DROP DATABASE`,
    `rm -rf`) sans avoir identifié l'impact et pris une sauvegarde. Des données de
    production tierces sont sur cette machine.
 
@@ -42,7 +42,7 @@ Déjà présents sur le serveur (vérifiés) :
 | Ubuntu | 24.04.4 LTS |
 | Docker | 29.7.2 |
 | Docker Compose | v5.4.0 |
-| Node.js | 20.20.2 |
+| Node.js | 22.23.2 |
 | Git | 2.43.0 |
 | OpenSSL, envsubst | 3.0.13 / 0.21 |
 
@@ -114,7 +114,7 @@ bash infrastructure/scripts/preflight.sh
 ./infrastructure/scripts/generate-secrets.sh
 ./infrastructure/scripts/render-config.sh
 cd infrastructure
-docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.production.yml up -d
+docker compose -p dallytrading --env-file ../.env -f docker-compose.yml -f docker-compose.production.yml up -d
 ```
 
 `render-config.sh` doit être relancé après **toute** modification de `.env` touchant
@@ -123,36 +123,29 @@ Odoo : `odoo.conf` en est un artefact généré.
 Initialiser la base au premier démarrage :
 
 ```bash
-docker exec -it dally-odoo odoo -c /etc/odoo/odoo.conf \
+docker exec -it dallytrading-odoo odoo -c /etc/odoo/odoo.conf \
     -d dallytrading -i base --without-demo=all --stop-after-init
-docker restart dally-odoo
+docker restart dallytrading-odoo
 ```
 
 Contrôle :
 
 ```bash
 curl -sf http://127.0.0.1:18169/web/health && echo OK
-docker compose ps          # les deux services doivent être « healthy »
+docker compose -p dallytrading ps          # les deux services doivent être « healthy »
 ```
 
 ## 5. Tests
 
 ### Modules Odoo
 
-Validation statique, sans Odoo — utilisable en CI :
+Validation statique :
 
 ```bash
 python3 infrastructure/scripts/validate-addons.py odoo/custom-addons
 ```
 
-Vérifie la cohérence vues ↔ modèles, les manifestes, les ACL, les identifiants
-externes et les imports. Les tests unitaires Odoo (`odoo/custom-addons/*/tests/`)
-requièrent une instance et n'ont **pas encore été exécutés** :
-
-```bash
-docker exec -it dally-odoo odoo -c /etc/odoo/odoo.conf \
-    -d dallytrading --test-enable --test-tags dally --stop-after-init
-```
+Validation réelle du 13 août 2026, dans une base et des volumes éphémères isolés : **587 méthodes, 0 échec, 0 erreur** (651 résultats avec sous-tests). Image Odoo `19.0-20260810`; les sept modules `dally_*` sont couverts. La commande de recette détaillée est conservée dans `docs/RUNBOOK-DEPLOY.md`.
 
 ### Site Next.js
 
@@ -228,9 +221,9 @@ nécessitant `root` ou Plesk.
 ## Sauvegardes
 
 ```bash
-./infrastructure/scripts/backup.sh                     # base + filestore, atomique
-./infrastructure/scripts/verify-backup.sh --deep       # prouve la restaurabilité
-./infrastructure/scripts/restore.sh <chemin>           # restauration
+./infrastructure/scripts/backup.sh
+./infrastructure/scripts/verify-backup.sh backups/daily/<timestamp>
+# Exercice complet isolé : voir docs/RESTORE.md
 ```
 
 Base et filestore forment **une seule sauvegarde logique** : un dump sans son filestore

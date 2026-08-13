@@ -1,0 +1,91 @@
+# Frontend Next.js DallyTrading — unité systemd
+#
+# Installation (administrateur) :
+#   sudo cp infrastructure/systemd/dallytrading-web.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now dallytrading-web
+#
+# ── Pourquoi systemd et non Plesk Node.js ou PM2 ─────────────────────
+#
+# Plesk Node.js (Passenger) est présent sur ce serveur (/opt/plesk/node/22 et /24),
+# mais il attend une application démarrée par un fichier d'entrée qu'il gère
+# lui-même. Or next.config.mjs fixe `output: 'standalone'` : Next produit son
+# propre serveur dans .next/standalone/server.js, avec ses propres dépendances
+# tracées. Faire cohabiter les deux revient à laisser Passenger deviner un contrat
+# que Next a déjà fixé — et le premier symptôme d'un désaccord est un 502 sans
+# message utile.
+#
+# PM2 ajouterait un superviseur de plus, avec sa base de processus, son démarrage
+# au boot à configurer et ses journaux séparés. systemd fait déjà tout cela, il est
+# déjà le système d'init de la machine, et `journalctl -u dallytrading-web` est
+# consultable par l'administrateur sans rien installer.
+#
+# Décision : systemd. Redémarrage au boot et après crash, journaux dans journald,
+# exécution sous l'utilisateur applicatif — jamais root.
+
+[Unit]
+Description=DallyTrading — frontend Next.js
+Documentation=https://github.com/gsentsas/dallytrading
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# L'utilisateur du vhost Plesk, jamais root. Le processus n'a besoin d'écrire
+# nulle part hors de son propre répertoire.
+User=dallytrading.com_02xd20o36s7
+Group=psacln
+
+WorkingDirectory=/var/www/vhosts/dallytrading.com/platform/apps/web
+
+# 127.0.0.1 et rien d'autre. Cette machine héberge une vingtaine de domaines en
+# production ; un serveur applicatif sur 0.0.0.0 serait joignable depuis internet,
+# court-circuitant Plesk, son TLS et ses règles.
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3010
+Environment=NODE_ENV=production
+
+# Les secrets ne sont PAS dans cette unité : un fichier d'unité est lisible par
+# tous, alors que .env.production est en 0600. EnvironmentFile= le lit au
+# démarrage, sans jamais l'exposer dans `systemctl show` ni dans les journaux.
+EnvironmentFile=/var/www/vhosts/dallytrading.com/platform/apps/web/.env.production
+
+# `next start` est INOPÉRANT avec output: 'standalone' — Next l'annonce au
+# démarrage puis ne sert rien. Le serveur autonome est le point d'entrée réel.
+ExecStart=/var/www/vhosts/dallytrading.com/.nodenv/versions/22/bin/node .next/standalone/server.js
+
+Restart=always
+RestartSec=5
+# Au-delà de 5 échecs en 60 s, systemd cesse de relancer : une boucle de
+# redémarrage sur une configuration cassée consomme le CPU d'une machine partagée
+# sans jamais réussir, et masque la cause dans un flot de journaux.
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dallytrading-web
+
+# ── Durcissement ─────────────────────────────────────────────────────
+# Le frontend lit son build et parle à Odoo en HTTPS. Il n'a besoin de rien
+# d'autre, et chaque capacité retirée est une capacité qu'une faille ne peut pas
+# emprunter.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/var/www/vhosts/dallytrading.com/platform/apps/web/.next
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+# Sur une machine partagée, une limite mémoire évite qu'une fuite dans le
+# frontend n'entraîne les vingt autres domaines avec elle.
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

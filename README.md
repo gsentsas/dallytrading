@@ -101,6 +101,13 @@ Contrôle indispensable :
 git check-ignore -v .env odoo/config/odoo.conf
 ```
 
+Contrôle de pré-vol complet, **en lecture seule** — droits, ressources, ports,
+exposition réseau, secrets, étanchéité Git, domaines et TLS :
+
+```bash
+bash infrastructure/scripts/preflight.sh
+```
+
 ## 4. Démarrage
 
 ```bash
@@ -239,6 +246,7 @@ exercice de restauration : [`docs/RESTORE.md`](docs/RESTORE.md).
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture, décisions et arbitrages | ✅ |
 | [`docs/SECURITY-FINDINGS.md`](docs/SECURITY-FINDINGS.md) | Constats de l'audit | ✅ |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Déploiement pas à pas (Plesk) | ✅ |
+| [`docs/RUNBOOK-DEPLOY.md`](docs/RUNBOOK-DEPLOY.md) | Mise en service réelle : commandes administrateur exactes | ✅ |
 | [`docs/VPS-MIGRATION.md`](docs/VPS-MIGRATION.md) | Déploiement et migration vers un VPS dédié | ✅ |
 | [`docs/BACKUPS.md`](docs/BACKUPS.md) | Stratégie de sauvegarde | ✅ |
 | [`docs/RESTORE.md`](docs/RESTORE.md) | Exercice de restauration | ✅ |

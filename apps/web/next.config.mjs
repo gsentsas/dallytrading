@@ -50,6 +50,30 @@ const nextConfig = {
         source: '/api/:path*',
         headers: [{ key: 'Cache-Control', value: 'no-store' }],
       },
+      {
+        // La page de suivi porte un secret dans sa query string.
+        //
+        // `strict-origin-when-cross-origin` transmet l'URL COMPLÈTE pour une
+        // navigation de même origine. Un visiteur passant de
+        // /tracking?ref=…&t=<token> à /contact envoyait donc le token dans
+        // l'en-tête Referer, que nginx journalise sur la ligne /contact.
+        // Mesuré le 13/08/2026 : le token apparaissait bien dans le journal,
+        // malgré `access_log off` sur /tracking — la fuite se produit sur la
+        // page de DESTINATION, pas sur la page d'origine.
+        //
+        // `no-referrer` supprime l'en-tête entièrement. La page de suivi n'a
+        // aucun besoin d'attribution, et les liens de suivi déjà distribués
+        // continuent de fonctionner : rien ne change côté URL.
+        //
+        // Cette entrée vient APRÈS la règle générale : Next applique la
+        // dernière valeur pour une clé donnée, donc elle l'emporte sur
+        // /tracking sans toucher au reste du site.
+        source: '/tracking',
+        headers: [
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'Cache-Control', value: 'no-store' },
+        ],
+      },
     ];
   },
 };

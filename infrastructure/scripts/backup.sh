@@ -240,7 +240,11 @@ if [[ -n "${S3_BUCKET:-}" || -n "${S3_ENDPOINT:-}" ]]; then
     ARCHIVE="${BACKUP_DIR}/${TAG}-${TIMESTAMP}.tar.gz.enc"
     tar -czf - -C "${BACKUP_DIR}/${TAG}" "${TIMESTAMP}" |
       openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt         -pass env:BACKUP_ENCRYPTION_KEY > "${ARCHIVE}"
-    if AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY}" AWS_SECRET_ACCESS_KEY="${S3_SECRET_KEY}"       aws --endpoint-url "${S3_ENDPOINT}" s3 cp         "${ARCHIVE}" "s3://${S3_BUCKET}/odoo/${TAG}/" >/dev/null; then
+    # AWS_DEFAULT_REGION est indispensable : sans région, le client aws refuse la
+    # commande (« You must specify a region »). S3_REGION était déclarée dans
+    # .env.example mais lue nulle part — le premier envoi aurait échoué à 02:15,
+    # sans personne pour le voir. Repli neutre pour les fournisseurs qui l'ignorent.
+    if AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY}" AWS_SECRET_ACCESS_KEY="${S3_SECRET_KEY}" AWS_DEFAULT_REGION="${S3_REGION:-us-east-1}"       aws --endpoint-url "${S3_ENDPOINT}" s3 cp         "${ARCHIVE}" "s3://${S3_BUCKET}/odoo/${TAG}/" >/dev/null; then
       log "copie distante envoyée."
       rm -f -- "${ARCHIVE}"
     else

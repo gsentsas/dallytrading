@@ -125,12 +125,78 @@ d'elle-même vers l'achat.
 | `action_mark_offers_received` | au moins une offre |
 | `action_prepare_proposal` | au moins une offre |
 | `action_send_proposal` | une proposition avec un montant, et un destinataire |
-| `action_mark_ready` (proposition) | un montant **et** une date de validité |
-| `action_create_purchase_order` | demande acceptée, offre sélectionnée, fournisseur, quantité, devise |
-| `action_create_sale_order` | demande acceptée, client, proposition acceptée |
+| `action_validate_price` (proposition) | un montant total strictement positif |
+| `action_mark_ready` (proposition) | un montant, une date de validité **et un prix validé** |
+| `action_create_purchase_order` | demande acceptée, offre sélectionnée, fournisseur, **produit catalogue**, quantité > 0, prix d'achat > 0, devise, société |
+| `action_create_sale_order` | demande acceptée, client, proposition acceptée, **produit catalogue**, quantité > 0, prix de vente > 0, devise, société |
 
 Un devis sans date de validité engagerait DallyTrading indéfiniment : les prix
 fournisseurs et les taux de fret bougent.
+
+### Le prix commercial est décidé, jamais calculé
+
+Une proposition rédigée depuis une offre part **sans prix de vente**. Aucune marge
+par défaut n'est appliquée, et la constante Python qui le faisait a été supprimée :
+un taux codé en dur est un prix que l'entreprise annonce sans que personne ne l'ait
+choisi, et le client l'oppose ensuite à DallyTrading.
+
+Ce qui traverse la frontière de confidentialité est le `cost_basis` seul — lui-même
+restreint par `groups=` — afin que le responsable qui fixe le prix voie ce qu'il doit
+couvrir.
+
+Le passage à `ready` puis `sent` exige `price_validated`, positionné par
+`action_validate_price()` et réservé à la direction sourcing, à la finance et à la
+direction générale : un utilisateur qui ne voit pas le coût n'est pas en mesure de juger
+si le prix le couvre. La traçabilité est conservée (`price_validated_by_id`,
+`price_validated_on`).
+
+Contrairement à `cost_basis` et `margin`, ces trois champs **ne portent pas** de
+`groups=`. Savoir si un prix est approuvé est une information de workflow, pas une
+donnée confidentielle : un utilisateur sourcing doit pouvoir lire pourquoi sa
+proposition ne partira pas. La restriction porte donc sur *qui peut le poser*, vérifiée
+en Python dans `_dally_check_price_validation_rights()` et non par un groupe de champ —
+un groupe de champ aurait de surcroît cassé le retrait automatique de la validation,
+puisque celui-ci écrit `price_validated` au nom d'un utilisateur qui n'a pas le droit de
+valider.
+
+Toute modification du prix, de la quantité, du fret estimé, des frais de service, des
+autres charges, de la taxe ou de la devise **retire la validation** : sinon
+l'approbation porterait sur un montant que personne n'a approuvé.
+
+Si DallyTrading veut un jour une marge par défaut, elle relèvera de la configuration —
+administrable, documentée, éventuellement dépendante du type d'opération — pas d'une
+constante de module.
+
+### Aucune commande commerciale vide
+
+`action_create_purchase_order()` et `action_create_sale_order()` créent la commande
+**avec sa ligne, en un seul appel**, ou refusent avec un `UserError` qui énumère ce
+qui manque.
+
+Une commande sans ligne utilisable est pire qu'aucune commande : elle peut être
+confirmée, elle apparaît dans le reporting, et plus personne ne sait ce qui devait
+être acheté. Une ligne de vente à prix nul, elle, peut être confirmée *et facturée* —
+le client reçoit une facture pour rien.
+
+Le point de blocage réel est le produit : une ligne `purchase.order.line` ou
+`sale.order.line` exige un `product_id`, et une demande de sourcing décrit un besoin,
+pas une référence de catalogue. D'où le champ `product_id` sur
+`dally.sourcing.request`, vide à la réception et à renseigner avant conversion. Créer
+le produit automatiquement remplirait le catalogue de quasi-doublons que personne n'a
+arbitrés.
+
+L'unité de mesure de la ligne est **délibérément omise** : Odoo la dérive du produit,
+qui en est la source de vérité.
+
+Les frais de service d'une proposition font une ligne distincte, jamais fondus dans le
+prix unitaire — le client voit ce qu'il paie, et la ligne peut être taxée
+différemment. Elle n'est ajoutée que si le paramètre système
+`dally_sourcing.service_fee_product_ref` désigne un produit de service ; sinon les
+frais ne sont pas ventilés et l'opérateur ajoute la ligne, ce qui est visible plutôt
+que surprenant.
+
+Les deux conversions restent **idempotentes** : relancées, elles ouvrent le document
+existant au lieu d'en émettre un second.
 
 ## 6. Idempotence
 
@@ -268,7 +334,8 @@ jetable et reconstruit à chaque déploiement.
 | **Tests Odoo non exécutés** | Aucune instance Odoo 19 DallyTrading |
 | Pas d'e-mail transactionnel | SMTP relève de l'administrateur ; `action_send` enregistre le fait plutôt que de simuler un envoi |
 | Pas de conversion multi-devises automatique entre offres | Convertir en silence masquerait le taux employé ; chaque offre garde sa devise et la comparaison est humaine |
-| Marge par défaut à 15 % au brouillon | Point de départ, pas une politique tarifaire. Elle garantit seulement qu'un brouillon n'est jamais sous le coût |
+| Pas de marge par défaut | Une politique tarifaire n'est pas une constante Python. Le brouillon part sans prix, et le prix doit être saisi puis validé explicitement |
 | Scores 0–5 sans pondération | Une pondération dépend du client, de la saison et de l'appétit au risque. La décision reste humaine (§14) |
 | Pas de lien automatique vers `dally.shipment` | Le fret reste sous `dally_freight` ; une expédition naît quand l'opération devient logistique (§24) |
-| Lignes vides sur les commandes générées | Chiffrer un achat ou une vente de sourcing suppose des choix d'opérateur ; une valeur préremplie serait facturée par erreur |
+| `product_id` à renseigner avant conversion | Une ligne de commande Odoo exige un produit réel ; le créer automatiquement remplirait le catalogue de quasi-doublons non arbitrés |
+| Frais de service non ventilés sans produit configuré | Ajouter un produit de service au catalogue en silence est la façon dont un catalogue devient inutilisable |

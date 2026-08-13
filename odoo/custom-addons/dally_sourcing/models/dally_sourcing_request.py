@@ -202,6 +202,17 @@ class DallySourcingRequest(models.Model):
         help="A link the customer supplied. Never fetched by the server: doing so "
              "would turn this field into a server-side request forgery vector.",
     )
+    product_id = fields.Many2one(
+        comodel_name="product.product",
+        string="Catalogue Product",
+        index=True,
+        help="The Odoo product this request resolves to. Empty on intake — a customer "
+             "describes a need, not a catalogue reference.\n\n"
+             "Required before a purchase or sales order can be raised: an order line "
+             "needs a real product, and inventing one automatically would fill the "
+             "catalogue with near-duplicates nobody curated. Select an existing "
+             "product, or create it once the operation is real.",
+    )
 
     quantity = fields.Float(
         string="Quantity", digits=(16, 3), required=True, default=1.0, tracking=True,
@@ -1044,11 +1055,13 @@ class DallySourcingRequest(models.Model):
     def action_create_purchase_order(self):
         """Create the purchase order from the selected offer.
 
-        Never automatic. §22 lists the conditions and they are all enforced here:
-        an accepted request, a selected offer with a supplier, a positive quantity
-        and a currency. A purchase order is a commitment to a supplier; creating one
-        from an unaccepted request would commit DallyTrading to buying goods nobody
-        has agreed to pay for.
+        Never automatic, and never empty. §22 lists the conditions; they are all
+        enforced here, and the order is created **with its line** in one call.
+
+        An order with no line is worse than no order: it can be confirmed, it appears
+        in reporting, and nobody can tell what was supposed to be bought. So every
+        piece the line needs is checked first, and the conversion is refused with an
+        explicit message when something is missing.
         """
         self.ensure_one()
 
@@ -1061,20 +1074,6 @@ class DallySourcingRequest(models.Model):
                 )
             )
 
-        offer = self.selected_offer_id
-        if not offer:
-            raise UserError(
-                _("Select a supplier offer on request %s first.", self.reference)
-            )
-        if not offer.partner_id:
-            raise UserError(
-                _("The selected offer has no supplier contact linked.")
-            )
-        if offer.quantity <= 0:
-            raise UserError(_("The selected offer has no quantity."))
-        if not offer.currency_id:
-            raise UserError(_("The selected offer has no currency."))
-
         if self.purchase_order_ids:
             # Idempotent by intent: re-running the action opens what exists rather
             # than raising a second order against the same supplier.
@@ -1082,14 +1081,68 @@ class DallySourcingRequest(models.Model):
                 "purchase.order", self.purchase_order_ids.ids, _("Purchase Orders"),
             )
 
+        offer = self.selected_offer_id
+        if not offer:
+            raise UserError(
+                _("Select a supplier offer on request %s first.", self.reference)
+            )
+
+        # Everything the line needs, checked before anything is created.
+        missing = []
+        if not offer.partner_id:
+            missing.append(_("a supplier contact on the selected offer"))
+        if not self.product_id:
+            missing.append(_("a catalogue product on the request"))
+        if offer.quantity <= 0:
+            missing.append(_("a quantity greater than zero on the offer"))
+        if offer.unit_price <= 0:
+            missing.append(_("a purchase unit price on the offer"))
+        if not offer.currency_id:
+            missing.append(_("a currency on the offer"))
+        if not self.company_id:
+            missing.append(_("a company on the request"))
+
+        if missing:
+            raise UserError(
+                _(
+                    "Request %(reference)s cannot produce a usable purchase order. "
+                    "Missing: %(missing)s.\n\n"
+                    "An order with no usable line can be confirmed and reported on "
+                    "while nobody can tell what was meant to be bought, so it is not "
+                    "created at all.",
+                    reference=self.reference,
+                    missing=", ".join(missing),
+                )
+            )
+
+        description = self._dally_order_line_description()
+
+        # Created with the line in one call. The unit of measure is deliberately left
+        # to Odoo, which derives it from the product: that is its own source of truth,
+        # and forcing a value here could contradict the product's purchase UoM.
         order = self.env["purchase.order"].create({
             "partner_id": offer.partner_id.id,
             "currency_id": offer.currency_id.id,
+            "company_id": self.company_id.id,
             "origin": self.reference,
             "dally_sourcing_request_id": self.id,
+            "order_line": [(0, 0, {
+                "product_id": self.product_id.id,
+                "name": description,
+                "product_qty": offer.quantity,
+                "price_unit": offer.unit_price,
+            })],
         })
+
         self.message_post(
-            body=_("Purchase order %s created from the selected offer.", order.name)
+            body=_(
+                "Purchase order %(order)s created from the selected offer: "
+                "%(quantity)s × %(price)s %(currency)s.",
+                order=order.name,
+                quantity=offer.quantity,
+                price=offer.unit_price,
+                currency=offer.currency_id.name,
+            )
         )
         if self.state == "accepted":
             self._dally_set_state("purchasing")
@@ -1102,27 +1155,26 @@ class DallySourcingRequest(models.Model):
         """Create the sales order from the accepted proposal.
 
         The proposal is what the customer agreed to, so it is the only legitimate
-        basis. Lines are left empty: pricing a sourcing operation involves service
-        fees and shipping the operator must choose, and a pre-filled guess would be
-        invoiced by mistake.
+        basis — and it carries a validated price, which is what makes the line
+        invoiceable rather than a guess.
+
+        As on the purchase side, the order is created **with its line** or not at all.
+        A sales order carrying a zero-priced line can be confirmed and invoiced, and
+        the customer receives an invoice for nothing.
         """
         self.ensure_one()
 
         if self.state not in ("accepted", "purchasing", "in_progress"):
             raise UserError(
                 _(
-                    "Request %s must be accepted before a sales order can be "
-                    "raised.",
+                    "Request %s must be accepted before a sales order can be raised.",
                     self.reference,
                 )
             )
-        if not self.customer_id:
-            raise UserError(
-                _(
-                    "Request %s has no customer. Create or link a contact first: a "
-                    "sales order needs one.",
-                    self.reference,
-                )
+
+        if self.sale_order_ids:
+            return self._dally_open_records(
+                "sale.order", self.sale_order_ids.ids, _("Sales Orders"),
             )
 
         accepted = self.proposal_ids.filtered(
@@ -1135,26 +1187,114 @@ class DallySourcingRequest(models.Model):
                     self.reference,
                 )
             )
+        proposal = accepted[0]
 
-        if self.sale_order_ids:
-            return self._dally_open_records(
-                "sale.order", self.sale_order_ids.ids, _("Sales Orders"),
+        missing = []
+        if not self.customer_id:
+            missing.append(_("a customer on the request"))
+        if not self.product_id:
+            missing.append(_("a catalogue product on the request"))
+        if proposal.quantity <= 0:
+            missing.append(_("a quantity greater than zero on the proposal"))
+        if proposal.selling_unit_price <= 0:
+            missing.append(_("a selling unit price on the proposal"))
+        if not proposal.currency_id:
+            missing.append(_("a currency on the proposal"))
+        if not self.company_id:
+            missing.append(_("a company on the request"))
+
+        if missing:
+            raise UserError(
+                _(
+                    "Request %(reference)s cannot produce a usable sales order. "
+                    "Missing: %(missing)s.\n\n"
+                    "A sales order with a zero-priced line can be confirmed and "
+                    "invoiced, so the customer would receive an invoice for nothing. "
+                    "It is therefore not created at all.",
+                    reference=self.reference,
+                    missing=", ".join(missing),
+                )
             )
 
-        proposal = accepted[0]
+        lines = [(0, 0, {
+            "product_id": self.product_id.id,
+            "name": self._dally_order_line_description(),
+            "product_uom_qty": proposal.quantity,
+            "price_unit": proposal.selling_unit_price,
+        })]
+
+        # The service fee is a distinct line, not folded into the unit price: the
+        # customer sees what they are paying for, and it can be taxed differently.
+        if proposal.service_fee > 0:
+            service_product = self._dally_service_fee_product()
+            if service_product:
+                lines.append((0, 0, {
+                    "product_id": service_product.id,
+                    "name": _("Sourcing service fee — %s", self.reference),
+                    "product_uom_qty": 1.0,
+                    "price_unit": proposal.service_fee,
+                }))
+
         order = self.env["sale.order"].create({
             "partner_id": self.customer_id.id,
             "currency_id": proposal.currency_id.id,
+            "company_id": self.company_id.id,
             "origin": self.reference,
             "dally_sourcing_request_id": self.id,
             "opportunity_id": self.crm_lead_id.id or False,
+            "order_line": lines,
         })
         proposal.sale_order_id = order
+
         self.message_post(
-            body=_("Sales order %s created from proposal %s.", order.name,
-                   proposal.reference)
+            body=_(
+                "Sales order %(order)s created from proposal %(proposal)s: "
+                "%(quantity)s × %(price)s %(currency)s.",
+                order=order.name,
+                proposal=proposal.reference,
+                quantity=proposal.quantity,
+                price=proposal.selling_unit_price,
+                currency=proposal.currency_id.name,
+            )
         )
         return self._dally_open_records("sale.order", order.ids, _("Sales Order"))
+
+    def _dally_order_line_description(self):
+        """Line description: the product, plus what the customer actually asked for.
+
+        The product name alone loses the specification, which is often the whole point
+        of a sourcing request — "solar panels" and "monocrystalline 400W, 10-year
+        warranty" are not the same purchase.
+        """
+        self.ensure_one()
+        parts = [self.product_name or self.product_id.display_name or _("Product")]
+        if self.product_reference:
+            parts.append(_("Ref. %s", self.product_reference))
+        if self.specifications:
+            specification = " ".join(self.specifications.split())
+            if len(specification) > 300:
+                specification = specification[:300] + "…"
+            parts.append(specification)
+        return "\n".join(parts)
+
+    @api.model
+    def _dally_service_fee_product(self):
+        """The service product used for a sourcing fee line, if configured.
+
+        Read from a system parameter rather than created on the fly: silently adding a
+        product to the catalogue is how a catalogue becomes unusable. When it is not
+        configured the fee is simply not broken out, and the operator adds the line —
+        which is visible, rather than a surprise.
+        """
+        reference = self.env["ir.config_parameter"].sudo().get_param(
+            "dally_sourcing.service_fee_product_ref"
+        )
+        if not reference:
+            return self.env["product.product"]
+        product = self.env.ref(reference, raise_if_not_found=False)
+        if product and product._name == "product.product":
+            return product
+        return self.env["product.product"]
 
     def _dally_open_records(self, model, ids, name):
         """Open one record in a form, or several in a list."""

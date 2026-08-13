@@ -197,7 +197,7 @@ Le core Odoo n'est **jamais** modifié. Tout vit dans `odoo/custom-addons/` :
 | `dally_crm` | ✅ `dally.quote.request` qualifiable, extension `crm.lead`, anti-doublon, lien `sale.order` |
 | `dally_freight` | ✅ `dally.shipment` + lignes de colis : maritime, aérien, routier, véhicules, groupage, CBM, conteneurs, **poids taxable** |
 | `dally_tracking` | ✅ `dally.shipment.event`, timeline publique, frontière de confidentialité à trois couches |
-| `dally_sourcing` | ✅ Demande, fournisseurs candidats, offres internes, propositions client ; workflow 16 états, conversions achat et vente |
+| `dally_sourcing` | ✅ Demande, fournisseurs candidats, offres internes, propositions client ; workflow 16 états, prix validé explicitement, conversions achat et vente à lignes réelles |
 | `dally_trade` | `dally.trade.opportunity` |
 | `dally_agrobusiness` | Socle extensible, minimal au MVP |
 | `dally_api` | ✅ Points d'accès REST versionnés `/api/v1/*` |

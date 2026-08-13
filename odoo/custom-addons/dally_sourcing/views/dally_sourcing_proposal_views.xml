@@ -33,6 +33,14 @@
         <field name="arch" type="xml">
             <form string="Customer Proposal">
                 <header>
+                    <button name="action_validate_price" type="object"
+                            string="Validate Price" class="btn-primary"
+                            groups="dally_sourcing.group_dally_sourcing_manager,dally_core.group_dally_finance"
+                            invisible="price_validated or state not in ('draft', 'ready')"/>
+                    <button name="action_revoke_price_validation" type="object"
+                            string="Withdraw Price Validation" class="btn-secondary"
+                            groups="dally_sourcing.group_dally_sourcing_manager,dally_core.group_dally_finance"
+                            invisible="not price_validated or state not in ('draft', 'ready')"/>
                     <button name="action_mark_ready" type="object"
                             string="Mark Ready" class="btn-primary"
                             invisible="state != 'draft'"/>
@@ -107,6 +115,14 @@
                             <field name="tax_amount"/>
                             <field name="total_amount" readonly="1"
                                    class="oe_subtotal_footer_separator"/>
+                            <!-- Visible to everyone who can see the proposal: a
+                                 sourcing user needs to know why it will not send.
+                                 Only the buttons above are group-restricted. -->
+                            <field name="price_validated" readonly="1"/>
+                            <field name="price_validated_by_id" readonly="1"
+                                   invisible="not price_validated"/>
+                            <field name="price_validated_on" readonly="1"
+                                   invisible="not price_validated"/>
                         </group>
                         <group string="Dates">
                             <field name="estimated_delivery"/>

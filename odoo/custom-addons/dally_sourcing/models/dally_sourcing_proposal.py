@@ -45,11 +45,15 @@ PROPOSAL_TRANSITIONS: dict[str, tuple[str, ...]] = {
     "cancelled": (),
 }
 
-#: Default uplift applied when drafting from an offer, as a starting point only.
+#: There is deliberately NO default margin rate.
 #:
-#: Not a pricing policy — pricing is commercial judgement. It exists so the draft is
-#: never below cost, which is the one number that must not be sent by accident.
-DEFAULT_MARGIN_RATE = 0.15
+#: A hidden Python constant is not a commercial policy. Applying an arbitrary uplift
+#: automatically would mean DallyTrading quotes a price nobody decided, and the first
+#: time it is wrong the customer holds the company to it. A proposal therefore starts
+#: with **no selling price**, and the price must be entered and validated explicitly.
+#:
+#: If DallyTrading later wants a default, it belongs in configuration — administrable,
+#: documented, and possibly per operation type — not here.
 
 
 class DallySourcingProposal(models.Model):
@@ -139,6 +143,40 @@ class DallySourcingProposal(models.Model):
         required=True,
         index=True,
         tracking=True,
+        copy=False,
+    )
+
+    # ─── Explicit price validation ───────────────────────────────────
+    #
+    # A proposal cannot become `ready` or `sent` until someone has looked at the
+    # commercial price and said so. Without this, a draft created from an offer could
+    # travel to a customer carrying a price that was computed rather than decided.
+    # Deliberately NOT restricted by ``groups=``, unlike cost_basis and margin.
+    #
+    # Whether a price has been approved is workflow information, not commercial
+    # confidentiality — a sourcing user needs to read it to understand why the
+    # proposal will not send, and the ORM would otherwise raise an access error on
+    # a field they must be able to see. The restriction that matters is *who may set
+    # it*, enforced in ``action_validate_price`` below rather than by a field group.
+    price_validated = fields.Boolean(
+        string="Price Validated",
+        copy=False,
+        tracking=True,
+        readonly=True,
+        help="Required before the proposal can be marked ready or sent. Set by a "
+             "sourcing manager or finance through the Validate Price action: it "
+             "records that a human decided this price, rather than a formula "
+             "producing it.",
+    )
+    price_validated_by_id = fields.Many2one(
+        comodel_name="res.users",
+        string="Price Validated By",
+        readonly=True,
+        copy=False,
+    )
+    price_validated_on = fields.Datetime(
+        string="Price Validated On",
+        readonly=True,
         copy=False,
     )
     sent_date = fields.Datetime(string="Sent On", readonly=True, copy=False)
@@ -236,6 +274,33 @@ class DallySourcingProposal(models.Model):
                 and proposal.state in ("ready", "sent")
             )
 
+    def write(self, vals):
+        """Editing the commercial price withdraws its validation.
+
+        Otherwise a proposal validated at one price could be sent at another — the
+        approval would attach to a number nobody approved.
+        """
+        price_fields = {
+            "selling_unit_price", "quantity", "estimated_shipping", "service_fee",
+            "other_customer_charges", "tax_amount", "currency_id",
+        }
+        if price_fields & set(vals) and "price_validated" not in vals:
+            changing = self.filtered(
+                lambda proposal: proposal.price_validated
+                and proposal.state in ("draft", "ready")
+            )
+            if changing:
+                super(DallySourcingProposal, changing).write({
+                    "price_validated": False,
+                    "price_validated_by_id": False,
+                    "price_validated_on": False,
+                })
+                for proposal in changing:
+                    proposal.message_post(
+                        body=_("Price changed — validation withdrawn, revalidate before sending.")
+                    )
+        return super().write(vals)
+
     # ─── Constraints ─────────────────────────────────────────────────
 
     @api.constrains("validity_date", "estimated_delivery")
@@ -275,14 +340,13 @@ class DallySourcingProposal(models.Model):
 
         The one bridge across the confidentiality boundary. Note what is **not**
         copied: unit cost, shipping cost, insurance, customs estimate, scores,
-        supplier notes, supplier identity. Only a derived selling price crosses, plus
-        the cost basis — which is itself group-restricted.
+        supplier notes, supplier identity. No selling price is derived either: the
+        draft carries none, and a manager must set and validate one. The only figure
+        that crosses is the cost basis — itself group-restricted — so that whoever
+        sets the price can see what it has to cover.
         """
         offer.ensure_one()
         request = offer.request_id
-
-        landed_unit = offer.landed_unit_cost or 0.0
-        selling_unit = round(landed_unit * (1 + DEFAULT_MARGIN_RATE), 2)
 
         proposal = self.create({
             "request_id": request.id,
@@ -294,7 +358,10 @@ class DallySourcingProposal(models.Model):
             "currency_id": offer.currency_id.id,
             "quantity": offer.quantity,
             "uom_id": offer.uom_id.id or request.uom_id.id or False,
-            "selling_unit_price": selling_unit,
+            # No selling price. It is a commercial decision, and a computed one would
+            # be quoted by accident. The cost basis is carried so the manager setting
+            # the price can see what it has to cover.
+            "selling_unit_price": 0.0,
             "cost_basis": offer.total_landed_cost,
             "source_offer_id": offer.id,
             "estimated_delivery": False,
@@ -303,9 +370,12 @@ class DallySourcingProposal(models.Model):
 
         request.message_post(
             body=_(
-                "Proposal %s drafted from the selected offer. Review the price, the "
-                "service fee and the terms before marking it ready.",
-                proposal.reference,
+                "Proposal %(reference)s drafted from the selected offer, with no "
+                "selling price. Landed cost to cover: %(cost)s %(currency)s. Set the "
+                "price, the service fee and the terms, then validate the price.",
+                reference=proposal.reference,
+                cost=round(offer.total_landed_cost, 2),
+                currency=offer.currency_id.name,
             )
         )
         return {
@@ -366,7 +436,80 @@ class DallySourcingProposal(models.Model):
                         proposal.reference,
                     )
                 )
+            if not proposal.price_validated:
+                raise UserError(
+                    _(
+                        "The price on proposal %s has not been validated. A sourcing "
+                        "manager or finance must confirm it before it can be sent: a "
+                        "price that was computed rather than decided is one the "
+                        "customer will hold DallyTrading to.",
+                        proposal.reference,
+                    )
+                )
         return self._dally_set_state("ready")
+
+    #: Who may decide a commercial price. A user who cannot see the cost basis is not
+    #: in a position to judge whether the price covers it.
+    _dally_price_validation_groups = (
+        "dally_sourcing.group_dally_sourcing_manager",
+        "dally_core.group_dally_finance",
+        "dally_core.group_dally_manager",
+    )
+
+    def _dally_check_price_validation_rights(self):
+        """Refuse price validation to anyone who cannot see what the price must cover.
+
+        Enforced here rather than by a field group: the field itself must stay
+        readable, so that a sourcing user can see why a proposal will not send.
+        """
+        if any(self.env.user.has_group(group)
+               for group in self._dally_price_validation_groups):
+            return
+        raise UserError(
+            _(
+                "Only sourcing management or finance can validate a commercial "
+                "price. Judging whether a price covers its cost requires seeing the "
+                "cost, which is restricted."
+            )
+        )
+
+    def action_validate_price(self):
+        """Record that a human decided this price."""
+        self._dally_check_price_validation_rights()
+        for proposal in self:
+            if proposal.total_amount <= 0:
+                raise UserError(
+                    _(
+                        "Proposal %s has no amount to validate. Set a unit price "
+                        "first.",
+                        proposal.reference,
+                    )
+                )
+            proposal.write({
+                "price_validated": True,
+                "price_validated_by_id": self.env.user.id,
+                "price_validated_on": fields.Datetime.now(),
+            })
+            proposal.message_post(
+                body=_(
+                    "Price validated: %(amount)s %(currency)s.",
+                    amount=proposal.total_amount,
+                    currency=proposal.currency_id.name,
+                )
+            )
+        return True
+
+    def action_revoke_price_validation(self):
+        """Withdraw the validation, so an edited price must be re-approved."""
+        self._dally_check_price_validation_rights()
+        for proposal in self:
+            proposal.write({
+                "price_validated": False,
+                "price_validated_by_id": False,
+                "price_validated_on": False,
+            })
+            proposal.message_post(body=_("Price validation withdrawn."))
+        return True
 
     def action_send(self):
         """Record that the proposal was sent.

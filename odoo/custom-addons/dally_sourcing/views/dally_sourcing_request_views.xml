@@ -216,6 +216,10 @@
                                 <group string="Product">
                                     <field name="product_reference"/>
                                     <field name="product_url" widget="url"/>
+                                    <!-- Required before a purchase or sales order can
+                                         be raised: an order line needs a real
+                                         product. Empty on intake. -->
+                                    <field name="product_id"/>
                                 </group>
                                 <group string="Quantity and Budget">
                                     <field name="quantity"/>

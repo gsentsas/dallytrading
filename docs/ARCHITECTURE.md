@@ -196,7 +196,8 @@ frais de service, conditions). Les deux pouvaient tenir dans un modèle avec un 
 
 **Décision.** Deux modèles distincts : `dally.sourcing.offer` et
 `dally.sourcing.proposal`, reliés par un unique pont
-(`_dally_draft_from_offer`) qui ne fait traverser qu'un prix de vente dérivé.
+(`_dally_draft_from_offer`) qui ne fait traverser que le `cost_basis`, lui-même
+restreint par `groups=`. Voir ADR-012 : aucun prix de vente n'est dérivé.
 
 **Motif.** Un modèle unique avec filtre laisse « montrer l'offre au client » à un bug
 près. Avec deux modèles, l'offre n'a aucun endpoint public, n'apparaît dans aucun DTO,
@@ -224,6 +225,63 @@ pour cela.
 
 **Conséquences.** Trois clés à gérer plutôt qu'une, et une fuite de clé reste bornée à
 ses propres capacités.
+
+### ADR-012 — Aucune marge par défaut dans le code
+
+**Contexte.** La proposition rédigée depuis une offre appliquait
+`DEFAULT_MARGIN_RATE = 0.15`, présentée comme un simple point de départ garantissant
+qu'un brouillon ne passe jamais sous le coût.
+
+**Décision.** Constante supprimée. Le brouillon part avec `selling_unit_price = 0` et
+un `cost_basis` visible. Le passage à `ready` puis `sent` exige un drapeau
+`price_validated` posé par `action_validate_price()`, réservé au manager sourcing, à la
+finance et à la direction. Toute modification du prix, de la quantité, du fret, des
+frais, de la taxe ou de la devise retire la validation.
+
+**Motif.** Un taux d'uplift codé en dur est un prix que l'entreprise annonce sans que
+personne ne l'ait choisi. « Point de départ » suppose que quelqu'un le revoie ; rien ne
+l'imposait, et un brouillon pouvait partir tel quel. Le garde-fou réel n'est pas une
+valeur préremplie mais l'impossibilité d'envoyer un prix non validé. La restriction aux
+groupes qui voient le coût est structurelle : juger si un prix couvre un coût suppose
+de voir le coût.
+
+**Pourquoi la restriction est en Python et non un `groups=` de champ.** Un groupe de
+champ aurait rendu `price_validated` illisible par l'utilisateur sourcing — or c'est
+précisément lui qui doit comprendre pourquoi sa proposition ne part pas — et aurait
+cassé le retrait automatique de la validation, qui écrit ce champ au nom d'un
+utilisateur qui n'a pas le droit de valider. Le champ reste lisible ; l'action est
+gardée. `cost_basis` et `margin` gardent leur `groups=` : eux sont confidentiels, pas
+cette information de workflow.
+
+**Conséquences.** Une étape de plus dans le circuit, assumée. Une politique de marge
+par défaut reste possible plus tard, mais en configuration — administrable, documentée,
+éventuellement dépendante du type d'opération — jamais en constante de module. Un test
+assure l'absence de l'attribut sur le module, pour que la réintroduire échoue.
+
+### ADR-013 — Conversions commerciales : une ligne réelle, ou aucun document
+
+**Contexte.** `action_create_purchase_order()` et `action_create_sale_order()` créaient
+l'en-tête sans `order_line`. La limite était documentée comme volontaire : chiffrer
+supposait des choix d'opérateur.
+
+**Décision.** Les deux actions créent la commande **avec sa ligne, en un seul appel**,
+ou refusent avec un `UserError` énumérant ce qui manque. Un champ `product_id` est
+ajouté sur `dally.sourcing.request` ; son absence bloque la conversion.
+
+**Motif.** Une commande sans ligne peut être confirmée et apparaît dans le reporting
+alors que plus personne ne sait ce qui devait être acheté ; une ligne de vente à prix
+nul peut en outre être facturée, et le client reçoit une facture pour rien. Un document
+vide n'est pas une absence de décision : c'est une décision fausse déjà enregistrée. Un
+refus explicite est visible ; une commande vide ne l'est pas.
+
+**Motif du `product_id` plutôt qu'un produit créé à la volée.** Une ligne de commande
+Odoo exige un `product_id`, et une demande de sourcing décrit un besoin, pas une
+référence de catalogue. Créer le produit automatiquement remplirait le catalogue de
+quasi-doublons que personne n'a arbitrés, et cette dette ne se rembourse pas.
+
+**Conséquences.** Une demande doit être rattachée au catalogue avant conversion. Les
+deux actions restent idempotentes. L'unité de mesure de la ligne est omise
+volontairement : Odoo la dérive du produit, qui en est la source de vérité.
 
 ---
 

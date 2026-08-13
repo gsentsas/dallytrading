@@ -187,6 +187,44 @@ répertoires gérés par Plesk (`logs/`, `httpdocs/`, `error_docs/`). Un dépôt
 exposerait des secrets à un `git add -A` malencontreux. La séparation rend l'accident
 impossible plutôt que simplement improbable.
 
+### ADR-010 — Offre fournisseur et proposition client : deux modèles
+
+**Contexte.** Une demande de sourcing produit des offres fournisseurs (coût unitaire,
+transport, assurance, douane, scores) puis une proposition au client (prix de vente,
+frais de service, conditions). Les deux pouvaient tenir dans un modèle avec un drapeau
+« visible client ».
+
+**Décision.** Deux modèles distincts : `dally.sourcing.offer` et
+`dally.sourcing.proposal`, reliés par un unique pont
+(`_dally_draft_from_offer`) qui ne fait traverser qu'un prix de vente dérivé.
+
+**Motif.** Un modèle unique avec filtre laisse « montrer l'offre au client » à un bug
+près. Avec deux modèles, l'offre n'a aucun endpoint public, n'apparaît dans aucun DTO,
+et son ACL exclut entièrement les groupes commercial et lecture seule. Divulguer un prix
+d'achat exigerait d'écrire un endpoint exprès.
+
+**Conséquences.** Un utilisateur commercial peut présenter une proposition sans
+apprendre ce qu'elle a coûté : `cost_basis` et `margin` portent `groups=` et sont
+retirés par l'ORM hors manager sourcing et finance.
+
+### ADR-011 — Un utilisateur d'API par capacité
+
+**Contexte.** Trois endpoints publics écrivent dans Odoo : leads, devis, sourcing. Un
+seul utilisateur d'intégration aurait suffi techniquement.
+
+**Décision.** Un utilisateur par capacité — `user_dally_api_integration` (leads et
+devis), `user_dally_api_tracking`, `user_dally_api_sourcing` — chacun dans le groupe
+minimal dont ses endpoints ont besoin.
+
+**Motif.** L'utilisateur des leads porte `group_dally_commercial`, qui implique
+`group_dally_readonly`, précisément le groupe qui garde `internal_notes`. Le réutiliser
+pour le sourcing rendrait les notes internes chargeables par l'ORM, laissant la liste
+blanche du contrôleur comme seule protection. Le champ `dally.api.key.user_id` existe
+pour cela.
+
+**Conséquences.** Trois clés à gérer plutôt qu'une, et une fuite de clé reste bornée à
+ses propres capacités.
+
 ---
 
 ## 3. Vue d'ensemble
@@ -290,6 +328,6 @@ second ERP : il ne conserve que sa session utilisateur et un cache de présentat
 | 7 | `dally_freight`, `dally_tracking`, page `/tracking`, critères §90 | ⏳ |
 | 8 | Sauvegardes planifiées, exercice de restauration, supervision, critères §91 | ⏳ |
 | 9 | Espace client `/mon-compte` | ⏳ |
-| 10 | `dally_sourcing`, `dally_trade` | ⏳ |
+| 10 | `dally_sourcing` ✅ · `dally_trade` ⏳ | 🔄 |
 | 11 | Boutique, CI/CD, staging | ⏳ |
 | 12 | Documentation complète et runbooks | ⏳ |

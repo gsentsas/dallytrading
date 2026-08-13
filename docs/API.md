@@ -237,6 +237,37 @@ technique ; le détail part dans les journaux serveur avec le `requestId`.
 
 ---
 
+## 4 bis. `POST /api/v1/sourcing/requests` — demandes de sourcing
+
+Scope **`sourcing:write`** — celui qui existait déjà. Pas de `sourcing:create` : la
+convention du projet est `<domaine>:write`, et une seconde orthographe pour le même
+domaine mènerait à accorder le mauvais scope à une clé.
+
+Crée une `dally.sourcing.request` et **rien d'autre** : ni contact, ni opportunité CRM,
+ni bon de commande, ni expédition.
+
+Charge utile imbriquée (`customer`, `product`, `utm`), détaillée dans
+[`SOURCING.md`](SOURCING.md) § 8. La réponse ne contient que la référence, le service et
+le statut.
+
+### Ce qui ne peut structurellement pas sortir
+
+Les offres fournisseurs, les coûts rendus, les scores et les marges vivent sur des
+modèles auxquels l'utilisateur d'API sourcing **n'a aucun accès** — pas un filtre, une
+absence d'ACL. Un troisième utilisateur d'intégration dédié
+(`user_dally_api_sourcing`), membre d'aucun groupe métier, garantit que l'ORM retire
+`internal_notes`, `cost_basis` et `margin` avant tout code de contrôleur.
+
+Une record rule le limite en outre à ses **propres** enregistrements
+(`create_uid = user.id`) : une faille dans le contrôleur ne pourrait pas atteindre une
+demande saisie par le personnel.
+
+### Pas d'endpoint de lecture
+
+`GET /api/v1/sourcing/requests/<reference>` n'est volontairement pas implémenté : sans
+portail client, rien ne le consomme, et une surface de lecture publique sans
+consommateur est de la surface d'attaque pour rien.
+
 ## 5. `POST /api/v1/leads` — endpoint Odoo privé
 
 ### Authentification
@@ -440,7 +471,6 @@ interdirait. Il est protégé par `groups=` au niveau de l'ORM.
 | `POST /api/v1/quotes` | 6 | `quotes:write` |
 | `GET /api/v1/tracking/{reference}` | 7 | `tracking:read` |
 | `GET /api/v1/shipments` | 7 | `shipments:read` |
-| `POST /api/v1/sourcing` | 10 | `sourcing:write` |
 | `POST /api/v1/trading` | 10 | `trading:write` |
 | `GET /api/v1/customers/me` | 9 | `customers:read` |
 

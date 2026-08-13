@@ -32,13 +32,17 @@ Endpoints
 * ``POST /api/v1/quotes`` — quote requests; creates a qualifiable
   ``dally.quote.request`` and a CRM opportunity, and deliberately no
   ``sale.order``, ``res.partner`` or ``dally.shipment``
+* ``POST /api/v1/sourcing/requests`` — sourcing requests; creates a qualifiable
+  ``dally.sourcing.request`` and deliberately nothing else. Supplier offers, costs,
+  scores and margins live on models the sourcing API user cannot reach at all
 * ``POST /api/v1/leads`` — simple contact requests
 * ``GET  /api/v1/tracking/<reference>`` — public shipment tracking, requiring a
   reference *and* an unpredictable token
 * ``GET  /api/v1/health`` — authenticated health probe for monitoring
 
-Planned in later phases: ``/api/v1/sourcing``, ``/api/v1/trading``,
-``/api/v1/shipments``, ``/api/v1/customers``.
+Planned in later phases: ``/api/v1/trading``, ``/api/v1/shipments``,
+``/api/v1/customers``, and a read endpoint for sourcing once a client portal exists —
+a public read surface with no consumer is attack surface for nothing.
 """,
     "author": "DallyTrading",
     "website": "https://dallytrading.com",

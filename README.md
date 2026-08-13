@@ -67,7 +67,8 @@ platform/
 │   └── custom-addons/                  Modules DallyTrading
 ├── apps/web/                            Next.js
 │   ├── src/app/                         /, /a-propos, /activites, /devis,
-│   │                                    /tracking, /contact, sitemap, robots
+│   │                                    /sourcing, /tracking, /contact,
+│   │                                    sitemap, robots
 │   ├── src/components/                  brand (logo), layout, ui, seo
 │   ├── src/config/                      site (coordonnées), activities (contenu)
 │   ├── src/features/                    quote, contact, tracking
@@ -196,7 +197,7 @@ Le core Odoo n'est **jamais** modifié. Tout vit dans `odoo/custom-addons/` :
 | `dally_crm` | ✅ `dally.quote.request` qualifiable, extension `crm.lead`, anti-doublon, lien `sale.order` |
 | `dally_freight` | ✅ `dally.shipment` + lignes de colis : maritime, aérien, routier, véhicules, groupage, CBM, conteneurs, **poids taxable** |
 | `dally_tracking` | ✅ `dally.shipment.event`, timeline publique, frontière de confidentialité à trois couches |
-| `dally_sourcing` | `dally.sourcing.request` et son workflow |
+| `dally_sourcing` | ✅ Demande, fournisseurs candidats, offres internes, propositions client ; workflow 16 états, conversions achat et vente |
 | `dally_trade` | `dally.trade.opportunity` |
 | `dally_agrobusiness` | Socle extensible, minimal au MVP |
 | `dally_api` | ✅ Points d'accès REST versionnés `/api/v1/*` |
@@ -241,6 +242,7 @@ exercice de restauration : [`docs/RESTORE.md`](docs/RESTORE.md).
 | [`docs/BACKUPS.md`](docs/BACKUPS.md) | Stratégie de sauvegarde | ✅ |
 | [`docs/RESTORE.md`](docs/RESTORE.md) | Exercice de restauration | ✅ |
 | [`docs/API.md`](docs/API.md) | Contrat d'API, OdooGateway, tracking public | ✅ |
+| [`docs/SOURCING.md`](docs/SOURCING.md) | Sous-système sourcing : modèles, workflow, confidentialité | ✅ |
 | `docs/ODOO.md` | Exploitation Odoo au quotidien | Phase 3 |
 | `docs/SECURITY.md` | Politique de sécurité applicative | Phase 8 |
 | `docs/OPERATIONS.md` | Runbooks d'exploitation | Phase 12 |

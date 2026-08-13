@@ -22,6 +22,8 @@ import type {
   QuoteInput,
   QuoteRef,
   ServiceType,
+  SourcingRequestInput,
+  SourcingRequestRef,
 } from './types';
 
 export interface OdooGateway {
@@ -53,6 +55,20 @@ export interface OdooGateway {
     idempotencyKey: string,
     correlationId: string,
   ): Promise<LeadRef>;
+
+  /**
+   * Create a sourcing request from a public submission.
+   *
+   * Produces a qualifiable request and nothing else — no contact, no CRM
+   * opportunity, no supplier, no purchase order. Those follow human qualification.
+   *
+   * Must be idempotent on `idempotencyKey`, like the other create methods.
+   */
+  createSourcingRequest(
+    input: SourcingRequestInput,
+    idempotencyKey: string,
+    correlationId: string,
+  ): Promise<SourcingRequestRef>;
 
   /**
    * Look up a shipment by reference **and** tracking token.

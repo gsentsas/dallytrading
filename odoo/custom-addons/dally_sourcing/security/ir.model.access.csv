@@ -1,0 +1,17 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_sourcing_request_readonly,dally.sourcing.request read-only,model_dally_sourcing_request,dally_core.group_dally_readonly,1,0,0,0
+access_sourcing_request_commercial,dally.sourcing.request commercial,model_dally_sourcing_request,dally_core.group_dally_commercial,1,0,0,0
+access_sourcing_request_user,dally.sourcing.request sourcing user,model_dally_sourcing_request,dally_core.group_dally_sourcing,1,1,1,0
+access_sourcing_request_manager,dally.sourcing.request sourcing manager,model_dally_sourcing_request,dally_sourcing.group_dally_sourcing_manager,1,1,1,0
+access_sourcing_request_dally_manager,dally.sourcing.request manager,model_dally_sourcing_request,dally_core.group_dally_manager,1,1,1,1
+access_sourcing_request_api,dally.sourcing.request API,model_dally_sourcing_request,dally_sourcing.group_dally_sourcing_api,1,0,1,0
+access_sourcing_supplier_user,dally.sourcing.supplier sourcing user,model_dally_sourcing_supplier,dally_core.group_dally_sourcing,1,1,1,1
+access_sourcing_supplier_manager,dally.sourcing.supplier manager,model_dally_sourcing_supplier,dally_core.group_dally_manager,1,1,1,1
+access_sourcing_offer_user,dally.sourcing.offer sourcing user,model_dally_sourcing_offer,dally_core.group_dally_sourcing,1,1,1,1
+access_sourcing_offer_finance,dally.sourcing.offer finance,model_dally_sourcing_offer,dally_core.group_dally_finance,1,0,0,0
+access_sourcing_offer_manager,dally.sourcing.offer manager,model_dally_sourcing_offer,dally_core.group_dally_manager,1,1,1,1
+access_sourcing_proposal_readonly,dally.sourcing.proposal read-only,model_dally_sourcing_proposal,dally_core.group_dally_readonly,1,0,0,0
+access_sourcing_proposal_commercial,dally.sourcing.proposal commercial,model_dally_sourcing_proposal,dally_core.group_dally_commercial,1,0,0,0
+access_sourcing_proposal_user,dally.sourcing.proposal sourcing user,model_dally_sourcing_proposal,dally_core.group_dally_sourcing,1,1,1,0
+access_sourcing_proposal_manager,dally.sourcing.proposal sourcing manager,model_dally_sourcing_proposal,dally_sourcing.group_dally_sourcing_manager,1,1,1,1
+access_sourcing_proposal_dally_manager,dally.sourcing.proposal manager,model_dally_sourcing_proposal,dally_core.group_dally_manager,1,1,1,1

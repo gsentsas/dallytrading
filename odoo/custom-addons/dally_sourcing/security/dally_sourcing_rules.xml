@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Multi-company isolation on all four models, mirroring the rules already in
+            place on shipments and quote requests. Global, so it applies to every user
+            including groups created later.
+        -->
+        <record id="sourcing_request_rule_company" model="ir.rule">
+            <field name="name">Sourcing request: own company only</field>
+            <field name="model_id" ref="model_dally_sourcing_request"/>
+            <field name="domain_force">
+                ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]
+            </field>
+            <field name="global" eval="True"/>
+        </record>
+
+        <record id="sourcing_supplier_rule_company" model="ir.rule">
+            <field name="name">Sourcing supplier: own company only</field>
+            <field name="model_id" ref="model_dally_sourcing_supplier"/>
+            <field name="domain_force">
+                ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]
+            </field>
+            <field name="global" eval="True"/>
+        </record>
+
+        <record id="sourcing_offer_rule_company" model="ir.rule">
+            <field name="name">Sourcing offer: own company only</field>
+            <field name="model_id" ref="model_dally_sourcing_offer"/>
+            <field name="domain_force">
+                ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]
+            </field>
+            <field name="global" eval="True"/>
+        </record>
+
+        <record id="sourcing_proposal_rule_company" model="ir.rule">
+            <field name="name">Sourcing proposal: own company only</field>
+            <field name="model_id" ref="model_dally_sourcing_proposal"/>
+            <field name="domain_force">
+                ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]
+            </field>
+            <field name="global" eval="True"/>
+        </record>
+
+        <!--
+            The API user may only read what it created.
+
+            The create endpoint needs to re-read its own record for the idempotency
+            check, and nothing else. Without this rule the API user could read every
+            sourcing request in the database, including those entered by staff with
+            richer internal content. With it, a flaw in the controller still cannot
+            reach another request.
+
+            Not a global rule: it applies to the API group alone, so staff are
+            unaffected.
+        -->
+        <record id="sourcing_request_rule_api_own_records" model="ir.rule">
+            <field name="name">Sourcing request: API sees only its own records</field>
+            <field name="model_id" ref="model_dally_sourcing_request"/>
+            <field name="groups" eval="[(4, ref('group_dally_sourcing_api'))]"/>
+            <field name="domain_force">[('create_uid', '=', user.id)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

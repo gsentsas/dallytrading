@@ -19,6 +19,8 @@ import {
   type QuoteInput,
   type QuoteRef,
   type ServiceType,
+  type SourcingRequestInput,
+  type SourcingRequestRef,
 } from './types';
 
 /** Envelope every dally_api endpoint returns. */
@@ -258,6 +260,71 @@ export class DallyApiAdapter implements OdooGateway {
 
     const data = await this.call<LeadResponse>(
       '/api/v1/leads',
+      { method: 'POST', body: payload },
+      correlationId,
+    );
+
+    return {
+      reference: data.reference,
+      serviceCode: data.service,
+      status: 'received',
+    };
+  }
+
+  async createSourcingRequest(
+    input: SourcingRequestInput,
+    idempotencyKey: string,
+    correlationId: string,
+  ): Promise<SourcingRequestRef> {
+    // Nested to match the API contract, and camelCase to snake_case happens here,
+    // once. Nothing outside this adapter knows the wire format.
+    const payload: Record<string, unknown> = {
+      request_uuid: idempotencyKey,
+      service_code: input.serviceCode ?? 'sourcing',
+      customer: {
+        first_name: input.customer.firstName ?? '',
+        last_name: input.customer.lastName,
+        company: input.customer.company ?? '',
+        email: input.customer.email ?? '',
+        phone: input.customer.phone ?? '',
+        whatsapp: input.customer.whatsapp ?? '',
+      },
+      product: {
+        name: input.product.name,
+        description: input.product.description ?? '',
+        specifications: input.product.specifications ?? '',
+        reference: input.product.reference ?? '',
+        url: input.product.url ?? '',
+      },
+      quantity: input.quantity,
+      uom: input.uom ?? '',
+      currency: input.currency ?? '',
+      preferred_origin_country: input.preferredOriginCountry ?? '',
+      destination_country: input.destinationCountry ?? '',
+      requested_deadline: input.requestedDeadline ?? '',
+      required_delivery_date: input.requiredDeliveryDate ?? '',
+      notes: input.notes ?? '',
+      source_url: input.sourceUrl ?? '',
+      referrer_url: input.referrerUrl ?? '',
+    };
+
+    // Numbers are omitted rather than sent as 0 when absent: a zero budget is a
+    // statement, an absent one is "not decided yet", and a salesperson needs to tell
+    // them apart.
+    if (input.budget !== undefined) payload.budget = input.budget;
+    if (input.targetUnitPrice !== undefined) {
+      payload.target_unit_price = input.targetUnitPrice;
+    }
+    if (input.utm) {
+      payload.utm = {
+        source: input.utm.source ?? '',
+        medium: input.utm.medium ?? '',
+        campaign: input.utm.campaign ?? '',
+      };
+    }
+
+    const data = await this.call<LeadResponse>(
+      '/api/v1/sourcing/requests',
       { method: 'POST', body: payload },
       correlationId,
     );

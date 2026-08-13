@@ -150,6 +150,59 @@ export interface QuoteRef {
   readonly status: 'received';
 }
 
+/**
+ * A sourcing request submitted from the public site.
+ *
+ * Nested to match the API contract, which groups customer and product because they
+ * are filled on different steps of the form and travel together.
+ *
+ * Note what is absent: nothing about suppliers, offers, costs or margins. Those exist
+ * only inside Odoo, on models the sourcing API user cannot reach.
+ */
+export interface SourcingRequestInput {
+  readonly serviceCode?: string;
+  readonly customer: {
+    readonly firstName?: string;
+    readonly lastName: string;
+    readonly company?: string;
+    readonly email?: string;
+    readonly phone?: string;
+    readonly whatsapp?: string;
+  };
+  readonly product: {
+    readonly name: string;
+    readonly description?: string;
+    readonly specifications?: string;
+    readonly reference?: string;
+    readonly url?: string;
+  };
+  readonly quantity: number;
+  readonly uom?: string;
+  readonly budget?: number;
+  readonly targetUnitPrice?: number;
+  readonly currency?: string;
+  readonly preferredOriginCountry?: string;
+  readonly destinationCountry?: string;
+  readonly requestedDeadline?: string;
+  readonly requiredDeliveryDate?: string;
+  readonly notes?: string;
+  readonly sourceUrl?: string;
+  readonly referrerUrl?: string;
+  readonly utm?: {
+    readonly source?: string;
+    readonly medium?: string;
+    readonly campaign?: string;
+  };
+}
+
+/** What the customer is shown after submitting a sourcing request. */
+export interface SourcingRequestRef {
+  /** Business reference, e.g. DT-SRC-2026-000124. */
+  readonly reference: string;
+  readonly serviceCode: string | null;
+  readonly status: 'received';
+}
+
 /** Stable error codes the UI can branch on without parsing messages. */
 export type OdooErrorCode =
   | 'unauthorized'

@@ -51,6 +51,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
+      // A conversion page with its own form and FAQ, ranked alongside /devis rather
+      // than under the activity that describes the service.
+      url: absoluteUrl('/sourcing'),
+      lastModified,
+      changeFrequency: 'monthly',
+      priority: 0.9,
+    },
+    {
       url: absoluteUrl('/a-propos'),
       lastModified,
       changeFrequency: 'yearly',

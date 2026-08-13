@@ -1,0 +1,525 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ─── List ──────────────────────────────────────────────────── -->
+    <record id="sourcing_request_view_list" model="ir.ui.view">
+        <field name="name">dally.sourcing.request.list</field>
+        <field name="model">dally.sourcing.request</field>
+        <field name="arch" type="xml">
+            <list string="Sourcing Requests" sample="1"
+                  decoration-danger="is_overdue"
+                  decoration-muted="state in ('cancelled', 'rejected')"
+                  decoration-success="state == 'completed'">
+                <field name="create_date" string="Received"/>
+                <field name="reference"/>
+                <field name="customer_id" optional="show"/>
+                <field name="company_name" optional="hide"/>
+                <field name="product_name"/>
+                <field name="quantity" optional="show"/>
+                <field name="uom_id" optional="hide"/>
+                <field name="target_total_budget" optional="show"
+                       sum="Total budget"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="preferred_origin_country_id" optional="show"/>
+                <field name="destination_country_id" optional="hide"/>
+                <field name="responsible_id" widget="many2one_avatar_user"/>
+                <field name="requested_deadline" optional="show"/>
+                <field name="state" widget="badge"
+                       decoration-success="state in ('accepted', 'completed')"
+                       decoration-info="state in ('researching', 'comparing', 'proposal_sent')"
+                       decoration-warning="state == 'on_hold'"
+                       decoration-danger="state in ('rejected', 'cancelled')"/>
+                <field name="is_overdue" column_invisible="True"/>
+                <field name="offer_count" optional="hide"/>
+                <field name="company_id" groups="base.group_multi_company"
+                       optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ─── Kanban, by state ──────────────────────────────────────── -->
+    <record id="sourcing_request_view_kanban" model="ir.ui.view">
+        <field name="name">dally.sourcing.request.kanban</field>
+        <field name="model">dally.sourcing.request</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state" sample="1" quick_create="false">
+                <field name="state"/>
+                <field name="is_overdue"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="oe_kanban_details">
+                            <strong><field name="reference"/></strong>
+                            <div class="mt-1"><field name="product_name"/></div>
+                            <div class="text-muted">
+                                <field name="quantity"/>
+                                <field name="uom_id"/>
+                            </div>
+                            <div t-if="record.customer_id.raw_value" class="text-muted">
+                                <field name="customer_id"/>
+                            </div>
+                            <div class="mt-1">
+                                <field name="target_total_budget"
+                                       widget="monetary"
+                                       options="{'currency_field': 'currency_id'}"/>
+                                <span t-if="record.is_overdue.raw_value"
+                                      class="badge text-bg-danger">Overdue</span>
+                            </div>
+                            <field name="responsible_id" widget="many2one_avatar_user"/>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- ─── Form ──────────────────────────────────────────────────── -->
+    <record id="sourcing_request_view_form" model="ir.ui.view">
+        <field name="name">dally.sourcing.request.form</field>
+        <field name="model">dally.sourcing.request</field>
+        <field name="arch" type="xml">
+            <form string="Sourcing Request">
+                <header>
+                    <!-- Only the milestones an operator moves between by hand.
+                         Sixteen states on a status bar would be unreadable. -->
+                    <button name="action_qualify" type="object" string="Qualify"
+                            class="btn-primary" invisible="state != 'new'"/>
+                    <button name="action_start_research" type="object"
+                            string="Start Research" class="btn-primary"
+                            invisible="state != 'to_qualify'"/>
+                    <button name="action_mark_suppliers_identified" type="object"
+                            string="Suppliers Identified" class="btn-primary"
+                            invisible="state != 'researching'"/>
+                    <button name="action_mark_offers_received" type="object"
+                            string="Offers Received" class="btn-primary"
+                            invisible="state != 'suppliers_identified'"/>
+                    <button name="action_start_comparison" type="object"
+                            string="Compare" class="btn-primary"
+                            invisible="state != 'offers_received'"/>
+                    <button name="action_prepare_proposal" type="object"
+                            string="Prepare Proposal" class="btn-primary"
+                            invisible="state != 'comparing'"/>
+                    <button name="action_send_proposal" type="object"
+                            string="Mark Proposal Sent" class="btn-primary"
+                            invisible="state != 'proposal_ready'"/>
+                    <button name="action_start_negotiation" type="object"
+                            string="Negotiating" class="btn-secondary"
+                            invisible="state != 'proposal_sent'"/>
+                    <button name="action_accept" type="object" string="Accepted"
+                            class="btn-primary"
+                            invisible="state not in ('proposal_sent', 'negotiating')"/>
+                    <button name="action_start_purchasing" type="object"
+                            string="Start Purchasing" class="btn-primary"
+                            invisible="state != 'accepted'"/>
+                    <button name="action_start_execution" type="object"
+                            string="In Progress" class="btn-primary"
+                            invisible="state != 'purchasing'"/>
+                    <button name="action_complete" type="object" string="Complete"
+                            class="btn-primary" invisible="state != 'in_progress'"/>
+
+                    <button name="action_resume" type="object" string="Resume"
+                            class="btn-secondary" invisible="state != 'on_hold'"/>
+                    <button name="action_put_on_hold" type="object"
+                            string="Put on Hold" class="btn-secondary"
+                            invisible="state in ('new', 'on_hold', 'completed', 'rejected', 'cancelled')"/>
+                    <button name="action_reject" type="object" string="Reject"
+                            class="btn-secondary"
+                            invisible="state in ('completed', 'rejected', 'cancelled')"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            class="btn-secondary"
+                            confirm="Cancel this sourcing request?"
+                            invisible="state in ('completed', 'rejected', 'cancelled')"/>
+                    <button name="action_reopen" type="object" string="Reopen"
+                            class="btn-secondary"
+                            confirm="Reopen this closed request for qualification?"
+                            invisible="state not in ('completed', 'rejected', 'cancelled')"/>
+
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="new,to_qualify,researching,offers_received,proposal_sent,accepted,completed"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Archived"
+                            bg_color="text-bg-danger" invisible="active"/>
+
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_suppliers" type="object"
+                                class="oe_stat_button" icon="fa-industry"
+                                groups="dally_core.group_dally_sourcing">
+                            <field name="supplier_count" widget="statinfo"
+                                   string="Suppliers"/>
+                        </button>
+                        <button name="action_view_offers" type="object"
+                                class="oe_stat_button" icon="fa-file-text-o"
+                                groups="dally_core.group_dally_sourcing">
+                            <field name="offer_count" widget="statinfo"
+                                   string="Offers"/>
+                        </button>
+                        <button name="action_view_proposals" type="object"
+                                class="oe_stat_button" icon="fa-handshake-o">
+                            <field name="proposal_count" widget="statinfo"
+                                   string="Proposals"/>
+                        </button>
+                        <button name="action_create_crm_opportunity" type="object"
+                                class="oe_stat_button" icon="fa-star"
+                                invisible="crm_lead_id"
+                                groups="dally_core.group_dally_commercial">
+                            <span class="o_stat_text">Create Opportunity</span>
+                        </button>
+                    </div>
+
+                    <div class="oe_title">
+                        <label for="reference"/>
+                        <h1><field name="reference" readonly="1"/></h1>
+                        <h2><field name="product_name" placeholder="What is being sourced"/></h2>
+                    </div>
+
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not is_overdue">
+                        This request is past the date the customer asked for an answer.
+                    </div>
+                    <div class="alert alert-info" role="alert"
+                         invisible="customer_id or state in ('rejected', 'cancelled')">
+                        No contact is linked. Nothing was created automatically —
+                        use <strong>Create Contact</strong> during qualification.
+                        <button name="action_create_customer" type="object"
+                                string="Create Contact" class="btn-link"/>
+                    </div>
+
+                    <group>
+                        <group string="Customer">
+                            <field name="customer_id"
+                                   options="{'no_create_edit': True}"/>
+                            <field name="contact_name"/>
+                            <field name="company_name"/>
+                            <field name="contact_email" widget="email"/>
+                            <field name="contact_phone" widget="phone"/>
+                            <field name="contact_whatsapp" widget="phone"/>
+                            <field name="crm_lead_id" readonly="1"
+                                   invisible="not crm_lead_id"/>
+                        </group>
+                        <group string="Assignment">
+                            <field name="responsible_id"
+                                   widget="many2one_avatar_user"/>
+                            <field name="team_id"/>
+                            <field name="service_id"
+                                   options="{'no_create': True}"/>
+                            <field name="source"/>
+                            <field name="active" invisible="1"/>
+                            <field name="is_overdue" invisible="1"/>
+                            <field name="company_id"
+                                   groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Requirement" name="requirement">
+                            <group>
+                                <group string="Product">
+                                    <field name="product_reference"/>
+                                    <field name="product_url" widget="url"/>
+                                </group>
+                                <group string="Quantity and Budget">
+                                    <field name="quantity"/>
+                                    <field name="uom_id"
+                                           options="{'no_create': True}"/>
+                                    <field name="currency_id"
+                                           options="{'no_create': True}"/>
+                                    <field name="target_unit_price"/>
+                                    <field name="target_total_budget"/>
+                                </group>
+                            </group>
+                            <group>
+                                <group string="Route">
+                                    <field name="preferred_origin_country_id"
+                                           options="{'no_create': True}"/>
+                                    <field name="destination_country_id"
+                                           options="{'no_create': True}"/>
+                                </group>
+                                <group string="Dates">
+                                    <field name="requested_deadline"/>
+                                    <field name="required_delivery_date"/>
+                                </group>
+                            </group>
+                            <group string="Description">
+                                <field name="product_description" nolabel="1"/>
+                            </group>
+                            <group string="Specifications">
+                                <field name="specifications" nolabel="1"/>
+                            </group>
+                            <group string="Customer Notes">
+                                <div class="text-muted" colspan="2">
+                                    The customer's own words, as submitted. Not edited
+                                    during qualification.
+                                </div>
+                                <field name="customer_notes" nolabel="1" colspan="2"/>
+                            </group>
+                        </page>
+
+                        <page string="Suppliers and Offers" name="sourcing"
+                              groups="dally_core.group_dally_sourcing">
+                            <div class="alert alert-danger" role="alert">
+                                <strong>Internal.</strong> Candidate suppliers, prices
+                                and scores below are never exposed to the customer and
+                                appear in no public payload. What the customer receives
+                                is a <strong>proposal</strong>.
+                            </div>
+
+                            <separator string="Candidate Suppliers"/>
+                            <field name="supplier_ids"
+                                   context="{'default_request_id': id}">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="partner_id"/>
+                                    <field name="country_id"/>
+                                    <field name="status"/>
+                                    <field name="verified" widget="boolean_toggle"/>
+                                    <field name="minimum_order_quantity"/>
+                                    <field name="lead_time_days"/>
+                                    <field name="offer_count"/>
+                                </list>
+                            </field>
+
+                            <separator string="Supplier Offers"/>
+                            <field name="offer_ids"
+                                   context="{'default_request_id': id}">
+                                <list decoration-success="selected"
+                                      decoration-muted="is_expired">
+                                    <field name="partner_id"/>
+                                    <field name="currency_id"/>
+                                    <field name="quantity"/>
+                                    <field name="unit_price"/>
+                                    <field name="total_landed_cost"/>
+                                    <field name="landed_unit_cost"/>
+                                    <field name="lead_time_days"/>
+                                    <field name="incoterm_id" optional="show"/>
+                                    <field name="validity_date"/>
+                                    <field name="overall_score"/>
+                                    <field name="selected" widget="boolean_toggle"/>
+                                    <field name="is_expired" column_invisible="True"/>
+                                </list>
+                            </field>
+
+                            <group>
+                                <group>
+                                    <field name="selected_offer_id" readonly="1"
+                                           invisible="not selected_offer_id"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <page string="Proposals" name="proposals">
+                            <field name="proposal_ids"
+                                   context="{'default_request_id': id}">
+                                <list decoration-success="state == 'accepted'"
+                                      decoration-muted="state in ('rejected', 'cancelled', 'expired')">
+                                    <field name="reference"/>
+                                    <field name="product_name"/>
+                                    <field name="quantity"/>
+                                    <field name="currency_id"/>
+                                    <field name="selling_unit_price"/>
+                                    <field name="total_amount"/>
+                                    <field name="validity_date"/>
+                                    <field name="state" widget="badge"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <page string="Conversion" name="conversion"
+                              groups="dally_core.group_dally_sourcing">
+                            <group>
+                                <group string="Purchase">
+                                    <field name="purchase_order_count" readonly="1"/>
+                                    <button name="action_create_purchase_order"
+                                            type="object"
+                                            string="Create Purchase Order"
+                                            class="btn-primary"
+                                            invisible="state not in ('accepted', 'purchasing')"/>
+                                </group>
+                                <group string="Sale">
+                                    <field name="sale_order_count" readonly="1"/>
+                                    <button name="action_create_sale_order"
+                                            type="object"
+                                            string="Create Sales Order"
+                                            class="btn-primary"
+                                            invisible="state not in ('accepted', 'purchasing', 'in_progress')"/>
+                                </group>
+                            </group>
+                            <field name="purchase_order_ids" readonly="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="partner_id"/>
+                                    <field name="date_order"/>
+                                    <field name="state"/>
+                                </list>
+                            </field>
+                            <field name="sale_order_ids" readonly="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="partner_id"/>
+                                    <field name="date_order"/>
+                                    <field name="state"/>
+                                </list>
+                            </field>
+                            <div class="alert alert-secondary" role="alert">
+                                A shipment is <strong>not</strong> created here.
+                                Freight remains the responsibility of the freight
+                                module, and a shipment is created when the operation
+                                actually becomes logistical.
+                            </div>
+                        </page>
+
+                        <page string="Attribution" name="attribution">
+                            <group>
+                                <group>
+                                    <field name="source_url" widget="url" readonly="1"/>
+                                    <field name="referrer_url" widget="url" readonly="1"/>
+                                </group>
+                                <group>
+                                    <field name="utm_source_id" readonly="1"/>
+                                    <field name="utm_medium_id" readonly="1"/>
+                                    <field name="utm_campaign_id" readonly="1"/>
+                                </group>
+                            </group>
+                            <group string="Technical">
+                                <field name="request_uuid" readonly="1"
+                                       help="Idempotency key. A unique constraint on this
+                                             column prevents a retry from creating a
+                                             second request."/>
+                                <field name="state_changed_on" readonly="1"/>
+                                <field name="state_before_hold" readonly="1"
+                                       invisible="not state_before_hold"/>
+                            </group>
+                        </page>
+
+                        <page string="Internal Notes" name="internal">
+                            <div class="alert alert-danger" role="alert">
+                                <strong>Internal only.</strong> Never returned by any
+                                public endpoint. Removed by the ORM for users outside
+                                the group, including the sourcing API user.
+                            </div>
+                            <field name="internal_notes" nolabel="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ─── Search ────────────────────────────────────────────────── -->
+    <record id="sourcing_request_view_search" model="ir.ui.view">
+        <field name="name">dally.sourcing.request.search</field>
+        <field name="model">dally.sourcing.request</field>
+        <field name="arch" type="xml">
+            <search string="Sourcing Requests">
+                <field name="reference"/>
+                <field name="product_name"/>
+                <field name="customer_id"/>
+                <field name="company_name"/>
+                <field name="contact_email"/>
+                <field name="responsible_id"/>
+                <field name="preferred_origin_country_id"/>
+
+                <filter name="filter_mine" string="My Requests"
+                        domain="[('responsible_id', '=', uid)]"/>
+                <filter name="filter_unassigned" string="Unassigned"
+                        domain="[('responsible_id', '=', False)]"/>
+                <separator/>
+                <filter name="filter_new" string="New"
+                        domain="[('state', '=', 'new')]"/>
+                <filter name="filter_to_qualify" string="To Qualify"
+                        domain="[('state', '=', 'to_qualify')]"/>
+                <filter name="filter_researching" string="Researching"
+                        domain="[('state', 'in', ('researching', 'suppliers_identified'))]"/>
+                <filter name="filter_offers" string="Offers Received"
+                        domain="[('state', 'in', ('offers_received', 'comparing'))]"/>
+                <filter name="filter_proposal_sent" string="Proposal Sent"
+                        domain="[('state', 'in', ('proposal_sent', 'negotiating'))]"/>
+                <filter name="filter_accepted" string="Accepted"
+                        domain="[('state', 'in', ('accepted', 'purchasing', 'in_progress'))]"/>
+                <filter name="filter_completed" string="Completed"
+                        domain="[('state', '=', 'completed')]"/>
+                <separator/>
+                <filter name="filter_active" string="Open"
+                        domain="[('state', 'not in', ('completed', 'rejected', 'cancelled'))]"/>
+                <filter name="filter_overdue" string="Overdue"
+                        domain="[('is_overdue', '=', True)]"/>
+                <filter name="filter_on_hold" string="On Hold"
+                        domain="[('state', '=', 'on_hold')]"/>
+                <separator/>
+                <filter name="filter_archived" string="Archived"
+                        domain="[('active', '=', False)]"/>
+
+                <group expand="0" string="Group By">
+                    <filter name="group_state" string="Status"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_responsible" string="Responsible"
+                            context="{'group_by': 'responsible_id'}"/>
+                    <filter name="group_customer" string="Customer"
+                            context="{'group_by': 'customer_id'}"/>
+                    <filter name="group_origin" string="Preferred Origin"
+                            context="{'group_by': 'preferred_origin_country_id'}"/>
+                    <filter name="group_service" string="Service"
+                            context="{'group_by': 'service_id'}"/>
+                    <filter name="group_created" string="Received"
+                            context="{'group_by': 'create_date:week'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ─── Reporting: native pivot and graph, no custom dashboard ── -->
+    <record id="sourcing_request_view_pivot" model="ir.ui.view">
+        <field name="name">dally.sourcing.request.pivot</field>
+        <field name="model">dally.sourcing.request</field>
+        <field name="arch" type="xml">
+            <pivot string="Sourcing Analysis" sample="1">
+                <field name="state" type="col"/>
+                <field name="preferred_origin_country_id" type="row"/>
+                <field name="target_total_budget" type="measure"/>
+                <field name="quantity" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="sourcing_request_view_graph" model="ir.ui.view">
+        <field name="name">dally.sourcing.request.graph</field>
+        <field name="model">dally.sourcing.request</field>
+        <field name="arch" type="xml">
+            <graph string="Sourcing Requests" type="bar" sample="1">
+                <field name="state"/>
+                <field name="target_total_budget" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <!-- ─── Actions ───────────────────────────────────────────────── -->
+    <record id="sourcing_request_action" model="ir.actions.act_window">
+        <field name="name">Sourcing Requests</field>
+        <field name="res_model">dally.sourcing.request</field>
+        <field name="view_mode">kanban,list,form,pivot,graph</field>
+        <field name="search_view_id" ref="sourcing_request_view_search"/>
+        <field name="context">{'search_default_filter_active': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No sourcing request yet</p>
+            <p>
+                Requests submitted on dallytrading.com/sourcing arrive here with their
+                reference and their attribution. Qualify them, research suppliers,
+                record offers, then compose a proposal — nothing downstream is created
+                automatically.
+            </p>
+        </field>
+    </record>
+
+    <record id="sourcing_request_action_overdue" model="ir.actions.act_window">
+        <field name="name">Overdue Requests</field>
+        <field name="res_model">dally.sourcing.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="sourcing_request_view_search"/>
+        <field name="domain">[('is_overdue', '=', True)]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Nothing is overdue</p>
+            <p>Every open request is within the date the customer asked for.</p>
+        </field>
+    </record>
+
+</odoo>

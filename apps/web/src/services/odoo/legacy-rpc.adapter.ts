@@ -38,6 +38,8 @@ import {
   type QuoteInput,
   type QuoteRef,
   type ServiceType,
+  type SourcingRequestInput,
+  type SourcingRequestRef,
 } from './types';
 
 const NOT_IMPLEMENTED =
@@ -59,6 +61,14 @@ export class LegacyRpcAdapter implements OdooGateway {
     _idempotencyKey: string,
     _correlationId: string,
   ): Promise<QuoteRef> {
+    throw new OdooGatewayError('unavailable', NOT_IMPLEMENTED, 501);
+  }
+
+  async createSourcingRequest(
+    _input: SourcingRequestInput,
+    _idempotencyKey: string,
+    _correlationId: string,
+  ): Promise<SourcingRequestRef> {
     throw new OdooGatewayError('unavailable', NOT_IMPLEMENTED, 501);
   }
 

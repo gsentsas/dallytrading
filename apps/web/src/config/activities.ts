@@ -45,6 +45,16 @@ export interface Activity {
   readonly faq: ReadonlyArray<{ question: string; answer: string }>;
   /** Matching `dally.service.type.code` in Odoo, for the /devis deep link. */
   readonly serviceCode: string;
+  /**
+   * A dedicated request page, when the activity has one.
+   *
+   * Sourcing has `/sourcing`, with its own form and FAQ. Without this, that page and
+   * this activity page would both target "sourcing Sénégal" and compete for it —
+   * keyword cannibalisation, with the two splitting the ranking signal. Pointing the
+   * activity's CTA at the dedicated page makes the roles explicit: the activity page
+   * explains, the dedicated page converts.
+   */
+  readonly requestHref?: string;
   /** Search terms this page legitimately targets (§49). */
   readonly keywords: ReadonlyArray<string>;
   /** Emphasised on the homepage. */
@@ -381,11 +391,11 @@ export const ACTIVITIES: ReadonlyArray<Activity> = [
       },
     ],
     serviceCode: 'sourcing',
+    requestHref: '/sourcing',
     keywords: [
-      'sourcing Sénégal',
       'recherche fournisseur Sénégal',
-      'sourcing international Dakar',
       'trouver fournisseur Chine Sénégal',
+      'recherche fabricant international',
     ],
     featured: true,
   },
@@ -521,5 +531,10 @@ export function activityHref(activity: Activity): string {
  * loses the pre-selection rather than breaking the page.
  */
 export function activityQuoteHref(activity: Activity): string {
+  // A dedicated request page wins: it asks the right questions for that activity, and
+  // pointing here avoids two pages competing for the same search intent.
+  if (activity.requestHref) {
+    return activity.requestHref;
+  }
   return `/devis?service=${encodeURIComponent(activity.serviceCode)}`;
 }

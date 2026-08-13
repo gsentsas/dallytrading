@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Hooks into the shells created by dally_core. Native Sales, Purchase and CRM
+        menus are left untouched.
+    -->
+
+    <menuitem id="menu_dally_sourcing_root"
+              name="Sourcing"
+              parent="dally_core.menu_dally_operations"
+              sequence="40"
+              groups="dally_core.group_dally_readonly"/>
+
+    <menuitem id="menu_dally_sourcing_request"
+              name="Sourcing Requests"
+              parent="menu_dally_sourcing_root"
+              action="sourcing_request_action"
+              sequence="10"
+              groups="dally_core.group_dally_readonly"/>
+
+    <menuitem id="menu_dally_sourcing_supplier"
+              name="Candidate Suppliers"
+              parent="menu_dally_sourcing_root"
+              action="sourcing_supplier_action"
+              sequence="20"
+              groups="dally_core.group_dally_sourcing"/>
+
+    <menuitem id="menu_dally_sourcing_offer"
+              name="Supplier Offers"
+              parent="menu_dally_sourcing_root"
+              action="sourcing_offer_action"
+              sequence="30"
+              groups="dally_core.group_dally_sourcing"/>
+
+    <menuitem id="menu_dally_sourcing_proposal"
+              name="Customer Proposals"
+              parent="menu_dally_sourcing_root"
+              action="sourcing_proposal_action"
+              sequence="40"
+              groups="dally_core.group_dally_readonly"/>
+
+    <menuitem id="menu_dally_sourcing_overdue"
+              name="Overdue Sourcing"
+              parent="dally_core.menu_dally_reporting"
+              action="sourcing_request_action_overdue"
+              sequence="30"
+              groups="dally_core.group_dally_readonly"/>
+
+</odoo>

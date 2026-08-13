@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!--
+            Sourcing Manager.
+
+            The "Sourcing User" role already exists as dally_core.group_dally_sourcing
+            and is reused rather than duplicated. Only the manager tier is new, and it
+            lives here because the distinction is a sourcing concern — adding it to
+            dally_core would mean editing a stable module for a downstream need.
+
+            The manager tier is what gates the money: cost basis, margin and offer
+            selection. A sourcing user researches suppliers and records offers; a
+            manager decides which one DallyTrading buys on and at what price it sells.
+        -->
+        <record id="group_dally_sourcing_manager" model="res.groups">
+            <field name="name">Sourcing Manager</field>
+            <field name="category_id" ref="dally_core.module_category_dallytrading"/>
+            <field name="implied_ids" eval="[(4, ref('dally_core.group_dally_sourcing'))]"/>
+            <field name="comment">Select supplier offers, manage customer proposals and see
+sourcing cost and margin figures.
+
+A Sourcing User can research suppliers and record offers but cannot see the cost basis
+or the margin on a proposal: those fields are removed by the ORM outside this group.</field>
+        </record>
+
+        <!--
+            Dedicated API group and user for the public sourcing endpoint.
+
+            A third integration user, alongside the leads and tracking ones. Reusing
+            an existing one would be simpler and wrong: the leads user holds
+            group_dally_commercial, which implies group_dally_readonly — precisely the
+            group that gates internal_notes. This user is in NO DallyTrading business
+            group, so the ORM strips internal notes, cost fields and margins before any
+            controller code runs.
+
+            dally.api.key.user_id exists so a key can act with the minimum rights its
+            endpoints need. This is the third use of that.
+        -->
+        <record id="group_dally_sourcing_api" model="res.groups">
+            <field name="name">Sourcing API (create only)</field>
+            <field name="category_id" ref="dally_core.module_category_dallytrading"/>
+            <!-- Implies nothing. Any implied group would drag in readonly and defeat
+                 the purpose. -->
+            <field name="comment">Create public sourcing requests through the API.
+
+Grants no access to candidate suppliers, supplier offers, customer proposals, internal
+notes, costs or margins. Reserved for the API integration user — never assign it to a
+person.</field>
+        </record>
+
+        <record id="user_dally_api_sourcing" model="res.users">
+            <field name="name">DallyTrading Sourcing API</field>
+            <field name="login">dally_api_sourcing</field>
+            <field name="active" eval="True"/>
+            <field name="share" eval="False"/>
+            <!-- base.group_user is required to be an internal user at all; the
+                 sourcing API group carries the actual permissions. No password is set,
+                 so this account cannot log into the web interface. -->
+            <field name="groups_id" eval="[(6, 0, [
+                ref('base.group_user'),
+                ref('group_dally_sourcing_api'),
+            ])]"/>
+        </record>
+
+    </data>
+</odoo>

@@ -43,6 +43,8 @@ function fakeGateway(
     listServiceTypes,
     createLead: notUsed as unknown as OdooGateway['createLead'],
     createQuoteRequest: notUsed as unknown as OdooGateway['createQuoteRequest'],
+    createSourcingRequest:
+      notUsed as unknown as OdooGateway['createSourcingRequest'],
     getShipmentByTracking:
       notUsed as unknown as OdooGateway['getShipmentByTracking'],
     healthCheck: notUsed as unknown as OdooGateway['healthCheck'],

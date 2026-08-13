@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Shows which sourcing request an order came out of. One anchor each, on a
+        long-stable native field, rather than several fragile xpaths.
+    -->
+
+    <record id="purchase_order_view_form_sourcing" model="ir.ui.view">
+        <field name="name">purchase.order.form.sourcing</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="dally_sourcing_request_id"
+                       options="{'no_create': True}"
+                       readonly="state not in ('draft', 'sent')"
+                       groups="dally_core.group_dally_sourcing"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="sale_order_view_form_sourcing" model="ir.ui.view">
+        <field name="name">sale.order.form.sourcing</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="dally_sourcing_request_id"
+                       options="{'no_create': True}"
+                       readonly="state != 'draft'"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

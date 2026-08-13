@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="sourcing_supplier_view_list" model="ir.ui.view">
+        <field name="name">dally.sourcing.supplier.list</field>
+        <field name="model">dally.sourcing.supplier</field>
+        <field name="arch" type="xml">
+            <list string="Candidate Suppliers" editable="bottom"
+                  decoration-success="status == 'selected'"
+                  decoration-muted="status == 'rejected'">
+                <field name="sequence" widget="handle"/>
+                <field name="request_id" optional="hide"/>
+                <field name="partner_id"/>
+                <field name="country_id"/>
+                <field name="contact_name" optional="hide"/>
+                <field name="contact_email" optional="hide"/>
+                <field name="status"/>
+                <field name="verified" widget="boolean_toggle"/>
+                <field name="verification_date" optional="hide"/>
+                <field name="minimum_order_quantity"/>
+                <field name="lead_time_days"/>
+                <field name="offer_count"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="sourcing_supplier_view_form" model="ir.ui.view">
+        <field name="name">dally.sourcing.supplier.form</field>
+        <field name="model">dally.sourcing.supplier</field>
+        <field name="arch" type="xml">
+            <form string="Candidate Supplier">
+                <header>
+                    <button name="action_mark_contacted" type="object"
+                            string="Mark Contacted" class="btn-secondary"
+                            invisible="status not in ('identified',)"/>
+                    <button name="action_mark_awaiting_reply" type="object"
+                            string="Awaiting Reply" class="btn-secondary"
+                            invisible="status not in ('contacted',)"/>
+                    <button name="action_mark_verified" type="object"
+                            string="Mark Verified" class="btn-secondary"
+                            invisible="verified"/>
+                    <button name="action_shortlist" type="object"
+                            string="Shortlist" class="btn-primary"
+                            invisible="status in ('shortlisted', 'selected', 'rejected')"/>
+                    <button name="action_reject" type="object" string="Reject"
+                            class="btn-secondary" invisible="status == 'rejected'"/>
+                    <field name="status" widget="statusbar"
+                           statusbar_visible="identified,contacted,offer_received,shortlisted,selected"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_offers" type="object"
+                                class="oe_stat_button" icon="fa-file-text-o">
+                            <field name="offer_count" widget="statinfo" string="Offers"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <label for="partner_id"/>
+                        <h1><field name="partner_id"
+                                   options="{'no_create_edit': True}"/></h1>
+                    </div>
+                    <group>
+                        <group string="Context">
+                            <field name="request_id"
+                                   options="{'no_create': True}"/>
+                            <field name="country_id"
+                                   options="{'no_create': True}"/>
+                            <field name="website" widget="url"/>
+                            <field name="company_id"
+                                   groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Contact for this request">
+                            <div class="text-muted" colspan="2">
+                                A snapshot: the person who quoted on this request. The
+                                partner keeps the current details.
+                            </div>
+                            <field name="contact_name"/>
+                            <field name="contact_email" widget="email"/>
+                            <field name="contact_phone" widget="phone"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Terms">
+                            <field name="minimum_order_quantity"/>
+                            <field name="lead_time_days"/>
+                        </group>
+                        <group string="Verification">
+                            <field name="verified"/>
+                            <field name="verification_date"/>
+                        </group>
+                    </group>
+                    <group string="Verification Notes">
+                        <div class="text-muted" colspan="2">
+                            What was checked and what was found, including anything that
+                            looked doubtful. Sourcing does not eliminate risk; it
+                            documents it.
+                        </div>
+                        <field name="verification_notes" nolabel="1" colspan="2"/>
+                    </group>
+                    <group string="Internal Notes">
+                        <field name="internal_notes" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="sourcing_supplier_view_search" model="ir.ui.view">
+        <field name="name">dally.sourcing.supplier.search</field>
+        <field name="model">dally.sourcing.supplier</field>
+        <field name="arch" type="xml">
+            <search string="Candidate Suppliers">
+                <field name="partner_id"/>
+                <field name="request_id"/>
+                <field name="country_id"/>
+                <filter name="filter_verified" string="Verified"
+                        domain="[('verified', '=', True)]"/>
+                <filter name="filter_unverified" string="Not Verified"
+                        domain="[('verified', '=', False)]"/>
+                <separator/>
+                <filter name="filter_awaiting" string="Awaiting Reply"
+                        domain="[('status', '=', 'awaiting_reply')]"/>
+                <filter name="filter_shortlisted" string="Shortlisted"
+                        domain="[('status', 'in', ('shortlisted', 'selected'))]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_request" string="Request"
+                            context="{'group_by': 'request_id'}"/>
+                    <filter name="group_status" string="Status"
+                            context="{'group_by': 'status'}"/>
+                    <filter name="group_country" string="Country"
+                            context="{'group_by': 'country_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="sourcing_supplier_action" model="ir.actions.act_window">
+        <field name="name">Candidate Suppliers</field>
+        <field name="res_model">dally.sourcing.supplier</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="sourcing_supplier_view_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No candidate supplier yet</p>
+            <p>
+                A candidate is a supplier's participation in one sourcing request. The
+                supplier itself is a standard contact, shared across requests.
+            </p>
+        </field>
+    </record>
+
+</odoo>

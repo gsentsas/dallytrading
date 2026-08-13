@@ -117,23 +117,18 @@ class DallySourcingSupplier(models.Model):
     )
     offer_count = fields.Integer(string="Offers", compute="_compute_offer_count")
 
-    _sql_constraints = [
-        (
-            "dally_sourcing_supplier_uniq",
-            "UNIQUE(request_id, partner_id)",
-            "This supplier is already a candidate on this sourcing request.",
-        ),
-        (
-            "dally_sourcing_supplier_moq_positive",
-            "CHECK(minimum_order_quantity >= 0)",
-            "The minimum order quantity cannot be negative.",
-        ),
-        (
-            "dally_sourcing_supplier_lead_time_positive",
-            "CHECK(lead_time_days >= 0)",
-            "The lead time cannot be negative.",
-        ),
-    ]
+    _dally_sourcing_supplier_uniq = models.Constraint(
+        'UNIQUE(request_id, partner_id)',
+        'This supplier is already a candidate on this sourcing request.',
+    )
+    _dally_sourcing_supplier_moq_positive = models.Constraint(
+        'CHECK(minimum_order_quantity >= 0)',
+        'The minimum order quantity cannot be negative.',
+    )
+    _dally_sourcing_supplier_lead_time_positive = models.Constraint(
+        'CHECK(lead_time_days >= 0)',
+        'The lead time cannot be negative.',
+    )
 
     @api.depends("partner_id", "request_id.reference")
     def _compute_display_name_field(self):

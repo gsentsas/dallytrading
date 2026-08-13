@@ -16,7 +16,7 @@
         -->
         <record id="group_dally_sourcing_manager" model="res.groups">
             <field name="name">Sourcing Manager</field>
-            <field name="category_id" ref="dally_core.module_category_dallytrading"/>
+            <field name="privilege_id" ref="dally_core.privilege_dallytrading"/>
             <field name="implied_ids" eval="[(4, ref('dally_core.group_dally_sourcing'))]"/>
             <field name="comment">Select supplier offers, manage customer proposals and see
 sourcing cost and margin figures.
@@ -40,7 +40,7 @@ or the margin on a proposal: those fields are removed by the ORM outside this gr
         -->
         <record id="group_dally_sourcing_api" model="res.groups">
             <field name="name">Sourcing API (create only)</field>
-            <field name="category_id" ref="dally_core.module_category_dallytrading"/>
+            <field name="privilege_id" ref="dally_core.privilege_dallytrading_technical"/>
             <!-- Implies nothing. Any implied group would drag in readonly and defeat
                  the purpose. -->
             <field name="comment">Create public sourcing requests through the API.
@@ -58,7 +58,7 @@ person.</field>
             <!-- base.group_user is required to be an internal user at all; the
                  sourcing API group carries the actual permissions. No password is set,
                  so this account cannot log into the web interface. -->
-            <field name="groups_id" eval="[(6, 0, [
+            <field name="group_ids" eval="[(6, 0, [
                 ref('base.group_user'),
                 ref('group_dally_sourcing_api'),
             ])]"/>

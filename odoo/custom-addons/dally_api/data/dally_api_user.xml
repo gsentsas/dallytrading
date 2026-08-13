@@ -18,7 +18,7 @@
             <field name="login">dally_api_integration</field>
             <field name="active" eval="True"/>
             <field name="share" eval="False"/>
-            <field name="groups_id" eval="[(6, 0, [
+            <field name="group_ids" eval="[(6, 0, [
                 ref('base.group_user'),
                 ref('sales_team.group_sale_salesman'),
                 ref('dally_core.group_dally_commercial'),

@@ -81,16 +81,15 @@
                         domain="[('status_code', '&gt;=', 400), ('status_code', '&lt;', 500)]"/>
                 <filter name="filter_server_error" string="Failed (5xx)"
                         domain="[('status_code', '&gt;=', 500)]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_by_endpoint" string="Endpoint"
-                            context="{'group_by': 'endpoint'}"/>
-                    <filter name="group_by_status" string="Status"
-                            context="{'group_by': 'status_code'}"/>
-                    <filter name="group_by_key" string="API Key"
-                            context="{'group_by': 'api_key_id'}"/>
-                    <filter name="group_by_date" string="Date"
-                            context="{'group_by': 'create_date:day'}"/>
-                </group>
+                <separator/>
+                <filter name="group_by_endpoint" string="Endpoint"
+                        context="{'group_by': 'endpoint'}"/>
+                <filter name="group_by_status" string="Status"
+                        context="{'group_by': 'status_code'}"/>
+                <filter name="group_by_key" string="API Key"
+                        context="{'group_by': 'api_key_id'}"/>
+                <filter name="group_by_date" string="Date"
+                        context="{'group_by': 'create_date:day'}"/>
             </search>
         </field>
     </record>

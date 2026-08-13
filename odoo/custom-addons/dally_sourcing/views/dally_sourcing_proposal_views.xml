@@ -198,14 +198,13 @@
                         domain="[('state', '=', 'accepted')]"/>
                 <filter name="filter_open" string="Open"
                         domain="[('state', 'in', ('draft', 'ready', 'sent'))]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_state" string="Status"
-                            context="{'group_by': 'state'}"/>
-                    <filter name="group_customer" string="Customer"
-                            context="{'group_by': 'customer_id'}"/>
-                    <filter name="group_created" string="Created"
-                            context="{'group_by': 'create_date:month'}"/>
-                </group>
+                <separator/>
+                <filter name="group_state" string="Status"
+                        context="{'group_by': 'state'}"/>
+                <filter name="group_customer" string="Customer"
+                        context="{'group_by': 'customer_id'}"/>
+                <filter name="group_created" string="Created"
+                        context="{'group_by': 'create_date:month'}"/>
             </search>
         </field>
     </record>

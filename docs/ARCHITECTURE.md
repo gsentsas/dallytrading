@@ -105,7 +105,7 @@ affecter d'autres abonnements. Le conteneur rend cycle de vie, sauvegardes et mo
 version indépendants.
 
 **Conséquences.** Aucun port publié sur l'hôte : PostgreSQL n'est joignable que depuis
-le réseau Docker `dally_private`, déclaré `internal: true`.
+le réseau Docker `dallytrading_private`, déclaré `internal: true`.
 
 ### ADR-004 — Contournement de l'entrypoint de l'image Odoo
 
@@ -368,12 +368,12 @@ fret.
                                     │ Projet Docker « dally »        │
                                     │                                │
                                     │  odoo:19.0      ─┐             │
-                                    │                  ├ dally_private│
+                                    │                  ├ dallytrading_private│
                                     │  postgres:16    ─┘  (internal)  │
                                     │                                │
                                     │  volumes :                     │
-                                    │   dally_postgres_data          │
-                                    │   dally_odoo_filestore         │
+                                    │   dallytrading_postgres_data          │
+                                    │   dallytrading_odoo_filestore         │
                                     └────────────────────────────────┘
 
         ═══════════ ISOLATION TOTALE — AUCUN LIEN ═══════════

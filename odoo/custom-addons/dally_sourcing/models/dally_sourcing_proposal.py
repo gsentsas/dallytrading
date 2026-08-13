@@ -220,24 +220,18 @@ class DallySourcingProposal(models.Model):
         groups="dally_core.group_dally_readonly",
     )
 
-    _sql_constraints = [
-        (
-            "dally_sourcing_proposal_quantity_positive",
-            "CHECK(quantity > 0)",
-            "The quantity must be greater than zero.",
-        ),
-        (
-            "dally_sourcing_proposal_price_positive",
-            "CHECK(selling_unit_price >= 0)",
-            "The unit price cannot be negative.",
-        ),
-        (
-            "dally_sourcing_proposal_charges_positive",
-            "CHECK(estimated_shipping >= 0 AND service_fee >= 0 "
-            "AND other_customer_charges >= 0 AND tax_amount >= 0)",
-            "Charges cannot be negative.",
-        ),
-    ]
+    _dally_sourcing_proposal_quantity_positive = models.Constraint(
+        'CHECK(quantity > 0)',
+        'The quantity must be greater than zero.',
+    )
+    _dally_sourcing_proposal_price_positive = models.Constraint(
+        'CHECK(selling_unit_price >= 0)',
+        'The unit price cannot be negative.',
+    )
+    _dally_sourcing_proposal_charges_positive = models.Constraint(
+        'CHECK(estimated_shipping >= 0 AND service_fee >= 0 AND other_customer_charges >= 0 AND tax_amount >= 0)',
+        'Charges cannot be negative.',
+    )
 
     # ─── Computes ────────────────────────────────────────────────────
 

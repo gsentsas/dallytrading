@@ -62,14 +62,13 @@
                             domain="[('is_estimate', '=', True)]"/>
                     <filter name="confirmed" string="Confirmés"
                             domain="[('is_estimate', '=', False)]"/>
-                    <group expand="0" string="Regrouper par">
-                        <filter name="group_category" string="Catégorie"
-                                context="{'group_by': 'category'}"/>
-                        <filter name="group_deal" string="Opération"
-                                context="{'group_by': 'opportunity_id'}"/>
-                        <filter name="group_partner" string="Prestataire"
-                                context="{'group_by': 'partner_id'}"/>
-                    </group>
+                    <separator/>
+                    <filter name="group_category" string="Catégorie"
+                            context="{'group_by': 'category'}"/>
+                    <filter name="group_deal" string="Opération"
+                            context="{'group_by': 'opportunity_id'}"/>
+                    <filter name="group_partner" string="Prestataire"
+                            context="{'group_by': 'partner_id'}"/>
                 </search>
             </field>
         </record>

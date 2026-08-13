@@ -18,7 +18,7 @@
 
         <record id="group_dally_trade_user" model="res.groups">
             <field name="name">DallyTrading / Trade — Utilisateur</field>
-            <field name="category_id" ref="base.module_category_sales_sales"/>
+            <field name="privilege_id" ref="dally_core.privilege_dallytrading"/>
             <field name="implied_ids" eval="[(4, ref('dally_core.group_dally_commercial'))]"/>
             <field name="comment">Travaille les opérations de trading : parties, lignes,
 volet vente, workflow. Ne voit ni prix d'achat, ni coûts, ni marges.</field>
@@ -26,7 +26,7 @@ volet vente, workflow. Ne voit ni prix d'achat, ni coûts, ni marges.</field>
 
         <record id="group_dally_trade_manager" model="res.groups">
             <field name="name">DallyTrading / Trade — Responsable</field>
-            <field name="category_id" ref="base.module_category_sales_sales"/>
+            <field name="privilege_id" ref="dally_core.privilege_dallytrading"/>
             <field name="implied_ids" eval="[(4, ref('dally_trade.group_dally_trade_user'))]"/>
             <field name="comment">Voit et modifie le volet achat, les coûts, les
 commissions et les marges. Seul habilité, avec la direction générale, à approuver une
@@ -44,7 +44,7 @@ opération sensible.</field>
         -->
         <record id="group_dally_trade_api" model="res.groups">
             <field name="name">DallyTrading / Trade — API</field>
-            <field name="category_id" ref="base.module_category_hidden"/>
+            <field name="privilege_id" ref="dally_core.privilege_dallytrading_technical"/>
             <field name="comment">Groupe technique de l'utilisateur d'intégration
 trading. N'implique aucun autre groupe : il ne doit pouvoir que créer une demande
 publique et relire les siennes.</field>
@@ -60,7 +60,7 @@ publique et relire les siennes.</field>
                 either would make internal_notes and other restricted fields loadable.
                 Least privilege here is not a slogan, it is the mechanism.
             -->
-            <field name="groups_id" eval="[(6, 0, [
+            <field name="group_ids" eval="[(6, 0, [
                 ref('base.group_user'),
                 ref('dally_trade.group_dally_trade_api'),
             ])]"/>

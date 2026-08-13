@@ -14,7 +14,7 @@
 #                  -f docker-compose.production.yml up -d
 ####################################################################
 
-name: ${COMPOSE_PROJECT_NAME:-dally}
+name: ${COMPOSE_PROJECT_NAME:-dallytrading}
 
 x-logging: &default-logging
   driver: json-file
@@ -30,17 +30,26 @@ services:
   # ─────────────────────────────────────────────────────────────────
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:16-alpine}
-    container_name: dally-postgres
-    hostname: dally-postgres
+    container_name: dallytrading-postgres
+    hostname: dallytrading-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB requis}
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER requis}
+      # Rôle d'AMORÇAGE, celui qu'initdb crée. Il est TOUJOURS
+      # superutilisateur : c'est une propriété de l'image, pas un choix.
+      # Il s'appelle donc `postgres` et Odoo ne l'utilise jamais.
+      #
+      # Le piège corrigé ici : POSTGRES_USER=odoo_dally rendait
+      # superutilisateur le rôle même qu'ADR-005 veut sans privilège.
+      # Constaté au premier démarrage réel, invisible en revue statique.
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis}
-      # Le rôle est créé sans SUPERUSER ni CREATEDB : la base est
-      # pré-créée par l'entrypoint et Odoo s'y initialise. Il n'a donc
-      # jamais besoin de créer une base lui-même.
+      POSTGRES_DB: postgres
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+      # Lues par postgres/init/10-dallytrading-role.sh, qui crée le rôle
+      # applicatif sans SUPERUSER ni CREATEDB, et la base qu'il possède.
+      DALLY_DB_USER: ${POSTGRES_USER:?POSTGRES_USER requis}
+      DALLY_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis}
+      DALLY_DB_NAME: ${POSTGRES_DB:?POSTGRES_DB requis}
       TZ: ${TZ:-Africa/Dakar}
     command:
       - postgres
@@ -60,12 +69,16 @@ services:
       - listen_addresses=*
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # Exécuté une seule fois, à l'initialisation du volume.
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
-      - dally_private
+      - dallytrading_private
     shm_size: ${POSTGRES_SHM_SIZE:-1g}
     mem_limit: ${POSTGRES_MEM_LIMIT:-4g}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      # Sonde la base APPLICATIVE, pas celle du rôle d'amorçage : c'est
+      # celle qu'Odoo ouvre, donc la seule dont la disponibilité compte.
+      test: ["CMD-SHELL", "pg_isready -U $${DALLY_DB_USER} -d $${DALLY_DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -85,8 +98,12 @@ services:
   # ─────────────────────────────────────────────────────────────────
   odoo:
     image: ${ODOO_IMAGE:-odoo:19.0}
-    container_name: dally-odoo
-    hostname: dally-odoo
+    container_name: dallytrading-odoo
+    hostname: dallytrading-odoo
+    # Aligné sur le propriétaire de odoo.conf, qui reste en 0600.
+    # L'alternative — élargir les droits du fichier — exposerait le mot de passe
+    # de la base à tous les comptes d'hébergement de cette machine partagée.
+    user: "${ODOO_RUN_UID:?ODOO_RUN_UID requis}:${ODOO_RUN_GID:?ODOO_RUN_GID requis}"
     restart: unless-stopped
     depends_on:
       postgres:
@@ -109,8 +126,8 @@ services:
       - "127.0.0.1:${ODOO_HTTP_PORT:-18169}:8069"
       - "127.0.0.1:${ODOO_LONGPOLLING_PORT:-18172}:8072"
     networks:
-      - dally_private
-      - dally_public
+      - dallytrading_private
+      - dallytrading_public
     mem_limit: ${ODOO_MEM_LIMIT:-9g}
     healthcheck:
       test:
@@ -132,18 +149,18 @@ services:
 
 networks:
   # Réseau isolé : pas de route vers l'extérieur. Porte le trafic Odoo ↔ DB.
-  dally_private:
-    name: dally_private
+  dallytrading_private:
+    name: dallytrading_private
     driver: bridge
     internal: true
   # Réseau de sortie : accès sortant (SMTP, mises à jour) et publication
   # des ports sur la loopback de l'hôte.
-  dally_public:
-    name: dally_public
+  dallytrading_public:
+    name: dallytrading_public
     driver: bridge
 
 volumes:
   postgres-data:
-    name: dally_postgres_data
+    name: dallytrading_postgres_data
   odoo-filestore:
-    name: dally_odoo_filestore
+    name: dallytrading_odoo_filestore

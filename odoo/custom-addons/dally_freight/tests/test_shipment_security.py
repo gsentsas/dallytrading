@@ -43,7 +43,7 @@ class TestShipmentAccessRights(TransactionCase):
         return self.env["res.users"].create({
             "name": "Test %s" % login,
             "login": "dally_test_%s" % login,
-            "groups_id": [(6, 0, groups)],
+            "group_ids": [(6, 0, groups)],
         })
 
     # ─── Model-level access ───────────────────────────────────────────

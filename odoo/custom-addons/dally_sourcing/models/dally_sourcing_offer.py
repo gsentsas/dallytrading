@@ -172,34 +172,26 @@ class DallySourcingOffer(models.Model):
              "Never leaves this model.",
     )
 
-    _sql_constraints = [
-        (
-            "dally_sourcing_offer_quantity_positive",
-            "CHECK(quantity > 0)",
-            "The offered quantity must be greater than zero.",
-        ),
-        (
-            "dally_sourcing_offer_unit_price_positive",
-            "CHECK(unit_price >= 0)",
-            "The unit price cannot be negative.",
-        ),
-        (
-            "dally_sourcing_offer_costs_positive",
-            "CHECK(shipping_cost >= 0 AND insurance_cost >= 0 "
-            "AND customs_estimate >= 0 AND other_costs >= 0 AND sample_cost >= 0)",
-            "Costs cannot be negative.",
-        ),
-        (
-            "dally_sourcing_offer_moq_positive",
-            "CHECK(minimum_order_quantity >= 0)",
-            "The minimum order quantity cannot be negative.",
-        ),
-        (
-            "dally_sourcing_offer_lead_time_positive",
-            "CHECK(lead_time_days >= 0)",
-            "The lead time cannot be negative.",
-        ),
-    ]
+    _dally_sourcing_offer_quantity_positive = models.Constraint(
+        'CHECK(quantity > 0)',
+        'The offered quantity must be greater than zero.',
+    )
+    _dally_sourcing_offer_unit_price_positive = models.Constraint(
+        'CHECK(unit_price >= 0)',
+        'The unit price cannot be negative.',
+    )
+    _dally_sourcing_offer_costs_positive = models.Constraint(
+        'CHECK(shipping_cost >= 0 AND insurance_cost >= 0 AND customs_estimate >= 0 AND other_costs >= 0 AND sample_cost >= 0)',
+        'Costs cannot be negative.',
+    )
+    _dally_sourcing_offer_moq_positive = models.Constraint(
+        'CHECK(minimum_order_quantity >= 0)',
+        'The minimum order quantity cannot be negative.',
+    )
+    _dally_sourcing_offer_lead_time_positive = models.Constraint(
+        'CHECK(lead_time_days >= 0)',
+        'The lead time cannot be negative.',
+    )
 
     # ─── Computes ────────────────────────────────────────────────────
 

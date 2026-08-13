@@ -41,13 +41,10 @@ class DallyReferenceMixin(models.AbstractModel):
              "customer: it appears on the website, in e-mails and on invoices.",
     )
 
-    _sql_constraints = [
-        (
-            "dally_reference_uniq",
-            "UNIQUE(reference)",
-            "This reference already exists. References must be unique.",
-        ),
-    ]
+    _dally_reference_uniq = models.Constraint(
+        'UNIQUE(reference)',
+        'This reference already exists. References must be unique.',
+    )
 
     @api.model
     def _dally_next_reference(self):

@@ -92,18 +92,14 @@ class DallyShipmentPackage(models.Model):
         store=True,
     )
 
-    _sql_constraints = [
-        (
-            "dally_package_quantity_positive",
-            "CHECK(quantity > 0)",
-            "A package line must have a quantity of at least 1.",
-        ),
-        (
-            "dally_package_weight_positive",
-            "CHECK(unit_weight_kg >= 0)",
-            "Unit weight cannot be negative.",
-        ),
-    ]
+    _dally_package_quantity_positive = models.Constraint(
+        'CHECK(quantity > 0)',
+        'A package line must have a quantity of at least 1.',
+    )
+    _dally_package_weight_positive = models.Constraint(
+        'CHECK(unit_weight_kg >= 0)',
+        'Unit weight cannot be negative.',
+    )
 
     @api.depends("length_cm", "width_cm", "height_cm")
     def _compute_volumes(self):

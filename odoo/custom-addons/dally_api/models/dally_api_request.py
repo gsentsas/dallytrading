@@ -62,16 +62,10 @@ class DallyApiRequest(models.Model):
     )
     error_message = fields.Char(string="Error", readonly=True)
 
-    _sql_constraints = [
-        # The uniqueness guarantee behind idempotency. Enforced by the database
-        # rather than by application logic, so two simultaneous retries cannot
-        # both pass a "does it exist?" check.
-        (
-            "dally_api_request_uuid_endpoint_uniq",
-            "UNIQUE(request_uuid, endpoint)",
-            "This request has already been recorded for this endpoint.",
-        ),
-    ]
+    _dally_api_request_uuid_endpoint_uniq = models.Constraint(
+        'UNIQUE(request_uuid, endpoint)',
+        'This request has already been recorded for this endpoint.',
+    )
 
     @api.model
     def _truncate(self, value):

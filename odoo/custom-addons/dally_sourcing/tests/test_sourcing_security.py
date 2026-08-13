@@ -80,7 +80,7 @@ class TestSourcingAccessRights(TransactionCase):
         return self.env["res.users"].create({
             "name": "Sourcing test %s" % login,
             "login": "dally_src_test_%s" % login,
-            "groups_id": [(6, 0, groups)],
+            "group_ids": [(6, 0, groups)],
         })
 
     # ─── The API user's group membership ──────────────────────────────

@@ -203,13 +203,10 @@ class DallyQuoteRequest(models.Model):
         help="Never exposed by any public endpoint.",
     )
 
-    _sql_constraints = [
-        (
-            "dally_quote_request_uuid_uniq",
-            "UNIQUE(request_uuid)",
-            "This request has already been recorded.",
-        ),
-    ]
+    _dally_quote_request_uuid_uniq = models.Constraint(
+        'UNIQUE(request_uuid)',
+        'This request has already been recorded.',
+    )
 
     @api.depends("sale_order_ids")
     def _compute_sale_order_count(self):

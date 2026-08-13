@@ -213,18 +213,17 @@
                 <filter name="filter_archived" string="Archived"
                         domain="[('active', '=', False)]"/>
 
-                <group expand="0" string="Group By">
-                    <filter name="group_state" string="Status"
-                            context="{'group_by': 'state'}"/>
-                    <filter name="group_service" string="Service"
-                            context="{'group_by': 'service_type_id'}"/>
-                    <filter name="group_user" string="Salesperson"
-                            context="{'group_by': 'user_id'}"/>
-                    <filter name="group_source" string="UTM Source"
-                            context="{'group_by': 'utm_source'}"/>
-                    <filter name="group_created" string="Received"
-                            context="{'group_by': 'create_date:week'}"/>
-                </group>
+                <separator/>
+                <filter name="group_state" string="Status"
+                        context="{'group_by': 'state'}"/>
+                <filter name="group_service" string="Service"
+                        context="{'group_by': 'service_type_id'}"/>
+                <filter name="group_user" string="Salesperson"
+                        context="{'group_by': 'user_id'}"/>
+                <filter name="group_source" string="UTM Source"
+                        context="{'group_by': 'utm_source'}"/>
+                <filter name="group_created" string="Received"
+                        context="{'group_by': 'create_date:week'}"/>
             </search>
         </field>
     </record>

@@ -95,20 +95,19 @@
                         domain="[('create_date', '&gt;=', datetime.datetime.now().replace(hour=0, minute=0, second=0))]"/>
                 <filter name="filter_this_month" string="This Month"
                         domain="[('create_date', '&gt;=', (context_today().replace(day=1)).strftime('%Y-%m-%d'))]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_by_service" string="Service"
-                            context="{'group_by': 'dally_service_type_id'}"/>
-                    <filter name="group_by_category" string="Service Category"
-                            context="{'group_by': 'dally_service_category'}"/>
-                    <filter name="group_by_country" string="Country"
-                            context="{'group_by': 'country_id'}"/>
-                    <filter name="group_by_salesperson" string="Salesperson"
-                            context="{'group_by': 'user_id'}"/>
-                    <filter name="group_by_source" string="Source"
-                            context="{'group_by': 'source_id'}"/>
-                    <filter name="group_by_creation" string="Received"
-                            context="{'group_by': 'create_date:week'}"/>
-                </group>
+                <separator/>
+                <filter name="group_by_service" string="Service"
+                        context="{'group_by': 'dally_service_type_id'}"/>
+                <filter name="group_by_category" string="Service Category"
+                        context="{'group_by': 'dally_service_category'}"/>
+                <filter name="group_by_country" string="Country"
+                        context="{'group_by': 'country_id'}"/>
+                <filter name="group_by_salesperson" string="Salesperson"
+                        context="{'group_by': 'user_id'}"/>
+                <filter name="group_by_source" string="Source"
+                        context="{'group_by': 'source_id'}"/>
+                <filter name="group_by_creation" string="Received"
+                        context="{'group_by': 'create_date:week'}"/>
             </search>
         </field>
     </record>

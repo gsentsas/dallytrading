@@ -559,13 +559,10 @@ class DallyTradeOpportunity(models.Model):
 
     # ─── Constraints ─────────────────────────────────────────────────
 
-    _sql_constraints = [
-        (
-            "dally_trade_request_uuid_unique",
-            "UNIQUE(request_uuid)",
-            "A trade opportunity already exists for this request UUID.",
-        ),
-    ]
+    _dally_trade_request_uuid_unique = models.Constraint(
+        'UNIQUE(request_uuid)',
+        'A trade opportunity already exists for this request UUID.',
+    )
 
     # ─── Computes ────────────────────────────────────────────────────
 

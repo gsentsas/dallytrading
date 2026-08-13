@@ -365,28 +365,22 @@ class DallySourcingRequest(models.Model):
              "and at what price is commercial information.",
     )
 
-    _sql_constraints = [
-        (
-            "dally_sourcing_request_uuid_uniq",
-            "UNIQUE(request_uuid)",
-            "This sourcing request has already been recorded.",
-        ),
-        (
-            "dally_sourcing_quantity_positive",
-            "CHECK(quantity > 0)",
-            "The quantity must be greater than zero.",
-        ),
-        (
-            "dally_sourcing_budget_positive",
-            "CHECK(target_total_budget >= 0)",
-            "The budget cannot be negative.",
-        ),
-        (
-            "dally_sourcing_unit_price_positive",
-            "CHECK(target_unit_price >= 0)",
-            "The target unit price cannot be negative.",
-        ),
-    ]
+    _dally_sourcing_request_uuid_uniq = models.Constraint(
+        'UNIQUE(request_uuid)',
+        'This sourcing request has already been recorded.',
+    )
+    _dally_sourcing_quantity_positive = models.Constraint(
+        'CHECK(quantity > 0)',
+        'The quantity must be greater than zero.',
+    )
+    _dally_sourcing_budget_positive = models.Constraint(
+        'CHECK(target_total_budget >= 0)',
+        'The budget cannot be negative.',
+    )
+    _dally_sourcing_unit_price_positive = models.Constraint(
+        'CHECK(target_unit_price >= 0)',
+        'The target unit price cannot be negative.',
+    )
 
     # ─── Computes ────────────────────────────────────────────────────
 

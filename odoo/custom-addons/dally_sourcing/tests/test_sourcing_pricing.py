@@ -242,7 +242,7 @@ class TestSourcingPricing(TransactionCase):
         sourcing_user = self.env["res.users"].create({
             "name": "Sourcing Operator",
             "login": "sourcing.operator.pricing",
-            "groups_id": [(6, 0, [
+            "group_ids": [(6, 0, [
                 self.env.ref("dally_core.group_dally_sourcing").id,
             ])],
         })
@@ -277,7 +277,7 @@ class TestSourcingPricing(TransactionCase):
         sourcing_user = self.env["res.users"].create({
             "name": "Sourcing Editor",
             "login": "sourcing.editor.pricing",
-            "groups_id": [(6, 0, [
+            "group_ids": [(6, 0, [
                 self.env.ref("dally_core.group_dally_sourcing").id,
             ])],
         })

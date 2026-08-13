@@ -43,7 +43,7 @@ Le rôle applicatif n'a pas ce droit en exploitation normale, par principe de mo
 privilège. L'exercice en a besoin pour créer une base jetable.
 
 ```bash
-docker exec dally-postgres psql -U postgres -c 'ALTER ROLE odoo_dally CREATEDB;'
+docker exec dallytrading-postgres psql -U postgres -c 'ALTER ROLE odoo_dally CREATEDB;'
 ```
 
 **4. Restauration réelle en base jetable**
@@ -92,18 +92,18 @@ Contrôles fonctionnels, à effectuer manuellement dans l'interface :
 - [ ] Ouverture d'un devis / d'une commande
 - [ ] **Téléchargement d'une pièce jointe** ← valide la cohérence base ↔ filestore
 - [ ] Ouverture d'une expédition et de sa chronologie d'événements
-- [ ] Aucune erreur dans `docker logs dally-odoo`
+- [ ] Aucune erreur dans `docker logs dallytrading-odoo`
 
 **7. Retirer `CREATEDB`**
 
 ```bash
-docker exec dally-postgres psql -U postgres -c 'ALTER ROLE odoo_dally NOCREATEDB;'
+docker exec dallytrading-postgres psql -U postgres -c 'ALTER ROLE odoo_dally NOCREATEDB;'
 ```
 
 **8. Nettoyer l'environnement de test**
 
 ```bash
-docker exec dally-postgres psql -U postgres -d postgres \
+docker exec dallytrading-postgres psql -U postgres -d postgres \
   -c 'DROP DATABASE IF EXISTS essai_restauration;'
 ```
 
@@ -162,7 +162,7 @@ de disponibilité sur `/web/health` (jusqu'à 180 s).
 
 ```bash
 curl -sf http://127.0.0.1:18169/web/health && echo OK
-docker logs --tail 100 dally-odoo | grep -iE 'error|traceback' || echo "aucune erreur"
+docker logs --tail 100 dallytrading-odoo | grep -iE 'error|traceback' || echo "aucune erreur"
 curl -o /dev/null -w '%{http_code}\n' https://crm.dallytrading.com/
 ```
 

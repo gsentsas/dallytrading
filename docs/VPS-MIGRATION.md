@@ -241,7 +241,7 @@ services:
       - caddy-data:/data    # certificats — À SAUVEGARDER
       - caddy-config:/config
     networks:
-      - dally_public
+      - dallytrading_public
     depends_on:
       odoo:
         condition: service_healthy
@@ -403,7 +403,7 @@ Service correspondant :
       ODOO_DATABASE: ${ODOO_DATABASE}
       ODOO_API_KEY: ${ODOO_API_KEY}
     networks:
-      - dally_public
+      - dallytrading_public
     depends_on:
       odoo:
         condition: service_healthy
@@ -412,7 +412,7 @@ Service correspondant :
 > `ODOO_URL` devient `http://odoo:8069`. Avec `allowed_ips` sur la clé API,
 > l'adresse autorisée n'est alors plus `127.0.0.1` mais l'IP du conteneur `web`
 > sur le réseau Docker. Le plus simple est de vider `allowed_ips` et de s'appuyer
-> sur l'isolation réseau : `dally_public` n'est pas routable depuis Internet.
+> sur l'isolation réseau : `dallytrading_public` n'est pas routable depuis Internet.
 
 ## 9. Migration des données
 
@@ -476,7 +476,7 @@ docker compose ps
 - [ ] Nombre de contacts, devis et commandes identique à l'ancienne instance
 - [ ] **Téléchargement d'une pièce jointe** — valide la cohérence base ↔ filestore
 - [ ] Soumission d'une demande de devis → lead créé dans Odoo
-- [ ] `docker logs dally-odoo` sans erreur ni traceback
+- [ ] `docker logs dallytrading-odoo` sans erreur ni traceback
 - [ ] Sauvegarde fonctionnelle sur le nouveau serveur
 
 ### Bascule DNS — point de non-retour

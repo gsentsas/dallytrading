@@ -96,14 +96,13 @@
                         domain="[('is_automatic', '=', False)]"/>
                 <filter name="filter_automatic" string="Automatic"
                         domain="[('is_automatic', '=', True)]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_shipment" string="Shipment"
-                            context="{'group_by': 'shipment_id'}"/>
-                    <filter name="group_status" string="Status"
-                            context="{'group_by': 'status'}"/>
-                    <filter name="group_date" string="Date"
-                            context="{'group_by': 'event_date:day'}"/>
-                </group>
+                <separator/>
+                <filter name="group_shipment" string="Shipment"
+                        context="{'group_by': 'shipment_id'}"/>
+                <filter name="group_status" string="Status"
+                        context="{'group_by': 'status'}"/>
+                <filter name="group_date" string="Date"
+                        context="{'group_by': 'event_date:day'}"/>
             </search>
         </field>
     </record>

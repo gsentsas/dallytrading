@@ -74,9 +74,11 @@ limit_request = 8192
 # rotation), donc consultable via `docker compose logs`.
 log_level = ${ODOO_LOG_LEVEL}
 log_handler = :INFO
-logrotate = False
 
 # ─── Divers ───────────────────────────────────────────────────────
 # Aucune donnée de démonstration en production.
-without_demo = all
+# Odoo 19 : `without_demo` est désormais un booléen. La valeur « all »,
+# valide jusqu'en 18, produit « invalid boolean value: 'all', assume True ».
+# Constaté au premier démarrage réel.
+without_demo = True
 server_wide_modules = base,web

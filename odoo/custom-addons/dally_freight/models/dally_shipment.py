@@ -317,23 +317,18 @@ class DallyShipment(models.Model):
         help="When the status last changed. Feeds the public 'last update'.",
     )
 
-    _sql_constraints = [
-        (
-            "dally_shipment_weight_positive",
-            "CHECK(weight_kg >= 0)",
-            "Gross weight cannot be negative.",
-        ),
-        (
-            "dally_shipment_volume_positive",
-            "CHECK(volume_cbm >= 0)",
-            "Volume cannot be negative.",
-        ),
-        (
-            "dally_shipment_packages_positive",
-            "CHECK(packages_count >= 0)",
-            "The number of packages cannot be negative.",
-        ),
-    ]
+    _dally_shipment_weight_positive = models.Constraint(
+        'CHECK(weight_kg >= 0)',
+        'Gross weight cannot be negative.',
+    )
+    _dally_shipment_volume_positive = models.Constraint(
+        'CHECK(volume_cbm >= 0)',
+        'Volume cannot be negative.',
+    )
+    _dally_shipment_packages_positive = models.Constraint(
+        'CHECK(packages_count >= 0)',
+        'The number of packages cannot be negative.',
+    )
 
     # ─── Computes ────────────────────────────────────────────────────
 

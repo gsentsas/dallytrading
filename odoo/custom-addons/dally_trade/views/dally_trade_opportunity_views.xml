@@ -533,20 +533,19 @@
                     <filter name="archived" string="Archivées"
                             domain="[('active', '=', False)]"/>
 
-                    <group expand="0" string="Regrouper par">
-                        <filter name="group_state" string="État"
-                                context="{'group_by': 'state'}"/>
-                        <filter name="group_type" string="Type d'opération"
-                                context="{'group_by': 'operation_type'}"/>
-                        <filter name="group_responsible" string="Responsable"
-                                context="{'group_by': 'responsible_id'}"/>
-                        <filter name="group_customer" string="Client"
-                                context="{'group_by': 'customer_id'}"/>
-                        <filter name="group_service" string="Activité"
-                                context="{'group_by': 'service_id'}"/>
-                        <filter name="group_close_month" string="Mois de clôture"
-                                context="{'group_by': 'expected_close_date:month'}"/>
-                    </group>
+                    <separator/>
+                    <filter name="group_state" string="État"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_type" string="Type d'opération"
+                            context="{'group_by': 'operation_type'}"/>
+                    <filter name="group_responsible" string="Responsable"
+                            context="{'group_by': 'responsible_id'}"/>
+                    <filter name="group_customer" string="Client"
+                            context="{'group_by': 'customer_id'}"/>
+                    <filter name="group_service" string="Activité"
+                            context="{'group_by': 'service_id'}"/>
+                    <filter name="group_close_month" string="Mois de clôture"
+                            context="{'group_by': 'expected_close_date:month'}"/>
                 </search>
             </field>
         </record>

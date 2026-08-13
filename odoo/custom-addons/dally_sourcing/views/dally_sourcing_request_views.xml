@@ -453,20 +453,19 @@
                 <filter name="filter_archived" string="Archived"
                         domain="[('active', '=', False)]"/>
 
-                <group expand="0" string="Group By">
-                    <filter name="group_state" string="Status"
-                            context="{'group_by': 'state'}"/>
-                    <filter name="group_responsible" string="Responsible"
-                            context="{'group_by': 'responsible_id'}"/>
-                    <filter name="group_customer" string="Customer"
-                            context="{'group_by': 'customer_id'}"/>
-                    <filter name="group_origin" string="Preferred Origin"
-                            context="{'group_by': 'preferred_origin_country_id'}"/>
-                    <filter name="group_service" string="Service"
-                            context="{'group_by': 'service_id'}"/>
-                    <filter name="group_created" string="Received"
-                            context="{'group_by': 'create_date:week'}"/>
-                </group>
+                <separator/>
+                <filter name="group_state" string="Status"
+                        context="{'group_by': 'state'}"/>
+                <filter name="group_responsible" string="Responsible"
+                        context="{'group_by': 'responsible_id'}"/>
+                <filter name="group_customer" string="Customer"
+                        context="{'group_by': 'customer_id'}"/>
+                <filter name="group_origin" string="Preferred Origin"
+                        context="{'group_by': 'preferred_origin_country_id'}"/>
+                <filter name="group_service" string="Service"
+                        context="{'group_by': 'service_id'}"/>
+                <filter name="group_created" string="Received"
+                        context="{'group_by': 'create_date:week'}"/>
             </search>
         </field>
     </record>

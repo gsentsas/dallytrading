@@ -6,8 +6,8 @@ Une sauvegarde Odoo se compose de **deux artefacts inséparables** :
 
 | Artefact | Contenu | Emplacement |
 |---|---|---|
-| Base PostgreSQL | Enregistrements, configuration, droits, séquences | volume `dally_postgres_data` |
-| Filestore | Pièces jointes binaires (documents de fret, scans, photos) | volume `dally_odoo_filestore` |
+| Base PostgreSQL | Enregistrements, configuration, droits, séquences | volume `dallytrading_postgres_data` |
+| Filestore | Pièces jointes binaires (documents de fret, scans, photos) | volume `dallytrading_odoo_filestore` |
 
 Odoo ne stocke **pas** les pièces jointes dans la base : `ir_attachment` conserve une
 somme de contrôle qui pointe vers un fichier du filestore. En conséquence :

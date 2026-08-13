@@ -23,7 +23,7 @@
 
         <record id="group_dally_tracking_api" model="res.groups">
             <field name="name">Tracking API (read only)</field>
-            <field name="category_id" ref="dally_core.module_category_dallytrading"/>
+            <field name="privilege_id" ref="dally_core.privilege_dallytrading_technical"/>
             <!-- Deliberately implies nothing. Any implied group would drag in
                  group_dally_readonly and defeat the purpose. -->
             <field name="comment">Read shipments and customer-visible tracking events
@@ -41,7 +41,7 @@ Reserved for the API integration user. Never assign it to a person.</field>
             <!-- base.group_user is required to be an internal user at all; the
                  tracking group carries the actual permissions. No password is
                  set, so this account cannot log into the web interface. -->
-            <field name="groups_id" eval="[(6, 0, [
+            <field name="group_ids" eval="[(6, 0, [
                 ref('base.group_user'),
                 ref('group_dally_tracking_api'),
             ])]"/>

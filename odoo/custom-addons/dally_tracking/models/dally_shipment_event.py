@@ -101,13 +101,10 @@ class DallyShipmentEvent(models.Model):
              "event, and the API has no way to make it.",
     )
 
-    _sql_constraints = [
-        (
-            "dally_event_description_not_empty",
-            "CHECK(description <> '')",
-            "An event must have a description.",
-        ),
-    ]
+    _dally_event_description_not_empty = models.Constraint(
+        "CHECK(description <> '')",
+        'An event must have a description.',
+    )
 
     @api.constrains("visible_to_customer", "description")
     def _check_public_description(self):

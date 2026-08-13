@@ -95,7 +95,7 @@ docker compose --env-file ../.env \
 docker compose ps
 ```
 
-Attendu : `dally-postgres` et `dally-odoo` en `healthy`.
+Attendu : `dallytrading-postgres` et `dallytrading-odoo` en `healthy`.
 
 Contrôles :
 
@@ -115,11 +115,11 @@ joignable depuis internet en contournant Plesk.
 Une seule base, `dallytrading`. `dbfilter = ^dallytrading$` interdit toute autre.
 
 ```bash
-docker exec -it dally-odoo odoo -c /etc/odoo/odoo.conf \
-  -d dallytrading -i base --without-demo=all --stop-after-init
+docker exec -it dallytrading-odoo odoo -c /etc/odoo/odoo.conf \
+  -d dallytrading -i base --without-demo=True --stop-after-init
 ```
 
-`--without-demo=all` est impératif : les données de démonstration créent des clients,
+`--without-demo=True` est impératif : les données de démonstration créent des clients,
 des produits et des factures fictifs qu'il faudrait ensuite distinguer des vrais.
 
 ---
@@ -143,11 +143,11 @@ Installation module par module, pour que l'échec éventuel désigne son module 
 cd /var/www/vhosts/dallytrading.com/platform/infrastructure
 for M in dally_core dally_crm dally_api dally_freight dally_sourcing dally_tracking dally_trade; do
   echo "── installation : $M"
-  docker exec dally-odoo odoo -c /etc/odoo/odoo.conf \
+  docker exec dallytrading-odoo odoo -c /etc/odoo/odoo.conf \
     -d dallytrading -i "$M" --stop-after-init --log-level=warn || {
       echo "ÉCHEC sur $M — ne pas continuer"; break; }
 done
-docker restart dally-odoo
+docker restart dallytrading-odoo
 ```
 
 ---
@@ -162,7 +162,7 @@ Module par module :
 ```bash
 for M in dally_core dally_crm dally_api dally_freight dally_sourcing dally_tracking dally_trade; do
   echo "════ tests : $M"
-  docker exec dally-odoo odoo -c /etc/odoo/odoo.conf \
+  docker exec dallytrading-odoo odoo -c /etc/odoo/odoo.conf \
     -d dallytrading -u "$M" --test-enable --test-tags "/$M" \
     --stop-after-init --log-level=test 2>&1 | tail -30
 done
@@ -171,7 +171,7 @@ done
 Puis la suite complète marquée `dally` :
 
 ```bash
-docker exec dally-odoo odoo -c /etc/odoo/odoo.conf \
+docker exec dallytrading-odoo odoo -c /etc/odoo/odoo.conf \
   -d dallytrading --test-enable --test-tags dally --stop-after-init \
   --log-level=test 2>&1 | tee /tmp/dally-tests.log
 grep -E '(FAIL|ERROR|failed|tests? in)' /tmp/dally-tests.log
@@ -324,7 +324,7 @@ l'interface : un champ masqué dans une vue est toujours dans le résultat de re
 alors qu'un champ dont l'utilisateur n'a pas le `groups=` n'est jamais chargé.
 
 ```bash
-docker exec -it dally-odoo odoo shell -c /etc/odoo/odoo.conf -d dallytrading
+docker exec -it dallytrading-odoo odoo shell -c /etc/odoo/odoo.conf -d dallytrading
 ```
 
 ```python

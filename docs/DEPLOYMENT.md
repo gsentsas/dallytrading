@@ -143,15 +143,15 @@ Attendre que les deux services soient `healthy` (PostgreSQL ~30 s, Odoo jusqu'à
 
 ```bash
 docker compose ps
-docker logs --tail 50 dally-odoo
+docker logs --tail 50 dallytrading-odoo
 ```
 
 ## Étape 8 — Initialisation de la base
 
 ```bash
-docker exec -it dally-odoo odoo -c /etc/odoo/odoo.conf \
+docker exec -it dallytrading-odoo odoo -c /etc/odoo/odoo.conf \
     -d dallytrading -i base --without-demo=all --stop-after-init
-docker restart dally-odoo
+docker restart dallytrading-odoo
 ```
 
 Le rôle PostgreSQL est volontairement **sans `CREATEDB` ni `SUPERUSER`** : la base est
@@ -161,9 +161,9 @@ créer une base lui-même (§7).
 > `verify-backup.sh --deep` crée une base jetable et requiert `CREATEDB`. Pour un
 > exercice de restauration, accorder le droit temporairement puis le retirer :
 > ```bash
-> docker exec dally-postgres psql -U postgres -c 'ALTER ROLE odoo_dally CREATEDB;'
+> docker exec dallytrading-postgres psql -U postgres -c 'ALTER ROLE odoo_dally CREATEDB;'
 > # … exercice …
-> docker exec dally-postgres psql -U postgres -c 'ALTER ROLE odoo_dally NOCREATEDB;'
+> docker exec dallytrading-postgres psql -U postgres -c 'ALTER ROLE odoo_dally NOCREATEDB;'
 > ```
 
 ## Étape 9 — Contrôles de sécurité Odoo
@@ -260,7 +260,7 @@ l'étape 5 réglée.
 # Arrêt SANS destruction de données — jamais l'option -v
 docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.production.yml down
 
-# Les volumes dally_postgres_data et dally_odoo_filestore survivent
+# Les volumes dallytrading_postgres_data et dallytrading_odoo_filestore survivent
 docker volume ls | grep dally
 ```
 

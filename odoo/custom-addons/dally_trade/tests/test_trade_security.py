@@ -25,7 +25,7 @@ class TestTradeSecurity(TradeCase):
         self.trade_user = self.env["res.users"].create({
             "name": "Trade Operator",
             "login": "trade.operator@dallytrading.test",
-            "groups_id": [(6, 0, [
+            "group_ids": [(6, 0, [
                 self.env.ref("base.group_user").id,
                 self.env.ref("dally_trade.group_dally_trade_user").id,
             ])],
@@ -33,7 +33,7 @@ class TestTradeSecurity(TradeCase):
         self.trade_manager = self.env["res.users"].create({
             "name": "Trade Manager",
             "login": "trade.manager@dallytrading.test",
-            "groups_id": [(6, 0, [
+            "group_ids": [(6, 0, [
                 self.env.ref("base.group_user").id,
                 self.env.ref("dally_trade.group_dally_trade_manager").id,
             ])],
@@ -128,7 +128,7 @@ class TestTradeSecurity(TradeCase):
         readonly = self.env["res.users"].create({
             "name": "Readonly",
             "login": "trade.readonly@dallytrading.test",
-            "groups_id": [(6, 0, [
+            "group_ids": [(6, 0, [
                 self.env.ref("base.group_user").id,
                 self.env.ref("dally_core.group_dally_readonly").id,
             ])],

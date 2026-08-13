@@ -79,14 +79,13 @@
                     <separator/>
                     <filter name="unsettled" string="Non réglées"
                             domain="[('is_settled', '=', False)]"/>
-                    <group expand="0" string="Regrouper par">
-                        <filter name="group_direction" string="Sens"
-                                context="{'group_by': 'direction'}"/>
-                        <filter name="group_partner" string="Contrepartie"
-                                context="{'group_by': 'partner_id'}"/>
-                        <filter name="group_deal" string="Opération"
-                                context="{'group_by': 'opportunity_id'}"/>
-                    </group>
+                    <separator/>
+                    <filter name="group_direction" string="Sens"
+                            context="{'group_by': 'direction'}"/>
+                    <filter name="group_partner" string="Contrepartie"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_deal" string="Opération"
+                            context="{'group_by': 'opportunity_id'}"/>
                 </search>
             </field>
         </record>

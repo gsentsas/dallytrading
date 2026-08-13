@@ -68,14 +68,10 @@ class CrmLead(models.Model):
              "a double-click or a network retry cannot produce two leads.",
     )
 
-    _sql_constraints = [
-        (
-            "dally_request_uuid_uniq",
-            "UNIQUE(dally_request_uuid)",
-            "A request with this identifier already exists. "
-            "The submission was already recorded.",
-        ),
-    ]
+    _dally_request_uuid_uniq = models.Constraint(
+        'UNIQUE(dally_request_uuid)',
+        'A request with this identifier already exists. The submission was already recorded.',
+    )
 
     # ─── Creation ────────────────────────────────────────────────────
 

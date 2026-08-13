@@ -122,14 +122,13 @@
                         domain="[('status', '=', 'awaiting_reply')]"/>
                 <filter name="filter_shortlisted" string="Shortlisted"
                         domain="[('status', 'in', ('shortlisted', 'selected'))]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_request" string="Request"
-                            context="{'group_by': 'request_id'}"/>
-                    <filter name="group_status" string="Status"
-                            context="{'group_by': 'status'}"/>
-                    <filter name="group_country" string="Country"
-                            context="{'group_by': 'country_id'}"/>
-                </group>
+                <separator/>
+                <filter name="group_request" string="Request"
+                        context="{'group_by': 'request_id'}"/>
+                <filter name="group_status" string="Status"
+                        context="{'group_by': 'status'}"/>
+                <filter name="group_country" string="Country"
+                        context="{'group_by': 'country_id'}"/>
             </search>
         </field>
     </record>

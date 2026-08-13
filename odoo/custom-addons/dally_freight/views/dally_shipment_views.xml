@@ -222,24 +222,23 @@
                 <filter name="filter_archived" string="Archived"
                         domain="[('active', '=', False)]"/>
 
-                <group expand="0" string="Group By">
-                    <filter name="group_state" string="Status"
-                            context="{'group_by': 'state'}"/>
-                    <filter name="group_mode" string="Transport Mode"
-                            context="{'group_by': 'transport_mode'}"/>
-                    <filter name="group_direction" string="Direction"
-                            context="{'group_by': 'direction'}"/>
-                    <filter name="group_partner" string="Customer"
-                            context="{'group_by': 'partner_id'}"/>
-                    <filter name="group_user" string="Responsible"
-                            context="{'group_by': 'user_id'}"/>
-                    <filter name="group_origin" string="Origin Country"
-                            context="{'group_by': 'origin_country_id'}"/>
-                    <filter name="group_destination" string="Destination Country"
-                            context="{'group_by': 'destination_country_id'}"/>
-                    <filter name="group_departure" string="Departure Month"
-                            context="{'group_by': 'departure_date:month'}"/>
-                </group>
+                <separator/>
+                <filter name="group_state" string="Status"
+                        context="{'group_by': 'state'}"/>
+                <filter name="group_mode" string="Transport Mode"
+                        context="{'group_by': 'transport_mode'}"/>
+                <filter name="group_direction" string="Direction"
+                        context="{'group_by': 'direction'}"/>
+                <filter name="group_partner" string="Customer"
+                        context="{'group_by': 'partner_id'}"/>
+                <filter name="group_user" string="Responsible"
+                        context="{'group_by': 'user_id'}"/>
+                <filter name="group_origin" string="Origin Country"
+                        context="{'group_by': 'origin_country_id'}"/>
+                <filter name="group_destination" string="Destination Country"
+                        context="{'group_by': 'destination_country_id'}"/>
+                <filter name="group_departure" string="Departure Month"
+                        context="{'group_by': 'departure_date:month'}"/>
             </search>
         </field>
     </record>

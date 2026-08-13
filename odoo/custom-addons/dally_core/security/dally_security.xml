@@ -19,11 +19,43 @@
         <field name="sequence">20</field>
     </record>
 
+    <!--
+        Odoo 19 a retiré `category_id` de `res.groups`. Les groupes se rattachent
+        désormais à un `res.groups.privilege`, qui porte lui-même la catégorie de
+        module. Constaté au premier chargement réel :
+        « ValueError: Invalid field 'category_id' in 'res.groups' ».
+
+        Ce niveau intermédiaire est ce qui, dans le formulaire utilisateur d'Odoo 19,
+        regroupe plusieurs groupes sous un seul sélecteur. Un privilège unique pour
+        toute la suite DallyTrading correspond à la réalité : ces rôles sont
+        mutuellement ordonnés, pas cumulables au hasard.
+    -->
+    <record id="privilege_dallytrading" model="res.groups.privilege">
+        <field name="name">DallyTrading</field>
+        <field name="description">Rôles métier de la suite DallyTrading.</field>
+        <!-- Ici `category_id` est le champ légitime : c'est le privilège qui
+             porte la catégorie de module, pas le groupe. -->
+        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="sequence">20</field>
+    </record>
+
+    <!--
+        Privilège séparé pour les identités techniques (utilisateurs d'intégration).
+        Les mêler aux rôles métier ferait apparaître « API Sourcing » dans le
+        sélecteur de rôle d'un utilisateur humain, où il n'a rien à faire.
+    -->
+    <record id="privilege_dallytrading_technical" model="res.groups.privilege">
+        <field name="name">DallyTrading — technique</field>
+        <field name="description">Groupes des utilisateurs d'intégration. Pas destinés à un humain.</field>
+        <field name="category_id" ref="base.module_category_hidden"/>
+        <field name="sequence">200</field>
+    </record>
+
     <!-- Read-only: reporting and consultation. The baseline every other
          DallyTrading role builds on. -->
     <record id="group_dally_readonly" model="res.groups">
         <field name="name">Read Only</field>
-        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="privilege_id" ref="privilege_dallytrading"/>
         <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
         <field name="comment">Consult DallyTrading records and reports. No modification.</field>
     </record>
@@ -31,7 +63,7 @@
     <!-- Commercial: leads, quotations, customers. -->
     <record id="group_dally_commercial" model="res.groups">
         <field name="name">Commercial</field>
-        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="privilege_id" ref="privilege_dallytrading"/>
         <field name="implied_ids" eval="[(4, ref('group_dally_readonly'))]"/>
         <field name="comment">Manage leads, opportunities, quotations and customers.</field>
     </record>
@@ -39,7 +71,7 @@
     <!-- Logistics: shipments, freight files, tracking events. -->
     <record id="group_dally_logistics" model="res.groups">
         <field name="name">Logistics</field>
-        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="privilege_id" ref="privilege_dallytrading"/>
         <field name="implied_ids" eval="[(4, ref('group_dally_readonly'))]"/>
         <field name="comment">Manage shipments, freight files and tracking events.</field>
     </record>
@@ -47,7 +79,7 @@
     <!-- Finance: invoicing and payments. -->
     <record id="group_dally_finance" model="res.groups">
         <field name="name">Finance</field>
-        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="privilege_id" ref="privilege_dallytrading"/>
         <field name="implied_ids" eval="[(4, ref('group_dally_readonly'))]"/>
         <field name="comment">Access invoicing, payments and financial reporting.</field>
     </record>
@@ -55,7 +87,7 @@
     <!-- Sourcing: supplier search and sourcing requests. -->
     <record id="group_dally_sourcing" model="res.groups">
         <field name="name">Sourcing</field>
-        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="privilege_id" ref="privilege_dallytrading"/>
         <field name="implied_ids" eval="[(4, ref('group_dally_readonly'))]"/>
         <field name="comment">Manage sourcing requests and supplier research.</field>
     </record>
@@ -63,7 +95,7 @@
     <!-- Manager: full operational scope across the four roles above. -->
     <record id="group_dally_manager" model="res.groups">
         <field name="name">Manager</field>
-        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="privilege_id" ref="privilege_dallytrading"/>
         <field name="implied_ids" eval="[(4, ref('group_dally_commercial')),
                                         (4, ref('group_dally_logistics')),
                                         (4, ref('group_dally_finance')),
@@ -74,7 +106,7 @@
     <!-- Administrator: configuration and API keys. Not an Odoo sysadmin. -->
     <record id="group_dally_admin" model="res.groups">
         <field name="name">Administrator</field>
-        <field name="category_id" ref="module_category_dallytrading"/>
+        <field name="privilege_id" ref="privilege_dallytrading"/>
         <field name="implied_ids" eval="[(4, ref('group_dally_manager'))]"/>
         <field name="comment">Configure the DallyTrading suite, including API keys.
 This does NOT grant Odoo system administration rights.</field>

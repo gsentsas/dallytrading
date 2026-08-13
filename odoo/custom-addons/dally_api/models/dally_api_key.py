@@ -111,10 +111,10 @@ class DallyApiKey(models.Model):
              "be recovered afterwards, only regenerated.",
     )
 
-    _sql_constraints = [
-        ("dally_api_key_prefix_uniq", "UNIQUE(key_prefix)",
-         "A key with this prefix already exists."),
-    ]
+    _dally_api_key_prefix_uniq = models.Constraint(
+        'UNIQUE(key_prefix)',
+        'A key with this prefix already exists.',
+    )
 
     @api.constrains("scopes")
     def _check_scopes(self):

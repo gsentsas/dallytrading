@@ -126,13 +126,10 @@ class DallyServiceType(models.Model):
         help="Ask what the goods are, and in what quantity.",
     )
 
-    _sql_constraints = [
-        (
-            "dally_service_type_code_uniq",
-            "UNIQUE(code)",
-            "A service type with this code already exists. Codes must be unique.",
-        ),
-    ]
+    _dally_service_type_code_uniq = models.Constraint(
+        'UNIQUE(code)',
+        'A service type with this code already exists. Codes must be unique.',
+    )
 
     @api.constrains("code")
     def _check_code_format(self):

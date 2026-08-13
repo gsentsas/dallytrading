@@ -16,3 +16,4 @@ access_trade_cost_finance,dally.trade.cost finance,model_dally_trade_cost,dally_
 access_trade_commission_manager,dally.trade.commission trade manager,model_dally_trade_commission,dally_trade.group_dally_trade_manager,1,1,1,1
 access_trade_commission_dally_manager,dally.trade.commission manager,model_dally_trade_commission,dally_core.group_dally_manager,1,1,1,1
 access_trade_commission_finance,dally.trade.commission finance,model_dally_trade_commission,dally_core.group_dally_finance,1,1,1,1
+access_dally_service_type_trade_api,dally.service.type trade api,dally_core.model_dally_service_type,dally_trade.group_dally_trade_api,1,0,0,0

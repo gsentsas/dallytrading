@@ -93,10 +93,17 @@ class DallyApiKey(models.Model):
     )
     allowed_ips = fields.Char(
         string="Allowed IPs",
-        default="127.0.0.1",
-        help="Comma-separated list of source IPs. The Next.js backend runs on this "
-             "same server, so 127.0.0.1 is the expected value and blocks any use "
-             "of a leaked key from outside. Leave empty to allow any source.",
+        help="Comma-separated list of source IPs. Empty allows any source.\n\n"
+             "ATTENTION — l'adresse observée n'est PAS 127.0.0.1 lorsque Odoo tourne "
+             "en conteneur, quoi qu'en dise l'intuition. Mesuré sur l'instance :\n"
+             "  • appel direct sur la loopback → passerelle Docker (172.22.0.1)\n"
+             "  • appel via le reverse proxy   → IP publique du serveur, transmise "
+             "par X-Forwarded-For\n\n"
+             "Le défaut était 127.0.0.1, valeur correcte sur un hôte nu et jamais "
+             "atteinte ici : toutes les clés étaient rejetées en « invalid_api_key ». "
+             "Il n'y a plus de défaut — une valeur à renseigner sciemment vaut mieux "
+             "qu'un défaut plausible et faux.\n\n"
+             "Relever la valeur réelle : journal Odoo lors d'un appel authentifié.",
     )
 
     last_used_at = fields.Datetime(string="Last Used", readonly=True)

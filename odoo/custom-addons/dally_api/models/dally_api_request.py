@@ -114,12 +114,32 @@ class DallyApiRequest(models.Model):
             values["res_model"] = record._name
             values["res_id"] = record.id
 
+        # Mettre à jour l'entrée existante plutôt que d'en insérer une seconde.
+        #
+        # `find_replay` ne rejoue que les appels réussis : un échec DOIT pouvoir être
+        # réessayé, sinon une erreur transitoire condamnerait définitivement le
+        # request_uuid du client. Mais la contrainte d'unicité porte sur
+        # (request_uuid, endpoint) quel que soit le statut — les deux règles se
+        # contredisaient.
+        #
+        # Constaté en production : un réessai après un 422 déclenchait
+        # « duplicate key value violates unique constraint », ce qui AVORTAIT la
+        # transaction PostgreSQL. Le `except` ci-dessous rattrapait bien l'exception,
+        # mais le curseur restait inutilisable et empoisonnait la suite de la requête.
         try:
-            return self.sudo().create(values)
+            with self.env.cr.savepoint():
+                existing = self.sudo().search([
+                    ("request_uuid", "=", values["request_uuid"]),
+                    ("endpoint", "=", endpoint),
+                ], limit=1) if values["request_uuid"] else self.browse()
+                if existing:
+                    existing.write(values)
+                    return existing
+                return self.sudo().create(values)
         except Exception:  # noqa: BLE001
-            # A duplicate uuid means a concurrent retry already logged it — the
-            # unique constraint did its job. Any other failure must not turn a
-            # successful business operation into a client-visible error.
+            # Course entre deux requêtes concurrentes : la contrainte a fait son
+            # office. Le savepoint garantit que le curseur reste utilisable, donc
+            # qu'une opération métier réussie n'est pas transformée en erreur.
             return self.browse()
 
     def action_open_record(self):

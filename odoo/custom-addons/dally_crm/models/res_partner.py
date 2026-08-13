@@ -85,11 +85,18 @@ class ResPartner(models.Model):
             # The database stores numbers in whatever shape they were entered,
             # so an exact SQL match is unreliable; a suffix LIKE narrows the set
             # and normalisation confirms it in Python.
+            # Odoo 19 a supprimé `res.partner.mobile` : il ne reste que `phone`
+            # (et `phone_sanitized`, calculé). Chercher sur `mobile` levait
+            # « Invalid field res.partner.mobile in condition » et faisait échouer
+            # toute création de demande depuis le site — constaté en production.
+            #
+            # Le paramètre `mobile` de cette méthode est conservé : les appelants
+            # en passent un, et un numéro de mobile reste un numéro à rapprocher.
+            # Il est simplement comparé aux mêmes colonnes que les autres.
             possible = self.search(
                 [
-                    "|", "|",
+                    "|",
                     ("phone", "like", tail),
-                    ("mobile", "like", tail),
                     ("dally_whatsapp", "like", tail),
                 ],
                 limit=20,
@@ -97,7 +104,6 @@ class ResPartner(models.Model):
             for partner in possible:
                 stored = {
                     normalize_phone(partner.phone),
-                    normalize_phone(partner.mobile),
                     normalize_phone(partner.dally_whatsapp),
                 }
                 stored.discard(None)

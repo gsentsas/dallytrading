@@ -157,12 +157,12 @@ class DallyTradeController(DallyApiController):
             )
 
         self._reject_internal_fields(payload)
-        clean = self._flatten(payload)
+        clean = self._flatten_trade(payload)
 
         self._require(clean, "subject")
         self._require_email_or_phone(clean)
         self._validate_operation_type(clean)
-        self._validate_countries(env, clean)
+        self._validate_countries_trade(env, clean)
         if clean.get("request_uuid"):
             self._validate_uuid(clean["request_uuid"])
 
@@ -205,7 +205,7 @@ class DallyTradeController(DallyApiController):
         _walk(payload)
 
     @classmethod
-    def _flatten(cls, payload):
+    def _flatten_trade(cls, payload):
         """Flatten the nested contract, keeping only allowlisted keys."""
         flat = {}
 
@@ -226,10 +226,10 @@ class DallyTradeController(DallyApiController):
                 if source in nested:
                     flat[target] = nested[source]
 
-        return cls._coerce(flat)
+        return cls._coerce_trade(flat)
 
     @staticmethod
-    def _coerce(flat):
+    def _coerce_trade(flat):
         """Trim strings and enforce length caps."""
         clean = {}
         for name, value in flat.items():
@@ -271,7 +271,7 @@ class DallyTradeController(DallyApiController):
             )
 
     @staticmethod
-    def _validate_countries(env, clean):
+    def _validate_countries_trade(env, clean):
         """Country codes must exist. No default is substituted.
 
         Guessing a country would attribute an enquiry to a market it never came from,

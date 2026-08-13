@@ -2,7 +2,7 @@
   "name": "@dallytrading/web",
   "version": "0.1.0",
   "private": true,
-  "description": "Public website for dallytrading.com \u2014 Next.js front end and BFF for Odoo.",
+  "description": "Public website for dallytrading.com — Next.js front end and BFF for Odoo.",
   "engines": {
     "node": ">=20.9.0"
   },
@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run typecheck && npm run lint && npm run test"
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "postbuild": "cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public"
   },
   "dependencies": {
     "next": "16.3.0",

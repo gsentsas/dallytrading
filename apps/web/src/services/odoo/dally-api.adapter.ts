@@ -111,17 +111,34 @@ function mapErrorCode(status: number, apiCode?: string): OdooErrorCode {
   return 'internal_error';
 }
 
+/**
+ * Which Odoo integration identity a call should use.
+ *
+ * Not a convenience: an Odoo API key is bound to one acting user, and that user's
+ * groups are what actually bound the call. Sending every request with one key
+ * would mean one identity for every capability — the opposite of ADR-011.
+ */
+type Capability = 'default' | 'sourcing' | 'trade' | 'tracking';
+
 export class DallyApiAdapter implements OdooGateway {
   private readonly baseUrl: string;
-  private readonly apiKey: string;
+  private readonly keys: Readonly<Record<Capability, string>>;
   private readonly timeoutMs: number;
 
   constructor() {
     const env = getServerEnv();
     // Trailing slash removed once, so path concatenation cannot produce "//".
     this.baseUrl = env.ODOO_URL.replace(/\/+$/, '');
-    this.apiKey = env.ODOO_API_KEY;
     this.timeoutMs = env.ODOO_TIMEOUT_MS;
+    // Each capability falls back to the default key. An instance that has not
+    // split its keys keeps working and fails with an explicit 403 from Odoo,
+    // rather than the call silently running as a wider identity.
+    this.keys = {
+      default: env.ODOO_API_KEY,
+      sourcing: env.ODOO_API_KEY_SOURCING ?? env.ODOO_API_KEY,
+      trade: env.ODOO_API_KEY_TRADE ?? env.ODOO_API_KEY,
+      tracking: env.ODOO_API_KEY_TRACKING ?? env.ODOO_API_KEY,
+    };
   }
 
   /** Perform a request, normalising every failure into OdooGatewayError. */
@@ -129,6 +146,7 @@ export class DallyApiAdapter implements OdooGateway {
     path: string,
     init: { method: 'GET' | 'POST'; body?: unknown },
     correlationId: string,
+    capability: Capability = 'default',
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
 
@@ -145,7 +163,7 @@ export class DallyApiAdapter implements OdooGateway {
           'Content-Type': 'application/json',
           // The key stays server-side. It is never forwarded to the browser and
           // never appears in a log (the logger redacts this header name).
-          'X-API-Key': this.apiKey,
+          'X-API-Key': this.keys[capability],
           'X-Correlation-Id': correlationId,
         },
         ...(init.body === undefined
@@ -335,6 +353,7 @@ export class DallyApiAdapter implements OdooGateway {
       '/api/v1/sourcing/requests',
       { method: 'POST', body: payload },
       correlationId,
+      'sourcing',
     );
 
     return {
@@ -380,6 +399,7 @@ export class DallyApiAdapter implements OdooGateway {
       '/api/v1/trade/opportunities',
       { method: 'POST', body: payload },
       correlationId,
+      'trade',
     );
 
     return {
@@ -411,6 +431,7 @@ export class DallyApiAdapter implements OdooGateway {
           `?token=${encodeURIComponent(token)}`,
         { method: 'GET' },
         correlationId,
+        'tracking',
       );
 
       return {

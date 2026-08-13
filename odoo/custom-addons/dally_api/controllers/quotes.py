@@ -102,7 +102,7 @@ class DallyQuotesController(DallyApiController):
 
         self._require(clean, "service_code", "last_name")
         self._require_email_or_phone(clean)
-        self._validate_email(clean.get("email"))
+        self._validate_email_quotes(clean.get("email"))
 
         service = env["dally.service.type"]._get_by_code(clean["service_code"])
         if not service:
@@ -225,7 +225,7 @@ class DallyQuotesController(DallyApiController):
             )
 
     @staticmethod
-    def _validate_email(email):
+    def _validate_email_quotes(email):
         """Structural check only.
 
         Full RFC validation rejects addresses that work in practice. Deliverability

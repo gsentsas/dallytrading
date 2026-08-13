@@ -15,3 +15,4 @@ access_sourcing_proposal_commercial,dally.sourcing.proposal commercial,model_dal
 access_sourcing_proposal_user,dally.sourcing.proposal sourcing user,model_dally_sourcing_proposal,dally_core.group_dally_sourcing,1,1,1,0
 access_sourcing_proposal_manager,dally.sourcing.proposal sourcing manager,model_dally_sourcing_proposal,dally_sourcing.group_dally_sourcing_manager,1,1,1,1
 access_sourcing_proposal_dally_manager,dally.sourcing.proposal manager,model_dally_sourcing_proposal,dally_core.group_dally_manager,1,1,1,1
+access_dally_service_type_sourcing_api,dally.service.type sourcing api,dally_core.model_dally_service_type,dally_sourcing.group_dally_sourcing_api,1,0,0,0

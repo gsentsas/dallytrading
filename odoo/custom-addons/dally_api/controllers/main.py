@@ -21,7 +21,7 @@ import json
 import logging
 import uuid
 
-from odoo import _, http
+from odoo import _, http, SUPERUSER_ID
 from odoo.exceptions import AccessDenied, AccessError, UserError, ValidationError
 from odoo.http import Response, request
 
@@ -151,7 +151,14 @@ class DallyApiController(http.Controller):
         cls._check_rate_limit(api_key)
 
         env = request.env(user=api_key.user_id.id)
-        return api_key, env
+        # La clé a été résolue dans l'environnement NON authentifié (auth="none",
+        # donc uid None). La rebasculer sur l'utilisateur agissant est nécessaire :
+        # `_register_use()` écrit dessus, et une écriture dans un environnement sans
+        # utilisateur casse le flush de fin de requête — le contrôle d'accès y
+        # appelle ensure_one() sur un res.users vide. Constaté en production : la
+        # création d'une opportunité aboutissait (201 journalisé) puis la requête
+        # se terminait en 500.
+        return api_key.with_env(env), env
 
     @classmethod
     def _check_rate_limit(cls, api_key):
@@ -352,8 +359,16 @@ class DallyApiController(http.Controller):
             request_uuid = ""
             if isinstance(payload, dict):
                 request_uuid = str(payload.get("request_uuid") or "")
+            # Journaliser au nom d'un utilisateur réel. `request.env` est ici
+            # l'environnement non authentifié (uid None) : y écrire produit un
+            # create_uid NULL et fait échouer le flush de fin de requête.
+            log_env = request.env
+            if api_key and api_key.user_id:
+                log_env = request.env(user=api_key.user_id.id)
+            else:
+                log_env = request.env(user=SUPERUSER_ID)
             with request.env.cr.savepoint():
-                request.env["dally.api.request"].sudo().log(
+                log_env["dally.api.request"].sudo().log(
                     request_uuid=request_uuid,
                     endpoint=endpoint,
                     status_code=status,

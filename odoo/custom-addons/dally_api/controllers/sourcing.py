@@ -115,18 +115,18 @@ class DallySourcingController(DallyApiController):
         )
 
     def _create_sourcing_request(self, env, payload, api_key):
-        clean = self._flatten(payload)
+        clean = self._flatten_sourcing(payload)
 
         self._require(clean, "product_name")
         self._require_contact(clean)
-        self._validate_email(clean.get("email"))
+        self._validate_email_sourcing(clean.get("email"))
         self._validate_dates(clean)
 
         service = self._resolve_service(env, clean)
         clean["service_code"] = service.code
 
         self._validate_currency(env, clean)
-        self._validate_countries(env, clean)
+        self._validate_countries_sourcing(env, clean)
 
         request = env["dally.sourcing.request"].dally_create_from_website(clean)
 
@@ -144,7 +144,7 @@ class DallySourcingController(DallyApiController):
     # ─── Payload handling ────────────────────────────────────────────
 
     @classmethod
-    def _flatten(cls, payload):
+    def _flatten_sourcing(cls, payload):
         """Flatten the nested contract, keeping only allowlisted keys."""
         flat = {}
 
@@ -179,10 +179,10 @@ class DallySourcingController(DallyApiController):
                 and isinstance(value, str)
             }
 
-        return cls._coerce(flat)
+        return cls._coerce_sourcing(flat)
 
     @staticmethod
-    def _coerce(flat):
+    def _coerce_sourcing(flat):
         """Trim strings, enforce caps, and validate numbers."""
         clean = {}
         for name, value in flat.items():
@@ -307,7 +307,7 @@ class DallySourcingController(DallyApiController):
             )
 
     @staticmethod
-    def _validate_countries(env, clean):
+    def _validate_countries_sourcing(env, clean):
         Country = env["res.country"]
         for key in ("preferred_origin_country", "destination_country"):
             code = (clean.get(key) or "").strip()
@@ -354,7 +354,7 @@ class DallySourcingController(DallyApiController):
             )
 
     @staticmethod
-    def _validate_email(email):
+    def _validate_email_sourcing(email):
         """Structural check only.
 
         Full RFC validation rejects addresses that work in practice. Deliverability is

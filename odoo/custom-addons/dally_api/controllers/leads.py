@@ -70,7 +70,7 @@ class DallyLeadsController(DallyApiController):
 
         self._require(clean, "service_code", "last_name")
         self._require_email_or_phone(clean)
-        self._validate_email(clean.get("email"))
+        self._validate_email_leads(clean.get("email"))
 
         lead = env["crm.lead"].dally_create_from_website(clean)
 
@@ -113,7 +113,7 @@ class DallyLeadsController(DallyApiController):
         return clean
 
     @staticmethod
-    def _validate_email(email):
+    def _validate_email_leads(email):
         """Structural check only.
 
         Full RFC validation rejects addresses that work in practice. Deliverability

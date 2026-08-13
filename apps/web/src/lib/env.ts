@@ -58,6 +58,28 @@ const serverEnvSchema = z.object({
     .string()
     .min(24, 'ODOO_API_KEY looks like a placeholder (fewer than 24 characters)'),
 
+  /**
+   * Capability-scoped keys.
+   *
+   * An Odoo API key is bound to exactly one acting user, whose groups bound what
+   * the call can do. ADR-011 gives each capability its own integration user
+   * precisely so that a leaked key cannot reach beyond its own endpoints — the
+   * leads user carries `group_dally_commercial`, which implies
+   * `group_dally_readonly`, the group that gates `internal_notes`.
+   *
+   * A single key would therefore either be over-privileged or unable to serve the
+   * sourcing and trading forms at all: verified on the live instance,
+   * `dally_api_integration` has no ACL on `dally.sourcing.request` or
+   * `dally.trade.opportunity`.
+   *
+   * Each is optional and falls back to ODOO_API_KEY, so an instance that has not
+   * split its keys yet keeps working — it simply gets whatever the single key can
+   * do, and fails with a clear 403 rather than silently escalating.
+   */
+  ODOO_API_KEY_SOURCING: z.string().min(24).optional(),
+  ODOO_API_KEY_TRADE: z.string().min(24).optional(),
+  ODOO_API_KEY_TRACKING: z.string().min(24).optional(),
+
   /** Milliseconds before an Odoo call is abandoned. */
   ODOO_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(15_000),
 });

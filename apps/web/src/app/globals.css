@@ -1,69 +1,93 @@
 @import 'tailwindcss';
 
 /*
- * Brand tokens (§31).
+ * ─── DallyTrading design system ──────────────────────────────────────
  *
- * Tailwind v4 is configured from CSS: these custom properties generate the
- * utilities (bg-navy-700, text-green-600, …). Defining the palette once here is
- * what stops hex values from being pasted into components, which is how a brand
- * drifts.
+ * Derived from the official logo: deep navy, two leaf greens, a warm grey for
+ * the signature line.
  *
- * Contrast is checked against WCAG AA (§53): navy-700 on white is ~12:1,
- * green-700 on white ~4.6:1. Lighter greens are for surfaces, never for text.
+ * ## The one rule that matters
+ *
+ * The logo's greens are BRIGHT. Measured against white:
+ *
+ *   #6DBE45  light leaf   2.31:1   decorative only
+ *   #4C9A2A  leaf         3.52:1   large text / graphics only
+ *   #3A7A20  deep leaf    5.27:1   safe for text and button labels
+ *   #16365B  navy        12.26:1   safe everywhere
+ *
+ * So `--color-leaf-*` (the logo greens) exist for graphics: the swoosh, icons,
+ * borders, hover accents. Anything carrying a word uses `--color-green-700`
+ * or darker. Using the brand's prettiest green for a button label would put the
+ * site below WCAG AA on its most important control (§53).
+ *
+ * Tailwind v4 is configured from CSS, so these custom properties generate the
+ * utilities (bg-navy-700, text-green-700, …). Defining the palette once here is
+ * what stops hex values being pasted into components, which is how a brand drifts.
  */
 @theme {
-  /* Navy — primary brand colour. */
-  --color-navy-50: #eef2f7;
-  --color-navy-100: #d5dfeb;
-  --color-navy-200: #adc0d7;
-  --color-navy-300: #7f9bbe;
-  --color-navy-400: #5578a4;
-  --color-navy-500: #3a5c87;
-  --color-navy-600: #2b466a;
-  --color-navy-700: #1e3352;
-  --color-navy-800: #152439;
-  --color-navy-900: #0d1725;
+  /* Navy — from the logo's wordmark and vessel. Primary brand colour. */
+  --color-navy-50: #eff3f8;
+  --color-navy-100: #d8e2ee;
+  --color-navy-200: #b0c4dc;
+  --color-navy-300: #7f9dc0;
+  --color-navy-400: #4f739d;
+  --color-navy-500: #2b4f7c;
+  --color-navy-600: #1d4269;
+  --color-navy-700: #16365b; /* logo navy */
+  --color-navy-800: #0f2743;
+  --color-navy-900: #081827;
 
-  /* Green — secondary, for progress and confirmation. */
-  --color-green-50: #edf7f1;
-  --color-green-100: #d2ebdc;
-  --color-green-200: #a6d7ba;
-  --color-green-300: #71bd93;
-  --color-green-400: #47a173;
-  --color-green-500: #2f855a;
-  --color-green-600: #256b48;
-  --color-green-700: #1d5437;
-  --color-green-800: #163f29;
-  --color-green-900: #0f2a1c;
+  /* Leaf greens — from the logo's swoosh. GRAPHICS ONLY, never text. */
+  --color-leaf-light: #6dbe45;
+  --color-leaf: #4c9a2a;
 
-  /* Neutrals. */
-  --color-mist-50: #f8fafc;
-  --color-mist-100: #f1f5f9;
-  --color-mist-200: #e2e8f0;
-  --color-mist-300: #cbd5e1;
-  --color-mist-600: #475569;
-  --color-mist-700: #334155;
+  /* Green — text-safe scale built down from the leaf. */
+  --color-green-50: #f1f9ec;
+  --color-green-100: #ddf0d1;
+  --color-green-200: #bce2a5;
+  --color-green-300: #94d073;
+  --color-green-400: #6dbe45; /* = leaf-light */
+  --color-green-500: #4c9a2a; /* = leaf */
+  --color-green-600: #438a24;
+  --color-green-700: #3a7a20; /* first text-safe step: 5.27:1 */
+  --color-green-800: #2e6318;
+  --color-green-900: #1f4410;
+
+  /* Neutrals — the grey comes from the logo's signature line. */
+  --color-mist-50: #f8fafb;
+  --color-mist-100: #f1f4f6;
+  --color-mist-200: #e3e8ec;
+  --color-mist-300: #cbd3da;
+  --color-mist-400: #9aa5ae;
+  --color-mist-500: #6d6e71; /* logo signature grey */
+  --color-mist-600: #55565a;
+  --color-mist-700: #3f4044;
 
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
     Arial, sans-serif;
+
+  /* The logo's signature spacing: IMPORT • EXPORT • LOGISTICS • SOLUTIONS */
+  --tracking-signature: 0.18em;
 }
 
-/*
- * A visible focus ring on every interactive element. Removing outlines makes a
- * site unusable by keyboard, and it is the single most common accessibility
- * regression (§53).
- */
 @layer base {
+  /*
+   * A visible focus ring on every interactive element. Removing outlines makes a
+   * site unusable by keyboard, and it is the single most common accessibility
+   * regression (§53).
+   */
   :focus-visible {
-    outline: 3px solid var(--color-green-500);
+    outline: 3px solid var(--color-green-700);
     outline-offset: 2px;
+    border-radius: 2px;
   }
 
   html {
     scroll-behavior: smooth;
+    /* Anchored sections must not land under the sticky header. */
+    scroll-padding-top: 5rem;
   }
 
-  /* Respect a user's reduced-motion preference. */
   @media (prefers-reduced-motion: reduce) {
     html {
       scroll-behavior: auto;
@@ -77,19 +101,50 @@
   }
 
   body {
-    background-color: var(--color-mist-50);
+    background-color: #ffffff;
     color: var(--color-navy-800);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Long service names must not overflow on a 320px screen. */
+  h1,
+  h2,
+  h3 {
+    overflow-wrap: break-word;
+  }
+}
+
+@layer components {
+  /* The brand signature, reused in the header, the footer and the hero. */
+  .dally-signature {
+    letter-spacing: var(--tracking-signature);
+    text-transform: uppercase;
+  }
+
+  /*
+   * The leaf swoosh from the logo, as a section divider. Purely decorative, so
+   * every use must be aria-hidden.
+   */
+  .dally-swoosh {
+    background-image: linear-gradient(
+      90deg,
+      var(--color-leaf) 0%,
+      var(--color-leaf-light) 50%,
+      var(--color-leaf) 100%
+    );
+    height: 4px;
+    border-radius: 999px;
   }
 }
 
 /*
- * Honeypot field (see features/quote/schema.ts).
+ * Honeypot field (see features/quote/quote-schema.ts).
  *
  * Hidden without `display: none` and without `hidden`: some bots skip those, and
  * a genuinely undisplayed field is also skipped by screen readers, which is what
- * we want here. aria-hidden and tabindex="-1" keep it out of assistive tech.
+ * we want. aria-hidden and tabindex="-1" keep it out of assistive tech.
  */
 .dally-honeypot {
   position: absolute;

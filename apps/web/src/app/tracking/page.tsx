@@ -5,15 +5,19 @@ import { getOdooGateway } from '@/services/odoo';
 import { OdooGatewayError, type PublicShipment } from '@/services/odoo/types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger, newCorrelationId } from '@/lib/logger';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+// noindex is forced, not merely environment-gated: a tracking result carries a
+// customer's shipment status and must never be archived by a search engine, in any
+// environment.
+export const metadata: Metadata = pageMetadata({
   title: 'Suivre mon expédition',
   description:
-    'Suivez votre expédition DallyTrading en saisissant votre référence de suivi. ' +
-    'Statut, trajet, dates de départ et d’arrivée estimée.',
-  alternates: { canonical: '/tracking' },
-  robots: { index: false, follow: false },
-};
+    'Suivez votre expédition DallyTrading avec votre référence et votre code de ' +
+    'suivi. Statut, trajet, dates de départ et d’arrivée estimée.',
+  path: '/tracking',
+  noindex: true,
+});
 
 /** Always rendered on demand: a tracking result must never be cached or shared. */
 export const dynamic = 'force-dynamic';
@@ -101,7 +105,7 @@ export default async function TrackingPage({
           <input type="hidden" name="t" value={token} />
           <button
             type="submit"
-            className="rounded-lg bg-green-500 px-6 py-3 font-semibold text-white hover:bg-green-600"
+            className="rounded-lg bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800"
           >
             Rechercher
           </button>

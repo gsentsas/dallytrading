@@ -67,13 +67,27 @@ type Status = 'editing' | 'submitting' | 'sent' | 'error';
 export function QuoteForm({
   services,
   catalogueStale,
+  initialServiceCode,
 }: {
   services: ReadonlyArray<ServiceType>;
   catalogueStale: boolean;
+  /**
+   * Service to start on, from `?service=` — set by the CTAs on activity pages.
+   *
+   * Only honoured when the code exists in the catalogue Odoo published, so a stale
+   * link loses the pre-selection instead of putting the form into a state where the
+   * chosen service does not exist.
+   */
+  initialServiceCode?: string;
 }) {
   const requestUuid = useMemo(() => crypto.randomUUID(), []);
 
-  const [form, setForm] = useState<FormState>(EMPTY);
+  const [form, setForm] = useState<FormState>(() =>
+    initialServiceCode &&
+    services.some((service) => service.code === initialServiceCode)
+      ? { ...EMPTY, serviceCode: initialServiceCode }
+      : EMPTY,
+  );
   const [stepIndex, setStepIndex] = useState(0);
   const [status, setStatus] = useState<Status>('editing');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -546,7 +560,7 @@ export function QuoteForm({
         ) : (
           <button
             type="button" onClick={submit} disabled={status === 'submitting'}
-            className="rounded-lg bg-green-500 px-6 py-3 font-semibold text-white hover:bg-green-600 disabled:opacity-60"
+            className="rounded-lg bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800 disabled:opacity-60"
           >
             {status === 'submitting' ? 'Envoi en cours…' : 'Envoyer ma demande'}
           </button>

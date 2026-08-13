@@ -66,8 +66,11 @@ platform/
 │   ├── config/odoo.conf                GÉNÉRÉ — 0600, hors Git
 │   └── custom-addons/                  Modules DallyTrading
 ├── apps/web/                            Next.js
-│   ├── src/app/                         pages : /, /devis, /tracking, /api/leads
-│   ├── src/features/                    quote (formulaire multi-étapes), tracking
+│   ├── src/app/                         /, /a-propos, /activites, /devis,
+│   │                                    /tracking, /contact, sitemap, robots
+│   ├── src/components/                  brand (logo), layout, ui, seo
+│   ├── src/config/                      site (coordonnées), activities (contenu)
+│   ├── src/features/                    quote, contact, tracking
 │   ├── src/services/odoo/               OdooGateway + adaptateurs
 │   └── src/lib/                         env, logger, rate-limit
 ├── docs/
@@ -155,6 +158,13 @@ npm run verify        # typecheck + lint + tests
 cd apps/web
 npm run build
 ```
+
+⚠️ **Les variables `NEXT_PUBLIC_*` doivent être présentes AVANT le build.**
+Next.js les inline pendant `next build`, et les pages statiques — accueil, à
+propos, les onze pages activités — sont rendues à ce moment. Les fournir
+seulement au runtime produit un site sans téléphone, sans e-mail et sans bouton
+WhatsApp sur toutes ces pages, **sans aucune erreur**. Constaté en test, détaillé
+dans [`.env.example`](.env.example).
 
 ⚠️ `next.config.mjs` fixe `output: 'standalone'` : **`next start` est alors
 inopérant** (Next l'annonce au démarrage). La commande de production est

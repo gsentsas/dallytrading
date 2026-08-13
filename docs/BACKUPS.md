@@ -58,9 +58,24 @@ La vérification rapide contrôle la complétude, le manifeste, la concordance d
 timestamps et tailles, les SHA-256, le catalogue `pg_restore` et l'innocuité des
 chemins de l'archive. Elle n'écrit rien dans PostgreSQL.
 
-`backup.sh` applique un `umask` restrictif et prend un verrou exclusif dans
-`BACKUP_DIR/.backup.lock`. Une seconde exécution concurrente échoue clairement au
-lieu de produire deux captures qui se chevauchent.
+`backup.sh` prend un verrou exclusif dans `BACKUP_DIR/.backup.lock` : une seconde
+exécution concurrente échoue clairement au lieu de produire deux captures qui se
+chevauchent.
+
+### Permissions : imposées, pas héritées
+
+Les répertoires de sauvegarde sont en `700` et les fichiers en `600`, posés par des
+`chmod` explicites — à la création et après l'écriture du marqueur `.complete`.
+
+Le script pose bien `umask 0077`, mais cela ne suffisait pas : l'umask ne protège que
+ce que le script crée pendant son exécution, et une sauvegarde lancée depuis un shell
+dont l'umask valait 022 produisait des répertoires `755` et des fichiers `644`. Le
+`database.dump` de production s'est ainsi retrouvé lisible par les ~20 comptes
+d'hébergement de cette machine partagée (constat DT-007).
+
+Un umask est un état hérité de l'appelant. Faire dépendre la protection d'un dump de
+production d'une variable que personne ne vérifie ne tient pas ; le `chmod` explicite,
+si.
 
 Le mode profond s'exécute seulement après une restauration isolée :
 

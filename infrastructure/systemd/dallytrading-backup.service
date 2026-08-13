@@ -8,6 +8,12 @@ Wants=docker.service network-online.target
 Type=oneshot
 User=dallytrading.com_02xd20o36s7
 Group=psacln
+# Déclaré explicitement plutôt que laissé à la résolution NSS : la sauvegarde
+# passe par le démon Docker (24 appels entre backup.sh et verify-backup.sh), et
+# sans ce groupe elle échoue chaque nuit à 02:15 avec un « permission denied »
+# que personne ne regarde. Le rendre visible dans l'unité documente aussi la
+# dépendance pour qui la lira.
+SupplementaryGroups=docker
 UMask=0077
 WorkingDirectory=/var/www/vhosts/dallytrading.com/platform
 ExecStart=/var/www/vhosts/dallytrading.com/platform/infrastructure/scripts/backup-daily.sh
@@ -23,6 +29,10 @@ ProtectSystem=strict
 ProtectHome=false
 ReadWritePaths=/var/www/vhosts/dallytrading.com/platform/backups
 ReadWritePaths=/var/www/vhosts/dallytrading.com/platform/logs
+# ProtectSystem=strict remonte toute la hiérarchie en lecture seule. Se connecter
+# au socket Docker exige un accès en écriture dessus ; sans cette exception, la
+# sauvegarde ne peut atteindre ni PostgreSQL ni le filestore.
+ReadWritePaths=/run/docker.sock
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true

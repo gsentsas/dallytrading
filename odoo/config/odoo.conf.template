@@ -73,7 +73,16 @@ limit_request = 8192
 # Pas de logfile : sortie standard captée par Docker (json-file avec
 # rotation), donc consultable via `docker compose logs`.
 log_level = ${ODOO_LOG_LEVEL}
-log_handler = :INFO
+# werkzeug journalise la ligne de requête COMPLÈTE, query string incluse. Or le
+# token de suivi y voyage : `GET /api/v1/tracking/DT-SHP-…?token=<secret>` se
+# retrouvait en clair dans le journal du conteneur, à côté du code 200 qui prouve
+# que le token est valide — la combinaison la plus exploitable qui soit.
+# Constaté : 27 occurrences avant correction.
+#
+# nginx conserve la trace d'accès (avec un format sans query string pour les
+# routes de suivi, cf. infrastructure/nginx/), donc rien n'est perdu côté
+# observabilité : seule la duplication qui portait le secret disparaît.
+log_handler = :INFO,werkzeug:WARNING
 
 # ─── Divers ───────────────────────────────────────────────────────
 # Aucune donnée de démonstration en production.

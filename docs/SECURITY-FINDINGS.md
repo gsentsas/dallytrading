@@ -236,11 +236,72 @@ Procédure exercice de restauration : [`RESTORE.md`](RESTORE.md). Le 13 août 20
 |---|---|
 | **Gravité** | 🟡 Moyenne |
 | **Système** | Tracking public DallyTrading |
-| **Statut** | ⚠️ Risque restant documenté |
+| **Statut** | ✅ Trois surfaces sur quatre fermées — une action Plesk restante |
 
-Le lien de capacité utilise actuellement les paramètres `ref` et `t`. Odoo et les reverse proxies peuvent journaliser la query string complète dans leurs logs accès. Aucun token ne figure dans le payload public, mais un opérateur ayant accès aux logs peut retrouver un lien encore valide. Le token de expédition synthétique utilisé pendant la recette a été tourné immédiatement après le constat, rendant la valeur observée inutilisable.
+Le lien de capacité utilise les paramètres `ref` et `t`. Le constat initial disait que
+les proxies « peuvent » journaliser la query string. **Mesuré le 13/08/2026 : ils la
+journalisent effectivement, sur quatre surfaces distinctes.**
 
-Traitement recommandé hors clôture : transporter le secret hors URL ou appliquer une politique de redaction des query strings sur Plesk et Odoo, protéger la lecture des logs, réduire leur rétention et tourner tout token suspect.
+| Surface | Constat mesuré | Traitement |
+|---|---|---|
+| Journal Odoo (werkzeug) | 27 occurrences de `?token=` | ✅ `log_handler = :INFO,werkzeug:WARNING` — vérifié : 0 occurrence après |
+| Journal du frontend (journald) | `path` complet journalisé sur chaque branche d'erreur | ✅ expurgation dans l'adaptateur, 3 tests |
+| nginx `crm.dallytrading.com` | 23 occurrences de `?token=` | ⏳ bloc `access_log off` préparé, à coller dans Plesk |
+| nginx `dallytrading.com` | `/tracking?ref=…&t=…` présent | ⏳ idem |
+| Journal applicatif `dally.api.request` | **0** — vérifié en base | ✅ rien à faire |
+
+Le journal Odoo était le plus exploitable : le token complet y côtoyait le code de
+réponse, qui indique si le token est valide.
+
+`access_log off` plutôt qu'un format de journal sans query string, parce que
+`log_format` est une directive de niveau `http` : elle est refusée dans les directives
+additionnelles Plesk, qui s'insèrent dans le bloc `server`. La trace applicative reste
+assurée par `dally.api.request` (endpoint, statut, IP source — jamais le token).
+
+**Portée réelle de l'exposition passée** : les seuls tokens ayant circulé appartiennent
+à des expéditions de recette. Aucun client réel n'existe encore. Les journaux Plesk
+concernés appartiennent à `root` et devront être purgés lors de leur rotation normale.
+
+Ce qui n'a délibérément pas été fait : sortir le secret de l'URL (fragment, échange
+token → session courte, POST initial). Chacune de ces options casse les liens de suivi
+déjà distribués, pour un gain nul une fois les quatre surfaces fermées.
+
+---
+
+## DT-007 — Sauvegarde de production lisible par tous les comptes du serveur
+
+| | |
+|---|---|
+| **Gravité** | 🟠 Élevée |
+| **Système** | Sauvegardes DallyTrading |
+| **Statut** | ✅ Corrigé le 13/08/2026 |
+
+### Constat
+
+`backups/production-release/20260813T192539Z/` était en `755`, ses fichiers en `644` —
+dont `database.dump`, le dump complet de la base de production. Sur cette machine
+partagée par une vingtaine de comptes d'hébergement, **n'importe lequel pouvait le
+lire** : données clients, notes internes, marges, coûts, hashs de clés d'API.
+
+La sauvegarde voisine `pre-deploy/` était correctement en `700`/`600`.
+
+### Cause
+
+`backup.sh` posait `umask 0077` en tête, ce qui ne protège que ce que le script crée
+**lui-même** pendant son exécution. Lancé depuis un shell dont l'umask valait 022, il
+produisait des permissions ouvertes. Les deux sauvegardes prouvent la différence : la
+même commande, deux umasks, deux résultats.
+
+Un umask est un état hérité de l'appelant. S'y fier pour protéger un secret revient à
+faire dépendre la sécurité d'une variable d'environnement que personne ne vérifie.
+
+### Correction
+
+- Permissions resserrées sur l'existant : `700` sur les répertoires, `600` sur les
+  fichiers, y compris `backups/` lui-même.
+- `backup.sh` impose désormais le mode par `chmod` explicite à la création **et** après
+  écriture du marqueur `.complete`, indépendamment de l'umask hérité.
+- L'unité systemd conserve `UMask=0077` en défense supplémentaire.
 
 ---
 
@@ -253,6 +314,8 @@ Traitement recommandé hors clôture : transporter le secret hors URL ou appliqu
 | DT-003 | 🟠 Élevée | Mot de passe DB dans `ps` | SEN CONTAINERS | Signalé, non traité |
 | DT-004 | 🟡 Moyenne | Aucun swap | Hôte partagé | Action requise (root) |
 | DT-005 | 🟡 Moyenne | Sauvegardes Odoo absentes | Hôte / SEN CONTAINERS | Traité côté DallyTrading |
+| DT-006 | 🟡 Moyenne | Token de suivi dans les journaux | DallyTrading | 3 surfaces sur 4 fermées |
+| DT-007 | 🟠 Élevée | Sauvegarde lisible par tous les comptes | DallyTrading | ✅ Corrigé |
 
 **Aucune modification n'a été apportée à l'instance SEN CONTAINERS ni à la
 configuration de l'hôte** dans le cadre de cet audit. Toutes les vérifications

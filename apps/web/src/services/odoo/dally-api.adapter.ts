@@ -141,6 +141,22 @@ export class DallyApiAdapter implements OdooGateway {
     };
   }
 
+  /**
+   * Remove a secret from a path before it reaches a log line.
+   *
+   * The tracking token travels in the query string — it is a capability, and
+   * anyone holding it can read the shipment. Every failure branch below logs
+   * `path`, so without this a 404 or a transient Odoo error would write a valid
+   * token into journald, where it outlives the request and is readable by anyone
+   * in the `adm` or `systemd-journal` groups.
+   *
+   * The reference is kept: it is not secret on its own (the lookup requires both),
+   * and without it the log line no longer identifies which request failed.
+   */
+  private static redact(path: string): string {
+    return path.replace(/([?&](?:token|t)=)[^&]*/gi, '$1<redacted>');
+  }
+
   /** Perform a request, normalising every failure into OdooGatewayError. */
   private async call<T>(
     path: string,
@@ -186,7 +202,7 @@ export class DallyApiAdapter implements OdooGateway {
         // (502/504) — treat it as unavailable rather than crashing on parse.
         logger.error('Odoo returned a non-JSON response', {
           correlationId,
-          path,
+          path: DallyApiAdapter.redact(path),
           status: response.status,
           durationMs,
         });
@@ -203,7 +219,7 @@ export class DallyApiAdapter implements OdooGateway {
 
         logger.warn('Odoo call rejected', {
           correlationId,
-          path,
+          path: DallyApiAdapter.redact(path),
           status: response.status,
           apiCode,
           odooRequestId: envelope?.request_id,
@@ -220,7 +236,7 @@ export class DallyApiAdapter implements OdooGateway {
 
       logger.info('Odoo call succeeded', {
         correlationId,
-        path,
+        path: DallyApiAdapter.redact(path),
         status: response.status,
         odooRequestId: envelope.request_id,
         durationMs,
@@ -242,7 +258,7 @@ export class DallyApiAdapter implements OdooGateway {
       const isTimeout = error instanceof Error && error.name === 'AbortError';
       logger.error(isTimeout ? 'Odoo call timed out' : 'Odoo unreachable', {
         correlationId,
-        path,
+        path: DallyApiAdapter.redact(path),
         timeoutMs: this.timeoutMs,
         durationMs: Date.now() - startedAt,
         error: error instanceof Error ? error.message : String(error),

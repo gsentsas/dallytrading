@@ -117,13 +117,25 @@ if (( CHECK_ONLY )); then
 fi
 
 mkdir -p "${BACKUP_DIR}"
+# Mode imposé explicitement, pas seulement par l'umask.
+#
+# `umask 0077` en tête de ce script ne protège que ce que CE script crée. Une
+# sauvegarde lancée depuis un shell dont l'umask est 022 produisait des
+# répertoires 755 et des fichiers 644 — constaté sur backups/production-release :
+# le database.dump complet était lisible par les ~20 comptes d'hébergement de
+# cette machine partagée (données clients, notes internes, marges, coûts).
+#
+# Un chmod explicite ne dépend d'aucun état hérité de l'appelant.
+chmod 700 "${BACKUP_DIR}"
 exec 9>"${BACKUP_DIR}/.backup.lock"
+chmod 600 "${BACKUP_DIR}/.backup.lock"
 flock -n 9 || fail "une autre sauvegarde DallyTrading est déjà en cours."
 
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 DEST="${BACKUP_DIR}/${TAG}/${TIMESTAMP}"
 [[ ! -e "${DEST}" ]] || fail "destination déjà existante : ${DEST}"
 mkdir -p "${DEST}"
+chmod 700 "${BACKUP_DIR}/${TAG}" "${DEST}"
 
 cleanup_on_error() {
   if [[ -d "${DEST}" && ! -f "${DEST}/.complete" ]]; then
@@ -208,6 +220,11 @@ log "calcul des empreintes SHA-256…"
   sha256sum database.dump filestore.tar.gz manifest.json > SHA256SUMS
 )
 touch "${DEST}/.complete"
+# Dernier filet : quel que soit l'umask hérité, rien de cette sauvegarde ne doit
+# être lisible par un autre compte du serveur.
+chmod 700 "${DEST}"
+find "${DEST}" -mindepth 1 -type d -exec chmod 700 {} +
+find "${DEST}" -mindepth 1 -type f -exec chmod 600 {} +
 log "sauvegarde complète."
 
 if [[ -n "${S3_BUCKET:-}" || -n "${S3_ENDPOINT:-}" ]]; then

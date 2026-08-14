@@ -1,0 +1,12 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_portal_quote_request,dally.quote.request portal read,dally_crm.model_dally_quote_request,base.group_portal,1,0,0,0
+access_portal_sourcing_request,dally.sourcing.request portal read,dally_sourcing.model_dally_sourcing_request,base.group_portal,1,0,0,0
+access_portal_sourcing_proposal,dally.sourcing.proposal portal read,dally_sourcing.model_dally_sourcing_proposal,base.group_portal,1,0,0,0
+access_portal_trade_opportunity,dally.trade.opportunity portal read,dally_trade.model_dally_trade_opportunity,base.group_portal,1,0,0,0
+access_portal_shipment,dally.shipment portal read,dally_freight.model_dally_shipment,base.group_portal,1,0,0,0
+access_portal_shipment_event,dally.shipment.event portal read,dally_tracking.model_dally_shipment_event,base.group_portal,1,0,0,0
+access_portal_shipment_package,dally.shipment.package portal read,dally_freight.model_dally_shipment_package,base.group_portal,1,0,0,0
+access_portal_document_portal,dally.portal.document portal read,model_dally_portal_document,base.group_portal,1,0,0,0
+access_portal_document_readonly,dally.portal.document staff read,model_dally_portal_document,dally_core.group_dally_readonly,1,0,0,0
+access_portal_document_commercial,dally.portal.document commercial,model_dally_portal_document,dally_core.group_dally_commercial,1,1,1,0
+access_portal_document_manager,dally.portal.document manager,model_dally_portal_document,dally_core.group_dally_manager,1,1,1,1

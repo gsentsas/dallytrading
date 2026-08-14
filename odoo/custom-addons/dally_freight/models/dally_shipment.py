@@ -106,6 +106,9 @@ class DallyShipment(models.Model):
         string="Consignee",
         help="Who receives the goods, when it is not the customer.",
     )
+        # Restreint au personnel interne. Un utilisateur portail lit ses propres
+        # dossiers ; ce champ, lui, expose l'identité d'un salarié et ne doit
+        # jamais lui être chargé par l'ORM, même sur un record qui lui appartient.
     user_id = fields.Many2one(
         comodel_name="res.users",
         string="Responsible",
@@ -113,6 +116,7 @@ class DallyShipment(models.Model):
         index=True,
         tracking=True,
         domain=[("share", "=", False)],
+        groups="dally_core.group_dally_readonly",
     )
 
     # ─── Service and mode ────────────────────────────────────────────

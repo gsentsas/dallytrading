@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Aucun groupe nouveau.
+
+            Odoo fournit déjà `base.group_portal`, avec toute la mécanique associée :
+            utilisateurs `share = True`, exclusion des règles internes, invitation par
+            `auth_signup`. En créer un second n'ajouterait aucune capacité et
+            introduirait la question « lequel fait foi ? » le jour d'un audit.
+
+            Ce fichier existe pour porter l'utilisateur de démonstration technique et
+            documenter la frontière. Les droits réels sont dans ir.model.access.csv
+            et dally_portal_rules.xml.
+
+            RAPPEL : un utilisateur portail ne doit JAMAIS recevoir
+            group_dally_readonly, group_dally_commercial, group_dally_sourcing,
+            group_dally_finance, group_dally_trade_user ni aucun groupe d'API.
+            group_dally_readonly est le socle interne : tous les rôles internes
+            l'impliquent, et c'est lui qui garde les champs marqués `groups=`.
+        -->
+
+    </data>
+</odoo>

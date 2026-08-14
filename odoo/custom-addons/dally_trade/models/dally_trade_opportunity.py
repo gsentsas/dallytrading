@@ -221,7 +221,9 @@ class DallyTradeOpportunity(models.Model):
         help="Left empty on public intake: assignment is a management decision, and "
              "an unassigned queue is visible whereas a wrongly assigned deal is not.",
     )
-    team_id = fields.Many2one(comodel_name="crm.team", string="Équipe", index=True)
+    # Restreint au personnel interne : expose l'organisation commerciale interne, jamais
+    # chargeable par un utilisateur portail.
+    team_id = fields.Many2one(comodel_name="crm.team", string="Équipe", index=True, groups="dally_core.group_dally_readonly")
 
     # ─── Parties ─────────────────────────────────────────────────────
     #

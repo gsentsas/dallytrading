@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Le cloisonnement client, au niveau ORM.
+
+            Toutes les règles filtrent sur `commercial_partner_id`, jamais sur
+            `partner_id` brut. La différence est métier : un client est une société,
+            et ses contacts sont des res.partner enfants. Filtrer sur le contact
+            ferait qu'un collaborateur ne verrait que les dossiers qu'il a lui-même
+            déposés — pas ceux de sa société. C'est la convention du core Odoo, qui
+            écrit `[('id', 'child_of', user.commercial_partner_id.id)]` sur
+            res.partner.
+
+            Toutes sont en LECTURE SEULE. Aucune ne porte perm_write, perm_create ou
+            perm_unlink : un client consulte, il ne modifie pas ses dossiers depuis
+            le portail.
+
+            Le nom du champ client diffère d'un modèle à l'autre — `partner_id` sur
+            les devis et les expéditions, `customer_id` sur le sourcing et le
+            trading. Chaque règle nomme donc le sien explicitement. Une règle
+            générique appliquée partout aurait, sur dally.trade.opportunity, pu
+            matcher `supplier_id` : un client également fournisseur aurait alors vu
+            l'opération depuis le mauvais côté.
+        -->
+
+        <record id="rule_portal_quote_request" model="ir.rule">
+            <field name="name">Portail — mes demandes de devis</field>
+            <field name="model_id" ref="dally_crm.model_dally_quote_request"/>
+            <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+            <field name="domain_force">
+                [('partner_id.commercial_partner_id', '=', user.commercial_partner_id.id)]
+            </field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="rule_portal_sourcing_request" model="ir.rule">
+            <field name="name">Portail — mes demandes de sourcing</field>
+            <field name="model_id" ref="dally_sourcing.model_dally_sourcing_request"/>
+            <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+            <field name="domain_force">
+                [('customer_id.commercial_partner_id', '=', user.commercial_partner_id.id)]
+            </field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <!--
+            Les propositions non envoyées restent invisibles.
+
+            Une proposition en brouillon porte un prix que personne n'a encore
+            validé ni décidé d'envoyer — c'est précisément ce que le garde-fou
+            `price_validated` protège côté interne. La rendre lisible au client par
+            le portail contournerait ce garde-fou : il verrait un prix avant qu'on
+            ait choisi de le lui proposer, et le tiendrait pour un engagement.
+        -->
+        <record id="rule_portal_sourcing_proposal" model="ir.rule">
+            <field name="name">Portail — les propositions qui m'ont été envoyées</field>
+            <field name="model_id" ref="dally_sourcing.model_dally_sourcing_proposal"/>
+            <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+            <field name="domain_force">
+                ['&amp;',
+                 ('customer_id.commercial_partner_id', '=', user.commercial_partner_id.id),
+                 ('state', 'in', ['sent', 'accepted', 'rejected', 'expired'])]
+            </field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <!--
+            `customer_id` uniquement. Jamais `supplier_id` ni `principal_id`.
+        -->
+        <record id="rule_portal_trade_opportunity" model="ir.rule">
+            <field name="name">Portail — mes opérations commerciales</field>
+            <field name="model_id" ref="dally_trade.model_dally_trade_opportunity"/>
+            <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+            <field name="domain_force">
+                [('customer_id.commercial_partner_id', '=', user.commercial_partner_id.id)]
+            </field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="rule_portal_shipment" model="ir.rule">
+            <field name="name">Portail — mes expéditions</field>
+            <field name="model_id" ref="dally_freight.model_dally_shipment"/>
+            <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+            <field name="domain_force">
+                [('partner_id.commercial_partner_id', '=', user.commercial_partner_id.id)]
+            </field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <!--
+            Les événements suivent leur expédition ET restent filtrés sur
+            `visible_to_customer`. Les deux conditions, pas l'une ou l'autre :
+            posséder l'expédition ne donne pas droit aux notes d'exploitation
+            internes qui y sont attachées.
+        -->
+        <record id="rule_portal_shipment_event" model="ir.rule">
+            <field name="name">Portail — les événements publics de mes expéditions</field>
+            <field name="model_id" ref="dally_tracking.model_dally_shipment_event"/>
+            <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+            <field name="domain_force">
+                ['&amp;',
+                 ('shipment_id.partner_id.commercial_partner_id', '=', user.commercial_partner_id.id),
+                 ('visible_to_customer', '=', True)]
+            </field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="rule_portal_shipment_package" model="ir.rule">
+            <field name="name">Portail — les colis de mes expéditions</field>
+            <field name="model_id" ref="dally_freight.model_dally_shipment_package"/>
+            <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+            <field name="domain_force">
+                [('shipment_id.partner_id.commercial_partner_id', '=', user.commercial_partner_id.id)]
+            </field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <!--
+            Deux conditions sur les documents : appartenir au client ET être publié.
+
+            La publication est un geste explicite du personnel. Sans cette seconde
+            condition, déposer un fichier sur un dossier client le rendrait
+            immédiatement téléchargeable — un brouillon de proposition, une pièce
+            reçue d'un tiers, une note scannée deviendraient visibles par le seul
+            fait d'avoir été attachés au bon dossier.
+        -->
+        <record id="rule_portal_document" model="ir.rule">
+            <field name="name">Portail — mes documents publiés</field>
+            <field name="model_id" ref="model_dally_portal_document"/>
+            <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+            <field name="domain_force">
+                ['&amp;',
+                 ('commercial_partner_id', '=', user.commercial_partner_id.id),
+                 ('published_to_portal', '=', True)]
+            </field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <!--
+            Isolation multi-société sur le document, en `global` : ANDée avec toutes
+            les autres règles plutôt que ORée avec elles. Une règle de groupe ne peut
+            donc pas la contourner.
+        -->
+        <record id="rule_portal_document_company" model="ir.rule">
+            <field name="name">Portal document — multi-company</field>
+            <field name="model_id" ref="model_dally_portal_document"/>
+            <field name="global" eval="True"/>
+            <field name="domain_force">
+                ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]
+            </field>
+        </record>
+
+    </data>
+</odoo>

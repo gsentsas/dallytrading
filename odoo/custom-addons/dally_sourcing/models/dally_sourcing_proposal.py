@@ -158,6 +158,10 @@ class DallySourcingProposal(models.Model):
     # proposal will not send, and the ORM would otherwise raise an access error on
     # a field they must be able to see. The restriction that matters is *who may set
     # it*, enforced in ``action_validate_price`` below rather than by a field group.
+        # Restreint au personnel interne. Un utilisateur portail lit ses propres
+        # dossiers ; ce champ, lui, expose l'état d'approbation interne du prix et
+        # ne doit jamais lui être chargé par l'ORM, même sur un record qui lui
+        # appartient.
     price_validated = fields.Boolean(
         string="Price Validated",
         copy=False,
@@ -167,17 +171,27 @@ class DallySourcingProposal(models.Model):
              "sourcing manager or finance through the Validate Price action: it "
              "records that a human decided this price, rather than a formula "
              "producing it.",
+        groups="dally_core.group_dally_readonly",
     )
+        # Restreint au personnel interne. Un utilisateur portail lit ses propres
+        # dossiers ; ce champ, lui, expose l'identité de l'approbateur et ne doit
+        # jamais lui être chargé par l'ORM, même sur un record qui lui appartient.
     price_validated_by_id = fields.Many2one(
         comodel_name="res.users",
         string="Price Validated By",
         readonly=True,
         copy=False,
+        groups="dally_core.group_dally_readonly",
     )
+        # Restreint au personnel interne. Un utilisateur portail lit ses propres
+        # dossiers ; ce champ, lui, expose la chronologie d'approbation interne et
+        # ne doit jamais lui être chargé par l'ORM, même sur un record qui lui
+        # appartient.
     price_validated_on = fields.Datetime(
         string="Price Validated On",
         readonly=True,
         copy=False,
+        groups="dally_core.group_dally_readonly",
     )
     sent_date = fields.Datetime(string="Sent On", readonly=True, copy=False)
     decision_date = fields.Datetime(string="Decided On", readonly=True, copy=False)

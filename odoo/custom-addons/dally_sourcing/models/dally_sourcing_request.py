@@ -162,6 +162,9 @@ class DallySourcingRequest(models.Model):
              "received from the internet deserves a pipeline entry.",
     )
 
+        # Restreint au personnel interne. Un utilisateur portail lit ses propres
+        # dossiers ; ce champ, lui, expose l'identité d'un salarié et ne doit
+        # jamais lui être chargé par l'ORM, même sur un record qui lui appartient.
     responsible_id = fields.Many2one(
         comodel_name="res.users",
         string="Responsible",
@@ -171,11 +174,17 @@ class DallySourcingRequest(models.Model):
         help="Left empty on intake on purpose: assignment is a management "
              "decision, and an unassigned queue is visible whereas a wrongly "
              "assigned request is not.",
+        groups="dally_core.group_dally_readonly",
     )
+        # Restreint au personnel interne. Un utilisateur portail lit ses propres
+        # dossiers ; ce champ, lui, expose l'organisation commerciale interne et
+        # ne doit jamais lui être chargé par l'ORM, même sur un record qui lui
+        # appartient.
     team_id = fields.Many2one(
         comodel_name="crm.team",
         string="Sales Team",
         index=True,
+        groups="dally_core.group_dally_readonly",
     )
 
     service_id = fields.Many2one(
@@ -321,10 +330,15 @@ class DallySourcingRequest(models.Model):
     )
 
     # ─── Related records ─────────────────────────────────────────────
+        # Restreint au personnel interne. Un utilisateur portail lit ses propres
+        # dossiers ; ce champ, lui, expose l'identité des fournisseurs consultés,
+        # donnée de tiers et ne doit jamais lui être chargé par l'ORM, même sur un
+        # record qui lui appartient.
     supplier_ids = fields.One2many(
         comodel_name="dally.sourcing.supplier",
         inverse_name="request_id",
         string="Candidate Suppliers",
+        groups="dally_core.group_dally_readonly",
     )
     offer_ids = fields.One2many(
         comodel_name="dally.sourcing.offer",
@@ -336,10 +350,15 @@ class DallySourcingRequest(models.Model):
         inverse_name="request_id",
         string="Customer Proposals",
     )
+        # Restreint au personnel interne. Un utilisateur portail lit ses propres
+        # dossiers ; ce champ, lui, expose les commandes d'achat, documents
+        # commerciaux internes et ne doit jamais lui être chargé par l'ORM, même
+        # sur un record qui lui appartient.
     purchase_order_ids = fields.One2many(
         comodel_name="purchase.order",
         inverse_name="dally_sourcing_request_id",
         string="Purchase Orders",
+        groups="dally_core.group_dally_readonly",
     )
     sale_order_ids = fields.One2many(
         comodel_name="sale.order",
@@ -347,7 +366,9 @@ class DallySourcingRequest(models.Model):
         string="Sales Orders",
     )
 
-    supplier_count = fields.Integer(compute="_compute_counts", string="Suppliers")
+    # Restreint au personnel interne : expose le nombre de fournisseurs consultés, jamais
+    # chargeable par un utilisateur portail.
+    supplier_count = fields.Integer(compute="_compute_counts", string="Suppliers", groups="dally_core.group_dally_readonly")
     offer_count = fields.Integer(compute="_compute_counts", string="Offers")
     proposal_count = fields.Integer(compute="_compute_counts", string="Proposals")
     purchase_order_count = fields.Integer(

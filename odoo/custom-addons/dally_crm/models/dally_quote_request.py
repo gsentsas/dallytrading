@@ -170,6 +170,9 @@ class DallyQuoteRequest(models.Model):
         tracking=True,
         copy=False,
     )
+        # Restreint au personnel interne. Un utilisateur portail lit ses propres
+        # dossiers ; ce champ, lui, expose l'identité d'un salarié et ne doit
+        # jamais lui être chargé par l'ORM, même sur un record qui lui appartient.
     user_id = fields.Many2one(
         comodel_name="res.users",
         string="Salesperson",
@@ -179,6 +182,7 @@ class DallyQuoteRequest(models.Model):
         help="Left empty on intake, on purpose: assignment is a management "
              "decision, and an unassigned queue is visible whereas a wrongly "
              "assigned request is not.",
+        groups="dally_core.group_dally_readonly",
     )
 
     lead_id = fields.Many2one(

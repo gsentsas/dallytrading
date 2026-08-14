@@ -24,7 +24,7 @@ Contrôle de pré-vol, **en lecture seule**, à lancer avant et après :
 cd /var/www/vhosts/dallytrading.com/platform && bash infrastructure/scripts/preflight.sh
 ```
 
-État au 13/08/2026 : accès Docker opérationnel. Le swap, le stockage hors serveur et l’installation root du timer restent à traiter séparément.
+État au 14/08/2026 : accès Docker opérationnel ; timer de sauvegarde installé et actif ; copie chiffrée hors serveur (Backblaze B2) validée de bout en bout — envoi, téléchargement, déchiffrement, empreintes et restauration isolée. **Le swap reste le seul point d'infrastructure en attente** (constat DT-004).
 
 ---
 
@@ -311,11 +311,26 @@ Puis la revue manuelle :
 
 ## 15. Git
 
-Les changements de clôture sont commités et poussés uniquement sur `feature/sourcing-closure-and-trade`. Avant toute proposition vers `main`, exécuter :
+`main` est la branche canonique de production : `origin/HEAD` y pointe et c'est la
+branche par défaut sur GitHub. Le travail se fait sur des branches courtes `feature/*`
+qui reviennent dans `main`.
+
+`legacy-main` conserve l'ancien commit d'initialisation GitHub, hors de la lignée de
+production. Elle n'a **aucun ancêtre commun** avec `main` : ne jamais tenter de la
+fusionner. Elle existe pour la traçabilité de la migration, rien d'autre.
+
+`feature/sourcing-closure-and-trade` pointe encore sur le même commit que `main` et
+peut être supprimée une fois la migration digérée.
+
+Contrôle avant de pousser :
 
 ```bash
-git merge-base origin/main HEAD
-git log --graph --oneline --decorate --all --max-count=40
+git status
+git log --oneline --decorate -5
+git rev-parse HEAD origin/main
 ```
 
-Si aucun ancêtre commun existe, arrêter : ne pas créer de merge artificiel, ne pas utiliser `--allow-unrelated-histories` et ne jamais forcer `main`. Un merge exige une autorisation explicite.
+Trois interdits permanents, quelle que soit la branche : pas de `push --force` sur une
+branche publiée, pas de `--allow-unrelated-histories`, pas de réécriture d'un historique
+déjà poussé. Une exception exige une autorisation explicite et une sauvegarde préalable
+(`git bundle create … --all`).

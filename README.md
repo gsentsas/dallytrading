@@ -252,7 +252,43 @@ exercice de restauration : [`docs/RESTORE.md`](docs/RESTORE.md).
 
 ## Git
 
-Stratégie **trunk-based** : `main` protégé, branches courtes `feature/*`, déploiement
-par tags. Justification (§68) : équipe réduite, un seul environnement de production,
-livraisons fréquentes — GitFlow ajouterait de la cérémonie sans bénéfice à cette
-échelle.
+Stratégie **trunk-based** : branches courtes `feature/*`, déploiement par tags.
+Justification : équipe réduite, un seul environnement de production, livraisons
+fréquentes — GitFlow ajouterait de la cérémonie sans bénéfice à cette échelle.
+
+### Branches
+
+| Branche | Rôle |
+|---|---|
+| `main` | **Branche canonique de production.** `origin/HEAD` y pointe, et c'est la branche par défaut sur GitHub |
+| `legacy-main` | Ancien `main` historique : le commit d'initialisation GitHub et son `README.md` de 14 octets. Conservé pour traçabilité, jamais fusionné |
+| `feature/sourcing-closure-and-trade` | Conservée temporairement au même commit que `main`. Supprimable une fois la migration digérée |
+
+### Comment `main` en est arrivé là
+
+Le dépôt GitHub avait été initialisé avec un `README.md` placeholder, tandis que la
+lignée de développement vivait ailleurs : les deux historiques n'avaient **aucun
+ancêtre commun**. Les faire converger imposait soit un `--allow-unrelated-histories`,
+qui greffe un commit de fusion sans contenu, soit un `push --force`, qui réécrit une
+branche partagée. Ni l'un ni l'autre.
+
+La migration a donc procédé par **nommage** : `legacy-main` créée sur le commit
+placeholder pour le préserver, la lignée production poussée sous un nom libre, bascule
+de la branche par défaut, puis renommage. Aucun commit réécrit, aucun `--force`, aucune
+fusion artificielle — et le placeholder reste atteignable sous son propre nom.
+
+### Branch protection recommended
+
+Aucune protection n'est active à ce jour (`protected: false` sur toutes les branches).
+Recommandé sur `main` :
+
+- **interdire le force push** — c'est la protection qui compte le plus : elle empêche
+  qu'un historique publié soit réécrit sous les pieds des autres clones ;
+- **interdire la suppression** de la branche ;
+- **privilégier les pull requests** plutôt que le push direct, même à une personne : la
+  PR donne un endroit où relire le diff avant qu'il devienne l'état de référence ;
+- **ne pas exiger de status checks pour l'instant.** Aucune CI GitHub Actions n'existe
+  dans ce dépôt ; exiger un check qui n'existe pas bloquerait toute fusion, y compris
+  un correctif urgent. Les checks obligatoires s'ajouteront le jour où la CI existera —
+  et ce jour-là, ils devront couvrir au minimum `npm run verify`, `npm run build` et la
+  suite de tests Odoo.

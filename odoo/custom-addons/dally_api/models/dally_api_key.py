@@ -184,6 +184,26 @@ class DallyApiKey(models.Model):
             "context": dict(self.env.context, dally_key_just_generated=True),
         }
 
+    @api.model
+    def fields_get(self, allfields=None, attributes=None):
+        """Ne pas décrire ce modèle à qui n'a pas le droit de le lire.
+
+        Odoo n'applique aucun contrôle d'accès à ``fields_get``. Sans cette
+        surcharge, un utilisateur portail authentifié obtient par
+        ``/web/dataset/call_kw`` la description complète de ce modèle — nom des
+        champs, libellés, textes d'aide — alors qu'il n'a aucune ACL dessus.
+
+        Aucune clé ne fuite : ``fields_get`` ne renvoie pas de données. Mais la
+        description d'un modèle de clés d'API indique où chercher, ce qui est
+        déjà trop pour un modèle dont l'existence ne regarde personne d'autre que
+        l'administration.
+
+        Constaté sur l'instance, par le test de contournement RPC générique.
+        """
+        self.check_access("read")
+        return super().fields_get(allfields=allfields, attributes=attributes)
+
+
     @api.model_create_multi
     def create(self, vals_list):
         records = super().create(vals_list)

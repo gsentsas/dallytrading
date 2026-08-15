@@ -168,12 +168,18 @@ class TestPortalHttp(HttpCase):
     def test_lists_only_return_the_caller_company_records(self):
         self.authenticate(self.login_a1, PORTAL_PASSWORD)
         for name in self.LIST_ENDPOINTS:
-            serialised = json.dumps(self._items(f"/api/v1/portal/{name}"))
-            self.assertIn("A", serialised)
+            items = self._items(f"/api/v1/portal/{name}")
+            serialised = json.dumps(items)
+            # Non vide d'abord : une liste vide ne contient jamais de données de B,
+            # et ferait passer les assertions suivantes sans rien démontrer.
+            #
+            # L'ancienne version cherchait « A » dans la charge utile. C'était à la
+            # fois trop faible (la lettre A apparaît dans quantité de mots) et
+            # inexact : la projection d'un devis ne porte AUCUN nom de société, par
+            # construction. Le test échouait donc sur un dessin volontaire.
+            self.assertTrue(items, f"{name} ne renvoie rien : test non probant")
             self.assertNotIn(
                 "HTTP-B", serialised, f"{name} expose des données de la société B")
-            self.assertNotIn(
-                " B", serialised, f"{name} expose des données de la société B")
 
     def test_a2_sees_the_same_lists_as_a1(self):
         self.authenticate(self.login_a1, PORTAL_PASSWORD)

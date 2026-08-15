@@ -20,7 +20,7 @@ La troisième est la moins intuitive : posséder un dossier ne donne pas droit �
 ses champs.
 """
 
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -288,15 +288,49 @@ class TestPortalIsolation(TransactionCase):
                     record.read([field])
 
     def test_forbidden_fields_are_absent_from_a_plain_read(self):
-        """Ils ne doivent pas non plus apparaître dans une lecture sans argument."""
+        """Une lecture sans argument ne doit pas les rapporter.
+
+        Mesuré sur Odoo 19 : un `read()` sans argument **lève** plutôt que d'omettre
+        les champs interdits, parce qu'il tente de lire tout ce que le modèle
+        déclare, y compris `activity_ids` que le portail n'a pas le droit de voir.
+        C'est plus strict que ce que ce test demandait à l'origine, donc acceptable
+        — et c'est la seule des deux issues qu'on ne peut pas prévoir en lisant le
+        code, d'où les deux branches.
+        """
         for model, fields in self.FORBIDDEN_FIELDS.items():
             key = dict(self.MODELS)[model]
-            row = self.records_a[key].with_user(self.user_a1).read()[0]
+            record = self.records_a[key].with_user(self.user_a1)
+            try:
+                row = record.read()[0]
+            except AccessError:
+                continue
             for field in fields:
                 self.assertNotIn(
                     field, row,
                     f"{model}.{field} apparaît dans une lecture complète",
                 )
+
+    def _assert_yields_nothing(self, operation, message):
+        """L'appel doit soit être refusé, soit ne rien rapporter.
+
+        Ce que la sécurité garantit est « le portail n'obtient rien », pas « Odoo
+        lève ». Les deux issues sont acceptables et Odoo choisit l'une ou l'autre
+        selon le mécanisme : une ACL manquante lève une `AccessError`, tandis
+        qu'une record rule **filtre** et renvoie un ensemble vide.
+
+        Exiger l'exception, comme le faisaient ces tests, les faisait échouer là où
+        la protection fonctionne parfaitement — et cette rougeur permanente est
+        pire qu'inutile : elle finit par faire ignorer un vrai échec.
+
+        (Autre raison de ne pas utiliser `assertRaises` avec un tuple ici :
+        l'implémentation d'Odoo appelle `issubclass()` sur l'argument et lève un
+        `TypeError` si on lui passe un tuple.)
+        """
+        try:
+            result = operation()
+        except (AccessError, ValidationError, ValueError):
+            return
+        self.assertFalse(result, message)
 
     def test_forbidden_fields_cannot_be_reached_through_a_domain(self):
         """Filtrer sur un champ interdit ne doit pas être un oracle.
@@ -307,13 +341,12 @@ class TestPortalIsolation(TransactionCase):
         for model, fields in self.FORBIDDEN_FIELDS.items():
             for field in fields:
                 model_obj = self.env[model].with_user(self.user_a1)
-                if not isinstance(model_obj._fields.get(field), object):
+                if field not in model_obj._fields:
                     continue
-                with self.assertRaises(
-                    (AccessError, ValueError),
-                    msg=f"{model} : {field} utilisable dans un domaine",
-                ):
-                    model_obj.search([(field, "!=", False)])
+                self._assert_yields_nothing(
+                    lambda m=model_obj, f=field: m.search([(f, "!=", False)]),
+                    f"{model} : {field} utilisable dans un domaine",
+                )
 
     # ─── 5. Le chatter n'est pas ouvert par ricochet ──────────────────
 
@@ -329,19 +362,25 @@ class TestPortalIsolation(TransactionCase):
         for field in ("message_ids", "activity_ids", "message_follower_ids"):
             if field not in record._fields:
                 continue
-            with self.assertRaises(
-                AccessError, msg=f"le portail traverse {field}",
-            ):
-                record.read([field])
+            self._assert_yields_nothing(
+                lambda r=record, f=field: r.read([f])[0][f],
+                f"le portail traverse {field}",
+            )
 
     def test_portal_cannot_search_internal_messages(self):
+        """Mesuré : la recherche n'est pas refusée, elle ne rapporte rien.
+
+        Vérifié sur l'instance — 0 message visible sur 104 existants. La record
+        rule native de `mail.message` filtre au lieu de lever, et le résultat pour
+        le client est le même : aucun échange interne.
+        """
         for model in ("mail.message", "mail.activity"):
-            with self.assertRaises(
-                AccessError, msg=f"le portail atteint {model}",
-            ):
-                self.env[model].with_user(self.user_a1).search(
+            self._assert_yields_nothing(
+                lambda m=model: self.env[m].with_user(self.user_a1).search(
                     [("res_id", "=", self.records_a["sourcing"].id)],
-                )
+                ),
+                f"le portail atteint {model}",
+            )
 
     # ─── 6. Documents ─────────────────────────────────────────────────
 
@@ -370,11 +409,15 @@ class TestPortalIsolation(TransactionCase):
             )._dally_portal_readable_attachment()
 
     def test_download_helper_refuses_an_unpublished_document(self):
-        from odoo.exceptions import ValidationError
-        with self.assertRaises((AccessError, ValidationError)):
-            self.records_a["unpublished"].with_user(
+        # Deux exceptions possibles selon la couche qui arrête l'appel — et
+        # `assertRaises` d'Odoo n'accepte pas un tuple (il appelle `issubclass`
+        # sur son argument).
+        self._assert_yields_nothing(
+            lambda: self.records_a["unpublished"].with_user(
                 self.user_a1,
-            )._dally_portal_readable_attachment()
+            )._dally_portal_readable_attachment(),
+            "un document non publié reste téléchargeable",
+        )
 
     def test_download_helper_returns_the_attachment_for_a_legitimate_document(self):
         attachment = self.records_a["document"].with_user(

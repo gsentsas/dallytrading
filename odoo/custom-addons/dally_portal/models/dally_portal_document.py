@@ -145,6 +145,25 @@ class DallyPortalDocument(models.Model):
 
     # ─── Contraintes ─────────────────────────────────────────────────
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Revalider à la création, y compris quand AUCUN rattachement n'est fourni.
+
+        `@api.constrains` ne se déclenche, à la création, que pour les champs
+        présents dans les valeurs. Un document créé sans aucun rattachement ne
+        touche donc aucun des champs surveillés, et passait au travers : il
+        existait, sans propriétaire, dans un état que la contrainte est justement
+        censée rendre impossible.
+
+        Ce n'était pas exploitable — sans `commercial_partner_id`, la record rule
+        ne le montre à personne, et la publication est refusée par
+        `_check_published_has_owner`. Mais un état interdit qui existe finit par
+        être traité comme autorisé.
+        """
+        documents = super().create(vals_list)
+        documents._check_exactly_one_business_link()
+        return documents
+
     @api.constrains(*BUSINESS_LINKS)
     def _check_exactly_one_business_link(self):
         """Exactement un rattachement, ni zéro ni deux.
@@ -247,6 +266,15 @@ class DallyPortalDocument(models.Model):
             ),
         }
         return {key: payload[key] for key in self.PORTAL_PAYLOAD_KEYS}
+
+    def _dally_portal_detail_payload(self):
+        """Un document n'a rien de plus à montrer en détail qu'en liste.
+
+        Présent explicitement plutôt qu'hérité d'un mixin : ce modèle est défini
+        dans ce fichier, et la liste des clés qu'il expose est juste au-dessus.
+        """
+        self.ensure_one()
+        return self._dally_portal_payload()
 
     def _dally_portal_readable_attachment(self):
         """Renvoyer la pièce jointe **après** que l'accès a été prouvé.

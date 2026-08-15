@@ -85,12 +85,26 @@ class TestPortalDocument(TransactionCase):
         self.assertEqual(by_shipment.commercial_partner_id, self.partner)
         self.assertEqual(by_sourcing.commercial_partner_id, self.partner)
 
-    def test_publishing_without_an_owner_is_refused(self):
-        orphan_shipment = self.env["dally.shipment"].create({})
-        document = self._document(shipment_id=orphan_shipment.id)
-        self.assertFalse(document.commercial_partner_id)
+    def test_a_document_without_an_owner_cannot_even_exist(self):
+        """Le scénario « document publié sans propriétaire » est devenu inatteignable.
+
+        Ce test construisait auparavant une expédition orpheline pour obtenir un
+        document sans propriétaire. Ce n'est plus possible : `dally.shipment` exige
+        un `partner_id` (contrainte NOT NULL en base), et un document doit être
+        rattaché à exactement un dossier métier — donc à un dossier qui a un client.
+
+        La garantie est donc plus forte que celle qui était testée : l'état
+        interdit ne peut pas être atteint, plutôt que d'être refusé à la
+        publication. `_check_published_has_owner` reste en place comme seconde
+        barrière, au cas où un futur modèle métier serait rattachable sans client.
+        """
         with self.assertRaises(ValidationError):
-            document.action_publish()
+            self._document()
+
+        with self.assertRaises(Exception):
+            # Une expédition sans client viole une contrainte de base : c'est ce qui
+            # rend le document orphelin inconstructible par ce chemin.
+            self.env["dally.shipment"].create({})
 
     def test_publish_and_unpublish_record_who_and_when(self):
         document = self._document(shipment_id=self.shipment.id)

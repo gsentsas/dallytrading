@@ -182,3 +182,89 @@ class TestDocumentLinkConstraint(TransactionCase):
         document = self._create(shipment_id=self.shipment.id)
         with self.assertRaises(ValidationError):
             document.write({"shipment_id": False})
+
+
+@tagged("post_install", "-at_install", "dally", "dally_portal")
+class TestProposalVisibility(TransactionCase):
+    """Le pendant portail de l'invariant `customer_id`.
+
+    Les tests de `dally_sourcing` prouvent que le champ est dérivé. Ceux-ci
+    prouvent ce que cette dérivation ACHÈTE : la proposition arrive bien chez son
+    client, et nulle part ailleurs.
+
+    Sans la dérivation, ces deux tests passaient tous les deux — le premier parce
+    que le seed pensait à remplir le champ, le second parce que rien n'était
+    visible de personne. C'est le premier qui a fini par échouer en E2E.
+    """
+
+    def setUp(self):
+        super().setUp()
+        Partner = self.env["res.partner"]
+        self.company_a = Partner.create({"name": "VIS Société A", "is_company": True})
+        self.company_b = Partner.create({"name": "VIS Société B", "is_company": True})
+        portal_group = self.env.ref("base.group_portal")
+
+        self.user_a = self.env["res.users"].create({
+            "name": "VIS Portail A",
+            "login": "vis.a@visibility-test.invalid",
+            "partner_id": Partner.create({
+                "name": "VIS Contact A", "parent_id": self.company_a.id,
+            }).id,
+            "group_ids": [(6, 0, [portal_group.id])],
+        })
+        self.user_b = self.env["res.users"].create({
+            "name": "VIS Portail B",
+            "login": "vis.b@visibility-test.invalid",
+            "partner_id": Partner.create({
+                "name": "VIS Contact B", "parent_id": self.company_b.id,
+            }).id,
+            "group_ids": [(6, 0, [portal_group.id])],
+        })
+
+        self.request_a = self.env["dally.sourcing.request"].create({
+            "product_name": "VIS produit A",
+            "quantity": 5.0,
+            "customer_id": self.user_a.partner_id.id,
+        })
+        # Aucune mention de `customer_id` : c'est tout l'enjeu.
+        self.sent = self.env["dally.sourcing.proposal"].create({
+            "request_id": self.request_a.id,
+            "product_name": "VIS proposition envoyée",
+            "quantity": 5.0,
+            "selling_unit_price": 90.0,
+        })
+        self.sent.write({"state": "sent"})
+        self.draft = self.env["dally.sourcing.proposal"].create({
+            "request_id": self.request_a.id,
+            "product_name": "VIS proposition brouillon",
+            "quantity": 5.0,
+            "selling_unit_price": 999.0,
+        })
+
+    def test_portal_a_sees_its_sent_proposal(self):
+        visible = self.env["dally.sourcing.proposal"].with_user(self.user_a).search([])
+        self.assertIn(
+            self.sent, visible,
+            "la proposition envoyée n'atteint pas son client : `customer_id` est "
+            "resté vide, exactement le défaut que la dérivation corrige",
+        )
+
+    def test_portal_a_does_not_see_the_draft(self):
+        visible = self.env["dally.sourcing.proposal"].with_user(self.user_a).search([])
+        self.assertNotIn(
+            self.draft, visible,
+            "un brouillon est visible : le client verrait un prix que personne "
+            "n'a décidé de lui proposer",
+        )
+
+    def test_portal_b_sees_nothing_of_a(self):
+        visible = self.env["dally.sourcing.proposal"].with_user(self.user_b).search([])
+        self.assertNotIn(self.sent, visible)
+        self.assertNotIn(self.draft, visible)
+
+    def test_the_detail_payload_carries_the_proposal(self):
+        """Bout en bout : c'est cette projection que la page du portail affiche."""
+        payload = self.request_a.with_user(self.user_a)._dally_portal_detail_payload()
+        references = [item["reference"] for item in payload["proposals"]]
+        self.assertIn(self.sent.reference, references)
+        self.assertNotIn(self.draft.reference, references)

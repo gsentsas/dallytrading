@@ -76,11 +76,38 @@ class DallySourcingProposal(models.Model):
     company_id = fields.Many2one(
         related="request_id.company_id", store=True, index=True, readonly=True,
     )
+    #: Le client d'une proposition EST celui de sa demande. Dérivé, jamais saisi.
+    #:
+    #: Auparavant un Many2one libre, recopié depuis la demande par
+    #: ``_dally_draft_from_offer`` et éditable dans le formulaire. Deux défauts en
+    #: découlaient :
+    #:
+    #: 1. Une proposition créée autrement — import, script, appel direct — gardait
+    #:    le champ vide. La record rule du portail filtre dessus : la proposition
+    #:    devenait alors invisible de TOUS les clients, sans la moindre erreur.
+    #:    Constaté en validation E2E, où le détail sourcing renvoyait
+    #:    ``"proposals": []`` alors que la proposition existait en état ``sent``.
+    #:
+    #: 2. Un client différent de celui de la demande produisait un état incohérent :
+    #:    la proposition visible du client, la demande qui l'a produite non — les
+    #:    deux règles portail ne filtrant pas sur le même champ.
+    #:
+    #: ``related`` supprime les deux par construction, et reprend le motif déjà
+    #: employé juste au-dessus pour ``company_id``. La qualification renseigne le
+    #: client sur la DEMANDE, ce que dit l'aide de ``dally.sourcing.request.customer_id`` ;
+    #: la proposition suit.
     customer_id = fields.Many2one(
         comodel_name="res.partner",
         string="Customer",
+        compute="_compute_customer_id",
+        store=True,
+        readonly=True,
         index=True,
         tracking=True,
+        help="Derived from the sourcing request. A proposal answers one request, "
+             "so it concerns that request's customer — recording a different one "
+             "would make the proposal visible to a customer who cannot see the "
+             "request behind it.",
     )
     active = fields.Boolean(default=True)
 
@@ -249,6 +276,52 @@ class DallySourcingProposal(models.Model):
 
     # ─── Computes ────────────────────────────────────────────────────
 
+    @api.depends("request_id.customer_id")
+    def _compute_customer_id(self):
+        """Le client suit la demande, y compris quand elle est qualifiée après coup.
+
+        Calculé plutôt que ``related`` : une écriture sur un champ ``related``
+        REMONTE à la source. Mesuré — ``proposal.write({"customer_id": autre})``
+        modifiait le client de la DEMANDE elle-même, ce qui est l'inverse de
+        l'intention et bien pire qu'une simple divergence.
+
+        Sans inverse, la valeur ne peut venir que d'ici.
+        """
+        for proposal in self:
+            proposal.customer_id = proposal.request_id.customer_id
+
+    @api.constrains("customer_id", "request_id")
+    def _check_customer_matches_request(self):
+        """Refuser une divergence, même écrite directement.
+
+        Le calcul ci-dessus dérive la valeur, mais ne la protège pas : mesuré sur
+        Odoo 19, ``write({"customer_id": autre})`` sur un champ calculé STOCKÉ
+        sans inverse est accepté, et la valeur persiste jusqu'au prochain
+        recalcul. La dérivation seule laisse donc une fenêtre.
+
+        Elle n'est pas théorique : c'est exactement l'écriture qu'un import, une
+        correction manuelle en base ou un script de reprise ferait. Et son effet
+        est une proposition visible d'un client qui ne peut pas voir la demande
+        derrière — les deux règles portail ne filtrant pas sur le même champ.
+
+        La contrainte ferme la fenêtre. Elle ne se déclenche jamais sur le chemin
+        normal, où la valeur vient du calcul et coïncide par construction.
+        """
+        for proposal in self:
+            if proposal.customer_id != proposal.request_id.customer_id:
+                raise ValidationError(
+                    _(
+                        "Le client d'une proposition est celui de sa demande de "
+                        "sourcing. La proposition %(proposal)s vise « %(theirs)s » "
+                        "alors que la demande %(request)s concerne « %(ours)s ».\n\n"
+                        "Corrigez le client sur la DEMANDE : la proposition suivra.",
+                        proposal=proposal.reference or _("(nouvelle)"),
+                        theirs=proposal.customer_id.display_name or _("(vide)"),
+                        request=proposal.request_id.reference or "",
+                        ours=proposal.request_id.customer_id.display_name or _("(vide)"),
+                    )
+                )
+
     @api.depends("quantity", "selling_unit_price", "estimated_shipping",
                  "service_fee", "other_customer_charges", "tax_amount")
     def _compute_amounts(self):
@@ -358,7 +431,9 @@ class DallySourcingProposal(models.Model):
 
         proposal = self.create({
             "request_id": request.id,
-            "customer_id": request.customer_id.id or False,
+            # `customer_id` n'est plus écrit : il est dérivé de `request_id`.
+            # L'écrire remonterait à la SOURCE et modifierait le client de la
+            # demande elle-même — l'inverse de l'intention.
             "product_name": request.product_name or offer.reference or _("Product"),
             "product_description": request.product_description or False,
             # The offer's currency, so the derived price is not silently converted at

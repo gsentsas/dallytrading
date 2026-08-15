@@ -146,18 +146,37 @@ test('une référence de B est indistinguable d’une référence inventée', as
   const real = await pageA.goto(
     `/espace-client/devis/${encodeURIComponent(otherClientRef)}`,
   );
-  const realBody = await pageA.content();
+  const realText = await pageA.innerText('body');
+  const realHtml = await pageA.content();
 
   const invented = await pageA.goto('/espace-client/devis/DT-2026-999999');
-  const inventedBody = await pageA.content();
+  const inventedText = await pageA.innerText('body');
 
   expect(real?.status()).toBe(invented?.status());
   expect(real?.status()).toBe(404);
-  // Les deux corps ne diffèrent que par la référence tapée, qui est l'entrée de
-  // l'utilisateur lui-même et n'apprend rien sur l'existence du dossier.
-  const strip = (html: string) =>
-    html.replace(/DT-2026-\d+/g, 'REF').replace(/\s+/g, ' ');
-  expect(strip(realBody)).toBe(strip(inventedBody));
+
+  /*
+   * On compare le TEXTE RENDU, pas le HTML brut.
+   *
+   * Une première version comparait `page.content()` octet par octet et échouait
+   * par intermittence : le document contient les balises de préchargement de
+   * Next, dont l'ensemble et l'ordre varient d'un rendu à l'autre. Cela n'a
+   * aucun rapport avec la référence demandée et n'apprend donc rien à un
+   * attaquant — mais rendait l'assertion instable, et une assertion de sécurité
+   * intermittente finit toujours par être ignorée.
+   *
+   * Le texte rendu est exactement ce qu'un visiteur observe. Le comparer est
+   * plus fidèle à la propriété visée : « les deux réponses sont
+   * indistinguables ».
+   */
+  const strip = (text: string) =>
+    text.replace(/DT-2026-\d+/g, 'REF').replace(/\s+/g, ' ').trim();
+  expect(strip(realText)).toBe(strip(inventedText));
+
+  // Et le document servi pour la référence de B ne porte aucune donnée de B.
+  expect(realHtml).not.toContain('E2E Beta SARL');
+  expect(realHtml).not.toContain('E2E Contact B');
+  expect(realHtml).not.toContain('Marchandise synthetique B');
 
   await contextA.close();
 });

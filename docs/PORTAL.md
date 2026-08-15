@@ -207,9 +207,79 @@ décrite au §7 : elle est réelle, et elle n'est pas distribuée.
   neuf bibliothèques système absentes de cet hôte, dont l'installation demanderait
   les droits d'administration.
 
-## 10. Ce qui n'est pas fait
+## 10. Portes de pré-déploiement — À FAIRE, dans cet ordre
+
+Aucune n'a été exécutée. Elles sont listées ici parce qu'une mise en
+production qui en oublierait une échouerait de façon peu lisible.
+
+### A. `PORTAL_SESSION_SECRET`
+
+```bash
+openssl rand -base64 48
+```
+
+À ajouter dans `apps/web/.env.production`, **en 0600**, propriétaire identique
+aux autres entrées. Le frontend refuse de démarrer sans lui : c'est voulu, un
+défaut serait devenu la valeur de production.
+
+Ce n'est pas une `NEXT_PUBLIC_*` : un `systemctl restart dallytrading-web`
+suffit, pas un rebuild.
+
+### B. `Secure` à vérifier empiriquement
+
+Non observé à ce jour : l'environnement de test est en `http://`, où l'attribut
+empêcherait la connexion. `wantsSecureCookie()` le dérive du schéma de
+`NEXT_PUBLIC_SITE_URL`, et les tests unitaires couvrent les deux branches — mais
+c'est une déduction, pas une mesure.
+
+Après déploiement, sur `https://dallytrading.com`, contrôler le cookie réel.
+
+### C. Le cookie doit rester exactement
+
+| Attribut | Valeur | Pourquoi |
+|---|---|---|
+| `HttpOnly` | oui | un script injecté ne peut rien lire |
+| `Secure` | oui | jamais en clair sur une requête `http://` |
+| `SameSite` | `Lax` | couvre le CSRF, laisse passer un lien d'e-mail |
+| `Path` | `/` | |
+| `Domain` | **ABSENT** | host-only |
+
+`Domain=.dallytrading.com` enverrait la session à `crm.dallytrading.com`, qui
+n'en a aucun usage. Une session transmise à un hôte qui n'en a pas besoin est
+une session exposée pour rien. Vérifié en E2E sur Chromium : `cookie.domain` ne
+commence pas par un point.
+
+### D. Ordre de déploiement — contraint
+
+**Odoo d'abord, frontend ensuite.** Le frontend exige désormais
+`_dally_portal_detail_payload()` et valide les réponses en mode strict : un
+payload sans `proposals` ou sans `packages` fait échouer la page de détail au
+lieu de l'afficher partiellement.
+
+1. `dally_portal` **et** `dally_sourcing` à jour (`-u`) sur `crm.dallytrading.com` ;
+2. vérifier qu'aucun modèle `*.portal` n'apparaît dans le registre ;
+3. `PORTAL_SESSION_SECRET` dans `.env.production` ;
+4. build puis déploiement du frontend ;
+5. contrôle du cookie en HTTPS réel.
+
+L'ordre inverse casserait les pages de détail entre les deux étapes.
+
+### E. Rollback à préparer AVANT
+
+- **Odoo** : sauvegarde base + filestore immédiatement avant le `-u`
+  (`infrastructure/scripts/backup.sh`), procédure dans `RESTORE.md`.
+  La mise à jour de `dally_sourcing` **recalcule** `customer_id` sur toutes les
+  propositions existantes, pour l'aligner sur leur demande. C'est l'objet du
+  correctif ; une divergence préexistante serait donc corrigée, et le retour en
+  arrière passe par la sauvegarde.
+- **Frontend** : conserver le `.next` précédent avant de le remplacer ; le
+  rollback est une restauration de répertoire plus un `systemctl restart`.
+- Le portail n'écrit rien : aucun rollback de données côté client n'est
+  nécessaire dans ce sens.
+
+## 11. Ce qui n'est pas fait
 
 - aucun déploiement : `/espace-client` répond 404 en production ;
-- aucune page métier ;
 - `PORTAL_SESSION_SECRET` absent de `.env.production` ;
-- aucune validation en HTTPS réel (donc `Secure` non observé en conditions).
+- aucune validation en HTTPS réel (donc `Secure` non observé en conditions) ;
+- aucune mutation : profil, acceptation de devis, téléversement, messagerie.

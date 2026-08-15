@@ -164,8 +164,26 @@ ENV
 
 # ─────────────────────────────────────────────────────────────────────────────
 restart_next() {
-  [ -f "$WORK/next.pid" ] && kill "$(cat "$WORK/next.pid")" 2>/dev/null || true
-  sleep 2
+  # Attendre que l'ancien processus ait RÉELLEMENT rendu le port.
+  #
+  # La première version faisait `kill` puis `sleep 2` puis sondait /connexion.
+  # Si l'ancien processus n'avait pas fini de s'arrêter, c'est LUI qui répondait
+  # 200 : la sonde réussissait, le nouveau processus échouait à se lier et
+  # mourait, et le serveur continuait avec ses compteurs de limitation de débit
+  # déjà chargés. La suite se freinait alors elle-même, par intermittence et
+  # sans rapport avec ce qu'elle testait.
+  if [ -f "$WORK/next.pid" ]; then
+    kill "$(cat "$WORK/next.pid")" 2>/dev/null || true
+  fi
+  for _ in $(seq 1 30); do
+    ss -ltn 2>/dev/null | grep -q ":${NEXT_PORT} " || break
+    sleep 1
+  done
+  if ss -ltn 2>/dev/null | grep -q ":${NEXT_PORT} "; then
+    echo "le port ${NEXT_PORT} n'a pas été libéré : arrêt plutôt que de tester" \
+      "contre un serveur dont les compteurs ne sont pas neufs" >&2
+    exit 1
+  fi
   ( cd "$WORK/web"
     set -a; . "$WORK/web/.env.local"; set +a
     HOSTNAME=127.0.0.1 PORT="$NEXT_PORT" NODE_ENV=production \

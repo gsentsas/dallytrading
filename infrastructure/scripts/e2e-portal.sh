@@ -45,7 +45,7 @@ BASE_URL="http://127.0.0.1:${NEXT_PORT}"
 ODOO_CONTAINER="dallytrading-e2e-odoo"
 PLAYWRIGHT_IMAGE="${E2E_PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.62.1-noble}"
 
-SPECS_BEFORE=(01-login 02-session 03-logout 04-redirect-origin 06-network 05a-capture-session)
+SPECS_BEFORE=(01-login 02-session 03-logout 04-redirect-origin 06-network 07-business 08-cross-client 09-canaries 05a-capture-session)
 
 log() { printf '\n\033[1m── %s\033[0m\n' "$*"; }
 

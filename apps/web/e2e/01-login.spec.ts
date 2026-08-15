@@ -30,7 +30,9 @@ test('Portal A se connecte et voit sa propre identité', async ({ page }) => {
   await loginThroughUi(page, accounts.portalA);
   await waitForPath(page, '/espace-client');
 
-  await expect(page.getByRole('heading', { name: /Espace client/i })).toBeVisible();
+  // Le titre est celui du tableau de bord ; l'identité est dans l'en-tête de
+  // navigation, rendu par le layout du portail.
+  await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible();
   await expect(page.getByText(/E2E Contact A/i).first()).toBeVisible();
   await expect(page.getByText(/E2E Alpha SARL/i).first()).toBeVisible();
 });

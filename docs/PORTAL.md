@@ -1,6 +1,7 @@
 # Espace client — frontière d'authentification
 
-État : **couche BFF + authentification construite et testée, non déployée.**
+État : **couche BFF + authentification construite, testée unitairement ET validée
+de bout en bout dans un vrai navigateur. Non déployée.**
 Branche : `feature/client-portal-mvp`.
 
 Ce document décrit uniquement ce qui existe. Le tableau de bord métier (devis,
@@ -151,9 +152,64 @@ répertoire, un `npm run build` sur place *serait* un déploiement). Le bundle
 client contient bien le code du formulaire — contrôle positif — et zéro
 occurrence du secret, de la clé d'API, de `session_id` et de `dt_portal_session`.
 
-## 9. Ce qui n'est pas fait
+## 9. Validation E2E dans un vrai navigateur
+
+Faite. Chromium réel, session Odoo réelle, environnement entièrement jetable.
+
+```bash
+./infrastructure/scripts/e2e-portal.sh all
+```
+
+`up` monte une pile Odoo 19 + PostgreSQL 16 neuve (labels `com.dallytrading.e2e`,
+base vide, comptes synthétiques en `.invalid`) et un frontend Next construit dans
+une copie du dépôt, écoutant sur `127.0.0.1:3020`. `test` exécute la suite. `down`
+détruit les objets portant le label et efface les secrets éphémères — jamais de
+`docker prune`, qui sur cette machine partagée finirait par emporter un voisin.
+
+**Rien de tout cela ne touche la production** : ni la base `dallytrading`, ni son
+serveur PostgreSQL, ni le filestore, ni les conteneurs de production, ni l'instance
+Odoo 18 `odoo_crm` (SEN CONTAINERS).
+
+### Les 20 tests
+
+| Fichier | Ce qu'il établit |
+|---|---|
+| `01-login` | connexion réussie ; mot de passe absent des URL ; compte interne refusé ; mot de passe faux, compte inconnu et compte interne **indistinguables** (statut, corps, message, timing grossier) |
+| `02-session` | rien dans `localStorage`/`sessionStorage`/`document.cookie`/HTML ; cookie HttpOnly, Lax, `/`, **host-only** ; A et B cloisonnés ; `no-store` |
+| `03-logout` | cookie retiré, Odoo invalidé, **retour arrière stérile**, onglet dupliqué inerte, cookie supprimé/altéré/inventé refusé, **rejeu d'un cookie authentique refusé** |
+| `04-redirect-origin` | `next` externe ramené au portail ; origine externe refusée sur login et logout |
+| `05a`/`05b` | le cookie reste authentique, la session Odoo est détruite entre les deux → **accès refusé** |
+| `06-network` | audit du trafic réel : aucun secret, aucune donnée de B ; le mot de passe n'existe **que** dans le corps du POST de connexion |
+
+### Deux points qui méritent d'être connus
+
+**Le cookie est host-only.** Aucun `Domain=` n'est posé, donc le navigateur ne
+l'enverra jamais à un sous-domaine — en production, jamais à
+`crm.dallytrading.com`, qui n'en a aucun usage. Une session envoyée à un hôte qui
+n'en a pas besoin est une session exposée pour rien. Vérifié dans Chromium :
+`cookie.domain` ne commence pas par un point.
+
+**La suite tourne fichier par fichier, avec redémarrage entre chacun.** Ce n'est
+pas une commodité : `/api/portal/auth/login` limite à 10 tentatives par IP sur
+5 minutes, et une suite E2E parle depuis une seule IP. La limite n'a pas été
+relâchée d'un iota — le compteur vit en mémoire d'un seul processus, et le
+redémarrage le remet à zéro. Ce détour **est** la démonstration de la limite
+décrite au §7 : elle est réelle, et elle n'est pas distribuée.
+
+### Limites de cette validation
+
+- **`Secure` n'a pas pu être observé** : l'environnement de test est en `http://`,
+  où l'attribut empêcherait la connexion. Le comportement est couvert autrement —
+  `wantsSecureCookie()` le dérive du schéma de `NEXT_PUBLIC_SITE_URL`, et un test
+  unitaire vérifie les deux branches de `cookieOptions()`.
+- Un seul moteur (Chromium). Firefox et WebKit n'ont pas été essayés.
+- Le navigateur tourne dans l'image officielle Playwright : son Chromium réclame
+  neuf bibliothèques système absentes de cet hôte, dont l'installation demanderait
+  les droits d'administration.
+
+## 10. Ce qui n'est pas fait
 
 - aucun déploiement : `/espace-client` répond 404 en production ;
 - aucune page métier ;
 - `PORTAL_SESSION_SECRET` absent de `.env.production` ;
-- aucune validation par un navigateur réel contre l'instance Odoo.
+- aucune validation en HTTPS réel (donc `Secure` non observé en conditions).

@@ -1,0 +1,135 @@
+####################################################################
+# DALLYTRADING — Environnement éphémère de validation E2E du portail
+#
+# À utiliser SEUL, avec un projet Compose explicite :
+#   docker compose -p dallytrading-e2e --env-file <env-e2e> \
+#     -f docker-compose.e2e.yml up -d
+#
+# ISOLATION — ce que cette pile ne touche jamais :
+#   * la base `dallytrading` de production ni son serveur PostgreSQL ;
+#   * le filestore de production ;
+#   * le conteneur `dallytrading-odoo` de production ;
+#   * l'instance Odoo 18 `odoo_crm` (SEN CONTAINERS) ni aucun voisin.
+#
+# Tout porte le label `com.dallytrading.e2e=true`, ce qui rend le
+# nettoyage sélectif : on supprime ce qui porte ce label, jamais
+# « tout ce qui est arrêté ». Aucun `docker prune` n'est nécessaire.
+#
+# La base est créée VIDE et remplie par des comptes synthétiques.
+# Aucune donnée client réelle n'y entre jamais.
+####################################################################
+
+name: ${E2E_COMPOSE_PROJECT_NAME:-dallytrading-e2e}
+
+services:
+
+  # ─────────────────────────────────────────────────────────────────
+  # PostgreSQL jetable. Aucun port publié : joignable uniquement
+  # depuis le réseau interne dédié.
+  #
+  # Le rôle est superutilisateur ici, contrairement à la production
+  # (ADR-005). C'est délibéré et sans portée : Odoo doit CRÉER la base
+  # au premier démarrage, la base est éphémère, son mot de passe est
+  # tiré au hasard pour ce cycle, et rien ne l'expose à l'hôte.
+  # ─────────────────────────────────────────────────────────────────
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    container_name: ${E2E_PG_CONTAINER:-dallytrading-e2e-postgres}
+    hostname: ${E2E_PG_CONTAINER:-dallytrading-e2e-postgres}
+    labels:
+      com.dallytrading.e2e: "true"
+    environment:
+      POSTGRES_USER: ${E2E_DB_USER:?E2E_DB_USER requis}
+      POSTGRES_PASSWORD: ${E2E_DB_PASSWORD:?E2E_DB_PASSWORD requis}
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+      TZ: ${TZ:-Africa/Dakar}
+    volumes:
+      - e2e-postgres-data:/var/lib/postgresql/data
+    networks:
+      - e2e-private
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: "no"
+
+  # ─────────────────────────────────────────────────────────────────
+  # Odoo 19, mêmes modules que la production (montés en lecture seule
+  # depuis le dépôt), base distincte, filestore distinct.
+  #
+  # Le port n'est publié que sur la loopback, et sur un numéro qui
+  # n'est celui d'aucune instance existante : l'instance Next de test
+  # tourne sur l'hôte et doit pouvoir l'atteindre.
+  # ─────────────────────────────────────────────────────────────────
+  odoo:
+    image: ${ODOO_IMAGE:-odoo:19.0}
+    container_name: ${E2E_ODOO_CONTAINER:-dallytrading-e2e-odoo}
+    hostname: ${E2E_ODOO_CONTAINER:-dallytrading-e2e-odoo}
+    labels:
+      com.dallytrading.e2e: "true"
+    # Aligné sur le propriétaire de la configuration, qui reste en 0600 :
+    # élargir ses droits exposerait le mot de passe de la base aux autres
+    # comptes de cette machine partagée.
+    user: "${E2E_RUN_UID:?E2E_RUN_UID requis}:${E2E_RUN_GID:?E2E_RUN_GID requis}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Même raison qu'en production : l'entrypoint de l'image passerait
+    # --db_password en ligne de commande, lisible via `ps aux`.
+    entrypoint: ["odoo"]
+    command: ["-c", "/etc/odoo/odoo.conf"]
+    environment:
+      TZ: ${TZ:-Africa/Dakar}
+    volumes:
+      - e2e-filestore:/var/lib/odoo
+      - ${E2E_ODOO_CONF:?E2E_ODOO_CONF requis}:/etc/odoo/odoo.conf:ro
+      - ../odoo/custom-addons:/mnt/extra-addons:ro
+    ports:
+      - "127.0.0.1:${E2E_ODOO_HTTP_PORT:-18269}:8069"
+    networks:
+      - e2e-private
+      - e2e-public
+    mem_limit: ${E2E_ODOO_MEM_LIMIT:-3g}
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - |
+          import sys, urllib.request
+          try:
+              r = urllib.request.urlopen("http://localhost:8069/web/health", timeout=5)
+              sys.exit(0 if r.status == 200 else 1)
+          except Exception:
+              sys.exit(1)
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: "no"
+
+networks:
+  e2e-private:
+    name: ${E2E_PRIVATE_NETWORK:-dallytrading_e2e_private}
+    driver: bridge
+    internal: true
+    labels:
+      com.dallytrading.e2e: "true"
+  e2e-public:
+    name: ${E2E_PUBLIC_NETWORK:-dallytrading_e2e_public}
+    driver: bridge
+    labels:
+      com.dallytrading.e2e: "true"
+
+volumes:
+  e2e-postgres-data:
+    name: ${E2E_POSTGRES_VOLUME:-dallytrading_e2e_postgres_data}
+    labels:
+      com.dallytrading.e2e: "true"
+  e2e-filestore:
+    name: ${E2E_FILESTORE_VOLUME:-dallytrading_e2e_odoo_filestore}
+    labels:
+      com.dallytrading.e2e: "true"

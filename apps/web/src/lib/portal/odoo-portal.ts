@@ -84,7 +84,13 @@ export class PortalOdooGateway {
   /** Appel brut, avec délai borné et erreurs normalisées. */
   private async call(
     path: string,
-    init: { method: 'GET' | 'POST'; body?: unknown; sessionId?: string },
+    init: {
+      method: 'GET' | 'POST';
+      body?: unknown;
+      sessionId?: string;
+      /** Ne pas consommer le corps en texte — voir `download`. */
+      raw?: boolean;
+    },
     correlationId: string,
   ): Promise<{ response: Response; text: string }> {
     const controller = new AbortController();
@@ -106,7 +112,8 @@ export class PortalOdooGateway {
         redirect: 'manual',
         signal: controller.signal,
       });
-      return { response, text: await response.text() };
+      // Un fichier n'est pas du texte : le lire en UTF-8 corromprait un PDF.
+      return { response, text: init.raw ? '' : await response.text() };
     } catch (error) {
       const durationMs = Date.now() - startedAt;
       const aborted = error instanceof Error && error.name === 'AbortError';
@@ -244,6 +251,59 @@ export class PortalOdooGateway {
     }
     return envelope.data;
   }
+
+  /**
+   * Télécharge un fichier sous la session du client.
+   *
+   * Le nom de fichier vient d'Odoo, qui l'a déjà assaini (il n'en garde que des
+   * caractères alphanumériques, espaces, points, tirets et soulignés). On le
+   * réassainit malgré tout ici : ce nom finit dans un en-tête `Content-Disposition`
+   * que nous écrivons, et faire confiance à l'assainissement d'une autre couche
+   * est précisément la façon dont ces défauts reviennent.
+   *
+   * Le type MIME d'Odoo n'est pas repris : il renvoie `application/octet-stream`
+   * pour tout, délibérément, afin qu'un fichier téléversé ne puisse pas se faire
+   * interpréter comme du HTML par le navigateur.
+   */
+  async download(
+    path: string,
+    sessionId: string,
+    correlationId: string,
+  ): Promise<{ body: ArrayBuffer; filename: string }> {
+    const { response } = await this.call(
+      `/api/v1/portal${path}`,
+      { method: 'GET', sessionId, raw: true },
+      correlationId,
+    );
+
+    if (response.status === 401 || response.status === 403) {
+      throw new PortalGatewayError('unauthenticated', 'session rejected', response.status);
+    }
+    if (response.status >= 300 && response.status < 400) {
+      throw new PortalGatewayError('unauthenticated', 'session expired');
+    }
+    if (response.status === 404) {
+      throw new PortalGatewayError('not_found', 'not found', 404);
+    }
+    if (!response.ok) {
+      throw new PortalGatewayError('unavailable', 'ERP error', response.status);
+    }
+
+    return {
+      body: await response.arrayBuffer(),
+      filename: safeFilename(response.headers.get('content-disposition')),
+    };
+  }
+}
+
+/** Nom de fichier réduit à ce qui ne peut pas casser un en-tête. */
+export function safeFilename(contentDisposition: string | null): string {
+  const match = /filename="([^"]*)"/.exec(contentDisposition ?? '');
+  const cleaned = (match?.[1] ?? '')
+    .replace(/[^A-Za-z0-9 ._-]/g, '')
+    .trim()
+    .slice(0, 120);
+  return cleaned || 'document';
 }
 
 /** Identité renvoyée par `/api/v1/portal/me`. Projection Odoo, jamais reconstruite. */

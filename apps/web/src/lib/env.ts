@@ -82,6 +82,27 @@ const serverEnvSchema = z.object({
 
   /** Milliseconds before an Odoo call is abandoned. */
   ODOO_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(15_000),
+
+  /**
+   * Server-only. Seals the portal session cookie (AES-256-GCM).
+   *
+   * Its only job is to make the cookie unforgeable: the cookie carries an Odoo
+   * session id, and a client able to mint one would be handing us an identifier
+   * we would then present to Odoo as our own.
+   *
+   * No default and no fallback. A development default would eventually be the
+   * production value, because nothing would ever fail to remind us. Rotating it
+   * invalidates every open portal session — that is the intended behaviour, not a
+   * side effect: it is the only way to revoke them all at once.
+   *
+   * Generate with: openssl rand -base64 48
+   */
+  PORTAL_SESSION_SECRET: z
+    .string()
+    .min(
+      32,
+      'PORTAL_SESSION_SECRET must be at least 32 characters (openssl rand -base64 48)',
+    ),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

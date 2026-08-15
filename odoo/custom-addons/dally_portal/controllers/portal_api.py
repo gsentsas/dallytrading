@@ -216,8 +216,11 @@ class DallyPortalController(http.Controller):
         if not record:
             return self._not_found()
         try:
+            # Projection de DÉTAIL : la même que la liste, sauf pour les modèles
+            # qui ont davantage à montrer sur leur propre page (les propositions
+            # d'une demande de sourcing, les colis d'une expédition).
             return self._json({"success": True,
-                               "data": record._dally_portal_payload()})
+                               "data": record._dally_portal_detail_payload()})
         except (AccessError, MissingError):
             return self._not_found()
 

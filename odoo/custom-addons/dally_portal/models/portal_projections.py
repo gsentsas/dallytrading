@@ -24,8 +24,38 @@ l'inverse : il est absent tant que quelqu'un ne l'ajoute pas sciemment.
 from odoo import models
 
 
+class DallyPortalProjectionMixin(models.AbstractModel):
+    """Le détail vaut la liste, sauf mention contraire.
+
+    Une liste doit rester légère : y joindre les propositions de chaque demande de
+    sourcing ferait une requête par ligne pour des données que la liste n'affiche
+    pas. Une page de détail, elle, a besoin de plus.
+
+    D'où deux projections, et un défaut qui les rend identiques. Un modèle qui n'a
+    rien de plus à montrer en détail n'a rien à écrire ; celui qui en a surcharge
+    cette méthode. L'alternative — enrichir depuis le contrôleur — remettrait de la
+    logique de projection à l'endroit précis d'où on l'a sortie.
+    """
+
+    _name = "dally.portal.projection.mixin"
+    _description = "Portal projection helpers"
+
+    def _dally_portal_detail_payload(self):
+        self.ensure_one()
+        return self._dally_portal_payload()
+
+
 class DallyQuoteRequestPortal(models.Model):
-    _inherit = "dally.quote.request"
+    # `_name` EST OBLIGATOIRE ici, et sa valeur doit répéter le modèle étendu.
+    #
+    # Avec `_inherit` sous forme de liste et sans `_name`, Odoo 19 ne comprend
+    # pas « étendre ce modèle » : il dérive un nom depuis le nom de la classe et
+    # crée un modèle NEUF — ici `dally.quote.request.portal` — avec sa propre
+    # table. Les projections disparaissent alors du vrai modèle sans qu'aucune
+    # erreur ne soit levée, et un `upgrade` en production créerait la table.
+    # Constaté sur l'instance E2E, en vérifiant le MRO.
+    _name = "dally.quote.request"
+    _inherit = ["dally.quote.request", "dally.portal.projection.mixin"]
 
     PORTAL_PAYLOAD_KEYS = (
         "reference", "service", "status", "createdOn",
@@ -58,7 +88,16 @@ class DallyQuoteRequestPortal(models.Model):
 
 
 class DallySourcingRequestPortal(models.Model):
-    _inherit = "dally.sourcing.request"
+    # `_name` EST OBLIGATOIRE ici, et sa valeur doit répéter le modèle étendu.
+    #
+    # Avec `_inherit` sous forme de liste et sans `_name`, Odoo 19 ne comprend
+    # pas « étendre ce modèle » : il dérive un nom depuis le nom de la classe et
+    # crée un modèle NEUF — ici `dally.sourcing.request.portal` — avec sa propre
+    # table. Les projections disparaissent alors du vrai modèle sans qu'aucune
+    # erreur ne soit levée, et un `upgrade` en production créerait la table.
+    # Constaté sur l'instance E2E, en vérifiant le MRO.
+    _name = "dally.sourcing.request"
+    _inherit = ["dally.sourcing.request", "dally.portal.projection.mixin"]
 
     PORTAL_PAYLOAD_KEYS = (
         "reference", "status", "productName", "productReference",
@@ -87,6 +126,27 @@ class DallySourcingRequestPortal(models.Model):
             ),
         }
         return {key: payload[key] for key in self.PORTAL_PAYLOAD_KEYS}
+
+    def _dally_portal_detail_payload(self):
+        """La demande, plus les propositions qui lui ont été envoyées.
+
+        ``search`` explicite plutôt que ``self.proposal_ids``. La différence est de
+        sécurité : parcourir un one2many renvoie les identifiants liés sans
+        appliquer les record rules — la lecture des champs lèverait ensuite une
+        ``AccessError`` au lieu de filtrer. Un ``search`` applique la règle et
+        **écarte** ce qui n'est pas visible, ce qui est exactement le comportement
+        voulu ici : une proposition en brouillon doit être absente, pas provoquer
+        une erreur qui trahirait son existence.
+        """
+        self.ensure_one()
+        payload = dict(self._dally_portal_payload())
+        proposals = self.env["dally.sourcing.proposal"].search(
+            [("request_id", "=", self.id)], order="create_date desc, id desc",
+        )
+        payload["proposals"] = [
+            proposal._dally_portal_payload() for proposal in proposals
+        ]
+        return payload
 
 
 class DallySourcingProposalPortal(models.Model):
@@ -128,7 +188,16 @@ class DallySourcingProposalPortal(models.Model):
 
 
 class DallyTradeOpportunityPortal(models.Model):
-    _inherit = "dally.trade.opportunity"
+    # `_name` EST OBLIGATOIRE ici, et sa valeur doit répéter le modèle étendu.
+    #
+    # Avec `_inherit` sous forme de liste et sans `_name`, Odoo 19 ne comprend
+    # pas « étendre ce modèle » : il dérive un nom depuis le nom de la classe et
+    # crée un modèle NEUF — ici `dally.trade.opportunity.portal` — avec sa propre
+    # table. Les projections disparaissent alors du vrai modèle sans qu'aucune
+    # erreur ne soit levée, et un `upgrade` en production créerait la table.
+    # Constaté sur l'instance E2E, en vérifiant le MRO.
+    _name = "dally.trade.opportunity"
+    _inherit = ["dally.trade.opportunity", "dally.portal.projection.mixin"]
 
     PORTAL_PAYLOAD_KEYS = (
         "reference", "subject", "operationType", "operationTypeLabel",
@@ -171,7 +240,16 @@ class DallyTradeOpportunityPortal(models.Model):
 
 
 class DallyShipmentPortal(models.Model):
-    _inherit = "dally.shipment"
+    # `_name` EST OBLIGATOIRE ici, et sa valeur doit répéter le modèle étendu.
+    #
+    # Avec `_inherit` sous forme de liste et sans `_name`, Odoo 19 ne comprend
+    # pas « étendre ce modèle » : il dérive un nom depuis le nom de la classe et
+    # crée un modèle NEUF — ici `dally.shipment.portal` — avec sa propre
+    # table. Les projections disparaissent alors du vrai modèle sans qu'aucune
+    # erreur ne soit levée, et un `upgrade` en production créerait la table.
+    # Constaté sur l'instance E2E, en vérifiant le MRO.
+    _name = "dally.shipment"
+    _inherit = ["dally.shipment", "dally.portal.projection.mixin"]
 
     def _dally_portal_payload(self):
         """Réutilise la projection publique du suivi, déjà éprouvée.
@@ -187,3 +265,54 @@ class DallyShipmentPortal(models.Model):
         """
         self.ensure_one()
         return self._dally_public_payload()
+
+    def _dally_portal_detail_payload(self):
+        """L'expédition, plus le détail de ses colis.
+
+        Le suivi public s'arrête à ``packagesCount`` : un visiteur muni d'un lien de
+        suivi n'a pas à connaître le contenu et les dimensions de chaque colis. Le
+        client authentifié, lui, regarde son propre envoi — c'est la seule
+        différence de fond entre les deux chemins d'accès, et elle est ici.
+
+        ``search`` plutôt que ``self.package_ids``, pour la même raison que sur le
+        sourcing : c'est le ``search`` qui applique la record rule.
+        """
+        self.ensure_one()
+        payload = dict(self._dally_public_payload())
+        packages = self.env["dally.shipment.package"].search(
+            [("shipment_id", "=", self.id)], order="sequence, id",
+        )
+        payload["packages"] = packages._dally_portal_package_payload()
+        return payload
+
+
+class DallyShipmentPackagePortal(models.Model):
+    _inherit = "dally.shipment.package"
+
+    PORTAL_PAYLOAD_KEYS = (
+        "packageType", "description", "quantity",
+        "totalWeightKg", "totalVolumeCbm",
+    )
+
+    def _dally_portal_package_payload(self):
+        """Ce que le client voit de ses colis.
+
+        Les dimensions unitaires ne sont pas reprises : ce sont des données de
+        calcul d'affrètement, et le client raisonne en poids et volume totaux.
+        Aucun identifiant technique, comme partout ailleurs dans cette couche.
+        """
+        labels = dict(
+            self._fields["package_type"]._description_selection(self.env)
+        )
+        payload = []
+        for package in self:
+            row = {
+                "packageType": labels.get(
+                    package.package_type, package.package_type),
+                "description": package.description or None,
+                "quantity": package.quantity,
+                "totalWeightKg": package.total_weight_kg,
+                "totalVolumeCbm": package.total_volume_cbm,
+            }
+            payload.append({key: row[key] for key in self.PORTAL_PAYLOAD_KEYS})
+        return payload

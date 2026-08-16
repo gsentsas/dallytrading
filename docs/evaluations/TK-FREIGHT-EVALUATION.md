@@ -4,6 +4,13 @@
 conditions de sécurité, toutes satisfaisables depuis `dally_freight_bridge` sans
 forker le fournisseur.
 
+Les §1 à §11 sont l'audit **statique**. La **partie II** (§12 à §15) rapporte ce
+qui a été réellement **exécuté** en stack jetable : le module s'installe proprement
+(exit 0, 0 ERROR), et les conditions de sécurité sont confirmées par la mesure —
+dont l'exfiltration d'un document d'un client par un autre, prouvée par canari,
+et une création d'enregistrement par POST sans jeton CSRF. En cas de divergence,
+**la partie II prime**.
+
 | | |
 |---|---|
 | Source | `github.com/rambolee200311/odoo19_freight` |
@@ -309,3 +316,148 @@ addons_path = <community>,/opt/dallytrading/vendor-addons,<dally addons>
 ```
 
 Non appliqué. Documenté seulement.
+
+---
+
+# Partie II — mesure dynamique
+
+Les sections 1 à 11 sont un audit **statique** (lecture du code). Cette partie
+rapporte ce qui a été **exécuté** dans une stack jetable isolée, et elle prime
+sur la partie I partout où les deux divergent.
+
+| | |
+|---|---|
+| Stack | projet `dallytrading-freight-dev`, base `dallytrading_freight_dev` |
+| Odoo | `19.0-20260810`, sur `127.0.0.1:18369`, PostgreSQL en réseau privé |
+| Installation | **exit 0**, 115 s, 94 modules, **0 ERROR / 0 CRITICAL / 0 Traceback** |
+| Jeu d'essai | Company Alpha (Portal A, uid 8) · Company Beta (Portal B, uid 9) |
+| Expéditions | A = `OCEAN/2026/08/00002` (id 1) · B = `OCEAN/2026/08/00003` (id 2) |
+
+## 12. Deux défauts de mesure, écartés avant conclusion
+
+Deux résultats bruts étaient faux. Ils sont consignés parce qu'ils changent la
+manière de tester Odoo, pas seulement ce module.
+
+**Le cache ORM est porté par la transaction, pas par l'utilisateur.** Une
+première sonde donnait « B lit l'expédition de A : AUTORISÉ », en contradiction
+avec le sens inverse. C'était un artefact : la valeur lue plus tôt sous A était
+resservie à B **sans nouveau contrôle d'accès**. Avec `env.invalidate_all()`
+entre chaque sonde, les deux sens sont refusés. Toute sonde d'isolation multi-
+locataire dans une transaction unique doit invalider le cache, sinon elle mesure
+le cache.
+
+**Un refus n'est pas toujours un refus de sécurité.** Une écriture croisée
+« refusée » l'était sur `ValueError` — champ inexistant —, pas sur `AccessError`.
+Rejouée sur un champ réel (`carrier_seal`), elle **passe**. De même, plusieurs
+routes renvoient 500 : ce sont des bugs, pas des contrôles.
+
+## 13. Résultats ORM
+
+**Le cloisonnement ne tient que sur `freight.shipment`.**
+
+| Sonde | Résultat |
+|---|---|
+| A lit / A écrit sa propre expédition | autorisé (`perm_write` natif confirmé) |
+| A lit l'expédition de B · B lit celle de A | **refusé** (`AccessError`), dans les deux sens |
+| A `search` expéditions | `[1]` — correctement borné |
+| A supprime sa propre expédition | refusé (`perm_unlink=0`) |
+
+Cause : **une seule règle d'enregistrement dans tout le module**, sur
+`freight.shipment` :
+
+```python
+['|', ('consignee_id','=',user.partner_id.id), ('shipper_id','=',user.partner_id.id)]
+```
+
+**Les 20 autres modèles ouverts au portail n'ont aucune règle.** Le groupe
+`base.group_portal` reçoit 21 ACL, toutes en `r1w1c0u0` — lecture **et
+écriture** — dont `freight.documents`, `shipment.invoice`, `shipment.quotation`,
+`shipment.freight.booking`, `shipment.package.line`, `shipment.tracking`,
+`shipment.item`, `freight.port`, `freight.route`, `freight.incoterms`.
+
+Conséquences mesurées, toutes reproduites :
+
+| Sonde | Résultat |
+|---|---|
+| A lit les colis de l'expédition de B | **autorisé** |
+| A **modifie** les colis de l'expédition de B | **autorisé** |
+| A lit le nom du document de B | **autorisé** — `contrat-confidentiel-B.pdf` |
+| A **exfiltre le binaire** du document de B | **autorisé** — canari `DALLY_CANARY_DOC_DE_B` restitué mot pour mot |
+| A modifie le document de B | **autorisé** |
+| A liste toutes les factures | **autorisé** |
+| A renomme `freight.incoterms`, `freight.route`, `freight.shipment.stages`, `freight.move.type` | **autorisé** — configuration globale mutable par un client |
+| A crée une expédition / route / cotation / booking de zéro | refusé (`perm_create=0`) |
+
+Le canari est la preuve décisive : un client lit **le contenu** d'un document
+d'un autre client, pas seulement son existence.
+
+## 14. Résultats HTTP
+
+17 motifs de routes, dont 3 en `auth=public`.
+
+**Suivi public sans jeton — confirmé.** `track_shipment` fait
+`sudo().search([('name','=',q)])` : aucun jeton, aucune limite de débit. Un
+visiteur anonyme obtient la page de détail. Le POST utilise le paramètre `q`
+(et non `tracking_number`).
+
+L'identifiant est **séquentiel** — `OCEAN/2026/08/00002`, `00003` — et la
+réponse **distingue l'existant de l'inexistant** (200 avec bloc de détail, vs
+redirection), ce qui est visible dans la source (`if freight:` … `return
+request.redirect`). C'est un oracle d'énumération : tout le carnet d'expéditions
+est parcourable de l'extérieur. Champs rendus dans cette version :
+référence, lieux source et destination, transport. Pas de nom de client — mais
+le gabarit est modifiable côté vendeur, la limite n'est pas structurelle.
+
+*Faux positif écarté* : la 404 de `/track/shipment/<ref>` contient la référence
+demandée. C'est un **écho d'URL** (`<link rel=canonical>`), pas une donnée —
+taille identique à l'octet (19 669) pour une référence réelle et une inventée.
+
+**CSRF désactivée et exploitable — prouvé par un enregistrement.**
+`/freight/shipment/booking/submit` est déclarée `csrf=False`. Un POST du
+client A **sans aucun jeton** renvoie 200 et crée une cotation réelle :
+
+```
+FQ/2026/08/00001 | cree_par=fd.a@freight-dev.invalid (uid=8) | 2026-08-16 21:13:25
+```
+
+L'attribution est vérifiée sur `create_uid`/`create_date` : une page tierce peut
+faire créer des enregistrements métier au navigateur d'un client connecté.
+
+**IDOR sur `/post/comment` — présente dans le code, actuellement inatteignable.**
+La route est `auth="user"` puis `sudo().browse(int(kw['book_id']))` **sans
+contrôle de propriété**, et rend la page de détail du booking visé. Elle ne peut
+pas être exploitée aujourd'hui : elle plante d'abord sur un défaut de
+compatibilité Odoo 19 —
+
+```
+File ".../tk_freight/controllers/main.py", line 185, in post_comment
+    'date': fields.datetime.now(),
+AttributeError: module 'odoo.fields' has no attribute 'datetime'
+```
+
+`fields.datetime` n'existe plus (c'est `fields.Datetime`). Le 500 précède toute
+écriture : aucun `booking.line` n'est créé. **Ce n'est pas un contrôle de
+sécurité** : le jour où le vendeur corrige la faute de frappe, l'IDOR devient
+vivante. Elle doit être neutralisée maintenant.
+
+**Routes de détail portail.** `/freight/shipment/shipment/details/<id>` renvoie
+**403 dans les deux sens** (A→B et B→A) : ce contrôle-là fonctionne.
+`/freight/shipment/booking/details/<id>` renvoie 500 pour A **comme pour son
+propriétaire B** — `ValueError: 1 is not in list`, le contrôleur appelle
+`.index()` sur une liste qui ne contient pas l'enregistrement. Barrière
+accidentelle, pas contrôle : elle échoue fermé, mais par accident.
+
+## 15. Ce que la mesure change pour le bridge
+
+Rien ici n'invalide l'architecture bridge — tout devient au contraire une
+**exigence testable** :
+
+1. Neutraliser les 21 ACL portail par surcharge d'`xmlid` (les ACL Odoo étant
+   additives, il faut **écraser** l'enregistrement vendeur, pas en ajouter un).
+   Vérification obligatoire par test dynamique, pas par lecture de CSV.
+2. Neutraliser les 17 routes vendeur. Retirer un lien d'interface ne suffit pas :
+   une URL non liée reste atteignable.
+3. Le portail DallyTrading ne consomme jamais tk directement : projection en
+   lecture seule via le BFF, avec jeton de suivi non énumérable.
+4. Rejouer les sondes des §13 et §14 comme tests de non-régression après chaque
+   mise à jour vendeur.

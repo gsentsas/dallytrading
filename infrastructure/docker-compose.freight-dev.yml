@@ -1,0 +1,115 @@
+####################################################################
+# DALLYTRADING — Stack éphémère d'évaluation du moteur Freight
+#
+#   docker compose -p dallytrading-freight-dev --env-file <env> \
+#     -f docker-compose.freight-dev.yml up -d
+#
+# ISOLATION — ce que cette pile ne touche jamais :
+#   * la base `dallytrading` ni son serveur PostgreSQL ;
+#   * les conteneurs `dallytrading-odoo` / `dallytrading-postgres` ;
+#   * la pile `dallytrading-e2e`, qui porte le harnais portail ;
+#   * l'instance Odoo 18 `odoo_crm` (SEN CONTAINERS) ni aucun voisin.
+#
+# Tout porte le label `com.dallytrading.freight-dev=true` : le nettoyage
+# supprime ce qui porte ce label, jamais « tout ce qui est arrêté ».
+#
+# Deux chemins d'addons sont montés séparément, et c'est délibéré : le code
+# fournisseur (OPL-1) vit dans un répertoire privé jetable, jamais dans le
+# dépôt. Le packaging de production sera traité au gate de déploiement.
+####################################################################
+
+name: ${FD_PROJECT:-dallytrading-freight-dev}
+
+services:
+
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    container_name: ${FD_PG_CONTAINER:-dallytrading-freight-dev-postgres}
+    hostname: ${FD_PG_CONTAINER:-dallytrading-freight-dev-postgres}
+    labels:
+      com.dallytrading.freight-dev: "true"
+    environment:
+      POSTGRES_USER: ${FD_DB_USER:?FD_DB_USER requis}
+      POSTGRES_PASSWORD: ${FD_DB_PASSWORD:?FD_DB_PASSWORD requis}
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+      TZ: ${TZ:-Africa/Dakar}
+    volumes:
+      - fd-postgres-data:/var/lib/postgresql/data
+    networks:
+      - fd-private
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: "no"
+
+  odoo:
+    image: ${ODOO_IMAGE:-odoo:19.0}
+    container_name: ${FD_ODOO_CONTAINER:-dallytrading-freight-dev-odoo}
+    hostname: ${FD_ODOO_CONTAINER:-dallytrading-freight-dev-odoo}
+    labels:
+      com.dallytrading.freight-dev: "true"
+    user: "${FD_RUN_UID:?FD_RUN_UID requis}:${FD_RUN_GID:?FD_RUN_GID requis}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["odoo"]
+    command: ["-c", "/etc/odoo/odoo.conf"]
+    environment:
+      TZ: ${TZ:-Africa/Dakar}
+    volumes:
+      - fd-filestore:/var/lib/odoo
+      - ${FD_ODOO_CONF:?FD_ODOO_CONF requis}:/etc/odoo/odoo.conf:ro
+      # Addons DallyTrading, depuis le dépôt.
+      - ../odoo/custom-addons:/mnt/extra-addons:ro
+      # Addons fournisseur, depuis le workspace privé jetable.
+      - ${FD_VENDOR_ADDONS:?FD_VENDOR_ADDONS requis}:/mnt/vendor-addons:ro
+    ports:
+      - "127.0.0.1:${FD_ODOO_HTTP_PORT:-18369}:8069"
+    networks:
+      - fd-private
+      - fd-public
+    mem_limit: ${FD_ODOO_MEM_LIMIT:-4g}
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - |
+          import sys, urllib.request
+          try:
+              r = urllib.request.urlopen("http://localhost:8069/web/health", timeout=5)
+              sys.exit(0 if r.status == 200 else 1)
+          except Exception:
+              sys.exit(1)
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 40s
+    restart: "no"
+
+networks:
+  fd-private:
+    name: ${FD_PRIVATE_NETWORK:-dallytrading_freight_dev_private}
+    driver: bridge
+    internal: true
+    labels:
+      com.dallytrading.freight-dev: "true"
+  fd-public:
+    name: ${FD_PUBLIC_NETWORK:-dallytrading_freight_dev_public}
+    driver: bridge
+    labels:
+      com.dallytrading.freight-dev: "true"
+
+volumes:
+  fd-postgres-data:
+    name: ${FD_POSTGRES_VOLUME:-dallytrading_freight_dev_postgres_data}
+    labels:
+      com.dallytrading.freight-dev: "true"
+  fd-filestore:
+    name: ${FD_FILESTORE_VOLUME:-dallytrading_freight_dev_filestore}
+    labels:
+      com.dallytrading.freight-dev: "true"

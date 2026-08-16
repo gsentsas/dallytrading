@@ -1,7 +1,8 @@
 # tk_freight — évaluation de faisabilité
 
-**Verdict : NO-GO en l'état.** Deux points bloquants indépendants, l'un juridique,
-l'autre de sécurité. Aucune installation n'a été faite — la raison est au §1.
+**Verdict : GO SOUS CONDITIONS.** Le point juridique est **clos** (§1). Restent des
+conditions de sécurité, toutes satisfaisables depuis `dally_freight_bridge` sans
+forker le fournisseur.
 
 | | |
 |---|---|
@@ -15,7 +16,20 @@ l'autre de sécurité. Aucune installation n'a été faite — la raison est au 
 
 ---
 
-## 1. BLOCKER — licence
+## 1. Licence — CLOS
+
+> **Le propriétaire de DallyTrading a confirmé détenir une licence valide et
+> légitime de tk_freight.** Le point est clos et ne conditionne plus le chantier.
+>
+> Conséquence pratique : l'évaluation dynamique doit se faire sur la **copie
+> licenciée**, jamais sur le dépôt GitHub tiers. Celui-ci a servi à l'audit
+> statique et ne doit pas devenir une source de production.
+
+Ce qui suit est conservé comme trace de l'analyse initiale, et parce qu'il reste
+utile : il documente pourquoi la copie GitHub ne peut pas servir de source, et à
+quoi comparer la copie licenciée.
+
+### Analyse initiale (historique)
 
 `__manifest__.py` déclare `'license': 'OPL-1'` et `'price': 175.00`. C'est un
 produit **commercial** de TechKhedut, vendu sur l'Odoo Apps Store. L'OPL-1
@@ -30,16 +44,15 @@ TechKhedut**.
 Cette copie est donc, selon toute vraisemblance, une **redistribution non
 autorisée**. Nous ne détenons aucune licence.
 
-**Conséquence pratique, et c'est pour cela que je me suis arrêté avant
-l'installation** : faire reposer le moteur opérationnel Freight de DallyTrading
-sur un logiciel dont nous n'avons pas la licence créerait une dépendance
-structurelle à un défaut de titre — pas un risque théorique, un risque sur
-l'outil de production.
+Cette copie ne peut donc pas servir de source de production, indépendamment de
+la licence que nous détenons par ailleurs : elle n'en est pas le canal
+d'obtention légitime, et rien ne garantit qu'elle corresponde à la version
+vendue.
 
-**Voie légitime** : acheter la licence sur l'Odoo Apps Store, puis rejouer
-l'évaluation dynamique sur la copie licenciée. Tout le harnais est prêt.
+**Statut** : le propriétaire détient la licence. L'évaluation dynamique se fera
+sur sa copie, dont le chemin reste à fournir.
 
-## 2. BLOCKER — sécurité portail native
+## 2. CONDITION — sécurité portail native
 
 ### ACL
 
@@ -90,7 +103,7 @@ C'est la symétrie exacte de nos choix : ACL en lecture seule, record rule par
 modèle sur `commercial_partner_id`, `groups=` au niveau des champs, et une seule
 écriture portail encapsulée dans une capacité privée.
 
-## 3. BLOCKER — suivi public sans jeton, via `sudo()`
+## 3. CONDITION — suivi public sans jeton, via `sudo()`
 
 ```python
 @http.route(['/track/shipment', '/track/shipment/<string:booking>',
@@ -259,18 +272,27 @@ deux états indépendants divergent toujours.
 
 ## 10. Recommandation
 
-**NO-GO en l'état.** Le module n'est pas utilisable tel qu'obtenu.
+**GO SOUS CONDITIONS.**
 
-**GO SOUS CONDITIONS** si, et seulement si :
-
-1. la licence est **achetée** auprès de TechKhedut ou de l'Odoo Apps Store, et
-   la copie licenciée remplace celle-ci ;
+1. ~~Licence~~ — **close** : le propriétaire la détient. L'évaluation dynamique
+   se fait sur sa copie, pas sur le dépôt GitHub tiers.
 2. **aucune route tk n'est exposée** — website et portal tk désactivés, `/shipment`
    et `/track/shipment` bloqués au reverse proxy ;
 3. les **ACL portail tk sont neutralisées** : `base.group_portal` ne doit
    conserver aucun `perm_write`, et l'unique `ir.rule` perdre `perm_unlink` ;
 4. `/post/comment` reste inaccessible tant que l'IDOR n'est pas corrigé ;
-5. l'évaluation dynamique (§23–§35) est rejouée sur la copie licenciée.
+5. l'évaluation dynamique est jouée sur la copie licenciée.
+
+### Point d'attention sur la neutralisation des ACL
+
+Odoo **additionne** les ACL : ajouter une ligne en lecture seule ne retire pas un
+`perm_write` déjà accordé par la ligne du fournisseur. Une ACL supplémentaire
+plus restrictive ne suffira donc pas, et le prétendre serait une fausse sécurité.
+
+Le bridge devra **écraser les lignes du fournisseur par leurs xmlid**
+(`tk_freight.access_freight_shipment_portal`, etc.) via des données XML de notre
+module, chargé après lui — et le résultat devra être **mesuré dynamiquement**,
+groupe par groupe, pas déduit.
 
 Ces conditions se satisfont depuis `dally_freight_bridge` **sans forker le
 fournisseur** : un module qui surcharge les ACL et ne route rien vers tk. C'est

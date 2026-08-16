@@ -37,8 +37,25 @@ test('Portal A traverse tout son espace client', async ({ page }) => {
   // ── Devis ──
   await page.getByRole('link', { name: 'Devis', exact: true }).first().click();
   await waitForPath(page, '/espace-client/devis');
-  const quoteRef = await firstReferenceLink(page);
-  expect(quoteRef, 'A doit avoir au moins un devis').toBeTruthy();
+  /*
+   * On vise le devis PAR SON CONTENU, pas par sa position.
+   *
+   * Ce test prenait la première ligne de la liste et affirmait ensuite y trouver
+   * « Marchandise synthetique A ». L'ordre est `create_date desc` : le jour où le
+   * jeu synthétique a gagné des devis plus récents — ceux du scénario de
+   * décision — la première ligne a changé et le test a échoué sans que rien de
+   * fonctionnel n'ait bougé. Une assertion qui dépend de l'ordre d'insertion
+   * finit toujours par mentir.
+   */
+  // « Ville origine A » est la colonne Trajet du devis synthétique d'origine ;
+  // les devis du scénario de décision portent « Quote A … » à cet endroit.
+  const quoteRow = page.locator('table tbody tr', {
+    hasText: 'Ville origine A',
+  });
+  const quoteRef = (
+    await quoteRow.locator('td:first-child a').first().textContent()
+  )?.trim();
+  expect(quoteRef, 'A doit avoir son devis synthétique').toBeTruthy();
   await page.getByRole('link', { name: quoteRef as string }).click();
   await waitForPath(page, `/espace-client/devis/${quoteRef}`);
   await expect(page.getByRole('heading', { name: quoteRef as string })).toBeVisible();

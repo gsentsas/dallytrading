@@ -45,7 +45,7 @@ BASE_URL="http://127.0.0.1:${NEXT_PORT}"
 ODOO_CONTAINER="dallytrading-e2e-odoo"
 PLAYWRIGHT_IMAGE="${E2E_PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.62.1-noble}"
 
-SPECS_BEFORE=(01-login 02-session 03-logout 04-redirect-origin 06-network 07-business 08-cross-client 09-canaries 10-profile-write 05a-capture-session)
+SPECS_BEFORE=(01-login 02-session 03-logout 04-redirect-origin 06-network 07-business 08-cross-client 09-canaries 10-profile-write 11-quote-decision 05a-capture-session)
 
 log() { printf '\n\033[1m── %s\033[0m\n' "$*"; }
 
@@ -214,6 +214,30 @@ playwright() {
     "$PLAYWRIGHT_IMAGE" npx playwright test --output=/tmp/pw-out "$@"
 }
 
+#: Restaure les fixtures MUTABLES d'une spec, puis VÉRIFIE la précondition.
+#:
+#: Appelé juste avant chaque spec qui écrit dans Odoo, avec son propre périmètre.
+#: Un reset global unique en début de suite ne suffirait pas : il supposerait
+#: qu'aucune spec ultérieure ne touche les mêmes données, et cette hypothèse est
+#: exactement celle qui a fini par être fausse.
+#:
+#: Le script relit l'état après restauration ; sans `PRECONDITION_OK`, on
+#: s'arrête ici plutôt que de laisser Playwright échouer loin de la cause.
+reset_fixtures() {
+  local scope="$1"
+  local output
+  output="$(docker compose -p dallytrading-e2e --env-file "$WORK/env" \
+    -f "$ROOT/infrastructure/docker-compose.e2e.yml" run --rm --no-deps -T \
+    -e "E2E_RESET_SCOPE=$scope" odoo \
+    shell -c /etc/odoo/odoo.conf -d dallytrading_e2e --no-http \
+    < "$ROOT/infrastructure/scripts/e2e-reset-fixtures.py" 2>&1)"
+  printf '%s\n' "$output" | grep -E "^RESET |^PRECONDITION_" | sed 's/^/   /'
+  if ! printf '%s' "$output" | grep -q "PRECONDITION_OK"; then
+    echo "   précondition non satisfaite pour « $scope » — arrêt" >&2
+    return 1
+  fi
+}
+
 run_tests() {
   : > "$WORK/next.log"
   local failed=0
@@ -227,6 +251,11 @@ run_tests() {
   # démonstration de la limite documentée au §7 de docs/PORTAL.md.
   for spec in "${SPECS_BEFORE[@]}"; do
     log "$spec"
+    # Chaque spec mutable repart d'un état connu et vérifié.
+    case "$spec" in
+      10-profile-write)  reset_fixtures profile || return 1 ;;
+      11-quote-decision) reset_fixtures quotes  || return 1 ;;
+    esac
     restart_next
     playwright "e2e/${spec}.spec.ts" || failed=1
   done
@@ -284,6 +313,7 @@ en-tête Authorization|Authorization:
 clé d'API|x-api-key
 valeur téléphone profil|+221 77 123 45 67
 valeur adresse profil|42 avenue du Test
+motif refus devis|DALLY_E2E_QUOTE_REJECTION_REASON
 AUDIT
 
   rm -f "$odoo_log"

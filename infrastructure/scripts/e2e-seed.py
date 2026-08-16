@@ -121,6 +121,27 @@ service = env["dally.service.type"].search([], limit=1)
 sn = env.ref("base.sn")
 assert company_a and company_b, "societes synthetiques introuvables"
 
+def make_decidable_quote(contact, label, key):
+    """Devis synthétique réellement envoyé, jamais une donnée de production."""
+    quote = env["dally.quote.request"].create({
+        "partner_id": contact.id,
+        "service_type_id": service.id,
+        "request_uuid": f"e2e-quote-decision-{key}",
+        "goods_description": f"Marchandise decision {label}",
+        "quantity": "1 lot synthetique",
+        "origin_city": label,
+        "origin_country_id": sn.id,
+        "destination_city": "Destination decision",
+        "destination_country_id": sn.id,
+        "state": "quoted",
+    })
+    env["sale.order"].create({
+        "partner_id": contact.id,
+        "dally_quote_request_id": quote.id,
+        "state": "sent",
+    })
+    return quote
+
 for tag, company in (("A", company_a), ("B", company_b)):
     contact = company.child_ids[0]
 
@@ -137,6 +158,14 @@ for tag, company in (("A", company_a), ("B", company_b)):
         "destination_country_id": sn.id,
         "internal_notes": canary("INTERNAL_NOTE", tag),
     })
+
+    if tag == "A":
+        make_decidable_quote(contact, "Quote A Accept", "a-accept")
+        make_decidable_quote(contact, "Quote A Reject", "a-reject")
+        make_decidable_quote(contact, "Quote A Concurrent", "a-concurrent")
+        make_decidable_quote(contact, "Quote A Security", "a-security")
+    else:
+        make_decidable_quote(contact, "Quote B Sent", "b-sent")
 
     # ── Sourcing + proposition envoyée ──
     sourcing = env["dally.sourcing.request"].create({

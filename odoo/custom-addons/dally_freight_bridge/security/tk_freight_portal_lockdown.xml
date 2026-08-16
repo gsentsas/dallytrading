@@ -180,6 +180,44 @@
   </record>
 
   <!--
+    Quatre ACL supplementaires, trouvees par la decouverte dynamique du
+    garde-fou et absentes de l'inventaire statique initial : leurs modeles ne
+    portent ni le prefixe `freight` ni le prefixe `shipment`, et un inventaire
+    fonde sur les noms les avait donc manques. Toutes en r1w1c0u0.
+
+    C'est precisement la raison pour laquelle le garde-fou raisonne desormais
+    par invariant et non par liste.
+  -->
+
+  <record id="tk_freight.access_custom_department_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+
+  <record id="tk_freight.access_dashboard_details_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+
+  <record id="tk_freight.access_policy_risk_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+
+  <record id="tk_freight.access_quot_order_line_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+
+  <!--
     La regle d'enregistrement du fournisseur sur freight.shipment devient sans
     objet une fois l'ACL retiree — une regle ne filtre que ce qu'une ACL laisse
     passer. Elle est neanmoins durcie ici, en seconde barriere : si un droit

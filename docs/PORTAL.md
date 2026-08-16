@@ -135,7 +135,7 @@ devant Node — nginx `limit_req`, qui exige un `limit_req_zone` dans le bloc
 ## 8. Ce qui a été prouvé
 
 `npm run test` — 381 tests Vitest au total (17 fichiers). La suite Odoo du
-module exécute 97 tests post-install (117 assertions recensées), sans échec :
+module exécute 97 méthodes post-install (117 cas comptés par Odoo), sans échec :
 
 - scellement : aller-retour, IV aléatoire, identifiant absent du texte scellé,
   huit formes d'altération refusées à l'identique, expiration, horloge future ;

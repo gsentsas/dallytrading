@@ -461,3 +461,63 @@ Rien ici n'invalide l'architecture bridge — tout devient au contraire une
    lecture seule via le BFF, avec jeton de suivi non énumérable.
 4. Rejouer les sondes des §13 et §14 comme tests de non-régression après chaque
    mise à jour vendeur.
+
+---
+
+# Partie III — `dally_freight_bridge`, confinement vérifié
+
+Le pont confine `tk_freight` sans le forker : aucun fichier du fournisseur n'est
+modifié. Installation dans la stack jetable : **exit 0, 0 ERROR, 0 CRITICAL**.
+
+## 16. Les attaques réussies, rejouées après confinement
+
+Toutes celles de la §13, sur la même base et le même jeu d'essai :
+
+| Attaque, réussie sur le module nu | Après le pont |
+|---|---|
+| A lit l'expédition de B | `AccessError` |
+| A lit les colis de B | `AccessError` |
+| A **modifie** les colis de B | `AccessError` |
+| A lit le nom du document de B | `AccessError` |
+| A **exfiltre le binaire** du document de B | `AccessError` |
+| A renomme les incoterms globaux | `AccessError` |
+| A `search` sur les 6 modèles sensibles | `AccessError` |
+
+Côté HTTP, les 13 requêtes de la §14 sont refusées, et aucune ne renvoie de
+contenu métier. Trois précisions, parce que les codes ne sont pas tous 404 :
+
+* les POST sans jeton sont arrêtés en **400** par le contrôle CSRF du noyau,
+  avant même d'atteindre la route neutralisée ;
+* les routes `…/details/<model(...)>` renvoient **403** : le convertisseur
+  résout l'enregistrement avant le gestionnaire et bute sur l'ACL désormais
+  nulle. Effet de bord accepté : le message nomme le modèle interne.
+* aucun enregistrement n'a été créé par ces requêtes — vérifié par comptage,
+  là où le module nu créait `FQ/2026/08/00001`.
+
+Suite de tests : **11 tests, 0 échec, 0 erreur** (`tests.stats: 15` = 11 méthodes
++ 2 × 2 classes).
+
+## 17. Une seule barrière sur la plupart des modèles — d'où le garde-fou
+
+Contrôle négatif, pour vérifier que ces tests ne sont pas vides : en restaurant
+l'ACL d'origine sur `freight.documents`, le client relit immédiatement le
+document (1 ligne), et le garde-fou le signale.
+
+Un premier essai avait donné « 0 ligne » — non par efficacité d'une seconde
+barrière, mais parce que la table était **vide**. Rejoué avec un document
+réellement présent, le résultat s'inverse. À retenir : un compte nul ne prouve
+rien tant qu'on n'a pas prouvé que la source n'est pas vide.
+
+Conséquence à énoncer sans l'embellir : `freight.documents` — comme 19 autres
+modèles — n'a **aucune règle d'enregistrement**, donc **une seule barrière**,
+l'ACL. Seul `freight.shipment` en a deux, sa règle étant en outre durcie ici
+avec un domaine `[(0, '=', 1)]`.
+
+C'est exactement ce que le garde-fou couvre. Une mise à jour de `tk_freight`
+seul recharge ses ACL et rouvre tout, en silence. Le garde-fou est réévalué au
+chargement du registre, donc **après** les données du fournisseur, et journalise
+en `CRITICAL` chaque droit rouvert. Règle d'exploitation :
+
+```
+odoo -u tk_freight,dally_freight_bridge     # jamais tk_freight seul
+```

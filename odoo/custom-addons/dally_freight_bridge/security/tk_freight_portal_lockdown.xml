@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Retrait des droits que tk_freight accorde au groupe portail.
+
+  Les droits d'accès d'Odoo sont ADDITIFS : l'union des ACL de tous les groupes
+  de l'utilisateur. Ajouter une ACL restrictive n'annulerait donc rien. Il faut
+  ECRASER l'enregistrement du fournisseur par son xmlid — c'est ce que fait ce
+  fichier, en remettant les quatre permissions a 0.
+
+  Pourquoi : tk_freight ouvre ces 26 modeles au portail en r1w1c0u0 — lecture
+  ET ecriture — alors qu'une seule regle d'enregistrement existe dans tout le
+  module, sur freight.shipment. Les 20 autres modeles n'en ont aucune. Mesure
+  a l'appui (evaluation, partie II) : un client lisait et modifiait les colis
+  d'un autre, exfiltrait le contenu binaire de ses documents, et renommait la
+  configuration globale (incoterms, routes, etapes).
+
+  Consequence operationnelle : toute mise a jour de tk_freight recharge ses
+  propres ACL. Le module doit donc TOUJOURS etre mis a jour ensemble :
+      odoo -u tk_freight,dally_freight_bridge
+  Le garde-fou de models/lockdown_guard.py echoue bruyamment si ce n'est pas
+  fait, plutot que de laisser l'ouverture passer inapercue.
+-->
+<odoo>
+
+  <record id="tk_freight.access_booking_line_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_booking_order_line_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_certificate_type_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_airline_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_documents_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_frequent_route_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_incoterms_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_move_type_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_multiple_invoice_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_package_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_port_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_route_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_service_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_shipment_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_shipment_stages_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_freight_vessel_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_shipment_freight_booking_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_shipment_invoice_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_shipment_item_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_shipment_location_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_shipment_location_activity_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_shipment_package_line_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_shipment_quotation_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_shipment_tracking_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_tracking_template_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+  <record id="tk_freight.access_tracking_template_line_portal" model="ir.model.access">
+    <field name="perm_read" eval="0"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+
+  <!--
+    La regle d'enregistrement du fournisseur sur freight.shipment devient sans
+    objet une fois l'ACL retiree — une regle ne filtre que ce qu'une ACL laisse
+    passer. Elle est neanmoins durcie ici, en seconde barriere : si un droit
+    portail etait retabli par accident, la regle ne doit plus rien laisser
+    passer.
+
+    Le domaine est mis a [(0, '=', 1)], qui ne correspond a aucune ligne. Les
+    permissions ne peuvent PAS etre toutes mises a zero : le noyau impose
+    CHECK (perm_read or perm_write or perm_create or perm_unlink), contrainte
+    `ir_rule_no_access_rights`. On conserve donc perm_read a 1 — une regle de
+    lecture dont le domaine est vide est plus restrictive qu'une regle absente,
+    puisqu'une absence de regle laisserait tout passer.
+  -->
+  <record id="tk_freight.freight_security_rule_portal" model="ir.rule">
+    <field name="domain_force">[(0, '=', 1)]</field>
+    <field name="perm_read" eval="1"/>
+    <field name="perm_write" eval="0"/>
+    <field name="perm_create" eval="0"/>
+    <field name="perm_unlink" eval="0"/>
+  </record>
+
+</odoo>

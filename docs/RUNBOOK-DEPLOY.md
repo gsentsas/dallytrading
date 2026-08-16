@@ -276,6 +276,21 @@ cd /var/www/vhosts/dallytrading.com/platform
 
 Base et filestore forment une seule sauvegarde logique. La restauration complète se fait uniquement avec le Compose isolé décrit dans [`RESTORE.md`](RESTORE.md).
 
+Le marqueur `.complete` atteste uniquement que le backup **local** a été construit et
+vérifié. Si aucune variable `S3_*` n'est configurée, le mode local-only reste un
+succès valide. Dès qu'une variable `S3_*` exprime l'intention offsite, toute
+configuration incomplète ou tout échec de chiffrement, upload ou vérification B2
+rend le job global non nul. Les artefacts locaux et `.complete` restent
+récupérables; `backup-daily.sh` retourne alors 1 et l'unité oneshot doit finir avec
+`Result=exit-code`. Le monitoring pourra s'appuyer sur cet état.
+
+La matrice d'échec doit être exercée uniquement avec
+`infrastructure/tests/test-backup-offsite.sh`. Ne jamais provoquer une panne B2 en
+production. Le futur test production est limité au chemin de succès manuel et
+taggé : vérification locale, chiffrement, upload, `head-object`, comparaison de
+taille puis exit 0. Il nécessite une validation séparée avant exécution; voir
+[`BACKUPS.md`](BACKUPS.md).
+
 ```bash
 docker compose -p dallytrading-restore --env-file .env -f infrastructure/docker-compose.restore.yml up -d
 ./infrastructure/scripts/restore.sh <chemin_de_la_sauvegarde> --isolated-test --replace-filestore --confirm-filestore-volume dallytrading_restore_odoo_filestore --yes

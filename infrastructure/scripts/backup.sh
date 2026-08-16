@@ -7,7 +7,10 @@
 #   filestore.tar.gz   contenu du filestore de la seule base Odoo ciblée
 #   manifest.json      identité des ressources, tailles et horodatage logique
 #   SHA256SUMS         empreintes des trois artefacts
-#   .complete          écrit uniquement quand l'ensemble est terminé
+#   .complete          écrit après vérification du backup LOCAL complet
+#
+# La copie offsite est une étape séparée : son échec ne retire jamais .complete
+# ni les artefacts locaux, mais rend le job global non nul si elle est configurée.
 #
 set -euo pipefail
 umask 0077
@@ -46,6 +49,97 @@ container_has_network() {
     grep -Fq "\"$2\""
 }
 
+detect_offsite_mode() {
+  OFFSITE_MODE="disabled"
+  OFFSITE_CONFIG_ERROR=""
+
+  # La clé de chiffrement seule n'active pas l'offsite : generate-secrets.sh peut
+  # la préparer sur une installation volontairement local-only. En revanche, la
+  # présence d'une seule variable S3 exprime l'intention d'utiliser l'offsite et
+  # rend alors toute la configuration obligatoire.
+  if [[ -z "${S3_ENDPOINT:-}" && -z "${S3_BUCKET:-}" &&
+        -z "${S3_REGION:-}" && -z "${S3_ACCESS_KEY:-}" &&
+        -z "${S3_SECRET_KEY:-}" ]]; then
+    return 0
+  fi
+
+  OFFSITE_MODE="enabled"
+  local missing=()
+  [[ -n "${S3_ENDPOINT:-}" ]] || missing+=(S3_ENDPOINT)
+  [[ -n "${S3_BUCKET:-}" ]] || missing+=(S3_BUCKET)
+  [[ -n "${S3_REGION:-}" ]] || missing+=(S3_REGION)
+  [[ -n "${S3_ACCESS_KEY:-}" ]] || missing+=(S3_ACCESS_KEY)
+  [[ -n "${S3_SECRET_KEY:-}" ]] || missing+=(S3_SECRET_KEY)
+  [[ -n "${BACKUP_ENCRYPTION_KEY:-}" ]] || missing+=(BACKUP_ENCRYPTION_KEY)
+
+  if (( ${#missing[@]} > 0 )); then
+    OFFSITE_MODE="invalid"
+    OFFSITE_CONFIG_ERROR="missing required variables: ${missing[*]}"
+  elif [[ ! "${S3_ENDPOINT}" =~ ^https://[^[:space:]]+$ ]]; then
+    OFFSITE_MODE="invalid"
+    OFFSITE_CONFIG_ERROR="S3_ENDPOINT must be an HTTPS URL"
+  elif [[ ! "${S3_BUCKET}" =~ ^[A-Za-z0-9][A-Za-z0-9.-]{1,61}[A-Za-z0-9]$ ]]; then
+    OFFSITE_MODE="invalid"
+    OFFSITE_CONFIG_ERROR="S3_BUCKET has an invalid format"
+  elif [[ ! "${S3_REGION}" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,62}$ ]]; then
+    OFFSITE_MODE="invalid"
+    OFFSITE_CONFIG_ERROR="S3_REGION has an invalid format"
+  elif (( ${#BACKUP_ENCRYPTION_KEY} < 32 )); then
+    OFFSITE_MODE="invalid"
+    OFFSITE_CONFIG_ERROR="BACKUP_ENCRYPTION_KEY is too short"
+  fi
+}
+
+verify_local_backup() {
+  local pg_catalog
+
+  for artifact in database.dump filestore.tar.gz manifest.json SHA256SUMS; do
+    [[ -s "${DEST}/${artifact}" ]] || return 1
+  done
+  if ! (
+    cd "${DEST}"
+    sha256sum -c SHA256SUMS >/dev/null 2>&1
+  ); then
+    return 1
+  fi
+  gzip -t "${DEST}/filestore.tar.gz" >/dev/null 2>&1 || return 1
+  if ! pg_catalog="$(
+    docker exec -i "${PG_CONTAINER}" pg_restore --list \
+      < "${DEST}/database.dump" 2>/dev/null
+  )"; then
+    return 1
+  fi
+  grep -Fq 'TABLE DATA' <<< "${pg_catalog}" || return 1
+
+  python3 - "${DEST}" "${TIMESTAMP}" "${ODOO_DB_NAME}" \
+    "${DB_SIZE}" "${FS_SIZE}" <<'PY'
+import json
+import os
+import sys
+
+path, timestamp, database_name, db_size, fs_size = sys.argv[1:]
+with open(os.path.join(path, "manifest.json"), encoding="utf-8") as handle:
+    manifest = json.load(handle)
+assert manifest.get("schema_version") == 2
+assert manifest.get("timestamp") == timestamp
+assert manifest["database"]["name"] == database_name
+assert manifest["database"]["dump_file"] == "database.dump"
+assert manifest["database"]["dump_format"] == "pg_dump-custom"
+assert manifest["database"]["size_bytes"] == int(db_size)
+assert manifest["filestore"]["database"] == database_name
+assert manifest["filestore"]["archive"] == "filestore.tar.gz"
+assert manifest["filestore"]["layout"] == "database-directory-contents-v1"
+assert manifest["filestore"]["size_bytes"] == int(fs_size)
+PY
+}
+
+offsite_aws() {
+  AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY}" \
+    AWS_SECRET_ACCESS_KEY="${S3_SECRET_KEY}" \
+    AWS_DEFAULT_REGION="${S3_REGION}" \
+    aws --endpoint-url "${S3_ENDPOINT}" "$@"
+}
+
 [[ -f "${ENV_FILE}" ]] || fail ".env introuvable."
 # shellcheck disable=SC1090
 set -a; source "${ENV_FILE}"; set +a
@@ -62,6 +156,7 @@ ODOO_FILESTORE_VOLUME="${ODOO_FILESTORE_VOLUME:-dallytrading_odoo_filestore}"
 PRIVATE_NETWORK="${PRIVATE_NETWORK:-dallytrading_private}"
 PUBLIC_NETWORK="${PUBLIC_NETWORK:-dallytrading_public}"
 BACKUP_DIR="${BACKUP_DIR:-${ROOT_DIR}/backups}"
+detect_offsite_mode
 
 command -v docker >/dev/null || fail "docker est requis."
 command -v python3 >/dev/null || fail "python3 est requis pour le manifeste."
@@ -112,6 +207,19 @@ docker exec "${ODOO_CONTAINER}" test -d "${FILESTORE_SOURCE}" ||
   fail "filestore source absent : ${FILESTORE_SOURCE}"
 
 if (( CHECK_ONLY )); then
+  case "${OFFSITE_MODE}" in
+    disabled)
+      log "OFFSITE DISABLED: not configured"
+      ;;
+    invalid)
+      fail "OFFSITE CONFIGURATION FAILED: ${OFFSITE_CONFIG_ERROR}"
+      ;;
+    enabled)
+      command -v aws >/dev/null || fail "OFFSITE CONFIGURATION FAILED: aws client is missing"
+      command -v openssl >/dev/null || fail "OFFSITE CONFIGURATION FAILED: openssl client is missing"
+      log "OFFSITE CONFIGURATION VALID"
+      ;;
+  esac
   log "VALIDATION OK : conteneurs, base, volumes, réseaux et filestore correspondent."
   exit 0
 fi
@@ -133,17 +241,24 @@ flock -n 9 || fail "une autre sauvegarde DallyTrading est déjà en cours."
 
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 DEST="${BACKUP_DIR}/${TAG}/${TIMESTAMP}"
+ARCHIVE=""
 [[ ! -e "${DEST}" ]] || fail "destination déjà existante : ${DEST}"
 mkdir -p "${DEST}"
 chmod 700 "${BACKUP_DIR}/${TAG}" "${DEST}"
 
-cleanup_on_error() {
+cleanup_on_exit() {
+  local exit_status=$?
+  trap - EXIT
+  if [[ -n "${ARCHIVE}" && -f "${ARCHIVE}" ]]; then
+    rm -f -- "${ARCHIVE}" || true
+  fi
   if [[ -d "${DEST}" && ! -f "${DEST}/.complete" ]]; then
     log "échec détecté — suppression de la sauvegarde incomplète ${DEST}"
     rm -rf -- "${DEST}"
   fi
+  exit "${exit_status}"
 }
-trap cleanup_on_error EXIT
+trap cleanup_on_exit EXIT
 
 log "source PostgreSQL : ${PG_CONTAINER}/${ODOO_DB_NAME} (${POSTGRES_VOLUME})"
 log "source filestore  : ${ODOO_CONTAINER}:${FILESTORE_SOURCE} (${ODOO_FILESTORE_VOLUME})"
@@ -219,41 +334,82 @@ log "calcul des empreintes SHA-256…"
   cd "${DEST}"
   sha256sum database.dump filestore.tar.gz manifest.json > SHA256SUMS
 )
-touch "${DEST}/.complete"
-# Dernier filet : quel que soit l'umask hérité, rien de cette sauvegarde ne doit
-# être lisible par un autre compte du serveur.
+# Premier filet avant vérification : quel que soit l'umask hérité, les artefacts
+# en cours ne doivent pas être lisibles par un autre compte du serveur.
 chmod 700 "${DEST}"
 find "${DEST}" -mindepth 1 -type d -exec chmod 700 {} +
 find "${DEST}" -mindepth 1 -type f -exec chmod 600 {} +
-log "sauvegarde complète."
 
-if [[ -n "${S3_BUCKET:-}" || -n "${S3_ENDPOINT:-}" ]]; then
-  if [[ -z "${S3_BUCKET:-}" || -z "${S3_ENDPOINT:-}" ||
-        -z "${S3_ACCESS_KEY:-}" || -z "${S3_SECRET_KEY:-}" ]]; then
-    log "AVERTISSEMENT : configuration S3 incomplète — envoi refusé."
-  elif ! command -v aws >/dev/null; then
-    log "AVERTISSEMENT : S3 configuré mais le client aws est absent — envoi ignoré."
-  elif [[ -z "${BACKUP_ENCRYPTION_KEY:-}" ]]; then
-    log "AVERTISSEMENT : clé de chiffrement absente — envoi refusé."
-  else
-    log "chiffrement et envoi vers S3…"
-    ARCHIVE="${BACKUP_DIR}/${TAG}-${TIMESTAMP}.tar.gz.enc"
-    tar -czf - -C "${BACKUP_DIR}/${TAG}" "${TIMESTAMP}" |
-      openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt         -pass env:BACKUP_ENCRYPTION_KEY > "${ARCHIVE}"
-    # AWS_DEFAULT_REGION est indispensable : sans région, le client aws refuse la
-    # commande (« You must specify a region »). S3_REGION était déclarée dans
-    # .env.example mais lue nulle part — le premier envoi aurait échoué à 02:15,
-    # sans personne pour le voir. Repli neutre pour les fournisseurs qui l'ignorent.
-    if AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY}" AWS_SECRET_ACCESS_KEY="${S3_SECRET_KEY}" AWS_DEFAULT_REGION="${S3_REGION:-us-east-1}"       aws --endpoint-url "${S3_ENDPOINT}" s3 cp         "${ARCHIVE}" "s3://${S3_BUCKET}/odoo/${TAG}/" >/dev/null; then
-      log "copie distante envoyée."
-      rm -f -- "${ARCHIVE}"
+log "vérification locale des artefacts…"
+verify_local_backup || fail "la vérification locale a échoué."
+touch "${DEST}/.complete"
+chmod 600 "${DEST}/.complete"
+log "LOCAL BACKUP COMPLETE: ${DEST}"
+
+OFFSITE_REQUIRED_FAILED=0
+case "${OFFSITE_MODE}" in
+  disabled)
+    log "OFFSITE DISABLED: not configured"
+    ;;
+  invalid)
+    log "OFFSITE CONFIGURATION FAILED: ${OFFSITE_CONFIG_ERROR}"
+    OFFSITE_REQUIRED_FAILED=1
+    ;;
+  enabled)
+    if ! command -v aws >/dev/null; then
+      log "OFFSITE CONFIGURATION FAILED: aws client is missing"
+      OFFSITE_REQUIRED_FAILED=1
+    elif ! command -v openssl >/dev/null; then
+      log "OFFSITE ENCRYPTION FAILED: openssl client is missing"
+      OFFSITE_REQUIRED_FAILED=1
     else
-      log "AVERTISSEMENT : envoi S3 échoué — archive chiffrée locale conservée."
+      ARCHIVE="${BACKUP_DIR}/${TAG}-${TIMESTAMP}.tar.gz.enc"
+      OBJECT_KEY="odoo/${TAG}/${TAG}-${TIMESTAMP}.tar.gz.enc"
+      log "création et chiffrement du bundle offsite…"
+      if tar -czf - -C "${BACKUP_DIR}/${TAG}" "${TIMESTAMP}" 2>/dev/null |
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+            -pass env:BACKUP_ENCRYPTION_KEY > "${ARCHIVE}" 2>/dev/null; then
+        chmod 600 "${ARCHIVE}"
+        ARCHIVE_SIZE="$(stat -c %s "${ARCHIVE}")"
+        if [[ ! "${ARCHIVE_SIZE}" =~ ^[1-9][0-9]*$ ]]; then
+          log "OFFSITE ENCRYPTION FAILED: encrypted bundle is empty"
+          OFFSITE_REQUIRED_FAILED=1
+        elif offsite_aws s3 cp "${ARCHIVE}" \
+            "s3://${S3_BUCKET}/${OBJECT_KEY}" >/dev/null 2>&1; then
+          log "OFFSITE UPLOAD SUCCESS"
+          if REMOTE_SIZE="$(
+            offsite_aws s3api head-object --bucket "${S3_BUCKET}" \
+              --key "${OBJECT_KEY}" --query ContentLength --output text \
+              2>/dev/null
+          )" && [[ "${REMOTE_SIZE}" =~ ^[0-9]+$ ]] &&
+              (( REMOTE_SIZE == ARCHIVE_SIZE )); then
+            log "OFFSITE VERIFY SUCCESS"
+          else
+            log "OFFSITE VERIFY FAILED: remote object missing or size mismatch"
+            OFFSITE_REQUIRED_FAILED=1
+          fi
+        else
+          log "OFFSITE UPLOAD FAILED"
+          OFFSITE_REQUIRED_FAILED=1
+        fi
+      else
+        log "OFFSITE ENCRYPTION FAILED"
+        OFFSITE_REQUIRED_FAILED=1
+      fi
+
+      if [[ -f "${ARCHIVE}" ]]; then
+        if rm -f -- "${ARCHIVE}"; then
+          ARCHIVE=""
+        else
+          log "OFFSITE TEMP CLEANUP FAILED"
+          OFFSITE_REQUIRED_FAILED=1
+        fi
+      else
+        ARCHIVE=""
+      fi
     fi
-  fi
-else
-  log "AVERTISSEMENT : aucun stockage hors serveur configuré."
-fi
+    ;;
+esac
 
 case "${TAG}" in
   daily)   KEEP="${BACKUP_RETENTION_DAILY:-7}" ;;
@@ -281,6 +437,12 @@ if (( ${#ALL[@]} > KEEP )); then
     log "suppression de l'ancienne sauvegarde $(basename "${old}")"
     rm -rf -- "${old}"
   done
+fi
+
+if (( OFFSITE_REQUIRED_FAILED )); then
+  log "LOCAL BACKUP PRESERVED: ${DEST}"
+  log "BACKUP JOB FAILED: required offsite copy was not completed"
+  exit 1
 fi
 
 trap - EXIT

@@ -42,6 +42,11 @@ Le manifeste v2 porte un horodatage logique unique dans
 base et les ressources sources y sont consignés. `SHA256SUMS` couvre le dump,
 l'archive et le manifeste.
 
+`.complete` signifie exclusivement **backup local complet et vérifié**. Le marqueur
+est écrit après validation des empreintes, de l'archive filestore, du catalogue
+PostgreSQL et de la cohérence du manifeste. Il ne signifie ni « upload effectué » ni
+« objet distant vérifié » et sa sémantique reste compatible avec le restore existant.
+
 L'archive contient uniquement le contenu du répertoire de la base. Cette disposition
 permet à `restore.sh` de le réimplanter sous un autre nom de base isolé sans vider le
 reste du volume Odoo.
@@ -108,9 +113,22 @@ redémarrage.
 Le service s'exécute sous l'utilisateur du vhost, ne publie aucun port et lance
 `backup-daily.sh`. Celui-ci sauvegarde avec le tag `daily`, récupère le chemin exact
 annoncé par `backup.sh`, exige le marqueur `.complete`, puis exécute
-`verify-backup.sh` sur cet artefact. Toute erreur rend l'unité systemd en échec. Les
-sorties sont ajoutées à `logs/backup.log`; la rétention quotidienne par défaut est
-de 7 sauvegardes.
+`verify-backup.sh` sur cet artefact. Si `backup.sh` retourne un code non nul,
+`backup-daily.sh` le détecte via `PIPESTATUS` et retourne lui-même 1.
+
+L'unité installée est de type `oneshot`, son `ExecStart` appelle directement
+`backup-daily.sh`, `ignore_errors=no` et aucun `SuccessExitStatus` alternatif
+n'est défini. La chaîne attendue est donc :
+
+```text
+backup.sh != 0
+→ backup-daily.sh = 1
+→ dallytrading-backup.service Result=exit-code
+```
+
+Les sorties sont ajoutées à `logs/backup.log`; la rétention quotidienne par défaut
+est de 7 sauvegardes. Cet état `failed` est volontairement exploitable par une
+alerte ou un monitoring ultérieur.
 
 Validation sans créer de sauvegarde :
 
@@ -152,9 +170,114 @@ Ces empreintes peuvent être publiées : elles authentifient les fichiers sans r
 
 ## Copie hors serveur
 
-Si toutes les variables S3 et la clé de chiffrement sont présentes, l'archive est
-chiffrée localement avant envoi. Une configuration partielle provoque un refus
-d'envoi, jamais un transfert en clair.
+### Détection sans ambiguïté
+
+Les variables structurantes sont `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`,
+`S3_ACCESS_KEY` et `S3_SECRET_KEY`.
+
+| État | Mode | Résultat attendu |
+|---|---|---|
+| Les cinq variables `S3_*` sont vides | local-only | `OFFSITE DISABLED: not configured`; succès si le local est valide |
+| Au moins une variable `S3_*` est présente, mais la configuration est incomplète ou incohérente | erreur de configuration | backup local conservé; job non nul |
+| Les cinq variables, `BACKUP_ENCRYPTION_KEY`, `aws` et `openssl` sont valides | offsite requis | upload et vérification distante obligatoires |
+
+Une clé `BACKUP_ENCRYPTION_KEY` préparée seule n'active pas l'offsite. Ce choix
+permet à `generate-secrets.sh` de préparer une installation local-only sans la
+mettre artificiellement en panne. Dès qu'une variable `S3_*` est renseignée, la clé
+de chiffrement fait partie des prérequis obligatoires. Les noms de credentials
+configurés sont `S3_ACCESS_KEY` et `S3_SECRET_KEY`; ils ne deviennent
+`AWS_ACCESS_KEY_ID` et `AWS_SECRET_ACCESS_KEY` que dans l'environnement privé du
+sous-processus `aws`.
+
+L'endpoint doit être HTTPS, le bucket et la région doivent avoir un format valide,
+et la clé de chiffrement doit contenir au moins 32 caractères. Pour Backblaze B2
+DallyTrading, la région attendue reste `eu-central-003`.
+
+### Ordre et sémantique d'échec
+
+Le job suit cet ordre :
+
+1. dump PostgreSQL ;
+2. archive du filestore ;
+3. manifeste v2 ;
+4. `SHA256SUMS` ;
+5. vérification locale ;
+6. écriture de `.complete` et log `LOCAL BACKUP COMPLETE` ;
+7. création du bundle `<tag>-<timestamp>.tar.gz.enc` ;
+8. chiffrement AES-256-CBC, PBKDF2, 200000 itérations ;
+9. upload vers `odoo/<tag>/<tag>-<timestamp>.tar.gz.enc` ;
+10. `head-object` distant et comparaison exacte de `ContentLength` ;
+11. suppression du bundle chiffré temporaire ;
+12. rétention locale.
+
+Quand l'offsite est configuré, sont fatals : configuration partielle ou incohérente,
+client `aws` absent, client ou opération `openssl` en échec, upload en échec,
+objet distant absent, `head-object` en échec et taille distante différente. Le job
+termine alors avec un code non nul après la rétention locale.
+
+Les cinq artefacts locaux restent présents et vérifiables :
+
+```text
+database.dump
+filestore.tar.gz
+manifest.json
+SHA256SUMS
+.complete
+```
+
+Le bundle chiffré hors de ce répertoire est temporaire et supprimé après succès
+comme après échec. Le backup local complet permet de le reconstruire; conserver des
+bundles orphelins sans rétention risquerait de remplir le disque. Si la suppression
+elle-même échoue, le job est également marqué en échec et le trap réessaie sans
+jamais supprimer le backup local.
+
+Les logs stables sont notamment :
+
+```text
+LOCAL BACKUP COMPLETE
+OFFSITE DISABLED: not configured
+
+LOCAL BACKUP COMPLETE
+OFFSITE UPLOAD SUCCESS
+OFFSITE VERIFY SUCCESS
+
+LOCAL BACKUP COMPLETE
+OFFSITE UPLOAD FAILED
+BACKUP JOB FAILED: required offsite copy was not completed
+```
+
+Aucune valeur de credential, clé de chiffrement, URL signée ou contenu d'archive
+n'est journalisé. Backup local réussi et backup offsite réussi sont deux résultats
+distincts; si l'offsite est requis, le second conditionne le succès global.
+
+### Tests isolés
+
+La matrice de panne utilise uniquement des mocks Docker, `aws` et `openssl` :
+
+```bash
+./infrastructure/tests/test-backup-offsite.sh
+```
+
+Elle couvre local-only, succès offsite, absence d'`aws`, configuration partielle,
+échec de chiffrement, d'upload, de vérification distante, différence de taille,
+préservation/vérification du local, absence de secrets dans les logs, propagation
+par `backup-daily.sh`, rétention et permissions 700/600. Elle ne contacte jamais
+B2 et ne touche aucun conteneur.
+
+### Plan du test de succès en production — à ne pas lancer sans validation
+
+Après revue et déploiement séparé du code seulement :
+
+1. lancer manuellement un backup avec un tag dédié ;
+2. confirmer `LOCAL BACKUP COMPLETE`, les SHA-256 et la vérification locale ;
+3. confirmer le chiffrement AES-256-CBC/PBKDF2/200000 ;
+4. confirmer `OFFSITE UPLOAD SUCCESS` ;
+5. confirmer `OFFSITE VERIFY SUCCESS` et la taille distante exacte ;
+6. confirmer le code de sortie 0 et les permissions 700/600.
+
+Ce plan ne prévoit aucune panne volontaire de B2, aucune suppression distante et
+aucune modification d'Object Lock. Le restore demeure inchangé et continue
+d'accepter le manifest v2 et le format local existant.
 
 En l'absence de stockage externe configuré, les sauvegardes restent sur le même
 serveur : c'est un risque de perte simultanée du service et de ses sauvegardes.

@@ -30,6 +30,7 @@ import {
   portalListSchema,
   portalProfileSchema,
   portalProfileUpdateSchema,
+  portalQuoteDecisionSchema,
   portalQuoteDetailSchema,
   portalQuoteSchema,
   portalShipmentDetailSchema,
@@ -43,6 +44,7 @@ import {
   type PortalList,
   type PortalProfile,
   type PortalProfileUpdate,
+  type PortalQuoteDecision,
   type PortalQuote,
   type PortalQuoteDetail,
   type PortalShipment,
@@ -162,6 +164,34 @@ export function getQuote(
   return fetchPortal(
     `/quotes/${encodeReference(reference)}`, portalQuoteDetailSchema, correlationId,
   );
+}
+
+export async function decideQuote(
+  reference: string,
+  input: PortalQuoteDecision,
+  correlationId: string,
+): Promise<PortalQuoteDetail> {
+  const parsedInput = portalQuoteDecisionSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new PortalGatewayError('invalid_request', 'invalid quote decision');
+  }
+
+  const session = await readPortalSession();
+  if (!session) {
+    throw new PortalGatewayError('unauthenticated', 'no portal session');
+  }
+
+  const path = `/quotes/${encodeReference(reference)}/decision`;
+  const raw = await gateway.post<unknown>(
+    path, parsedInput.data, session.odooSessionId, correlationId,
+  );
+  const parsedResponse = portalQuoteDetailSchema.safeParse(raw);
+  if (!parsedResponse.success) {
+    throw new PortalGatewayError(
+      'unavailable', `unexpected ERP payload for ${path}`,
+    );
+  }
+  return parsedResponse.data;
 }
 
 // ─── Sourcing ────────────────────────────────────────────────────────

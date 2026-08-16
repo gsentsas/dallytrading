@@ -45,6 +45,8 @@ export const portalQuoteSchema = z
     // `quantity` est un Char côté Odoo, pas un nombre : le client écrit
     // « 2 conteneurs 40' » aussi souvent qu'un chiffre.
     quantity: nullableText,
+    canDecide: z.boolean(),
+    customerDecisionAt: nullableText,
   })
   .strict();
 
@@ -52,6 +54,31 @@ export type PortalQuote = z.infer<typeof portalQuoteSchema>;
 /** Le détail d'un devis n'expose rien de plus que sa ligne de liste. */
 export type PortalQuoteDetail = PortalQuote;
 export const portalQuoteDetailSchema = portalQuoteSchema;
+
+const rejectionReason = z
+  .string()
+  .trim()
+  .max(500)
+  .refine((value) => !/[\u0000-\u001f\u007f<>]/.test(value), {
+    message: 'unsupported_characters',
+  });
+
+/** Commande exhaustive : aucune clé ORM ou identité n'entre dans le contrat. */
+export const portalQuoteDecisionSchema = z.discriminatedUnion('decision', [
+  z
+    .object({
+      decision: z.literal('accept'),
+    })
+    .strict(),
+  z
+    .object({
+      decision: z.literal('reject'),
+      reason: rejectionReason.optional(),
+    })
+    .strict(),
+]);
+
+export type PortalQuoteDecision = z.infer<typeof portalQuoteDecisionSchema>;
 
 // ─── Sourcing ────────────────────────────────────────────────────────
 

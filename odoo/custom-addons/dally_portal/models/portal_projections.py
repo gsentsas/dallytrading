@@ -21,7 +21,7 @@ demain à ``dally.trade.opportunity`` serait exposé par défaut. Une liste blan
 l'inverse : il est absent tant que quelqu'un ne l'ajoute pas sciemment.
 """
 
-from odoo import models
+from odoo import fields, models
 
 
 class DallyPortalProjectionMixin(models.AbstractModel):
@@ -60,6 +60,7 @@ class DallyQuoteRequestPortal(models.Model):
     PORTAL_PAYLOAD_KEYS = (
         "reference", "service", "status", "createdOn",
         "origin", "destination", "goodsDescription", "quantity",
+        "canDecide", "customerDecisionAt",
     )
 
     def _dally_portal_payload(self):
@@ -83,6 +84,11 @@ class DallyQuoteRequestPortal(models.Model):
                 self.destination_city, self.destination_country_id.name])) or None,
             "goodsDescription": self.goods_description or None,
             "quantity": self.quantity or None,
+            "canDecide": self._dally_portal_can_decide(),
+            "customerDecisionAt": (
+                fields.Datetime.to_string(self.customer_decision_at)
+                if self.customer_decision_at else None
+            ),
         }
         return {key: payload[key] for key in self.PORTAL_PAYLOAD_KEYS}
 

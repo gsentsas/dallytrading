@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "DallyTrading Client Portal",
-    "summary": "Espace client cloisonné et édition sécurisée du profil contact",
+    "summary": "Espace client cloisonné et mutations métier encapsulées",
     "description": """
 DallyTrading Client Portal
 ==========================
@@ -19,6 +19,8 @@ Ce que ce module porte
 - Les projections ``_dally_portal_payload()``.
 - La route de profil et sa capacité ORM sans ``sudo``, limitée au contact exact,
   avec refus de tout ``res.partner.write`` portail générique.
+- La décision client sur un devis envoyé, atomique et auditée, sans ouvrir
+  ``dally.quote.request.write`` au RPC générique.
 - ``dally.portal.document`` : la seule voie par laquelle un fichier peut atteindre
   un client.
 
@@ -47,7 +49,7 @@ Ce que le module n'expose jamais
 traiter comme les autres aurait donné à un client-fournisseur l'accès aux coûts
 et aux commissions.
 """,
-    "version": "19.0.1.1.0",
+    "version": "19.0.1.2.0",
     "category": "Website/Portal",
     "author": "DallyTrading",
     "website": "https://dallytrading.com",
@@ -69,6 +71,7 @@ et aux commissions.
         "security/dally_portal_security.xml",
         "security/ir.model.access.csv",
         "security/dally_portal_rules.xml",
+        "views/dally_quote_request_views.xml",
     ],
     "installable": True,
     "application": False,

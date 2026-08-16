@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { Card, Detail, PageHeader, StatusBadge, UnavailableState } from '@/features/portal/ui';
+import { QuoteDecision } from '@/features/portal/QuoteDecision';
+import { Card, Detail, PageHeader, UnavailableState } from '@/features/portal/ui';
 import { loadPortal } from '@/features/portal/load';
 import { getQuote } from '@/lib/portal/business';
 import { newCorrelationId } from '@/lib/logger';
@@ -39,12 +40,7 @@ export default async function QuoteDetailPage({
       </div>
 
       <Card>
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <StatusBadge label={quote.status} />
-          <span className="text-sm text-mist-600">
-            Déposée le {quote.createdOn ?? '—'}
-          </span>
-        </div>
+        <QuoteDecision initialQuote={quote} />
         <dl className="grid gap-4 sm:grid-cols-2">
           <Detail label="Service" value={quote.service} />
           <Detail label="Origine" value={quote.origin} />

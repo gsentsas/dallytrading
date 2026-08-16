@@ -30,6 +30,7 @@ export type PortalErrorCode =
   | 'forbidden'
   | 'invalid_request'
   | 'not_found'
+  | 'conflict'
   | 'invalid_credentials'
   | 'unavailable'
   | 'timeout';
@@ -286,6 +287,61 @@ export class PortalOdooGateway {
     }
     if (response.status === 400) {
       throw new PortalGatewayError('invalid_request', 'invalid request', 400);
+    }
+    if (response.status >= 300 && response.status < 400) {
+      throw new PortalGatewayError('unauthenticated', 'session expired');
+    }
+    if (!response.ok) {
+      throw new PortalGatewayError('unavailable', 'ERP error', response.status);
+    }
+
+    let envelope: OdooEnvelope<T>;
+    try {
+      envelope = JSON.parse(text) as OdooEnvelope<T>;
+    } catch {
+      throw new PortalGatewayError('unavailable', 'unreadable ERP response');
+    }
+    if (!envelope.success || envelope.data === undefined) {
+      throw new PortalGatewayError('unavailable', 'unexpected ERP payload');
+    }
+    return envelope.data;
+  }
+
+  /**
+   * Déclenche une commande métier portail sous la session réelle du client.
+   *
+   * POST est réservé ici aux transitions, jamais à un RPC générique. Les codes
+   * 404 et 409 restent distincts : le premier masque l'appartenance, le second
+   * indique qu'un devis visible a déjà quitté l'état décidable.
+   */
+  async post<T>(
+    path: string,
+    body: unknown,
+    sessionId: string,
+    correlationId: string,
+  ): Promise<T> {
+    const { response, text } = await this.call(
+      `/api/v1/portal${path}`,
+      { method: 'POST', sessionId, body },
+      correlationId,
+    );
+
+    if (response.status === 401) {
+      throw new PortalGatewayError(
+        'unauthenticated', 'session rejected', response.status,
+      );
+    }
+    if (response.status === 403) {
+      throw new PortalGatewayError('forbidden', 'request forbidden', 403);
+    }
+    if (response.status === 400) {
+      throw new PortalGatewayError('invalid_request', 'invalid request', 400);
+    }
+    if (response.status === 404) {
+      throw new PortalGatewayError('not_found', 'not found', 404);
+    }
+    if (response.status === 409) {
+      throw new PortalGatewayError('conflict', 'decision conflict', 409);
     }
     if (response.status >= 300 && response.status < 400) {
       throw new PortalGatewayError('unauthenticated', 'session expired');

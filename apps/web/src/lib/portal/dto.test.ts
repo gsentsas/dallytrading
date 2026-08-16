@@ -7,6 +7,7 @@ import {
   portalListSchema,
   portalProfileSchema,
   portalProfileUpdateSchema,
+  portalQuoteDecisionSchema,
   portalQuoteSchema,
   portalShipmentDetailSchema,
   portalSourcingDetailSchema,
@@ -22,6 +23,8 @@ const quote = {
   destination: 'Abidjan',
   goodsDescription: null,
   quantity: '12 cartons',
+  canDecide: false,
+  customerDecisionAt: null,
 };
 
 describe('schémas stricts', () => {
@@ -59,11 +62,35 @@ describe('schémas stricts', () => {
 });
 
 describe('contrats métier', () => {
-  it('le devis n’a aucune clé au-delà des huit projetées', () => {
+  it('le devis n’a aucune clé au-delà de la projection autorisée', () => {
     expect(Object.keys(portalQuoteSchema.parse(quote)).sort()).toEqual([
-      'createdOn', 'destination', 'goodsDescription', 'origin',
-      'quantity', 'reference', 'service', 'status',
+      'canDecide', 'createdOn', 'customerDecisionAt', 'destination',
+      'goodsDescription', 'origin', 'quantity', 'reference', 'service', 'status',
     ]);
+  });
+
+  it('accepte uniquement les deux commandes de décision documentées', () => {
+    expect(portalQuoteDecisionSchema.parse({ decision: 'accept' })).toEqual({
+      decision: 'accept',
+    });
+    expect(portalQuoteDecisionSchema.parse({
+      decision: 'reject', reason: '  Conditions non adaptées  ',
+    })).toEqual({
+      decision: 'reject', reason: 'Conditions non adaptées',
+    });
+  });
+
+  it.each([
+    { decision: 'maybe' },
+    { decision: 'accept', reason: 'non' },
+    { decision: 'accept', state: 'won' },
+    { decision: 'reject', partner_id: 7 },
+    { decision: 'reject', margin: 0 },
+    { decision: 'reject', reason: 'x'.repeat(501) },
+    { decision: 'reject', reason: '<b>non</b>' },
+    { decision: 'reject', reason: 'ligne\nsuivante' },
+  ])('refuse une décision ou une clé hors contrat : %j', (payload) => {
+    expect(portalQuoteDecisionSchema.safeParse(payload).success).toBe(false);
   });
 
   it('l’opération de trading ne porte que le volet vente', () => {

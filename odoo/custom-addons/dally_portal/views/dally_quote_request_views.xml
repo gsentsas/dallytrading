@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="dally_quote_request_view_form_portal_decision" model="ir.ui.view">
+        <field name="name">dally.quote.request.form.portal.decision</field>
+        <field name="model">dally.quote.request</field>
+        <field name="inherit_id" ref="dally_crm.dally_quote_request_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Customer Decision"
+                      name="customer_decision"
+                      invisible="not customer_decision_at">
+                    <group>
+                        <group>
+                            <field name="customer_decision_at" readonly="1"/>
+                            <field name="customer_decision_by_id"
+                                   readonly="1"
+                                   options="{'no_open': True}"/>
+                        </group>
+                        <group string="Rejection reason"
+                               invisible="not customer_rejection_reason">
+                            <field name="customer_rejection_reason"
+                                   readonly="1" nolabel="1"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

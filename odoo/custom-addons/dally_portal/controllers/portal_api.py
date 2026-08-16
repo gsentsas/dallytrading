@@ -34,6 +34,14 @@ import uuid
 from odoo import http
 from odoo.exceptions import AccessError, MissingError, ValidationError
 from odoo.http import request
+# Le tuple fourni par Odoo lui-même : (LockNotAvailable,
+# SerializationFailure, DeadlockDetected). Aucun tuple parallèle —
+# la liste doit rester celle que `retrying()` sait traiter.
+from odoo.service.model import PG_CONCURRENCY_EXCEPTIONS_TO_RETRY
+
+from ..models.dally_quote_request import (
+    PortalQuoteDecisionConflict,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -45,7 +53,9 @@ _logger = logging.getLogger(__name__)
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
 MAX_PROFILE_BODY_BYTES = 8 * 1024
+MAX_QUOTE_DECISION_BODY_BYTES = 4 * 1024
 _REQUEST_ID = re.compile(r"[A-Za-z0-9_.-]{1,128}\Z")
+_SAFE_REFERENCE = re.compile(r"[A-Za-z0-9_.-]{1,128}\Z")
 
 #: Tris autorisés, par nom logique.
 #:
@@ -327,6 +337,166 @@ class DallyPortalController(http.Controller):
                 auth="user", methods=["GET"], csrf=False, readonly=True)
     def quote_detail(self, reference, **kwargs):
         return self._detail("quotes", reference)
+
+    @staticmethod
+    def _quote_decision_audit(request_id, reference, decision, uid, result, reason):
+        """Journal minimal : aucun corps, motif, cookie ou donnée commerciale."""
+        safe_reference = (
+            reference if _SAFE_REFERENCE.fullmatch(reference or "") else "invalid"
+        )
+        _logger.info(
+            "Portal audit requestId=%s action=quote_decision reference=%s "
+            "decision=%s uid=%s result=%s reason=%s",
+            request_id, safe_reference, decision or "invalid", uid, result, reason,
+        )
+
+    @http.route(
+        "/api/v1/portal/quotes/<string:reference>/decision",
+        type="http", auth="user", methods=["POST"], csrf=False,
+    )
+    def quote_decision(self, reference, **kwargs):
+        """Transition dédiée; aucune identité ni valeur ORM ne vient du navigateur."""
+        request_id = self._request_id()
+        user = self._portal_user_or_none()
+        if not user:
+            self._quote_decision_audit(
+                request_id, reference, None, request.env.user.id,
+                "failure", "forbidden",
+            )
+            return self._error(
+                403, "forbidden", "Ces routes sont réservées aux comptes clients.",
+            )
+
+        content_length = request.httprequest.content_length or 0
+        if content_length > MAX_QUOTE_DECISION_BODY_BYTES:
+            self._quote_decision_audit(
+                request_id, reference, None, user.id,
+                "failure", "invalid_request",
+            )
+            return self._error(400, "invalid_request", "Requête invalide.")
+
+        raw_body = request.httprequest.get_data(cache=True)
+        if len(raw_body) > MAX_QUOTE_DECISION_BODY_BYTES:
+            self._quote_decision_audit(
+                request_id, reference, None, user.id,
+                "failure", "invalid_request",
+            )
+            return self._error(400, "invalid_request", "Requête invalide.")
+
+        payload = request.httprequest.get_json(silent=True)
+        if not isinstance(payload, dict):
+            self._quote_decision_audit(
+                request_id, reference, None, user.id,
+                "failure", "invalid_request",
+            )
+            return self._error(400, "invalid_request", "Requête invalide.")
+
+        decision = payload.get("decision")
+        allowed_keys = (
+            {"decision"} if decision == "accept"
+            else {"decision", "reason"} if decision == "reject"
+            else set()
+        )
+        if not allowed_keys or set(payload) - allowed_keys:
+            self._quote_decision_audit(
+                request_id, reference, decision, user.id,
+                "failure", "invalid_request",
+            )
+            return self._error(400, "invalid_request", "Requête invalide.")
+
+        reason = payload.get("reason") if "reason" in payload else None
+        try:
+            # La même validation vit dans la méthode métier afin qu'un futur appel
+            # non HTTP ne puisse pas contourner la frontière du contrôleur.
+            decision, reason = request.env[
+                "dally.quote.request"
+            ]._dally_portal_normalize_decision(decision, reason)
+        except ValidationError:
+            self._quote_decision_audit(
+                request_id, reference, decision, user.id,
+                "failure", "invalid_request",
+            )
+            return self._error(400, "invalid_request", "Requête invalide.")
+
+        if not _SAFE_REFERENCE.fullmatch(reference or ""):
+            self._quote_decision_audit(
+                request_id, reference, decision, user.id,
+                "failure", "not_found",
+            )
+            return self._not_found()
+
+        # Domaine réduit à la référence. La record rule du portail ajoute
+        # l'appartenance commerciale ; inconnu et autre client donnent le même vide.
+        quote = request.env["dally.quote.request"].search([
+            ("reference", "=", reference),
+        ], limit=1)
+        if not quote:
+            self._quote_decision_audit(
+                request_id, reference, decision, user.id,
+                "failure", "not_found",
+            )
+            return self._not_found()
+
+        try:
+            changed = quote._dally_portal_decide(decision, reason)
+            data = quote._dally_portal_detail_payload()
+        except PortalQuoteDecisionConflict:
+            self._quote_decision_audit(
+                request_id, reference, decision, user.id,
+                "failure", "conflict",
+            )
+            return self._error(
+                409, "conflict",
+                "Ce devis ne peut plus recevoir cette décision.",
+            )
+        except (AccessError, MissingError):
+            self._quote_decision_audit(
+                request_id, reference, decision, user.id,
+                "failure", "not_found",
+            )
+            return self._not_found()
+        except ValidationError:
+            self._quote_decision_audit(
+                request_id, reference, decision, user.id,
+                "failure", "invalid_request",
+            )
+            return self._error(400, "invalid_request", "Requête invalide.")
+        except PG_CONCURRENCY_EXCEPTIONS_TO_RETRY:
+            # LAISSER REMONTER — c'est le correctif, et il tient à ce seul `raise`.
+            #
+            # Sous REPEATABLE READ, deux décisions simultanées sur le même devis
+            # sérialisent : PostgreSQL annule la perdante avec une
+            # `SerializationFailure`. Odoo sait exactement quoi en faire —
+            # `odoo/service/model.py:retrying`, appelé par `http.py`, annule la
+            # transaction et rejoue jusqu'à cinq fois ; le rejeu observe la
+            # décision commitée et renvoie le 200 idempotent attendu.
+            #
+            # Encore faut-il que l'exception lui parvienne. Le `except Exception`
+            # ci-dessous l'interceptait et la convertissait en 500 : mesuré en
+            # HTTP réel, deux acceptations simultanées donnaient 200 puis 503.
+            # Aucun état contradictoire n'était écrit — mais un client qui
+            # double-clique recevait une erreur là où toute la conception promet
+            # une répétition sans effet.
+            #
+            # Aucun rejeu maison ici : pas de boucle, pas de `sleep`, pas de
+            # curseur ni de commit. La couche qui sait rejouer est au-dessus ;
+            # le contrôleur doit seulement cesser de l'en empêcher.
+            raise
+        except Exception:  # noqa: BLE001
+            # Pas de traceback : une exception SQL pourrait reprendre une valeur
+            # métier. Le requestId suffit pour corréler sans exposer le payload.
+            _logger.error(
+                "Portal audit requestId=%s action=quote_decision reference=%s "
+                "decision=%s uid=%s result=failure reason=internal_error",
+                request_id, reference, decision, user.id,
+            )
+            return self._error(500, "unavailable", "Service indisponible.")
+
+        self._quote_decision_audit(
+            request_id, reference, decision, user.id,
+            "success", "changed" if changed else "idempotent",
+        )
+        return self._json({"success": True, "data": data})
 
     @http.route("/api/v1/portal/sourcing", type="http", auth="user",
                 methods=["GET"], csrf=False, readonly=True)

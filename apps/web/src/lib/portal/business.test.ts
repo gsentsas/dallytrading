@@ -61,6 +61,7 @@ async function dal() {
 const QUOTE = {
   reference: 'DT-1', service: null, status: 'new', createdOn: null,
   origin: null, destination: null, goodsDescription: null, quantity: null,
+  canDecide: false, customerDecisionAt: null,
 };
 
 describe('transport', () => {

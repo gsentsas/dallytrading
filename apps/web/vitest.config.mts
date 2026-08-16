@@ -4,14 +4,13 @@ import { fileURLToPath } from 'node:url';
 /**
  * Vitest configuration.
  *
- * Node environment: what is tested here is server-side logic — validation, the
- * gateway, rate limiting. Component tests would need jsdom and come with the UI
- * work in phase 5.
+ * Node environment : les tests React rendent le HTML initial avec
+ * `react-dom/server` et testent des reducers purs, sans navigateur ni jsdom.
  */
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     // Fail on an unhandled rejection instead of passing with a warning.
     dangerouslyIgnoreUnhandledErrors: false,
   },

@@ -207,12 +207,48 @@ export const portalProfileSchema = z
     email: nullableText,
     phone: nullableText,
     company: nullableText,
+    street: nullableText,
+    street2: nullableText,
+    zip: nullableText,
     city: nullableText,
     country: nullableText,
   })
   .strict();
 
 export type PortalProfile = z.infer<typeof portalProfileSchema>;
+
+const plainText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .refine((value) => !/[\u0000-\u001f\u007f<>]/.test(value), {
+      message: 'unsupported_characters',
+    });
+
+/**
+ * Seule projection acceptée en écriture.
+ *
+ * Pas d'e-mail, de société, de pays, d'identifiant ni de champ Odoo libre. Le
+ * schéma est strict et refuse aussi l'objet vide : une mutation qui ne demande
+ * aucun changement est une requête invalide, pas un succès fictif.
+ */
+export const portalProfileUpdateSchema = z
+  .object({
+    name: plainText(120).min(1),
+    phone: plainText(64).regex(/^[0-9+(). /-]*$/),
+    street: plainText(128),
+    street2: plainText(128),
+    zip: plainText(32),
+    city: plainText(128),
+  })
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'empty_profile_update',
+  });
+
+export type PortalProfileUpdate = z.infer<typeof portalProfileUpdateSchema>;
 
 // ─── Tableau de bord ─────────────────────────────────────────────────
 

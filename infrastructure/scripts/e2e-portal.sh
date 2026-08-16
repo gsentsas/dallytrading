@@ -45,7 +45,7 @@ BASE_URL="http://127.0.0.1:${NEXT_PORT}"
 ODOO_CONTAINER="dallytrading-e2e-odoo"
 PLAYWRIGHT_IMAGE="${E2E_PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.62.1-noble}"
 
-SPECS_BEFORE=(01-login 02-session 03-logout 04-redirect-origin 06-network 07-business 08-cross-client 09-canaries 05a-capture-session)
+SPECS_BEFORE=(01-login 02-session 03-logout 04-redirect-origin 06-network 07-business 08-cross-client 09-canaries 10-profile-write 05a-capture-session)
 
 log() { printf '\n\033[1m── %s\033[0m\n' "$*"; }
 
@@ -282,6 +282,8 @@ cookie du portail|dt_portal_session
 en-tête Cookie|Cookie:
 en-tête Authorization|Authorization:
 clé d'API|x-api-key
+valeur téléphone profil|+221 77 123 45 67
+valeur adresse profil|42 avenue du Test
 AUDIT
 
   rm -f "$odoo_log"

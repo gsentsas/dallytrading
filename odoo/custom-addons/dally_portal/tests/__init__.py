@@ -4,3 +4,4 @@ from . import test_portal_document
 from . import test_native_portal_audit
 from . import test_portal_http
 from . import test_portal_regressions
+from . import test_portal_profile

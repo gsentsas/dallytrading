@@ -35,12 +35,18 @@ def make_company(label, city):
     })
 
 def make_portal_user(label, company):
+    profile = {
+        "A": {"phone": "+221 70 000 00 01", "street": "1 rue Alpha"},
+        "B": {"phone": "+221 70 000 00 02", "street": "2 rue Beta"},
+    }[label]
     contact = env["res.partner"].create({
         "name": f"E2E Contact {label} (synthetique)",
         "parent_id": company.id,
         "email": f"portal.{label.lower()}@e2e-{label.lower()}.invalid",
         "city": company.city,
         "country_id": company.country_id.id,
+        "phone": profile["phone"],
+        "street": profile["street"],
     })
     user = env["res.users"].create({
         "name": contact.name,

@@ -93,14 +93,15 @@ test('Portal A traverse tout son espace client', async ({ page }) => {
   // Le document NON publié n'est pas listé.
   expect(await page.content()).not.toContain('DALLY_E2E_SECRET_UNPUBLISHED_NAME_A');
 
-  // ── Profil, en lecture seule ──
+  // ── Profil : consultation, l'édition complète est couverte par le scénario 10 ──
   await page.getByRole('link', { name: 'Profil', exact: true }).first().click();
   await waitForPath(page, '/espace-client/profil');
   // Deux occurrences légitimes : l'en-tête de navigation et la fiche. On vise
   // celle de la fiche, dans la liste de définitions.
   await expect(page.locator('dl').getByText('E2E Alpha SARL (synthetique)'))
     .toBeVisible();
-  // Aucun formulaire, aucun champ modifiable : c'est le périmètre de ce cycle.
+  await expect(page.getByRole('button', { name: 'Modifier' })).toBeVisible();
+  // En consultation, aucun champ éditable n'est rendu avant une action explicite.
   expect(await page.locator('form').count()).toBe(0);
   expect(await page.locator('input, textarea, select').count()).toBe(0);
 });

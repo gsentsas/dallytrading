@@ -41,10 +41,10 @@ describe('checkOrigin', () => {
     expect(checkOrigin(headers({}), SITE)).toEqual({ ok: false, reason: 'missing' });
   });
 
-  it('accepte un Referer de la bonne origine quand Origin est absent', () => {
+  it('refuse un Referer seul quand Origin est absent', () => {
     expect(
       checkOrigin(headers({ referer: `${SITE}/connexion?next=/espace-client` }), SITE).ok,
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('refuse un Referer illisible', () => {

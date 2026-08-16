@@ -28,9 +28,11 @@ Le personnel a l'interface Odoo.
 """
 
 import logging
+import re
+import uuid
 
 from odoo import http
-from odoo.exceptions import AccessError, MissingError
+from odoo.exceptions import AccessError, MissingError, ValidationError
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
@@ -42,6 +44,8 @@ _logger = logging.getLogger(__name__)
 #: coûte une projection.
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
+MAX_PROFILE_BODY_BYTES = 8 * 1024
+_REQUEST_ID = re.compile(r"[A-Za-z0-9_.-]{1,128}\Z")
 
 #: Tris autorisés, par nom logique.
 #:
@@ -107,12 +111,35 @@ class DallyPortalController(http.Controller):
     def _portal_user_or_none():
         """L'appelant est-il bien un client ?
 
-        `share` est ce qui distingue un utilisateur portail d'un salarié. Le tester
-        plutôt que l'appartenance à `base.group_portal` couvre aussi le cas d'un
-        futur groupe portail dérivé.
+        La route exige les deux propriétés : ``share`` exclut le personnel et le
+        groupe portail exclut un éventuel autre type d'utilisateur partagé.
         """
         user = request.env.user
-        return user if user and user.share else None
+        return user if (
+            user and user.share and user.has_group("base.group_portal")
+        ) else None
+
+    @staticmethod
+    def _request_id():
+        """Identifiant de corrélation sûr, jamais une valeur libre dans les logs."""
+        candidate = request.httprequest.headers.get("X-Request-ID", "")
+        return candidate if _REQUEST_ID.fullmatch(candidate) else uuid.uuid4().hex
+
+    @staticmethod
+    def _profile_payload(partner):
+        """Projection du contact connecté; aucun identifiant technique."""
+        company = partner.commercial_partner_id
+        return {
+            "name": partner.name,
+            "email": partner.email or None,
+            "phone": partner.phone or None,
+            "company": company.name if company != partner else None,
+            "street": partner.street or None,
+            "street2": partner.street2 or None,
+            "zip": partner.zip or None,
+            "city": partner.city or None,
+            "country": partner.country_id.name or None,
+        }
 
     @classmethod
     def _pagination(cls, kwargs):
@@ -150,16 +177,83 @@ class DallyPortalController(http.Controller):
         if not user:
             return self._error(403, "forbidden",
                                "Ces routes sont réservées aux comptes clients.")
-        partner = user.partner_id
-        company = partner.commercial_partner_id
-        return self._json({"success": True, "data": {
-            "name": partner.name,
-            "email": partner.email or None,
-            "phone": partner.phone or None,
-            "company": company.name if company != partner else None,
-            "city": partner.city or None,
-            "country": partner.country_id.name or None,
-        }})
+        return self._json({"success": True,
+                           "data": self._profile_payload(user.partner_id)})
+
+    @http.route("/api/v1/portal/profile", type="http", auth="user",
+                methods=["PATCH"], csrf=False)
+    def profile_update(self, **kwargs):
+        """Modifie le contact exact de la session, jamais sa société par défaut.
+
+        ``csrf=False`` est volontaire : cette route n'est appelée par le navigateur
+        qu'à travers le BFF, qui exige un ``Origin`` strict. Le navigateur ne détient
+        pas le cookie Odoo (seulement le cookie BFF host-only), et l'appel serveur à
+        serveur ne possède pas de jeton CSRF Odoo. La sécurité de l'écriture reste
+        toutefois dans l'ORM : même un appel RPC générique ne peut pas obtenir la
+        capacité privée utilisée ici.
+        """
+        request_id = self._request_id()
+        user = self._portal_user_or_none()
+        if not user:
+            _logger.warning(
+                "Portal audit requestId=%s action=profile_update uid=%s "
+                "result=failure reason=forbidden",
+                request_id, request.env.user.id,
+            )
+            return self._error(403, "forbidden",
+                               "Ces routes sont réservées aux comptes clients.")
+
+        content_length = request.httprequest.content_length or 0
+        if content_length > MAX_PROFILE_BODY_BYTES:
+            _logger.warning(
+                "Portal audit requestId=%s action=profile_update uid=%s "
+                "result=failure reason=invalid_request",
+                request_id, user.id,
+            )
+            return self._error(400, "invalid_request", "Requête invalide.")
+
+        raw_body = request.httprequest.get_data(cache=True)
+        if len(raw_body) > MAX_PROFILE_BODY_BYTES:
+            _logger.warning(
+                "Portal audit requestId=%s action=profile_update uid=%s "
+                "result=failure reason=invalid_request",
+                request_id, user.id,
+            )
+            return self._error(400, "invalid_request", "Requête invalide.")
+
+        try:
+            payload = request.httprequest.get_json(silent=True)
+            changed = user.partner_id._dally_portal_update_profile(payload)
+        except ValidationError:
+            _logger.warning(
+                "Portal audit requestId=%s action=profile_update uid=%s "
+                "result=failure reason=invalid_request",
+                request_id, user.id,
+            )
+            return self._error(400, "invalid_request", "Requête invalide.")
+        except AccessError:
+            _logger.warning(
+                "Portal audit requestId=%s action=profile_update uid=%s "
+                "result=failure reason=forbidden",
+                request_id, user.id,
+            )
+            return self._error(403, "forbidden", "Requête refusée.")
+        except Exception:  # noqa: BLE001
+            # Pas de traceback : une erreur SQL peut contenir les valeurs écrites.
+            _logger.error(
+                "Portal audit requestId=%s action=profile_update uid=%s "
+                "result=failure reason=internal_error",
+                request_id, user.id,
+            )
+            return self._error(500, "unavailable", "Service indisponible.")
+
+        _logger.info(
+            "Portal audit requestId=%s action=profile_update uid=%s "
+            "result=success fields=%s",
+            request_id, user.id, ",".join(sorted(changed)),
+        )
+        return self._json({"success": True,
+                           "data": self._profile_payload(user.partner_id)})
 
     # ─── Tableau de bord ─────────────────────────────────────────────
 

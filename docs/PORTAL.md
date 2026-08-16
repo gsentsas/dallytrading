@@ -1,11 +1,13 @@
 # Espace client — frontière d'authentification
 
-État : **couche BFF + authentification construite, testée unitairement ET validée
-de bout en bout dans un vrai navigateur. Non déployée.**
-Branche : `feature/client-portal-mvp`.
+État : **portail client en lecture seule validé en production. Première mutation
+de profil construite et validée sur environnement isolé, non déployée.**
+Branche de la mutation : `feature/portal-profile-write`.
 
-Ce document décrit uniquement ce qui existe. Le tableau de bord métier (devis,
-sourcing, trading, expéditions, documents, profil) n'est pas commencé.
+Le tableau de bord métier (devis, sourcing, trading, expéditions, documents et
+profil en lecture) reste celui déjà déployé. Ce cycle n'ajoute que l'édition du
+profil décrite au §11.
+
 
 ---
 
@@ -132,7 +134,8 @@ devant Node — nginx `limit_req`, qui exige un `limit_req_zone` dans le bloc
 
 ## 8. Ce qui a été prouvé
 
-`npm run test` — 281 tests au total, dont 92 sur le portail (5 fichiers) :
+`npm run test` — 381 tests Vitest au total (17 fichiers). La suite Odoo du
+module exécute 97 tests post-install (117 assertions recensées), sans échec :
 
 - scellement : aller-retour, IV aléatoire, identifiant absent du texte scellé,
   huit formes d'altération refusées à l'identique, expiration, horloge future ;
@@ -170,12 +173,16 @@ détruit les objets portant le label et efface les secrets éphémères — jama
 serveur PostgreSQL, ni le filestore, ni les conteneurs de production, ni l'instance
 Odoo 18 `odoo_crm` (SEN CONTAINERS).
 
-### Les 20 tests
+### Les 28 tests
 
 | Fichier | Ce qu'il établit |
 |---|---|
 | `01-login` | connexion réussie ; mot de passe absent des URL ; compte interne refusé ; mot de passe faux, compte inconnu et compte interne **indistinguables** (statut, corps, message, timing grossier) |
 | `02-session` | rien dans `localStorage`/`sessionStorage`/`document.cookie`/HTML ; cookie HttpOnly, Lax, `/`, **host-only** ; A et B cloisonnés ; `no-store` |
+| `07-business` | toutes les surfaces métier et le téléchargement de document restent fonctionnels |
+| `08-cross-client` | références réelles ou inventées d'un autre client refusées de façon indistinguable |
+| `09-canaries` | aucun champ interne, coût, marge, fournisseur, commission, note ou clé n'atteint le navigateur |
+| `10-profile-write` | édition confirmée par Odoo, refresh et reconnexion persistants, A/B isolés, mass assignment et origines externes refusés |
 | `03-logout` | cookie retiré, Odoo invalidé, **retour arrière stérile**, onglet dupliqué inerte, cookie supprimé/altéré/inventé refusé, **rejeu d'un cookie authentique refusé** |
 | `04-redirect-origin` | `next` externe ramené au portail ; origine externe refusée sur login et logout |
 | `05a`/`05b` | le cookie reste authentique, la session Odoo est détruite entre les deux → **accès refusé** |
@@ -207,32 +214,29 @@ décrite au §7 : elle est réelle, et elle n'est pas distribuée.
   neuf bibliothèques système absentes de cet hôte, dont l'installation demanderait
   les droits d'administration.
 
-## 10. Portes de pré-déploiement — À FAIRE, dans cet ordre
+## 10. Portes de déploiement à conserver
 
-Aucune n'a été exécutée. Elles sont listées ici parce qu'une mise en
-production qui en oublierait une échouerait de façon peu lisible.
+Les gates A à C ont été validés lors du déploiement du portail en lecture seule.
+Ils restent des invariants pour le futur déploiement de la mutation.
 
-### A. `PORTAL_SESSION_SECRET`
+### A. `PORTAL_SESSION_SECRET` (déjà configuré en production)
 
 ```bash
 openssl rand -base64 48
 ```
 
-À ajouter dans `apps/web/.env.production`, **en 0600**, propriétaire identique
-aux autres entrées. Le frontend refuse de démarrer sans lui : c'est voulu, un
-défaut serait devenu la valeur de production.
+La production le charge depuis `apps/web/.env.production`, en 0600. Le frontend
+refuse de démarrer s'il est absent : c'est voulu. Ne pas le changer pendant le
+déploiement du profil, car sa rotation invaliderait les sessions existantes.
 
 Ce n'est pas une `NEXT_PUBLIC_*` : un `systemctl restart dallytrading-web`
 suffit, pas un rebuild.
 
-### B. `Secure` à vérifier empiriquement
+### B. `Secure` validé en HTTPS réel
 
-Non observé à ce jour : l'environnement de test est en `http://`, où l'attribut
-empêcherait la connexion. `wantsSecureCookie()` le dérive du schéma de
-`NEXT_PUBLIC_SITE_URL`, et les tests unitaires couvrent les deux branches — mais
-c'est une déduction, pas une mesure.
-
-Après déploiement, sur `https://dallytrading.com`, contrôler le cookie réel.
+Le déploiement en lecture seule a confirmé `Secure`, `HttpOnly`, `SameSite=Lax`,
+`Path=/` et l'absence de `Domain`. Les tests isolés continuent à couvrir la
+dérivation depuis `NEXT_PUBLIC_SITE_URL`.
 
 ### C. Le cookie doit rester exactement
 
@@ -240,7 +244,7 @@ Après déploiement, sur `https://dallytrading.com`, contrôler le cookie réel.
 |---|---|---|
 | `HttpOnly` | oui | un script injecté ne peut rien lire |
 | `Secure` | oui | jamais en clair sur une requête `http://` |
-| `SameSite` | `Lax` | couvre le CSRF, laisse passer un lien d'e-mail |
+| `SameSite` | `Lax` | défense en profondeur ; la mutation exige aussi un `Origin` exact |
 | `Path` | `/` | |
 | `Domain` | **ABSENT** | host-only |
 
@@ -251,35 +255,82 @@ commence pas par un point.
 
 ### D. Ordre de déploiement — contraint
 
-**Odoo d'abord, frontend ensuite.** Le frontend exige désormais
-`_dally_portal_detail_payload()` et valide les réponses en mode strict : un
-payload sans `proposals` ou sans `packages` fait échouer la page de détail au
-lieu de l'afficher partiellement.
+**Odoo d'abord, frontend ensuite.** Le BFF ne doit appeler la mutation qu'après
+installation de la route et de la capacité privée dans `dally_portal`.
 
-1. `dally_portal` **et** `dally_sourcing` à jour (`-u`) sur `crm.dallytrading.com` ;
-2. vérifier qu'aucun modèle `*.portal` n'apparaît dans le registre ;
-3. `PORTAL_SESSION_SECRET` dans `.env.production` ;
+1. backup production vérifié ;
+2. `dally_portal` à jour (`-u`) sur `crm.dallytrading.com` ;
+3. vérifier les refus ORM/RPC et le GET portail ;
 4. build puis déploiement du frontend ;
-5. contrôle du cookie en HTTPS réel.
+5. test de succès profil et revalidation des surfaces privées/publiques.
 
-L'ordre inverse casserait les pages de détail entre les deux étapes.
+L'ordre inverse exposerait temporairement un formulaire sans endpoint compatible.
 
 ### E. Rollback à préparer AVANT
 
 - **Odoo** : sauvegarde base + filestore immédiatement avant le `-u`
   (`infrastructure/scripts/backup.sh`), procédure dans `RESTORE.md`.
-  La mise à jour de `dally_sourcing` **recalcule** `customer_id` sur toutes les
-  propositions existantes, pour l'aligner sur leur demande. C'est l'objet du
-  correctif ; une divergence préexistante serait donc corrigée, et le retour en
-  arrière passe par la sauvegarde.
 - **Frontend** : conserver le `.next` précédent avant de le remplacer ; le
   rollback est une restauration de répertoire plus un `systemctl restart`.
-- Le portail n'écrit rien : aucun rollback de données côté client n'est
-  nécessaire dans ce sens.
+- Une donnée de contact déjà enregistrée est une donnée métier confirmée par
+  Odoo : un rollback du code ne doit pas la réécrire automatiquement.
 
-## 11. Ce qui n'est pas fait
+## 11. Première mutation : profil client
 
-- aucun déploiement : `/espace-client` répond 404 en production ;
-- `PORTAL_SESSION_SECRET` absent de `.env.production` ;
-- aucune validation en HTTPS réel (donc `Secure` non observé en conditions) ;
-- aucune mutation : profil, acceptation de devis, téléversement, messagerie.
+`Browser PATCH /api/portal/profile`
+→ BFF Next.js avec cookie scellé et `Origin` exact
+→ session Odoo réelle → `request.env.user.partner_id` → écriture ORM.
+
+### Cible et liste blanche
+
+La cible est toujours le contact exact de l'utilisateur authentifié
+(`request.env.user.partner_id`). `commercial_partner_id` sert à projeter la
+société, jamais à la renommer : un contact enfant ne peut donc pas modifier
+silencieusement sa société mère.
+
+Liste blanche exacte :
+
+- `name` ;
+- `phone` ;
+- `street` ;
+- `street2` ;
+- `zip` ;
+- `city`.
+
+E-mail/login, société, pays et tous les champs internes restent en lecture seule.
+
+### Fermeture ORM et mass assignment
+
+L'ACL native de `res.partner` reste read-only. Une méthode privée de capacité
+contrôle le contact exact, les champs exacts et une sentinelle non
+reconstructible depuis JSON. L'override de `res.partner.write` refuse donc tout
+appel générique venant d'un utilisateur `share`. La capacité ouvre uniquement
+son propre contrôle d'accès puis appelle l'ORM avec l'utilisateur portail réel,
+sans
+`sudo`, afin de ne pas ouvrir les hooks d'addons réservés au personnel.
+
+Les tests RPC refusent l'écriture directe du contact propre, de sa société et de
+la société d'un autre client. La méthode privée n'est pas appelable par RPC.
+
+### Validation, CSRF et cache
+
+Le BFF et Odoo appliquent tous deux une liste blanche stricte, des limites de
+longueur, du texte sans contrôles/HTML et un format téléphonique conservateur. Un
+payload vide ou contenant une seule clé inconnue est refusé en entier avec
+`400 invalid_request`. Le BFF exige `Origin` et sa valeur doit être exactement
+l'origine de `NEXT_PUBLIC_SITE_URL`; `Referer` seul, HTTP en production et toute
+origine externe sont refusés. `SameSite=Lax` reste une défense en profondeur,
+pas le gate CSRF.
+
+Toutes les réponses de mutation portent `Cache-Control: no-store`. Après succès,
+l'interface affiche la projection réellement renvoyée par Odoo puis la relit au
+refresh ; aucune copie optimiste n'est utilisée.
+
+### Audit et données sensibles
+
+Odoo et le BFF journalisent `requestId`, `action=profile_update`, résultat et UID
+ou noms des champs modifiés. Ils n'enregistrent ni payload, ni adresse, ni numéro,
+ni session, cookie ou secret. Le suivi minimum est applicatif : le chatter n'est
+pas exposé au portail et la mutation ne dépend d'aucun droit sur celui-ci.
+
+## 12. État de ce cycle

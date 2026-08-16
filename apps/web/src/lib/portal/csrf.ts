@@ -19,33 +19,19 @@ export type OriginCheck =
 /**
  * L'appel vient-il bien de notre propre site ?
  *
- * `Origin` est préféré à `Referer` : il est envoyé sur toutes les requêtes à effet
- * de bord et ne contient jamais de chemin ni de query string — donc jamais de
- * secret. `Referer` ne sert que de repli quand `Origin` est absent.
- *
- * Une origine absente est refusée, pas tolérée : c'est le cas d'un client qui ne se
+ * `Origin` est obligatoire : il ne contient jamais de chemin ni de query string,
+ * donc jamais de secret. Aucun repli sur `Referer` : une origine absente est
+ * refusée, pas tolérée. C'est le cas d'un client qui ne se
  * comporte pas comme un navigateur, et une mutation n'a pas de raison d'en venir.
  */
 export function checkOrigin(headers: Headers, allowed: string): OriginCheck {
   const origin = headers.get('origin');
-  const referer = headers.get('referer');
   const expected = normalise(allowed);
 
-  if (origin) {
-    return normalise(origin) === expected
-      ? { ok: true }
-      : { ok: false, reason: 'mismatch' };
-  }
-  if (referer) {
-    try {
-      return normalise(new URL(referer).origin) === expected
-        ? { ok: true }
-        : { ok: false, reason: 'mismatch' };
-    } catch {
-      return { ok: false, reason: 'mismatch' };
-    }
-  }
-  return { ok: false, reason: 'missing' };
+  if (!origin) return { ok: false, reason: 'missing' };
+  return normalise(origin) === expected
+    ? { ok: true }
+    : { ok: false, reason: 'mismatch' };
 }
 
 function normalise(value: string): string {

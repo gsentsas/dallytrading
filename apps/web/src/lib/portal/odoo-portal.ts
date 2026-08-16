@@ -28,6 +28,7 @@ import { logger } from '@/lib/logger';
 export type PortalErrorCode =
   | 'unauthenticated'
   | 'forbidden'
+  | 'invalid_request'
   | 'not_found'
   | 'invalid_credentials'
   | 'unavailable'
@@ -69,6 +70,10 @@ function safeSessionId(sessionId: string): string {
   return sessionId;
 }
 
+function safeRequestId(value: string): string {
+  return /^[A-Za-z0-9_.-]{1,128}$/.test(value) ? value : 'portal';
+}
+
 export class PortalOdooGateway {
   private readonly baseUrl: string;
   private readonly database: string;
@@ -85,7 +90,7 @@ export class PortalOdooGateway {
   private async call(
     path: string,
     init: {
-      method: 'GET' | 'POST';
+      method: 'GET' | 'POST' | 'PATCH';
       body?: unknown;
       sessionId?: string;
       /** Ne pas consommer le corps en texte — voir `download`. */
@@ -98,6 +103,7 @@ export class PortalOdooGateway {
     const startedAt = Date.now();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'X-Request-ID': safeRequestId(correlationId),
     };
     if (init.sessionId) {
       headers.Cookie = `session_id=${safeSessionId(init.sessionId)}`;
@@ -253,6 +259,54 @@ export class PortalOdooGateway {
   }
 
   /**
+   * Modifie une ressource portail sous la session réelle du client.
+   *
+   * La charge utile est déjà validée par la DAL, mais Odoo la revalide : aucune
+   * frontière de sécurité ne dépend de TypeScript ou du navigateur.
+   */
+  async patch<T>(
+    path: string,
+    body: unknown,
+    sessionId: string,
+    correlationId: string,
+  ): Promise<T> {
+    const { response, text } = await this.call(
+      `/api/v1/portal${path}`,
+      { method: 'PATCH', sessionId, body },
+      correlationId,
+    );
+
+    if (response.status === 401) {
+      throw new PortalGatewayError(
+        'unauthenticated', 'session rejected', response.status,
+      );
+    }
+    if (response.status === 403) {
+      throw new PortalGatewayError('forbidden', 'request forbidden', 403);
+    }
+    if (response.status === 400) {
+      throw new PortalGatewayError('invalid_request', 'invalid request', 400);
+    }
+    if (response.status >= 300 && response.status < 400) {
+      throw new PortalGatewayError('unauthenticated', 'session expired');
+    }
+    if (!response.ok) {
+      throw new PortalGatewayError('unavailable', 'ERP error', response.status);
+    }
+
+    let envelope: OdooEnvelope<T>;
+    try {
+      envelope = JSON.parse(text) as OdooEnvelope<T>;
+    } catch {
+      throw new PortalGatewayError('unavailable', 'unreadable ERP response');
+    }
+    if (!envelope.success || envelope.data === undefined) {
+      throw new PortalGatewayError('unavailable', 'unexpected ERP payload');
+    }
+    return envelope.data;
+  }
+
+  /**
    * Télécharge un fichier sous la session du client.
    *
    * Le nom de fichier vient d'Odoo, qui l'a déjà assaini (il n'en garde que des
@@ -312,6 +366,9 @@ export interface PortalIdentity {
   readonly email: string | null;
   readonly phone: string | null;
   readonly company: string | null;
+  readonly street: string | null;
+  readonly street2: string | null;
+  readonly zip: string | null;
   readonly city: string | null;
   readonly country: string | null;
 }

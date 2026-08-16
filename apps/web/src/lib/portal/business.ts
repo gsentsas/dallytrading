@@ -29,6 +29,7 @@ import {
   portalDocumentSchema,
   portalListSchema,
   portalProfileSchema,
+  portalProfileUpdateSchema,
   portalQuoteDetailSchema,
   portalQuoteSchema,
   portalShipmentDetailSchema,
@@ -41,6 +42,7 @@ import {
   type PortalDocument,
   type PortalList,
   type PortalProfile,
+  type PortalProfileUpdate,
   type PortalQuote,
   type PortalQuoteDetail,
   type PortalShipment,
@@ -116,6 +118,32 @@ export function getDashboard(correlationId: string): Promise<PortalDashboard> {
 
 export function getProfile(correlationId: string): Promise<PortalProfile> {
   return fetchPortal('/me', portalProfileSchema, correlationId);
+}
+
+export async function updateProfile(
+  input: PortalProfileUpdate,
+  correlationId: string,
+): Promise<PortalProfile> {
+  const parsedInput = portalProfileUpdateSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new PortalGatewayError('invalid_request', 'invalid profile update');
+  }
+
+  const session = await readPortalSession();
+  if (!session) {
+    throw new PortalGatewayError('unauthenticated', 'no portal session');
+  }
+
+  const raw = await gateway.patch<unknown>(
+    '/profile', parsedInput.data, session.odooSessionId, correlationId,
+  );
+  const parsedResponse = portalProfileSchema.safeParse(raw);
+  if (!parsedResponse.success) {
+    throw new PortalGatewayError(
+      'unavailable', 'unexpected ERP payload for /profile',
+    );
+  }
+  return parsedResponse.data;
 }
 
 // ─── Devis ───────────────────────────────────────────────────────────

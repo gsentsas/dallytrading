@@ -5,6 +5,8 @@ import {
   portalDashboardSchema,
   portalDocumentSchema,
   portalListSchema,
+  portalProfileSchema,
+  portalProfileUpdateSchema,
   portalQuoteSchema,
   portalShipmentDetailSchema,
   portalSourcingDetailSchema,
@@ -143,6 +145,48 @@ describe('contrats métier', () => {
     expect(parsed).not.toHaveProperty('attachmentId');
     expect(portalDocumentSchema.safeParse({ ...document, attachmentId: 7 }).success)
       .toBe(false);
+  });
+});
+
+describe('profil', () => {
+  const profile = {
+    name: 'Client',
+    email: 'client@example.com',
+    phone: null,
+    company: 'Client SARL',
+    street: null,
+    street2: null,
+    zip: null,
+    city: 'Dakar',
+    country: 'Sénégal',
+  };
+
+  it('valide exactement la projection profil en lecture', () => {
+    expect(portalProfileSchema.parse(profile)).toEqual(profile);
+    expect(portalProfileSchema.safeParse({ ...profile, partnerId: 7 }).success)
+      .toBe(false);
+  });
+
+  it('accepte un diff autorisé et le normalise', () => {
+    expect(portalProfileUpdateSchema.parse({
+      phone: '  +221 77 000 00 00  ',
+      city: '  Dakar Plateau ',
+    })).toEqual({ phone: '+221 77 000 00 00', city: 'Dakar Plateau' });
+  });
+
+  it.each([
+    {},
+    { partner_id: 7 },
+    { company_id: 1 },
+    { groups_id: [4] },
+    { parent_id: 8 },
+    { credit_limit: 500000 },
+    { email: 'nouveau@example.com' },
+    { city: 'x'.repeat(129) },
+    { phone: 'javascript:alert(1)' },
+    { street: '<b>Rue</b>' },
+  ])('rejette le payload %j', (payload) => {
+    expect(portalProfileUpdateSchema.safeParse(payload).success).toBe(false);
   });
 });
 

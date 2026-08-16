@@ -320,3 +320,188 @@ class TestGardeFouInvariant(ProvisioningCommon):
         self.assertEqual(
             routes, [], f"Routes tk_freight non neutralisees : {routes}"
         )
+
+
+@tagged("post_install", "-at_install", "dally_freight")
+class TestModes(ProvisioningCommon):
+    """Le mode vient du service demandé, pas d'une valeur fixée en dur."""
+
+    def _devis_pour(self, code, nom):
+        service = self.env["dally.service.type"].search([("code", "=", code)], limit=1)
+        self.assertTrue(service, f"Service {code} absent de l'instance.")
+        partenaire = self.env["res.partner"].create({"name": f"Mode {nom}"})
+        return self.env["dally.quote.request"].create({
+            "partner_id": partenaire.id,
+            "contact_name": f"Mode {nom}",
+            "company_name": f"Mode {nom}",
+            "service_type_id": service.id,
+            "email": f"mode-{nom.lower()}@test.invalid",
+            "request_uuid": str(uuid.uuid4()),
+        })
+
+    def _chaine(self, devis):
+        booking = self.env["shipment.freight.booking"].sudo().search(
+            [("dally_quote_request_id", "=", devis.id)], limit=1
+        )
+        expedition = self.env["freight.shipment"].sudo().search(
+            [("booking_id", "=", booking.id)], limit=1
+        )
+        projection = self.env["dally.shipment"].sudo().search(
+            [("tk_shipment_id", "=", expedition.id)], limit=1
+        )
+        return expedition, projection
+
+    def test_flux_maritime_de_bout_en_bout(self):
+        devis = self._devis_pour("freight_sea", "Sea")
+        devis.write({"state": "won"})
+        expedition, projection = self._chaine(devis)
+        self.assertEqual(expedition.transport, "ocean")
+        self.assertEqual(projection.transport_mode, "sea")
+
+    def test_flux_aerien_de_bout_en_bout(self):
+        """Sans ce test, un mode fixé en dur créait toute expédition en maritime.
+
+        C'était le cas de la première version : `_dally_freight_transport()`
+        retournait `ocean` quel que soit le service demandé par le client.
+        """
+        devis = self._devis_pour("freight_air", "Air")
+        devis.write({"state": "won"})
+        expedition, projection = self._chaine(devis)
+        self.assertEqual(expedition.transport, "air")
+        self.assertEqual(projection.transport_mode, "air")
+
+    def test_flux_vehicule_bascule_en_routier(self):
+        devis = self._devis_pour("freight_vehicle", "Route")
+        devis.write({"state": "won"})
+        expedition, projection = self._chaine(devis)
+        self.assertEqual(expedition.transport, "land")
+        self.assertEqual(projection.transport_mode, "road")
+
+    def test_un_service_sans_mode_retombe_sur_le_maritime(self):
+        """Comportement documenté, et volontairement distinct du fail-closed.
+
+        Un mode erroné est visible et corrigeable au back-office, et la
+        correction redescend au client puisque la projection est à sens unique.
+        """
+        devis = self._devis_pour("import_export", "Defaut")
+        devis.write({"state": "won"})
+        expedition, _projection = self._chaine(devis)
+        self.assertEqual(expedition.transport, "ocean")
+
+
+@tagged("post_install", "-at_install", "dally_freight")
+class TestColisProjetes(ProvisioningCommon):
+    """Les colis opérationnels sont projetés, sans aucun montant."""
+
+    def test_les_colis_du_fournisseur_sont_projetes(self):
+        devis = self._devis("Colis")
+        devis.write({"state": "won"})
+        booking = self.env["shipment.freight.booking"].sudo().search(
+            [("dally_quote_request_id", "=", devis.id)], limit=1
+        )
+        expedition = self.env["freight.shipment"].sudo().search(
+            [("booking_id", "=", booking.id)], limit=1
+        )
+        projection = self.env["dally.shipment"].sudo().search(
+            [("tk_shipment_id", "=", expedition.id)], limit=1
+        )
+
+        # Colis créés côté opérationnel après le provisionnement, comme le ferait
+        # l'exploitation en préparant l'envoi.
+        self.env["shipment.package.line"].sudo().create({
+            "shipment_id": expedition.id, "qty": 3,
+            "net_weight": 12.5, "length": 100.0, "width": 80.0, "height": 60.0,
+            "charges": 999.0,
+        })
+        projection._dally_freight_sync_from_tk()
+
+        colis = self.env["dally.shipment.package"].sudo().search(
+            [("shipment_id", "=", projection.id)]
+        )
+        self.assertEqual(len(colis), 1, "Le colis operationnel n'a pas ete projete.")
+        self.assertEqual(colis.quantity, 3)
+        self.assertEqual(colis.unit_weight_kg, 12.5)
+        self.assertEqual(colis.length_cm, 100.0)
+
+        # Contrôle négatif : le montant `charges` du fournisseur ne doit
+        # apparaître nulle part dans la projection client.
+        self.assertNotIn("999", repr(colis.read()))
+
+    def test_la_projection_des_colis_est_idempotente(self):
+        devis = self._devis("ColisRejeu")
+        devis.write({"state": "won"})
+        booking = self.env["shipment.freight.booking"].sudo().search(
+            [("dally_quote_request_id", "=", devis.id)], limit=1
+        )
+        expedition = self.env["freight.shipment"].sudo().search(
+            [("booking_id", "=", booking.id)], limit=1
+        )
+        projection = self.env["dally.shipment"].sudo().search(
+            [("tk_shipment_id", "=", expedition.id)], limit=1
+        )
+        self.env["shipment.package.line"].sudo().create({
+            "shipment_id": expedition.id, "qty": 1,
+        })
+        for _ in range(5):
+            projection._dally_freight_sync_from_tk()
+        self.assertEqual(
+            self.env["dally.shipment.package"].sudo().search_count(
+                [("shipment_id", "=", projection.id)]
+            ),
+            1,
+            "La resynchronisation a duplique les colis.",
+        )
+
+
+@tagged("post_install", "-at_install", "dally_freight")
+class TestProvisionnementSousUtilisateurPortail(ProvisioningCommon):
+    """Le provisionnement doit aboutir quand c'est le CLIENT qui déclenche.
+
+    Tous les autres tests s'exécutent en administrateur, et passaient donc sur
+    un chemin que le client n'emprunte jamais. Une lecture de configuration
+    ajoutée au provisionnement — le type de service, pour déterminer le mode —
+    échouait en `AccessError` pour un utilisateur portail, et bloquait la suite
+    sous concurrence. Ce test existe pour que cela ne puisse plus passer
+    inaperçu.
+    """
+
+    def test_un_client_portail_declenche_le_provisionnement(self):
+        devis = self._devis("Portail")
+        client = self.env["res.users"].create({
+            "name": "Prov Portail",
+            "login": "prov.portail@dally.invalid",
+            "partner_id": devis.partner_id.id,
+            "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+        })
+
+        # Le client n'a aucun droit sur la configuration : c'est exactement la
+        # situation qui faisait échouer le provisionnement.
+        with self.assertRaises(AccessError):
+            self.env(user=client)["dally.service.type"].search([], limit=1).read(["code"])
+
+        devis.with_user(client)._dally_freight_provision()
+
+        self.assertEqual(
+            self._compte(devis),
+            (1, 1, 1),
+            "Le provisionnement declenche par un client portail n'aboutit pas.",
+        )
+
+    def test_l_operateur_du_dossier_n_est_jamais_un_client(self):
+        """Un utilisateur portail ne peut pas être opérateur d'exploitation."""
+        devis = self._devis("Operateur")
+        client = self.env["res.users"].create({
+            "name": "Prov Operateur",
+            "login": "prov.operateur@dally.invalid",
+            "partner_id": devis.partner_id.id,
+            "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+        })
+        devis.with_user(client)._dally_freight_provision()
+
+        booking = self.env["shipment.freight.booking"].sudo().search(
+            [("dally_quote_request_id", "=", devis.id)], limit=1
+        )
+        self.assertFalse(
+            booking.operator_id.share,
+            "Un utilisateur portail est devenu operateur du dossier.",
+        )

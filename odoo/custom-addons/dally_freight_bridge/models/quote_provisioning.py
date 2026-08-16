@@ -77,6 +77,7 @@ from .freight_mapping import (
     DIRECTION_TO_DIRECTION,
     mode_from_transport,
     state_from_stage,
+    transport_from_service,
 )
 
 _logger = logging.getLogger(__name__)
@@ -185,7 +186,10 @@ class DallyQuoteRequest(models.Model):
         expediteur, destinataire = self._dally_freight_parties()
         valeurs = {
             "dally_quote_request_id": self.id,
-            "operator_id": self.env.user.id,
+            # L'opérateur est l'utilisateur courant s'il est interne, faute de
+            # quoi le compte système : un utilisateur portail ne peut pas être
+            # l'opérateur d'un dossier d'exploitation.
+            "operator_id": self._dally_freight_operator().id,
             "shipper_id": expediteur.id,
             "consignee_id": destinataire.id,
             "transport": self._dally_freight_transport(),
@@ -218,6 +222,14 @@ class DallyQuoteRequest(models.Model):
 
         return booking
 
+    def _dally_freight_operator(self):
+        """Utilisateur interne responsable du dossier côté exploitation."""
+        self.ensure_one()
+        utilisateur = self.env.user
+        if not utilisateur.share:
+            return utilisateur
+        return self.env.ref("base.user_root")
+
     def _dally_freight_parties(self):
         """Détermine expéditeur et destinataire.
 
@@ -227,14 +239,16 @@ class DallyQuoteRequest(models.Model):
         la contrepartie dans les deux cas.
         """
         self.ensure_one()
-        client = self.partner_id.commercial_partner_id
+        # Même raison que pour le service : la transition est autorisée, la
+        # résolution des parties en est la conséquence serveur.
+        client = self.sudo().partner_id.commercial_partner_id
         if not client:
             raise UserError(
                 _("Le devis %s n'a pas de client : provisionnement fret impossible.")
                 % self.display_name
             )
 
-        maison = self.env.company.partner_id
+        maison = self.env.company.sudo().partner_id
         if self._dally_freight_direction() == "export":
             return client, maison
         return maison, client
@@ -250,14 +264,29 @@ class DallyQuoteRequest(models.Model):
         return DIRECTION_TO_DIRECTION.get("import", "import")
 
     def _dally_freight_transport(self):
-        """Transport tk à utiliser. `ocean` par défaut.
+        """Transport tk, déduit du service demandé par le client.
 
-        Le devis ne porte pas encore de mode. Plutôt que de deviner, on retient
-        le mode majoritaire et on laisse l'exploitation corriger dans le
-        back-office : la projection suit ensuite, puisqu'elle est à sens unique.
+        Le devis porte l'information : `dally.service.type.code` distingue
+        `freight_sea`, `freight_air`, `freight_vehicle` et `freight_groupage`.
+        La lire évite de décider à la place du client — un mode fixé en dur
+        aurait créé toutes les expéditions en maritime, y compris les aériennes.
+
+        ## Pourquoi `sudo()` ici
+
+        Le provisionnement est déclenché par une transition d'état, y compris
+        celle qu'un client produit en acceptant son devis depuis le portail. Or
+        `dally.service.type` est une table de configuration : le portail n'y a
+        aucun droit de lecture.
+
+        Sans `sudo()`, l'acceptation échouait donc sur un `AccessError` — et,
+        sous concurrence, la suite de tests se bloquait purement et simplement.
+        Le `sudo()` est légitime parce qu'il vient **après** la décision
+        d'autorisation, pas à sa place : c'est la transition du devis qui a été
+        autorisée, et cette lecture n'est qu'une conséquence serveur. Il est
+        limité à un champ de configuration, sans donnée d'un autre client.
         """
         self.ensure_one()
-        return "ocean"
+        return transport_from_service(self.sudo().service_type_id)
 
     # ------------------------------------------------------------------
     # Projection
@@ -281,7 +310,7 @@ class DallyQuoteRequest(models.Model):
         if not projection:
             projection = self.env["dally.shipment"].sudo().create({
                 "tk_shipment_id": expedition.id,
-                "partner_id": self.partner_id.commercial_partner_id.id,
+                "partner_id": self.sudo().partner_id.commercial_partner_id.id,
                 "transport_mode": mode_from_transport(expedition.transport) or "other",
                 "direction": self._dally_freight_direction(),
                 "state": "draft",

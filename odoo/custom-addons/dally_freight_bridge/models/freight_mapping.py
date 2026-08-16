@@ -63,6 +63,45 @@ DIRECTION_TO_DIRECTION = {
     "export": "export",
 }
 
+#: Code de `dally.service.type` → transport tk.
+#:
+#: C'est le devis qui porte l'information, via le service demandé par le client.
+#: La déduire d'ailleurs — ou la fixer en dur — reviendrait à décider à sa place.
+#:
+#: `freight_groupage` est rattaché au maritime : le groupage de DallyTrading est
+#: du LCL. Si un groupage aérien apparaît un jour, il lui faudra son propre code
+#: de service, pas une exception ici.
+SERVICE_CODE_TO_TRANSPORT = {
+    "freight_sea": "ocean",
+    "freight_air": "air",
+    "freight_vehicle": "land",
+    "freight_groupage": "ocean",
+}
+
+#: Transport retenu quand le service ne désigne pas de mode — `import_export`,
+#: `logistics`, `other`…
+#:
+#: Le maritime est le flux très majoritaire. Ce n'est pas un « fail-closed »
+#: comme pour les états, et la nuance est délibérée : un mode erroné est visible
+#: et corrigeable au back-office, et la correction redescend au client puisque la
+#: projection est à sens unique. Un état final erroné, lui, fait cesser le suivi
+#: sans que personne ne s'en aperçoive.
+TRANSPORT_PAR_DEFAUT = "ocean"
+
+
+def transport_from_service(service_type):
+    """Transport tk déduit du service demandé, ou le défaut documenté."""
+    code = (service_type.code or "") if service_type else ""
+    transport = SERVICE_CODE_TO_TRANSPORT.get(code)
+    if transport:
+        return transport
+    _logger.info(
+        "Service %r sans mode de transport explicite : %s retenu par defaut.",
+        code or "(aucun)",
+        TRANSPORT_PAR_DEFAUT,
+    )
+    return TRANSPORT_PAR_DEFAUT
+
 
 def state_from_stage(env, stage):
     """Traduit une étape tk en état Dally, ou `None` si elle est inconnue.

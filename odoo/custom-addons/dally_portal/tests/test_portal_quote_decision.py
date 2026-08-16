@@ -335,6 +335,31 @@ class TestPortalQuoteDecisionOrm(QuoteDecisionFixture, TransactionCase):
                 # derrière lui exactement les lignes qu'il devait retirer.
                 orders.filtered(lambda order: order.state != "cancel")._action_cancel()
                 orders.unlink()
+
+            # Même classe de problème que ci-dessus, sur un autre dépendant :
+            # quand `dally_freight_bridge` est installé, accepter un devis
+            # provisionne un booking fret qui le référence en `restrict`. Le
+            # refus est délibéré — supprimer l'origine commerciale d'une
+            # expédition en cours est presque toujours une erreur — mais un
+            # nettoyage de fixture doit, lui, retirer ce qu'il a créé.
+            #
+            # Le test du portail ne dépend pas du pont pour autant : le modèle
+            # n'est touché que s'il existe dans le registre.
+            if "shipment.freight.booking" in env:
+                bookings = env["shipment.freight.booking"].sudo().search([
+                    ("dally_quote_request_id", "in", quote.ids),
+                ])
+                if bookings:
+                    shipments = env["freight.shipment"].sudo().search([
+                        ("booking_id", "in", bookings.ids),
+                    ])
+                    projections = env["dally.shipment"].sudo().search([
+                        ("tk_shipment_id", "in", shipments.ids),
+                    ])
+                    projections.unlink()
+                    shipments.unlink()
+                    bookings.unlink()
+
             quote.unlink()
         user = env["res.users"].search([("login", "=", cls.CONCURRENT_LOGIN)])
         partner = user.partner_id

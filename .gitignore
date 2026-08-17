@@ -55,3 +55,9 @@ Thumbs.db
 .claude.json
 .imunify_patch_id
 .myimunify_id
+
+# Instantanés de rollback frontend et artefacts de build de déploiement.
+# Ce sont des copies de `.next` — des centaines de mégaoctets, régénérables,
+# et propres à une machine. Elles n'ont rien à faire dans l'historique.
+rollback/
+.deploy-build/

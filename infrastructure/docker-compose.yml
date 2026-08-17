@@ -120,6 +120,15 @@ services:
       - ../odoo/config/odoo.conf:/etc/odoo/odoo.conf:ro
       # Modules DallyTrading. Le core Odoo n'est jamais modifié (§3).
       - ../odoo/custom-addons:/mnt/extra-addons:ro
+      # Modules tiers sous licence, hors du dépôt public et hors document root.
+      # En lecture seule : rien, côté Odoo, n'a de raison d'écrire dans du code
+      # fournisseur, et la version y est épinglée — voir le PROVENANCE.txt du
+      # répertoire.
+      #
+      # Règle d'exploitation : ne JAMAIS lancer « odoo -u tk_freight » seul. Le
+      # module rechargerait ses propres droits d'accès et rouvrirait au portail
+      # 30 modèles en lecture ET écriture. Voir docs/FREIGHT-BRIDGE.md.
+      - ${VENDOR_ADDONS:-../../vendor-addons}:/mnt/vendor-addons:ro
     ports:
       # Bind sur la loopback UNIQUEMENT : seul le nginx de Plesk y accède.
       # Odoo n'est jamais joignable directement depuis Internet (§5).

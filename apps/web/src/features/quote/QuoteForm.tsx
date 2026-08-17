@@ -32,6 +32,7 @@ interface FormState {
   weightKg: string;
   volumeCbm: string;
   packagesCount: string;
+  groupageTransportMode: string;
   vehicleMake: string;
   vehicleModel: string;
   vehicleYear: string;
@@ -66,6 +67,7 @@ const EMPTY: FormState = {
   destinationCountryCode: '', destinationCity: '',
   goodsDescription: '', quantity: '', weightKg: '', volumeCbm: '',
   packagesCount: '',
+  groupageTransportMode: '',
   vehicleMake: '', vehicleModel: '', vehicleYear: '',
   vehicleVin: '', vehicleRegistration: '', vehicleColor: '',
   vehicleCategory: 'car', vehicleCondition: 'running', vehicleFuel: '',
@@ -223,6 +225,7 @@ export function QuoteForm({
       weightKg: form.weightKg || undefined,
       volumeCbm: form.volumeCbm || undefined,
       packagesCount: form.packagesCount || undefined,
+      groupageTransportMode: form.groupageTransportMode || undefined,
       vehicleMake: form.vehicleMake || undefined,
       vehicleModel: form.vehicleModel || undefined,
       vehicleYear: form.vehicleYear || undefined,
@@ -420,6 +423,21 @@ export function QuoteForm({
 
         {currentStep === 'cargo' && service && (
           <div className="space-y-5">
+            {/*
+              Le mode physique d'un groupage est obligatoire et n'a pas de
+              valeur par défaut : le serveur refuse un devis groupé qui ne dit
+              pas s'il part par bateau ou par avion.
+            */}
+            {service.code === 'freight_groupage' && (
+              <Choix label="Mode de transport *"
+                     value={form.groupageTransportMode}
+                     onChange={(v) => update('groupageTransportMode', v)}
+                     options={[
+                       ['', 'À sélectionner'],
+                       ['sea', 'Groupage maritime'],
+                       ['air', 'Groupage aérien'],
+                     ]} />
+            )}
             {service.requires_goods && (
               <>
                 <Field label="Nature de la marchandise"

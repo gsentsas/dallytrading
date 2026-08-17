@@ -45,6 +45,10 @@ QUOTE_INPUT_FIELDS = (
     "weight_kg",
     "volume_cbm",
     "packages_count",
+    # Mode physique d'un envoi groupé. Exigé pour le service de groupage : voir
+    # `_validate_groupage`.
+    "groupage_transport_mode",
+
     # ── Véhicule transporté ──
     #
     # Préfixés `vehicle_` et déclarés un par un, comme le reste : la liste
@@ -85,7 +89,7 @@ MAX_LENGTHS = {
     "vehicle_make": 100, "vehicle_model": 100, "vehicle_year": 10,
     "vehicle_vin": 32, "vehicle_registration": 32, "vehicle_color": 32,
     "vehicle_category": 20, "vehicle_condition": 20, "vehicle_fuel": 20,
-    "vehicle_transport_mode": 10,
+    "vehicle_transport_mode": 10, "groupage_transport_mode": 10,
     "vehicle_pickup_address": 500, "vehicle_delivery_address": 500,
     "budget": 100, "message": 20000,
     "source_url": 500, "referrer_url": 500,
@@ -141,6 +145,7 @@ class DallyQuotesController(DallyApiController):
             )
 
         self._validate_service_requirements(service, clean)
+        self._validate_groupage(service, clean)
 
         request = env["dally.quote.request"].dally_create_from_website(clean)
 
@@ -222,6 +227,33 @@ class DallyQuotesController(DallyApiController):
                 clean[key] = clean[key].upper()
 
         return clean
+
+    @staticmethod
+    def _validate_groupage(service, clean):
+        """Exige le mode physique d'un envoi groupé, et le borne.
+
+        « Groupage » dit ce que le client achète, pas comment la marchandise
+        voyage. Sans mode, le poids taxable serait calculé au mauvais ratio —
+        167 kg/m³ en aérien contre 1000 en maritime, soit un facteur six sur du
+        fret léger et volumineux.
+
+        Le contrôle est ici et non seulement dans le formulaire : ce point
+        d'entrée est joignable avec curl.
+        """
+        if service.code != "freight_groupage":
+            # Une valeur résiduelle sur un autre service est simplement écartée :
+            # le provisionnement ne la lit pas, et refuser la demande pour un
+            # champ sans effet serait hostile sans rien protéger.
+            clean.pop("groupage_transport_mode", None)
+            return
+
+        mode = (clean.get("groupage_transport_mode") or "").strip().lower()
+        if mode not in ("sea", "air"):
+            raise DallyApiError(
+                422, "missing_groupage_mode",
+                _("A groupage request requires a transport mode: sea or air."),
+            )
+        clean["groupage_transport_mode"] = mode
 
     @staticmethod
     def _create_vehicle_cargo(env, request, clean):

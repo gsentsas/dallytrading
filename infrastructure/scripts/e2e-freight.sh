@@ -47,7 +47,7 @@ VENDOR_ADDONS="${FE2E_VENDOR_ADDONS:-/tmp/dallytrading-tk-freight-dev/vendor-add
 
 #: Specs exécutées, dans l'ordre. Le pont fret d'abord : une régression sur lui
 #: doit se voir avant que la spec véhicule ne s'en serve.
-SPECS=(12-freight-bridge 13-vehicle-cargo)
+SPECS=(12-freight-bridge 13-vehicle-cargo 14-groupage)
 
 log() { printf '\n\033[1m── %s\033[0m\n' "$*"; }
 
@@ -181,7 +181,7 @@ ENV
   grep -q 'FREIGHT_SEED_OK' "$WORK/freight-seed.out" || {
     echo "seed fret échoué :" >&2; tail -20 "$WORK/freight-seed.out" >&2; exit 1; }
   # Les valeurs utiles à Playwright sont extraites une fois, ici.
-  grep -E '^FREIGHT_' "$WORK/freight-seed.out" > "$WORK/freight-refs"
+  grep -E '^FREIGHT_' "$WORK/freight-seed.out" | grep '=' > "$WORK/freight-refs"
   chmod 600 "$WORK/freight-refs"
 
   log "fixtures vehicule"
@@ -195,7 +195,17 @@ ENV
     | sed -E 's/^(VEHICLE_VIN_[AB]=).*/\1<expurgé>/' | sed 's/^/   /'
   grep -q 'VEHICLE_SEED_OK' "$WORK/vehicle-seed.out" || {
     echo "seed vehicule échoué :" >&2; tail -20 "$WORK/vehicle-seed.out" >&2; exit 1; }
-  grep -E '^VEHICLE_' "$WORK/vehicle-seed.out" >> "$WORK/freight-refs"
+  grep -E '^VEHICLE_' "$WORK/vehicle-seed.out" | grep '=' >> "$WORK/freight-refs"
+
+  log "fixtures groupage"
+  docker cp "$HERE/e2e-freight-groupage-seed.py" "$ODOO_CONTAINER:/tmp/e2e-seed/groupage.py" >/dev/null
+  docker exec "$ODOO_CONTAINER" sh -c \
+    "odoo shell -c /etc/odoo/odoo.conf -d $DB --no-http < /tmp/e2e-seed/groupage.py" \
+    > "$WORK/groupage-seed.out" 2>&1
+  grep -E '^GROUPAGE_' "$WORK/groupage-seed.out" | sed 's/^/   /'
+  grep -q 'GROUPAGE_SEED_OK' "$WORK/groupage-seed.out" || {
+    echo "seed groupage échoué :" >&2; tail -20 "$WORK/groupage-seed.out" >&2; exit 1; }
+  grep -E '^GROUPAGE_' "$WORK/groupage-seed.out" | grep '=' >> "$WORK/freight-refs"
 
   # Charge les références produites par les graines — dont la clé d'API réelle,
   # sans laquelle la page /devis affiche « Formulaire momentanément
@@ -311,6 +321,19 @@ reset_vehicle() {
   fi
 }
 
+#: Restaure le périmètre groupage et vérifie ses préconditions.
+reset_groupage() {
+  local output
+  output="$(docker exec -i "$ODOO_CONTAINER" \
+    odoo shell -c /etc/odoo/odoo.conf -d "$DB" --no-http \
+    < "$HERE/e2e-freight-groupage-reset.py" 2>&1)"
+  printf '%s\n' "$output" | grep -E "^PRECONDITION_" | sed 's/^/   /'
+  if ! printf '%s' "$output" | grep -q "PRECONDITION_OK groupage"; then
+    echo "   précondition groupage non satisfaite — arrêt" >&2
+    return 1
+  fi
+}
+
 run_tests() {
   : > "$WORK/next.log"
   local failed=0
@@ -330,6 +353,9 @@ run_tests() {
 
   log "restauration du périmètre véhicule"
   reset_vehicle || return 1
+
+  log "restauration du périmètre groupage"
+  reset_groupage || return 1
 
   # Une spec par invocation, avec redémarrage entre chacune : la limitation de
   # débit sur la connexion vit en mémoire d'un seul processus, et deux specs
@@ -403,6 +429,8 @@ prix d achat vehicule|DALLY_E2E_SECRET_VEHICLE_PURCHASE_PRICE
 prix d achat (montant)|987654
 VIN de fixture A|DALLYE2EVIN000001
 VIN du formulaire public|DALLYE2EVINPUB001
+note interne groupage|DALLY_E2E_SECRET_GROUPAGE_INTERNAL_NOTE
+taux interne groupage|876543
 cookie de session|dt_portal_session=
 session Odoo|session_id=
 en-tête d'autorisation|Authorization:

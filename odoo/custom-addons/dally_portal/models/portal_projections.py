@@ -104,6 +104,21 @@ class DallyQuoteRequestPortal(models.Model):
         vehicule = self._dally_portal_vehicle_payload()
         if vehicule:
             payload["vehicle"] = vehicule
+
+        # Le mode d'un envoi groupé, en libellé client.
+        #
+        # « Groupage » et « Maritime » répondent à deux questions différentes :
+        # ce que le client a commandé, et comment sa marchandise voyage. Les
+        # afficher séparément évite la confusion que le modèle interne a
+        # justement pour but d'empêcher.
+        if self.service_code == "freight_groupage" and self.groupage_transport_mode:
+            libelles = dict(
+                self._fields["groupage_transport_mode"]._description_selection(self.env)
+            )
+            payload["groupage"] = {
+                "transportMode": self.groupage_transport_mode,
+                "transportModeLabel": libelles.get(self.groupage_transport_mode),
+            }
         return payload
 
     def _dally_portal_vehicle_payload(self):
@@ -415,7 +430,35 @@ class DallyShipmentPortal(models.Model):
         if vehicule:
             payload["vehicle"] = vehicule
 
+        # Type d'envoi, distinct du mode physique déjà présent dans le payload.
+        #
+        # Le mode dit « Maritime » ou « Aérien » ; ceci dit « Groupage ». Une
+        # expédition groupée aérienne affiche donc les deux, ce qui est la
+        # lecture juste — et jamais « groupage » comme mode de transport, qui
+        # calculerait le poids taxable au mauvais ratio.
+        type_envoi = self._dally_portal_shipment_service()
+        if type_envoi:
+            payload["shipmentType"] = type_envoi
+
         return payload
+
+    def _dally_portal_shipment_service(self):
+        """Type d'envoi hérité du devis d'origine, s'il est remarquable.
+
+        On remonte au devis par le booking du fournisseur plutôt que de stocker
+        l'information une seconde fois : le lien existe déjà, et une donnée
+        recopiée finit toujours par diverger de sa source.
+        """
+        self.ensure_one()
+        if "shipment.freight.booking" not in self.env:
+            return None
+        expedition = self.sudo().tk_shipment_id
+        if not expedition or not expedition.booking_id:
+            return None
+        devis = expedition.booking_id.sudo().dally_quote_request_id
+        if not devis or devis.service_code != "freight_groupage":
+            return None
+        return {"code": "groupage", "label": "Groupage"}
 
     def _dally_portal_shipment_vehicle(self):
         """Véhicule rattaché à cette expédition, s'il y en a un.

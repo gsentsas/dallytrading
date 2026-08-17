@@ -534,6 +534,7 @@ export class DallyApiAdapter implements OdooGateway {
       destination_city: input.destinationCity ?? '',
       goods_description: input.goodsDescription ?? '',
       quantity: input.quantity ?? '',
+      groupage_transport_mode: input.groupageTransportMode ?? '',
       vehicle_make: input.vehicleMake ?? '',
       vehicle_model: input.vehicleModel ?? '',
       vehicle_year: input.vehicleYear ?? '',

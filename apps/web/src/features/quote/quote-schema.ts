@@ -170,6 +170,16 @@ export const quoteRequestSchema = z
     // camion. `vehicleTransportMode` porte donc le mode physique, et il est
     // exigé pour ce service — sans lui, le serveur refuse en 422, et c'est
     // voulu : deviner produirait une expédition fausse.
+    /**
+     * Mode physique d'un envoi groupé.
+     *
+     * « Groupage » décrit ce que le client achète — un envoi consolidé — et non
+     * la façon dont il voyage. Le serveur l'exige pour ce service et refuse
+     * sans lui : le poids taxable se calcule à 167 kg/m³ en aérien contre 1000
+     * en maritime, et deviner se paierait d'un facteur six sur du fret léger.
+     */
+    groupageTransportMode: z.enum(['sea', 'air']).optional(),
+
     vehicleMake: optionalText(100),
     vehicleModel: optionalText(100),
     vehicleYear: optionalText(10),
@@ -284,6 +294,9 @@ export function toQuoteInput(data: QuoteRequestData): QuoteInput {
     ...(data.volumeCbm !== undefined && { volumeCbm: data.volumeCbm }),
     ...(data.packagesCount !== undefined && {
       packagesCount: data.packagesCount,
+    }),
+    ...(data.groupageTransportMode !== undefined && {
+      groupageTransportMode: data.groupageTransportMode,
     }),
     ...(data.vehicleMake !== undefined && { vehicleMake: data.vehicleMake }),
     ...(data.vehicleModel !== undefined && { vehicleModel: data.vehicleModel }),

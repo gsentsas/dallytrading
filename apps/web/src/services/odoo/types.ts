@@ -131,6 +131,7 @@ export interface QuoteInput {
   readonly weightKg?: number;
   readonly volumeCbm?: number;
   readonly packagesCount?: number;
+  readonly groupageTransportMode?: string;
   readonly vehicleMake?: string;
   readonly vehicleModel?: string;
   readonly vehicleYear?: string;

@@ -265,6 +265,32 @@ export const portalVehicleSchema = z
 export type PortalVehicle = z.infer<typeof portalVehicleSchema>;
 
 /**
+ * Le mode physique d'un envoi groupé, tel que le portail le reçoit.
+ *
+ * Mesuré sur les payloads réels : la clé est **absente** hors service de
+ * groupage, et non `null`. Le libellé est déjà traduit par Odoo — le recalculer
+ * ici créerait une seconde table de correspondance à tenir d'accord.
+ */
+export const portalGroupageSchema = z
+  .object({
+    transportMode: nullableText,
+    transportModeLabel: nullableText,
+  })
+  .strict();
+
+/**
+ * Le type d'envoi, distinct du mode de transport.
+ *
+ * Une expédition groupée aérienne porte les deux : `shipmentType` vaut
+ * « Groupage », `transportModeLabel` vaut « Aérien ». Les confondre ferait
+ * afficher un mode qui n'existe pas physiquement — et, côté serveur,
+ * calculerait le poids taxable au mauvais ratio.
+ */
+export const portalShipmentTypeSchema = z
+  .object({ code: nullableText, label: nullableText })
+  .strict();
+
+/**
  * Le détail d'un devis : la liste, plus le véhicule s'il y en a un.
  *
  * `vehicle` est `.optional()` parce que la clé est **absente** — et non `null` —
@@ -275,7 +301,10 @@ export type PortalVehicle = z.infer<typeof portalVehicleSchema>;
  * jamais au moyen d'un `passthrough()` qui ouvrirait la porte à tout le reste.
  */
 export const portalQuoteDetailSchema = portalQuoteSchema
-  .extend({ vehicle: portalVehicleSchema.optional() })
+  .extend({
+    vehicle: portalVehicleSchema.optional(),
+    groupage: portalGroupageSchema.optional(),
+  })
   .strict();
 
 export type PortalQuoteDetail = z.infer<typeof portalQuoteDetailSchema>;
@@ -316,6 +345,7 @@ export const portalShipmentDetailSchema = portalShipmentSchema
     // Les expéditions maritimes et aériennes historiques continuent donc de
     // parser sans changement.
     vehicle: portalVehicleSchema.optional(),
+    shipmentType: portalShipmentTypeSchema.optional(),
   })
   .strict();
 

@@ -63,6 +63,18 @@ export default async function QuoteDetailPage({
         absente sinon — pas nulle — et le schéma le reflète.
       */}
       {quote.vehicle && <VehicleDetails vehicle={quote.vehicle} />}
+
+      {/*
+        Le mode d'un envoi groupé. « Groupage » dit ce que le client a commandé,
+        « Maritime » comment sa marchandise voyage : le libellé serveur porte
+        déjà les deux, il n'y a rien à recomposer ici.
+      */}
+      {quote.groupage?.transportModeLabel && (
+        <Card className="mb-6">
+          <h2 className="text-sm text-mist-600">Mode de groupage</h2>
+          <p className="mt-1 text-navy-800">{quote.groupage.transportModeLabel}</p>
+        </Card>
+      )}
     </>
   );
 }

@@ -64,6 +64,16 @@ export default async function ShipmentDetailPage({
           <span className="text-sm text-mist-600">
             {shipment.transportModeLabel ?? '—'}
           </span>
+          {/*
+            Type d'envoi affiché à côté du mode, jamais à sa place : un
+            groupage aérien est « Groupage » ET « Aérien ». Les fondre ferait
+            disparaître l'information qui décide du poids taxable.
+          */}
+          {shipment.shipmentType?.label && (
+            <span className="rounded-full bg-mist-100 px-3 py-1 text-sm text-navy-800">
+              {shipment.shipmentType.label}
+            </span>
+          )}
         </div>
         <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Detail label="Origine" value={shipment.origin} />

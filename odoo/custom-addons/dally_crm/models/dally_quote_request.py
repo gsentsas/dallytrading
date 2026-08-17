@@ -360,6 +360,10 @@ class DallyQuoteRequest(models.Model):
             "weight_kg": number("weight_kg"),
             "volume_cbm": number("volume_cbm"),
             "packages_count": int(number("packages_count")),
+            # Mode d'un envoi groupé. Le contrôleur public l'a déjà borné à
+            # `sea`/`air` et écarté hors service de groupage ; on ne réécrit
+            # donc qu'une valeur déjà validée, ou rien.
+            "groupage_transport_mode": payload.get("groupage_transport_mode") or False,
             "vehicle_make": text("vehicle_make", 100),
             "vehicle_model": text("vehicle_model", 100),
             "vehicle_year": text("vehicle_year", 10),

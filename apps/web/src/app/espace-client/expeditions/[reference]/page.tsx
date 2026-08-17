@@ -5,6 +5,7 @@ import {
   Card, Detail, PageHeader, StatusBadge, TableWrapper, UnavailableState,
 } from '@/features/portal/ui';
 import { loadPortal } from '@/features/portal/load';
+import { VehicleDetails } from '@/features/portal/VehicleDetails';
 import { getShipment } from '@/lib/portal/business';
 import { newCorrelationId } from '@/lib/logger';
 
@@ -117,6 +118,11 @@ export default async function ShipmentDetailPage({
           </TableWrapper>
         )}
       </section>
+
+      {/* Le véhicule transporté, avant les colis : c'est LA marchandise. */}
+      {shipment.vehicle && (
+        <VehicleDetails vehicle={shipment.vehicle} title="Véhicule transporté" />
+      )}
 
       <section aria-labelledby="documents" className="mb-6">
         <h2 id="documents" className="mb-4 text-lg font-semibold text-navy-800">

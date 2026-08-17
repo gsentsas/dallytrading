@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 import { QuoteDecision } from '@/features/portal/QuoteDecision';
+import { VehicleDetails } from '@/features/portal/VehicleDetails';
 import { Card, Detail, PageHeader, UnavailableState } from '@/features/portal/ui';
 import { loadPortal } from '@/features/portal/load';
 import { getQuote } from '@/lib/portal/business';
@@ -56,6 +57,12 @@ export default async function QuoteDetailPage({
           </div>
         )}
       </Card>
+
+      {/*
+        Le véhicule n'apparaît que sur les devis qui en décrivent un. La clé est
+        absente sinon — pas nulle — et le schéma le reflète.
+      */}
+      {quote.vehicle && <VehicleDetails vehicle={quote.vehicle} />}
     </>
   );
 }

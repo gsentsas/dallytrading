@@ -51,9 +51,10 @@ export const portalQuoteSchema = z
   .strict();
 
 export type PortalQuote = z.infer<typeof portalQuoteSchema>;
-/** Le détail d'un devis n'expose rien de plus que sa ligne de liste. */
-export type PortalQuoteDetail = PortalQuote;
-export const portalQuoteDetailSchema = portalQuoteSchema;
+/**
+ * Le détail d'un devis expose une chose de plus que sa ligne de liste : le
+ * véhicule, quand il y en a un. Le type est dérivé du schéma, plus bas.
+ */
 
 const rejectionReason = z
   .string()
@@ -202,6 +203,83 @@ export const portalShipmentSchema = z
 export type PortalShipment = z.infer<typeof portalShipmentSchema>;
 
 
+
+// ─── Véhicule transporté ─────────────────────────────────────────────
+
+/**
+ * Le véhicule d'un client, tel que le portail le reçoit.
+ *
+ * ## La forme vient de la mesure, pas de l'intention
+ *
+ * Chaque champ ci-dessous a été capturé sur les payloads Odoo réels, dans deux
+ * cas — véhicule complet et véhicule minimal. Ce que cela a appris :
+ *
+ * * les champs facultatifs arrivent à `null`, **jamais absents** — d'où
+ *   `.nullable()` et non `.optional()` ;
+ * * `keyCount` est toujours un entier, y compris `0` ;
+ * * `pickupAddress` et `deliveryAddress` sont `null` quand la prestation n'est
+ *   pas demandée, ce qui évite d'afficher une adresse fantôme.
+ *
+ * Un schéma écrit d'après l'idée qu'on se fait du serveur échoue au premier
+ * `null` inattendu, en production, sur la page d'un client.
+ *
+ * ## `.strict()` sur l'objet lui-même
+ *
+ * C'est le garde-fou contre une fuite future côté serveur : si quelqu'un ajoute
+ * `internal_notes` ou `purchase_price` à la projection Odoo, le parse échoue ici
+ * plutôt que d'afficher la valeur. La barrière est censée être en amont — celle-ci
+ * existe pour le jour où l'amont se trompe.
+ */
+export const portalVehicleSchema = z
+  .object({
+    make: nullableText,
+    model: nullableText,
+    year: nullableText,
+    /**
+     * VIN complet, et c'est assumé.
+     *
+     * Ce contrat ne sert que le détail privé du propriétaire authentifié. Le
+     * VIN est le seul numéro qui distingue deux voitures identiques — sur un
+     * connaissement, auprès d'une douane, dans un litige. Il reste absent des
+     * listes et du suivi public, où d'autres schémas s'appliquent.
+     */
+    vin: nullableText,
+    registration: nullableText,
+    color: nullableText,
+    category: nullableText,
+    categoryLabel: nullableText,
+    condition: nullableText,
+    conditionLabel: nullableText,
+    fuelType: nullableText,
+    fuelTypeLabel: nullableText,
+    keyCount: z.number().int().min(0),
+    transportMode: nullableText,
+    transportModeLabel: nullableText,
+    pickupRequested: z.boolean(),
+    pickupAddress: nullableText,
+    deliveryRequested: z.boolean(),
+    deliveryAddress: nullableText,
+  })
+  .strict();
+
+export type PortalVehicle = z.infer<typeof portalVehicleSchema>;
+
+/**
+ * Le détail d'un devis : la liste, plus le véhicule s'il y en a un.
+ *
+ * `vehicle` est `.optional()` parce que la clé est **absente** — et non `null` —
+ * quand le devis ne décrit pas de véhicule. Les devis maritimes et aériens
+ * existants continuent donc de parser sans modification.
+ *
+ * Le schéma parent reste `.strict()` : `vehicle` y est ajouté explicitement,
+ * jamais au moyen d'un `passthrough()` qui ouvrirait la porte à tout le reste.
+ */
+export const portalQuoteDetailSchema = portalQuoteSchema
+  .extend({ vehicle: portalVehicleSchema.optional() })
+  .strict();
+
+export type PortalQuoteDetail = z.infer<typeof portalQuoteDetailSchema>;
+
 // ─── Documents ───────────────────────────────────────────────────────
 
 export const portalDocumentSchema = z
@@ -233,6 +311,11 @@ export const portalShipmentDetailSchema = portalShipmentSchema
   .extend({
     packages: z.array(portalShipmentPackageSchema),
     documents: z.array(portalDocumentSchema),
+    // `.optional()` et non `.nullable()` : mesuré, la clé est ABSENTE quand
+    // l'expédition ne transporte pas de véhicule, elle n'arrive pas à `null`.
+    // Les expéditions maritimes et aériennes historiques continuent donc de
+    // parser sans changement.
+    vehicle: portalVehicleSchema.optional(),
   })
   .strict();
 

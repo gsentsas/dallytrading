@@ -537,6 +537,23 @@ export class DallyApiAdapter implements OdooGateway {
       vehicle_make: input.vehicleMake ?? '',
       vehicle_model: input.vehicleModel ?? '',
       vehicle_year: input.vehicleYear ?? '',
+      vehicle_vin: input.vehicleVin ?? '',
+      vehicle_registration: input.vehicleRegistration ?? '',
+      vehicle_color: input.vehicleColor ?? '',
+      vehicle_category: input.vehicleCategory ?? '',
+      vehicle_condition: input.vehicleCondition ?? '',
+      vehicle_fuel: input.vehicleFuel ?? '',
+      vehicle_key_count:
+        input.vehicleKeyCount === undefined ? '' : String(input.vehicleKeyCount),
+      vehicle_transport_mode: input.vehicleTransportMode ?? '',
+      // Les booléens partent en chaîne : le point d'entrée public normalise
+      // lui-même « true »/« 1 »/« on ». Envoyer un booléen JSON marcherait
+      // aussi, mais la chaîne traverse identiquement un formulaire HTML et un
+      // appel programmatique — un seul comportement à tenir.
+      vehicle_pickup_requested: input.vehiclePickupRequested ? 'true' : '',
+      vehicle_pickup_address: input.vehiclePickupAddress ?? '',
+      vehicle_delivery_requested: input.vehicleDeliveryRequested ? 'true' : '',
+      vehicle_delivery_address: input.vehicleDeliveryAddress ?? '',
       budget: input.budget ?? '',
       message: input.message ?? '',
       source_url: input.sourceUrl ?? '',

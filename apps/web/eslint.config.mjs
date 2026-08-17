@@ -10,7 +10,17 @@ import nextTypescript from 'eslint-config-next/typescript';
  */
 const config = [
   {
-    ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts', 'coverage/**'],
+    // `.next.old` est l'ancien build conservé pendant une bascule de
+    // déploiement, à côté du nouveau. C'est du code compilé — le linter y
+    // trouve des milliers de faux problèmes qui noient les vrais, et il n'y a
+    // rien à y corriger puisque le répertoire est jetable par construction.
+    ignores: [
+      '.next/**',
+      '.next.old/**',
+      'node_modules/**',
+      'next-env.d.ts',
+      'coverage/**',
+    ],
   },
 
   ...coreWebVitals,

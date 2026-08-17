@@ -35,6 +35,18 @@ interface FormState {
   vehicleMake: string;
   vehicleModel: string;
   vehicleYear: string;
+  vehicleVin: string;
+  vehicleRegistration: string;
+  vehicleColor: string;
+  vehicleCategory: string;
+  vehicleCondition: string;
+  vehicleFuel: string;
+  vehicleKeyCount: string;
+  vehicleTransportMode: string;
+  vehiclePickupRequested: boolean;
+  vehiclePickupAddress: string;
+  vehicleDeliveryRequested: boolean;
+  vehicleDeliveryAddress: string;
   budget: string;
   firstName: string;
   lastName: string;
@@ -55,6 +67,11 @@ const EMPTY: FormState = {
   goodsDescription: '', quantity: '', weightKg: '', volumeCbm: '',
   packagesCount: '',
   vehicleMake: '', vehicleModel: '', vehicleYear: '',
+  vehicleVin: '', vehicleRegistration: '', vehicleColor: '',
+  vehicleCategory: 'car', vehicleCondition: 'running', vehicleFuel: '',
+  vehicleKeyCount: '1', vehicleTransportMode: '',
+  vehiclePickupRequested: false, vehiclePickupAddress: '',
+  vehicleDeliveryRequested: false, vehicleDeliveryAddress: '',
   budget: '',
   firstName: '', lastName: '', companyName: '',
   email: '', phone: '', whatsapp: '',
@@ -209,6 +226,25 @@ export function QuoteForm({
       vehicleMake: form.vehicleMake || undefined,
       vehicleModel: form.vehicleModel || undefined,
       vehicleYear: form.vehicleYear || undefined,
+      vehicleVin: form.vehicleVin || undefined,
+      vehicleRegistration: form.vehicleRegistration || undefined,
+      vehicleColor: form.vehicleColor || undefined,
+      vehicleCategory: form.vehicleCategory || undefined,
+      vehicleCondition: form.vehicleCondition || undefined,
+      vehicleFuel: form.vehicleFuel || undefined,
+      vehicleKeyCount: form.vehicleKeyCount || undefined,
+      vehicleTransportMode: form.vehicleTransportMode || undefined,
+      // Les adresses ne sont transmises que si la prestation est cochée. Le
+      // schéma les écarte aussi, mais les retenir ici évite qu'une valeur
+      // masquée traverse la validation pour être supprimée ensuite.
+      vehiclePickupRequested: form.vehiclePickupRequested || undefined,
+      vehiclePickupAddress: form.vehiclePickupRequested
+        ? form.vehiclePickupAddress || undefined
+        : undefined,
+      vehicleDeliveryRequested: form.vehicleDeliveryRequested || undefined,
+      vehicleDeliveryAddress: form.vehicleDeliveryRequested
+        ? form.vehicleDeliveryAddress || undefined
+        : undefined,
       budget: form.budget || undefined,
       message: form.message || undefined,
       sourceUrl: typeof window !== 'undefined' ? window.location.href : undefined,
@@ -421,16 +457,92 @@ export function QuoteForm({
         )}
 
         {currentStep === 'vehicle' && (
-          <div className="grid gap-5 sm:grid-cols-3">
-            <Field label="Marque" value={form.vehicleMake}
-                   onChange={(v) => update('vehicleMake', v)}
-                   placeholder="Ex. Toyota" />
-            <Field label="Modèle" value={form.vehicleModel}
-                   onChange={(v) => update('vehicleModel', v)}
-                   placeholder="Ex. Hilux" />
-            <Field label="Année" value={form.vehicleYear}
-                   onChange={(v) => update('vehicleYear', v)}
-                   placeholder="Ex. 2019" />
+          <div className="space-y-5">
+            <div className="grid gap-5 sm:grid-cols-3">
+              <Field label="Marque" value={form.vehicleMake}
+                     onChange={(v) => update('vehicleMake', v)}
+                     placeholder="Ex. Toyota" />
+              <Field label="Modèle" value={form.vehicleModel}
+                     onChange={(v) => update('vehicleModel', v)}
+                     placeholder="Ex. Hilux" />
+              <Field label="Année" value={form.vehicleYear}
+                     onChange={(v) => update('vehicleYear', v)}
+                     placeholder="Ex. 2019" />
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-3">
+              <Field label="Numéro de châssis (VIN)" value={form.vehicleVin}
+                     onChange={(v) => update('vehicleVin', v)}
+                     placeholder="Ex. JT1234567890ABCDE" />
+              <Field label="Immatriculation" value={form.vehicleRegistration}
+                     onChange={(v) => update('vehicleRegistration', v)}
+                     placeholder="Ex. AB-123-CD" />
+              <Field label="Couleur" value={form.vehicleColor}
+                     onChange={(v) => update('vehicleColor', v)}
+                     placeholder="Ex. Blanc" />
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-3">
+              <Choix label="Type de véhicule" value={form.vehicleCategory}
+                     onChange={(v) => update('vehicleCategory', v)}
+                     options={[
+                       ['car', 'Voiture'], ['suv', 'SUV / 4x4'],
+                       ['van', 'Utilitaire'], ['motorcycle', 'Moto'],
+                       ['truck', 'Camion'], ['other', 'Autre'],
+                     ]} />
+              <Choix label="État du véhicule" value={form.vehicleCondition}
+                     onChange={(v) => update('vehicleCondition', v)}
+                     options={[
+                       ['running', 'Roulant'],
+                       ['non_running', 'Non roulant'],
+                     ]} />
+              <Choix label="Motorisation" value={form.vehicleFuel}
+                     onChange={(v) => update('vehicleFuel', v)}
+                     options={[
+                       ['', 'Non précisé'], ['petrol', 'Essence'],
+                       ['diesel', 'Diesel'], ['hybrid', 'Hybride'],
+                       ['electric', 'Électrique'], ['other', 'Autre'],
+                     ]} />
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              {/*
+                Le mode est obligatoire, et c'est le champ le plus important de
+                cette étape : « transport de véhicule » ne dit pas si la voiture
+                part par bateau ou par camion. Sans lui, le serveur refuse — et
+                c'est voulu, deviner produirait une expédition fausse.
+              */}
+              <Choix label="Mode de transport *" value={form.vehicleTransportMode}
+                     onChange={(v) => update('vehicleTransportMode', v)}
+                     options={[
+                       ['', 'À sélectionner'],
+                       ['sea', 'Transport maritime'],
+                       ['road', 'Transport routier'],
+                     ]} />
+              <Field label="Nombre de clés" value={form.vehicleKeyCount}
+                     onChange={(v) => update('vehicleKeyCount', v)}
+                     placeholder="Ex. 2" />
+            </div>
+
+            <div className="space-y-4">
+              <Bascule label="Je souhaite un enlèvement du véhicule"
+                       checked={form.vehiclePickupRequested}
+                       onChange={(v) => update('vehiclePickupRequested', v)} />
+              {form.vehiclePickupRequested && (
+                <Field label="Adresse d'enlèvement" value={form.vehiclePickupAddress}
+                       onChange={(v) => update('vehiclePickupAddress', v)}
+                       placeholder="Adresse complète" />
+              )}
+
+              <Bascule label="Je souhaite une livraison à destination"
+                       checked={form.vehicleDeliveryRequested}
+                       onChange={(v) => update('vehicleDeliveryRequested', v)} />
+              {form.vehicleDeliveryRequested && (
+                <Field label="Adresse de livraison" value={form.vehicleDeliveryAddress}
+                       onChange={(v) => update('vehicleDeliveryAddress', v)}
+                       placeholder="Adresse complète" />
+              )}
+            </div>
           </div>
         )}
 
@@ -567,6 +679,52 @@ export function QuoteForm({
         )}
       </div>
     </div>
+  );
+}
+
+/** Liste déroulante à libellés client — jamais les codes techniques. */
+function Choix({
+  label, value, onChange, options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: ReadonlyArray<readonly [string, string]>;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-medium text-navy-800">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-lg border border-mist-300 px-3 py-2 text-navy-800"
+      >
+        {options.map(([code, libelle]) => (
+          <option key={code} value={code}>{libelle}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** Case à cocher qui gouverne l'affichage d'un champ dépendant. */
+function Bascule({
+  label, checked, onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-3 text-navy-800">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="h-4 w-4 rounded border-mist-300"
+      />
+      <span className="text-sm">{label}</span>
+    </label>
   );
 }
 

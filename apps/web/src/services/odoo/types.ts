@@ -134,6 +134,18 @@ export interface QuoteInput {
   readonly vehicleMake?: string;
   readonly vehicleModel?: string;
   readonly vehicleYear?: string;
+  readonly vehicleVin?: string;
+  readonly vehicleRegistration?: string;
+  readonly vehicleColor?: string;
+  readonly vehicleCategory?: string;
+  readonly vehicleCondition?: string;
+  readonly vehicleFuel?: string;
+  readonly vehicleKeyCount?: number;
+  readonly vehicleTransportMode?: string;
+  readonly vehiclePickupRequested?: boolean;
+  readonly vehiclePickupAddress?: string;
+  readonly vehicleDeliveryRequested?: boolean;
+  readonly vehicleDeliveryAddress?: string;
   readonly budget?: string;
   readonly message?: string;
   readonly sourceUrl?: string;

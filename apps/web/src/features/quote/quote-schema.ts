@@ -36,6 +36,27 @@ const optionalText = (max: number) =>
  * from zero — a shipment that weighs nothing does not exist, so zero must not be
  * inferred from silence.
  */
+/**
+ * VIN facultatif : normalisé, borné, mais **pas** contraint à 17 caractères.
+ *
+ * Le VIN moderne en fait 17. Les véhicules d'avant 1981 et certains marchés
+ * portent des numéros plus courts, et refuser un dossier légitime pour cette
+ * raison coûte plus cher que d'accepter un numéro atypique : le client
+ * abandonne, et personne ne sait pourquoi. On écarte donc ce qui est
+ * manifestement dangereux ou absurde, et on accepte le reste.
+ */
+const optionalVin = () =>
+  z
+    .string()
+    .trim()
+    .transform((value) => value.toUpperCase())
+    .refine((value) => value === '' || /^[A-Z0-9-]{5,32}$/.test(value), {
+      message:
+        'Le numéro de châssis doit comporter 5 à 32 lettres, chiffres ou tirets',
+    })
+    .transform((value) => (value === '' ? undefined : value))
+    .optional();
+
 const optionalNumber = (max: number) =>
   z
     .union([z.string(), z.number()])
@@ -142,9 +163,32 @@ export const quoteRequestSchema = z
     volumeCbm: optionalNumber(100_000),
     packagesCount: optionalNumber(100_000),
 
+    // ── Véhicule transporté ──
+    //
+    // Le service commercial « transport de véhicule » ne dit pas comment la
+    // voiture voyage : Paris → Dakar part par bateau, Dakar → Bamako par
+    // camion. `vehicleTransportMode` porte donc le mode physique, et il est
+    // exigé pour ce service — sans lui, le serveur refuse en 422, et c'est
+    // voulu : deviner produirait une expédition fausse.
     vehicleMake: optionalText(100),
     vehicleModel: optionalText(100),
     vehicleYear: optionalText(10),
+    vehicleVin: optionalVin(),
+    vehicleRegistration: optionalText(32),
+    vehicleColor: optionalText(32),
+    vehicleCategory: z
+      .enum(['car', 'suv', 'van', 'motorcycle', 'truck', 'other'])
+      .optional(),
+    vehicleCondition: z.enum(['running', 'non_running']).optional(),
+    vehicleFuel: z
+      .enum(['petrol', 'diesel', 'hybrid', 'electric', 'other'])
+      .optional(),
+    vehicleKeyCount: optionalNumber(10),
+    vehicleTransportMode: z.enum(['sea', 'road']).optional(),
+    vehiclePickupRequested: z.boolean().optional(),
+    vehiclePickupAddress: optionalText(500),
+    vehicleDeliveryRequested: z.boolean().optional(),
+    vehicleDeliveryAddress: optionalText(500),
 
     budget: optionalText(100),
     message: optionalText(20_000),
@@ -244,6 +288,39 @@ export function toQuoteInput(data: QuoteRequestData): QuoteInput {
     ...(data.vehicleMake !== undefined && { vehicleMake: data.vehicleMake }),
     ...(data.vehicleModel !== undefined && { vehicleModel: data.vehicleModel }),
     ...(data.vehicleYear !== undefined && { vehicleYear: data.vehicleYear }),
+    ...(data.vehicleVin !== undefined && { vehicleVin: data.vehicleVin }),
+    ...(data.vehicleRegistration !== undefined && {
+      vehicleRegistration: data.vehicleRegistration,
+    }),
+    ...(data.vehicleColor !== undefined && { vehicleColor: data.vehicleColor }),
+    ...(data.vehicleCategory !== undefined && {
+      vehicleCategory: data.vehicleCategory,
+    }),
+    ...(data.vehicleCondition !== undefined && {
+      vehicleCondition: data.vehicleCondition,
+    }),
+    ...(data.vehicleFuel !== undefined && { vehicleFuel: data.vehicleFuel }),
+    ...(data.vehicleKeyCount !== undefined && {
+      vehicleKeyCount: data.vehicleKeyCount,
+    }),
+    ...(data.vehicleTransportMode !== undefined && {
+      vehicleTransportMode: data.vehicleTransportMode,
+    }),
+    // Les adresses ne partent QUE si la prestation est demandée. Un client qui
+    // coche, saisit, puis décoche ne doit pas laisser derrière lui une adresse
+    // fantôme que l'exploitation croirait valide.
+    ...(data.vehiclePickupRequested === true && {
+      vehiclePickupRequested: true,
+      ...(data.vehiclePickupAddress !== undefined && {
+        vehiclePickupAddress: data.vehiclePickupAddress,
+      }),
+    }),
+    ...(data.vehicleDeliveryRequested === true && {
+      vehicleDeliveryRequested: true,
+      ...(data.vehicleDeliveryAddress !== undefined && {
+        vehicleDeliveryAddress: data.vehicleDeliveryAddress,
+      }),
+    }),
     ...(data.budget !== undefined && { budget: data.budget }),
     ...(data.message !== undefined && { message: data.message }),
     ...(data.sourceUrl !== undefined && { sourceUrl: data.sourceUrl }),

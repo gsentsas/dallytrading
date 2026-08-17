@@ -13,9 +13,23 @@ D'où la règle unique de ce fichier : **écrire seulement ce qui est vide.**
 
 ## Ce qu'il ne fait jamais
 
+* **sélectionner le tarif de la boutique** — même celui qu'il vient de créer.
+  Sélectionner, c'est ouvrir la tarification, et un déploiement technique ne prend
+  pas cette décision ;
 * publier un produit — la vitrine reste fermée jusqu'à décision explicite ;
 * créer une règle de prix — un montant inventé est pire qu'un montant absent ;
 * créer une clé d'API — elle porte un secret, qui n'a rien à faire dans du code.
+
+## L'ordre d'ouverture, quand le propriétaire le décidera
+
+1. créer une règle de prix explicite ;
+2. vérifier le prix calculé par Odoo ;
+3. sélectionner « Boutique DallyTrading » dans les réglages ;
+4. publier un produit pilote.
+
+Dans cet ordre. Sélectionner avant d'avoir une règle ouvrirait une boutique dont
+aucun produit n'est vendable ; publier avant de vérifier le prix exposerait un
+montant que personne n'a relu.
 """
 
 import logging
@@ -34,7 +48,7 @@ def post_init_hook(env):
     """Amorce le tarif boutique sans jamais écraser une décision existante."""
     activer_devise_xof(env)
     regler_devise_du_tarif(env)
-    _selectionner_tarif(env)
+    _constater_selection(env)
     _verifier_aucune_publication(env)
 
 
@@ -109,32 +123,44 @@ def regler_devise_du_tarif(env):
     )
 
 
-def _selectionner_tarif(env):
-    """Sélectionne le tarif boutique **seulement s'il n'y en a pas déjà un**.
+def _constater_selection(env):
+    """Constate l'état de la sélection du tarif. **N'en choisit jamais un.**
 
-    Le paramètre existant l'emporte toujours, même s'il désigne un autre tarif :
-    quelqu'un l'a choisi, et ce n'est pas au code de revenir dessus.
+    ## Pourquoi le code ne sélectionne pas, même le tarif qu'il vient de créer
+
+    Sélectionner un tarif, c'est ouvrir la tarification : à partir de cet instant
+    le catalogue cesse de répondre « boutique en préparation » et se met à servir
+    des prix. C'est une décision commerciale, et un déploiement technique ne doit
+    pas la prendre — surtout pas en silence, et surtout pas au premier `-u`.
+
+    Une version précédente sélectionnait automatiquement le tarif créé par le
+    module. C'était commode et faux : la boutique se serait ouverte d'elle-même au
+    déploiement, avec un tarif sans règle, donc avec des produits invendables et un
+    écran qui ne dirait plus la vérité sur son état.
+
+    Le code crée donc l'outil et laisse la décision. Ce qu'il fait ici est
+    uniquement écrire dans le journal ce qui manque encore.
+
+    Une sélection existante n'est jamais touchée non plus : quelqu'un l'a faite.
     """
     parametre = env["ir.config_parameter"].sudo()
     actuel = (parametre.get_param(CLE_TARIF) or "").strip()
+    tarif = _tarif(env)
+
     if actuel:
         _logger.info(
-            "Boutique : un tarif est deja selectionne (%s=%s), inchange.",
+            "Boutique : un tarif est deja selectionne (%s=%s). Inchange.",
             CLE_TARIF, actuel,
         )
         return
-    tarif = _tarif(env)
-    if not tarif:
-        _logger.warning(
-            "Boutique : tarif de reference introuvable, %s reste vide. "
-            "La boutique restera fermee.", CLE_TARIF,
-        )
-        return
-    parametre.set_param(CLE_TARIF, str(tarif.id))
+
     _logger.info(
-        "Boutique : tarif « %s » selectionne (%s=%s). Aucune regle de prix n'est "
-        "definie : aucun produit ne sera vendable avant qu'un prix ne soit decide.",
-        tarif.display_name, CLE_TARIF, tarif.id,
+        "Boutique : AUCUN tarif selectionne — la boutique reste fermee, et c'est "
+        "l'etat attendu. Le tarif « %s » existe et ne porte aucune regle de prix. "
+        "Pour ouvrir, dans l'ordre : (1) creer une regle de prix explicite, "
+        "(2) verifier le prix calcule par Odoo, (3) selectionner ce tarif dans "
+        "%s, (4) publier un produit pilote.",
+        tarif.display_name if tarif else "(introuvable)", CLE_TARIF,
     )
 
 

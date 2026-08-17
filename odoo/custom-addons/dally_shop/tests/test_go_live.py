@@ -229,12 +229,47 @@ class TestAmorcage(TransactionCase):
         post_init_hook(self.env)
         self.assertEqual(self.parametre.get_param(CLE_TARIF), str(autre.id))
 
-    def test_un_parametre_vide_est_complete(self):
+    def test_lamorcage_ne_selectionne_jamais_le_tarif(self):
+        """Fail-closed : créer l'outil, laisser la décision.
+
+        Une version précédente sélectionnait automatiquement le tarif qu'elle
+        venait de créer. C'était commode et faux : la boutique se serait ouverte
+        d'elle-même au déploiement, avec un tarif sans règle — donc des produits
+        invendables et un écran qui ne dirait plus la vérité sur son état.
+
+        Sélectionner, c'est ouvrir la tarification. Un déploiement technique ne
+        prend pas cette décision.
+        """
         self.parametre.set_param(CLE_TARIF, "")
         post_init_hook(self.env)
-        self.assertEqual(
-            self.parametre.get_param(CLE_TARIF), str(self.tarif_module.id)
+        self.assertFalse(
+            (self.parametre.get_param(CLE_TARIF) or "").strip(),
+            "l'amorçage ne doit jamais sélectionner de tarif",
         )
+
+    def test_le_parametre_absent_reste_absent(self):
+        """L'autre forme du vide : la ligne n'existe pas du tout.
+
+        C'est l'état d'une base neuve, et il ne doit pas non plus être complété.
+        """
+        self.env["ir.config_parameter"].sudo().search(
+            [("key", "=", CLE_TARIF)]
+        ).unlink()
+        post_init_hook(self.env)
+        self.assertFalse(
+            (self.parametre.get_param(CLE_TARIF) or "").strip()
+        )
+
+    def test_la_boutique_reste_donc_fermee_apres_amorcage(self):
+        """Conséquence observable, et non déduite du code du hook.
+
+        Après amorçage sans sélection, résoudre le tarif lève l'exception qui fait
+        afficher « Boutique en préparation ».
+        """
+        self.parametre.set_param(CLE_TARIF, "")
+        post_init_hook(self.env)
+        with self.assertRaises(ShopPricelistMissing):
+            self.env["product.template"]._dally_shop_pricelist()
 
     def test_lamorcage_ne_publie_aucun_produit(self):
         avant = self.env["product.template"].search_count([("dally_published", "=", True)])
@@ -292,3 +327,167 @@ class TestAmorcage(TransactionCase):
             ("model", "=", "dally.api.key"),
         ])
         self.assertFalse(cles_du_module)
+
+
+@tagged("post_install", "-at_install", "dally_shop")
+class TestAdoptionUtilisateurs(TransactionCase):
+    """Le script de pré-migration qui a évité de mettre Odoo à terre.
+
+    ## Ce que la mesure a montré
+
+    La production porte déjà les deux utilisateurs d'intégration, créés à la main
+    pendant la mise en service, donc sans xmlid. Reproduit à l'identique sur la
+    pile de développement — utilisateurs présents, xmlid retirés, module ramené en
+    19.0.1.0.0 — la montée de version échouait ainsi :
+
+        ERROR odoo.registry: Failed to load registry
+        CRITICAL Failed to initialize database
+        You can not have two users with the same login!
+        code de sortie 255
+
+    Ce n'était donc pas un doublon discret mais l'échec du chargement du registre
+    entier. Un `-u dally_shop` en production aurait cassé Odoo.
+
+    Ces tests portent sur la liste d'identités du script et sur l'état obtenu. Le
+    script lui-même s'exécute en SQL avant le chargement du module : il est
+    éprouvé par la montée de version réelle, rejouée sur une base reproduisant
+    l'état de production.
+    """
+
+    def test_la_liste_du_script_concorde_avec_les_donnees_du_module(self):
+        """Un ajout d'identité ne doit pas laisser le script en arrière.
+
+        Le script de migration duplique la correspondance xmlid → login, faute de
+        pouvoir lire les données du module avant son chargement. Ce test est le
+        garde-fou de cette duplication : sans lui, une troisième identité ajoutée
+        au XML provoquerait exactement l'échec de registre qu'on vient de fermer.
+        """
+        import importlib.util
+        import pathlib
+
+        chemin = (
+            pathlib.Path(__file__).parent.parent
+            / "migrations" / "19.0.1.1.0" / "pre-adopt-users.py"
+        )
+        spec = importlib.util.spec_from_file_location("pre_adopt_users", chemin)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        attendu = {
+            ("user_dally_shop_read", "dally_api_shop_read"),
+            ("user_dally_shop_checkout", "dally_api_shop_checkout"),
+        }
+        self.assertEqual(set(module.IDENTITES), attendu)
+
+        # Et la correspondance décrit bien les enregistrements réels.
+        for nom_xmlid, login in module.IDENTITES:
+            utilisateur = self.env.ref(f"dally_shop.{nom_xmlid}")
+            self.assertEqual(utilisateur.login, login)
+
+    def test_aucun_doublon_de_login(self):
+        for login in ("dally_api_shop_read", "dally_api_shop_checkout"):
+            self.assertEqual(
+                self.env["res.users"].with_context(active_test=False).search_count(
+                    [("login", "=", login)]
+                ),
+                1,
+                f"« {login} » doit exister exactement une fois",
+            )
+
+    def test_les_utilisateurs_nont_pas_de_mot_de_passe(self):
+        for nom_xmlid in ("user_dally_shop_read", "user_dally_shop_checkout"):
+            self.assertFalse(self.env.ref(f"dally_shop.{nom_xmlid}").password)
+
+    def test_le_module_ne_livre_aucune_cle_dapi(self):
+        """Le contrôle porte sur les données du module, pas sur la base.
+
+        Une clé créée à la main par le propriétaire est normale — et le point de
+        l'adoption est précisément qu'elle survive à la montée de version, puisque
+        elle pointe sur l'`id` de l'utilisateur.
+        """
+        self.assertFalse(
+            self.env["ir.model.data"].search([
+                ("module", "=", "dally_shop"),
+                ("model", "=", "dally.api.key"),
+            ])
+        )
+
+
+@tagged("post_install", "-at_install", "dally_shop")
+class TestVisibiliteCatalogue(TransactionCase):
+    """Les quatre conditions de visibilité, chacune éprouvée séparément.
+
+    Un test qui n'en vérifierait qu'une laisserait les trois autres ouvertes, et
+    trois d'entre elles ont déjà été des lacunes réelles : `sale_ok` n'était
+    contrôlé qu'à la commande, et la règle de tarif ne l'était pas du tout.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.tarif = cls.env["product.pricelist"].create({
+            "name": "Essai — visibilite",
+            "item_ids": [(0, 0, {
+                "compute_price": "fixed", "fixed_price": 55000.0,
+                "applied_on": "3_global",
+            })],
+        })
+        cls.env["ir.config_parameter"].sudo().set_param(CLE_TARIF, str(cls.tarif.id))
+
+    def _produit(self, slug, **surcharges):
+        valeurs = {
+            "name": f"Visibilite {slug}",
+            "type": "consu",
+            "list_price": PRIX_LISTE,
+            "dally_shop_slug": slug,
+            "dally_published": True,
+            "sale_ok": True,
+        }
+        valeurs.update(surcharges)
+        return self.env["product.template"].create(valeurs)
+
+    def _visible(self, produit):
+        Produit = self.env["product.template"]
+        catalogue = Produit._dally_shop_search()
+        fiche = Produit._dally_shop_find(produit.dally_shop_slug)
+        return produit in catalogue, bool(fiche)
+
+    def test_les_quatre_conditions_reunies_rendent_le_produit_visible(self):
+        # Contrôle positif : sans lui, chaque assertion d'invisibilité serait
+        # satisfaite par un catalogue vide.
+        produit = self._produit("essai-vis-complet")
+        self.assertEqual(self._visible(produit), (True, True))
+
+    def test_non_publie_invisible(self):
+        produit = self._produit("essai-vis-non-publie", dally_published=False)
+        self.assertEqual(self._visible(produit), (False, False))
+
+    def test_archive_invisible(self):
+        produit = self._produit("essai-vis-archive")
+        produit.active = False
+        self.assertEqual(self._visible(produit), (False, False))
+
+    def test_sale_ok_faux_invisible(self):
+        """`sale_ok = False` retire l'article de la vitrine, pas seulement de la
+        commande.
+
+        Il n'était vérifié qu'à la commande : le catalogue pouvait donc lister un
+        article que la commande refuserait ensuite — le client choisit, puis on lui
+        dit non.
+        """
+        produit = self._produit("essai-vis-non-vendable", sale_ok=False)
+        self.assertEqual(self._visible(produit), (False, False))
+
+    def test_sans_regle_de_tarif_invisible(self):
+        """La quatrième condition, invisible dans le domaine SQL.
+
+        Elle ne s'exprime pas comme un champ : il faut demander à Odoo si une règle
+        s'applique. Sans elle, le produit serait servi au prix de liste.
+        """
+        vide = self.env["product.pricelist"].create({"name": "Essai — sans regle"})
+        self.env["ir.config_parameter"].sudo().set_param(CLE_TARIF, str(vide.id))
+        produit = self._produit("essai-vis-sans-regle")
+        self.assertEqual(self._visible(produit), (True, False))
+        # Présent dans la recherche SQL — les trois champs sont bons — mais absent
+        # de la projection et de la fiche : c'est là que la quatrième condition agit.
+        self.assertEqual(produit._dally_shop_projection(), [])

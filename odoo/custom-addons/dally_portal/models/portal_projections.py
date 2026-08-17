@@ -92,6 +92,105 @@ class DallyQuoteRequestPortal(models.Model):
         }
         return {key: payload[key] for key in self.PORTAL_PAYLOAD_KEYS}
 
+    def _dally_portal_detail_payload(self):
+        """La demande, plus le véhicule qu'elle décrit s'il y en a un.
+
+        Le véhicule n'apparaît que dans le DÉTAIL, jamais dans la liste : celle-ci
+        porte le VIN et l'immatriculation de chaque dossier, et les afficher en
+        vrac multiplierait sans raison les endroits où ils circulent.
+        """
+        self.ensure_one()
+        payload = dict(self._dally_portal_payload())
+        vehicule = self._dally_portal_vehicle_payload()
+        if vehicule:
+            payload["vehicle"] = vehicule
+        return payload
+
+    def _dally_portal_vehicle_payload(self):
+        """Projection du véhicule, depuis `dally.freight.vehicle.cargo`.
+
+        La **source est le cargo**, jamais `vehicle_make`/`vehicle_model` du
+        devis. Ces trois-là ne sont qu'un miroir entretenu par le cargo ; les
+        relire comme source métier réintroduirait la seconde vérité que le
+        miroir existe précisément pour éviter.
+
+        `sudo()` après autorisation : c'est le `search` sous l'utilisateur réel,
+        plus haut dans la chaîne, qui a établi que ce dossier lui appartient.
+        Lire la marchandise de SON dossier en est la conséquence serveur.
+        """
+        self.ensure_one()
+        if "dally.freight.vehicle.cargo" not in self.env:
+            return None
+        cargo = self.env["dally.freight.vehicle.cargo"].sudo().search(
+            [("quote_request_id", "=", self.id)], limit=1
+        )
+        return cargo._dally_portal_vehicle_projection() if cargo else None
+
+
+class DallyFreightVehicleCargoPortal(models.Model):
+    """Ce qu'un client voit de son propre véhicule.
+
+    Liste blanche explicite, comme partout ailleurs : les champs internes
+    (`internal_notes`, `purchase_price`) portent déjà `groups=` et ne sont pas
+    chargés pour un utilisateur portail, mais cette projection est appelée en
+    `sudo()` — la protection par groupes ne s'y applique donc pas, et c'est
+    l'énumération ci-dessous qui décide seule.
+
+    ## Le VIN complet, et pourquoi
+
+    Le VIN sort en entier. C'est une décision produit assumée : ce détail est
+    privé et réservé au propriétaire authentifié, et c'est précisément le numéro
+    qui lui permet d'identifier son véhicule sans ambiguïté — sur un connaissement,
+    auprès d'une douane, dans un litige. Le masquer ici le priverait de la seule
+    donnée qui distingue deux voitures identiques.
+
+    Il reste absent des listes, du suivi public et des journaux.
+    """
+
+    _name = "dally.freight.vehicle.cargo"
+    _inherit = "dally.freight.vehicle.cargo"
+
+    def _dally_portal_vehicle_projection(self):
+        self.ensure_one()
+
+        def libelle(champ):
+            """Libellé traduit d'une sélection, jamais son code.
+
+            Le client lit « Maritime », pas `sea` : notre vocabulaire interne
+            n'a aucune raison de traverser jusqu'à lui.
+            """
+            valeur = self[champ]
+            if not valeur:
+                return None
+            return dict(
+                self._fields[champ]._description_selection(self.env)
+            ).get(valeur, valeur)
+
+        return {
+            "make": self.make or None,
+            "model": self.model or None,
+            "year": self.year or None,
+            "vin": self.vin or None,
+            "registration": self.registration or None,
+            "color": self.color or None,
+            "category": self.category or None,
+            "categoryLabel": libelle("category"),
+            "condition": self.condition or None,
+            "conditionLabel": libelle("condition"),
+            "fuelType": self.fuel or None,
+            "fuelTypeLabel": libelle("fuel"),
+            "keyCount": self.key_count or 0,
+            "transportMode": self.transport_mode or None,
+            "transportModeLabel": libelle("transport_mode"),
+            "pickupRequested": bool(self.pickup_requested),
+            # Adresse projetée seulement si la prestation est demandée : une
+            # adresse résiduelle affichée au client lui ferait croire à un
+            # enlèvement qui n'aura pas lieu.
+            "pickupAddress": (self.pickup_address or None) if self.pickup_requested else None,
+            "deliveryRequested": bool(self.delivery_requested),
+            "deliveryAddress": (self.delivery_address or None) if self.delivery_requested else None,
+        }
+
 
 class DallySourcingRequestPortal(models.Model):
     # `_name` EST OBLIGATOIRE ici, et sa valeur doit répéter le modèle étendu.
@@ -309,7 +408,30 @@ class DallyShipmentPortal(models.Model):
         payload["documents"] = [
             document._dally_portal_payload() for document in documents
         ]
+
+        # Véhicule transporté, s'il y en a un. Même source que sur le devis :
+        # `dally.freight.vehicle.cargo`, jamais les champs miroir.
+        vehicule = self._dally_portal_shipment_vehicle()
+        if vehicule:
+            payload["vehicle"] = vehicule
+
         return payload
+
+    def _dally_portal_shipment_vehicle(self):
+        """Véhicule rattaché à cette expédition, s'il y en a un.
+
+        Le rattachement est posé par le pont au provisionnement. On repart de
+        lui plutôt que du devis : une expédition peut exister sans que son devis
+        soit encore accessible, et c'est le véhicule réellement transporté qui
+        intéresse le client à ce stade.
+        """
+        self.ensure_one()
+        if "dally.freight.vehicle.cargo" not in self.env:
+            return None
+        cargo = self.env["dally.freight.vehicle.cargo"].sudo().search(
+            [("shipment_id", "=", self.id)], limit=1
+        )
+        return cargo._dally_portal_vehicle_projection() if cargo else None
 
 
 class DallyShipmentPackagePortal(models.Model):

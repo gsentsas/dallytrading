@@ -29,7 +29,7 @@ restent l'autorité sur le nom, le prix et le stock.
     "category": "Sales/DallyTrading",
     "version": "19.0.1.0.0",
     "license": "LGPL-3",
-    "depends": ["dally_core", "product", "sale", "stock"],
+    "depends": ["dally_core", "dally_portal", "product", "sale", "stock"],
     "data": [
         "security/ir.model.access.csv",
         "views/dally_shop_category_views.xml",

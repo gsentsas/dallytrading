@@ -26,6 +26,7 @@ import { LogoutButton } from './LogoutButton';
 const LINKS = [
   { href: '/espace-client', label: 'Tableau de bord' },
   { href: '/espace-client/devis', label: 'Devis' },
+  { href: '/espace-client/commandes', label: 'Commandes' },
   { href: '/espace-client/sourcing', label: 'Sourcing' },
   { href: '/espace-client/trading', label: 'Trading' },
   { href: '/espace-client/expeditions', label: 'Expéditions' },

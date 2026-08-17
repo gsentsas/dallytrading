@@ -112,6 +112,33 @@ print(f"VERIFY shop invites_avec_compte={len(avec_compte)}")
 if avec_compte:
     echecs.append(f"{len(avec_compte)} contact(s) invite(s) portent un compte")
 
+# ── Le portail ne montre à personne les commandes d'un autre ─────────────
+#
+# Vérifié en base, sous l'identité de chaque compte portail, et non par ce que
+# l'écran affiche : l'interface est paginée et filtrée, et compter des lignes à
+# l'écran ne prouve rien sur ce que la requête aurait rendu.
+# `group_ids` et non `groups_id` : le champ a été renommé en Odoo 19, et
+# l'ancien nom lève une erreur de domaine plutôt que de rendre zéro ligne.
+comptes = env["res.users"].search([
+    ("share", "=", True),
+    ("group_ids", "in", env.ref("base.group_portal").ids),
+])
+Commande = env["sale.order"]
+for compte in comptes:
+    env.invalidate_all()
+    vues = Commande.with_user(compte).search(Commande._dally_shop_portal_domain())
+    etrangeres = vues.filtered(
+        lambda c: c.partner_id.commercial_partner_id
+        != compte.partner_id.commercial_partner_id
+    )
+    invitees = vues.filtered("dally_shop_guest")
+    print(f"VERIFY shop portail {compte.login} vues={len(vues)} "
+          f"etrangeres={len(etrangeres)} invitees={len(invitees)}")
+    if etrangeres:
+        echecs.append(f"{compte.login} voit {len(etrangeres)} commande(s) d'un autre")
+    if invitees:
+        echecs.append(f"{compte.login} voit {len(invitees)} commande(s) invitee(s)")
+
 if echecs:
     for echec in echecs:
         print(f"VERIFY_FAIL shop : {echec}")

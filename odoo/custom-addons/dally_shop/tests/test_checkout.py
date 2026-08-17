@@ -276,12 +276,16 @@ class TestCheckoutBoutique(TransactionCase):
         client validerait un total qu'il n'a pas vu, pour un contenu qu'il n'a pas
         choisi.
         """
+        cart = str(uuid.uuid4())
         with self.assertRaises(ValueError):
             self.env["product.template"]._dally_shop_resolve_lines(
                 [("essai-co-vendable", 1), ("essai-co-non-publie", 1)]
             )
+        # Le contrôle porte sur CE panier et non sur toute la base : une base de
+        # développement porte les commandes des sondes précédentes, et chercher
+        # partout faisait échouer le test pour une raison sans rapport.
         self.assertFalse(
-            self.env["sale.order"].search([("dally_shop_order", "=", True)])
+            self.env["sale.order"].search([("dally_shop_cart_uuid", "=", cart)])
         )
 
     def test_reference_inconnue_refusee(self):

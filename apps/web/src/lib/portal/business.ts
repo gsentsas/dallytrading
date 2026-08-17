@@ -54,6 +54,12 @@ import {
   type PortalTrade,
   type PortalTradeDetail,
 } from './dto';
+import {
+  shopOrderDetailEnvelopeSchema,
+  shopOrderListSchema,
+  type ShopOrderDetail,
+  type ShopOrderList,
+} from '@/lib/shop/order-dto';
 
 const gateway = new PortalOdooGateway();
 
@@ -300,4 +306,44 @@ export async function downloadDocument(
   return gateway.download(
     `/documents/${id}/download`, session.odooSessionId, correlationId,
   );
+}
+
+// ─── Commandes boutique ──────────────────────────────────────────────
+
+/**
+ * Les commandes boutique du client connecté.
+ *
+ * Passe par `fetchPortal`, donc par la session réelle du client : aucune clé
+ * d'API boutique n'intervient pour lire des données privées. Les deux clés
+ * `shop:read` et `shop:checkout` servent la vitrine et la création de commande ;
+ * elles n'ont rien à faire dans une lecture cloisonnée par client.
+ *
+ * Pas de pagination pour l'instant : la route Odoo borne à 50, et une commande
+ * boutique de MVP se compte en dizaines. Ajouter une pagination maintenant
+ * signifierait la tester sans jamais l'exercer.
+ */
+export function listShopOrders(
+  correlationId: string,
+): Promise<ShopOrderList> {
+  return fetchPortal('/shop/orders', shopOrderListSchema, correlationId);
+}
+
+/**
+ * Une commande boutique, ou `not_found`.
+ *
+ * La référence est encodée : elle vient de l'URL, donc de l'utilisateur. Odoo
+ * répond le même 404 pour une commande d'un autre client, une commande invité,
+ * une commande non-boutique et une référence inventée — `loadPortal` conserve
+ * cette indistinction.
+ */
+export async function getShopOrder(
+  reference: string,
+  correlationId: string,
+): Promise<ShopOrderDetail> {
+  const enveloppe = await fetchPortal(
+    `/shop/orders/${encodeReference(reference)}`,
+    shopOrderDetailEnvelopeSchema,
+    correlationId,
+  );
+  return enveloppe.order;
 }

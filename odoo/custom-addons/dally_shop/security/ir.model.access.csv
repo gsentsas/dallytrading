@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_shop_category_readonly,dally.shop.category lecture,model_dally_shop_category,dally_core.group_dally_readonly,1,0,0,0
+access_shop_category_commercial,dally.shop.category commercial,model_dally_shop_category,dally_core.group_dally_commercial,1,1,1,0
+access_shop_category_manager,dally.shop.category responsable,model_dally_shop_category,dally_core.group_dally_manager,1,1,1,1

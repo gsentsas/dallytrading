@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_dally_shop"
+              name="Boutique"
+              parent="dally_core.menu_dally_root"
+              sequence="45"/>
+
+    <menuitem id="menu_dally_shop_products"
+              name="Produits"
+              parent="menu_dally_shop"
+              action="dally_shop_product_action"
+              sequence="10"/>
+
+    <menuitem id="menu_dally_shop_categories"
+              name="Catégories"
+              parent="menu_dally_shop"
+              action="dally_shop_category_action"
+              sequence="20"/>
+
+</odoo>

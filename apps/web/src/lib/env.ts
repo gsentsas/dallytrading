@@ -103,6 +103,39 @@ const serverEnvSchema = z.object({
       32,
       'PORTAL_SESSION_SECRET must be at least 32 characters (openssl rand -base64 48)',
     ),
+
+  /**
+   * Server-only. Seals the shop cart cookie (AES-256-GCM).
+   *
+   * Deliberately **not** PORTAL_SESSION_SECRET, and this is the whole point of
+   * the field existing: the two cookies protect things of very different value.
+   * The portal cookie carries an authenticated Odoo session; the cart cookie
+   * carries an anonymous list of product references. They also have opposite
+   * rotation needs — a cart is disposable and can be rotated freely, whereas
+   * rotating the portal secret logs every customer out.
+   *
+   * Sharing one secret would tie those two decisions together, and the direction
+   * it would fail in is the bad one: nobody rotates a secret that also signs
+   * everyone out, so the cart secret would end up never rotating either.
+   *
+   * Generate with: openssl rand -base64 48
+   */
+  SHOP_CART_SECRET: z
+    .string()
+    .min(
+      32,
+      'SHOP_CART_SECRET must be at least 32 characters (openssl rand -base64 48)',
+    ),
+
+  /**
+   * Optional key carrying `shop:read`.
+   *
+   * Same reasoning as the other capability-scoped keys: the storefront is the
+   * most exposed surface of the site, and a key that only renders a public
+   * catalogue should not be able to write a lead or read a customer. Falls back
+   * to ODOO_API_KEY so an instance that has not split its keys still works.
+   */
+  ODOO_API_KEY_SHOP: z.string().min(24).optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

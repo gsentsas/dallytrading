@@ -13,6 +13,7 @@ function envForTests() {
   process.env.ODOO_API_KEY = 'x'.repeat(32);
   process.env.ODOO_TIMEOUT_MS = '2000';
   process.env.PORTAL_SESSION_SECRET = 's'.repeat(48);
+  process.env.SHOP_CART_SECRET = 'shop-cart-secret-for-tests-'.padEnd(48, 'x');
   resetServerEnvCache();
 }
 

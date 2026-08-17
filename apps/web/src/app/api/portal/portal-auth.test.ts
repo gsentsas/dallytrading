@@ -94,6 +94,10 @@ beforeEach(() => {
   process.env.ODOO_API_KEY = 'k'.repeat(32);
   process.env.ODOO_TIMEOUT_MS = '2000';
   process.env.PORTAL_SESSION_SECRET = SECRET;
+  // La boutique impose son propre secret, et l'environnement est validé en
+  // bloc : sans lui, `getServerEnv()` refuse de rendre quoi que ce soit, y
+  // compris à un test qui n'a rien à voir avec la boutique.
+  process.env.SHOP_CART_SECRET = 'shop-cart-secret-for-tests-'.padEnd(48, 'x');
   resetServerEnvCache();
   resetRateLimits();
   jar = new CookieJar();

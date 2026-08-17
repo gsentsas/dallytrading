@@ -27,6 +27,7 @@ const MAIN_NAV = [
   { href: '/', label: 'Accueil' },
   { href: '/a-propos', label: 'À propos' },
   { href: '/activites', label: 'Nos activités', hasSubmenu: true },
+  { href: '/boutique', label: 'Boutique' },
   { href: '/tracking', label: 'Suivi' },
   { href: '/contact', label: 'Contact' },
 ] as const;

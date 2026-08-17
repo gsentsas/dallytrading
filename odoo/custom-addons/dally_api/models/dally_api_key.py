@@ -30,6 +30,13 @@ AVAILABLE_SCOPES = [
     "shipments:read",
     "tracking:read",
     "customers:read",
+    # Shop scopes are split read/write for a reason that is not symmetry: the
+    # catalogue is public information, while placing an order writes a
+    # ``sale.order``. A key that only renders the storefront has no business
+    # holding the second one, and the storefront is exactly the surface most
+    # exposed to the internet.
+    "shop:read",
+    "shop:checkout",
 ]
 
 

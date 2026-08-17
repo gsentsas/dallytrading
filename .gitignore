@@ -63,3 +63,7 @@ rollback/
 .deploy-build/
 apps/web/.next.old/
 apps/web/.next.previous/
+# Copie de vérification : `next build` doit s'exécuter ailleurs que dans le
+# répertoire servi par systemd, et Turbopack refuse un `node_modules` en lien
+# symbolique hors racine projet — d'où une copie sur le même système de fichiers.
+.shop-build/

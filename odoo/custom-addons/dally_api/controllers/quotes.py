@@ -45,9 +45,26 @@ QUOTE_INPUT_FIELDS = (
     "weight_kg",
     "volume_cbm",
     "packages_count",
+    # ── Véhicule transporté ──
+    #
+    # Préfixés `vehicle_` et déclarés un par un, comme le reste : la liste
+    # blanche est la seule barrière contre l'affectation en masse, et un objet
+    # imbriqué la contournerait en faisant entrer des clés non inspectées.
     "vehicle_make",
     "vehicle_model",
     "vehicle_year",
+    "vehicle_vin",
+    "vehicle_registration",
+    "vehicle_color",
+    "vehicle_category",
+    "vehicle_condition",
+    "vehicle_fuel",
+    "vehicle_key_count",
+    "vehicle_transport_mode",
+    "vehicle_pickup_requested",
+    "vehicle_pickup_address",
+    "vehicle_delivery_requested",
+    "vehicle_delivery_address",
     "budget",
     "message",
     "source_url",
@@ -66,6 +83,10 @@ MAX_LENGTHS = {
     "origin_city": 100, "destination_city": 100,
     "service_code": 50, "goods_description": 5000, "quantity": 100,
     "vehicle_make": 100, "vehicle_model": 100, "vehicle_year": 10,
+    "vehicle_vin": 32, "vehicle_registration": 32, "vehicle_color": 32,
+    "vehicle_category": 20, "vehicle_condition": 20, "vehicle_fuel": 20,
+    "vehicle_transport_mode": 10,
+    "vehicle_pickup_address": 500, "vehicle_delivery_address": 500,
     "budget": 100, "message": 20000,
     "source_url": 500, "referrer_url": 500,
     "utm_source": 100, "utm_medium": 100, "utm_campaign": 100,
@@ -122,6 +143,16 @@ class DallyQuotesController(DallyApiController):
         self._validate_service_requirements(service, clean)
 
         request = env["dally.quote.request"].dally_create_from_website(clean)
+
+        # Le véhicule est créé dans la MÊME transaction que la demande.
+        #
+        # Une demande de transport de véhicule sans véhicule est un dossier
+        # ininterprétable : impossible d'en déduire le mode physique, donc
+        # impossible de le provisionner. Plutôt que d'enregistrer une demande
+        # que personne ne pourra traiter, on refuse l'ensemble — l'exception
+        # remonte au dispatcher Odoo, qui annule la création de la demande.
+        if service.requires_vehicle:
+            self._create_vehicle_cargo(env, request, clean)
 
         # Only what the website needs back. No database id, and no indication of
         # whether an existing contact was matched — that is internal commercial
@@ -191,6 +222,87 @@ class DallyQuotesController(DallyApiController):
                 clean[key] = clean[key].upper()
 
         return clean
+
+    @staticmethod
+    def _create_vehicle_cargo(env, request, clean):
+        """Crée le véhicule décrit par la demande, ou refuse l'ensemble.
+
+        Le mode physique est **obligatoire** et sans valeur de repli : « transport
+        de véhicule » ne dit pas si la voiture part par bateau ou par camion, et
+        deviner produirait une expédition fausse que personne ne saurait devoir
+        corriger.
+        """
+        from odoo.addons.dally_freight.models.dally_freight_vehicle_cargo import (
+            VEHICLE_CATEGORIES, VEHICLE_CONDITIONS, VEHICLE_FUELS,
+            VEHICLE_TRANSPORT_MODES,
+        )
+
+        manquants = [
+            nom for nom, cle in (
+                ("make", "vehicle_make"),
+                ("model", "vehicle_model"),
+                ("transport mode", "vehicle_transport_mode"),
+            )
+            if not clean.get(cle)
+        ]
+        if manquants:
+            raise DallyApiError(
+                422, "missing_vehicle",
+                _("A vehicle transport request requires: %s.", ", ".join(manquants)),
+            )
+
+        def selection(cle, valeurs, defaut=None):
+            """Refuse toute valeur hors sélection : jamais de repli silencieux."""
+            brut = (clean.get(cle) or "").strip().lower()
+            if not brut:
+                return defaut
+            autorisees = {code for code, _label in valeurs}
+            if brut not in autorisees:
+                raise DallyApiError(
+                    422, "invalid_vehicle_field",
+                    _("Invalid value for '%(field)s': '%(value)s'.",
+                      field=cle, value=brut),
+                )
+            return brut
+
+        def booleen(cle):
+            return str(clean.get(cle) or "").strip().lower() in ("1", "true", "yes", "on")
+
+        pickup = booleen("vehicle_pickup_requested")
+        delivery = booleen("vehicle_delivery_requested")
+
+        cles = clean.get("vehicle_key_count")
+        try:
+            nombre_cles = int(cles) if cles not in (None, "") else 1
+        except (TypeError, ValueError):
+            raise DallyApiError(
+                422, "invalid_vehicle_field",
+                _("Invalid value for 'vehicle_key_count'."),
+            ) from None
+
+        return env["dally.freight.vehicle.cargo"].sudo().create({
+            "quote_request_id": request.id,
+            "make": clean["vehicle_make"],
+            "model": clean["vehicle_model"],
+            "year": clean.get("vehicle_year") or False,
+            "vin": clean.get("vehicle_vin") or False,
+            "registration": clean.get("vehicle_registration") or False,
+            "color": clean.get("vehicle_color") or False,
+            "category": selection("vehicle_category", VEHICLE_CATEGORIES, "car"),
+            "condition": selection("vehicle_condition", VEHICLE_CONDITIONS, "running"),
+            "fuel": selection("vehicle_fuel", VEHICLE_FUELS),
+            "key_count": nombre_cles,
+            "transport_mode": selection(
+                "vehicle_transport_mode", VEHICLE_TRANSPORT_MODES
+            ),
+            # Adresse ignorée si la prestation n'est pas demandée : un client qui
+            # coche, saisit, puis décoche ne doit pas laisser derrière lui une
+            # adresse fantôme que l'exploitation croirait valide.
+            "pickup_requested": pickup,
+            "pickup_address": (clean.get("vehicle_pickup_address") or "") if pickup else False,
+            "delivery_requested": delivery,
+            "delivery_address": (clean.get("vehicle_delivery_address") or "") if delivery else False,
+        })
 
     @staticmethod
     def _validate_service_requirements(service, clean):

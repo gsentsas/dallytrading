@@ -83,6 +83,36 @@ _VIN_ALLOWED = re.compile(r"^[A-Z0-9-]+$")
 _UNSAFE_TEXT = re.compile(r"[\x00-\x1f\x7f<>]")
 
 
+class DallyQuoteRequest(models.Model):
+    """Relation inverse vers le véhicule décrit par la demande."""
+
+    _name = "dally.quote.request"
+    _inherit = "dally.quote.request"
+
+    vehicle_cargo_id = fields.Many2one(
+        comodel_name="dally.freight.vehicle.cargo",
+        string="Véhicule",
+        compute="_compute_vehicle_cargo_id",
+        help="Véhicule décrit par cette demande, pour les services de transport "
+             "de véhicule.",
+    )
+
+    def _compute_vehicle_cargo_id(self):
+        """Calculé plutôt que stocké : une seule clé étrangère, pas deux.
+
+        `dally.freight.vehicle.cargo.quote_request_id` porte déjà la relation,
+        avec un index unique. Stocker l'inverse ajouterait une deuxième écriture
+        à tenir d'accord avec la première — et c'est exactement ce que la
+        contrainte d'unicité rend inutile.
+        """
+        cargos = self.env["dally.freight.vehicle.cargo"].sudo().search(
+            [("quote_request_id", "in", self.ids)]
+        )
+        par_devis = {cargo.quote_request_id.id: cargo for cargo in cargos}
+        for devis in self:
+            devis.vehicle_cargo_id = par_devis.get(devis.id, False)
+
+
 class DallyFreightVehicleCargo(models.Model):
     """Un véhicule confié au transport. Marchandise, jamais moyen de transport."""
 
@@ -321,11 +351,62 @@ class DallyFreightVehicleCargo(models.Model):
     def create(self, vals_list):
         for vals in vals_list:
             self._dally_normalise(vals)
-        return super().create(vals_list)
+        cargos = super().create(vals_list)
+        cargos._dally_mirror_to_quote()
+        return cargos
 
     def write(self, vals):
         self._dally_normalise(vals)
-        return super().write(vals)
+        resultat = super().write(vals)
+        if {"make", "model", "year", "quote_request_id"} & set(vals):
+            self._dally_mirror_to_quote()
+        return resultat
+
+    def _dally_mirror_to_quote(self):
+        """Recopie marque, modèle et année sur la demande de devis.
+
+        ## Pourquoi un miroir plutôt qu'une suppression
+
+        `dally.quote.request` porte `vehicle_make`, `vehicle_model` et
+        `vehicle_year` depuis l'origine. Trois consommateurs en dépendent : le
+        formulaire back-office, le résumé calculé du dossier, et l'API publique.
+        Les retirer casserait ces trois-là pour un gain nul.
+
+        Mais deux sources de vérité qui décrivent la même voiture finissent
+        toujours par diverger — quelqu'un corrige d'un côté, pas de l'autre, et
+        plus personne ne sait laquelle croire.
+
+        Le miroir est donc **à sens unique et sans exception** : le cargo écrit
+        vers le devis, jamais l'inverse. Le provisionnement, lui, ne lit que le
+        cargo. `_check_pas_de_divergence` interdit qu'un écart s'installe.
+        """
+        for cargo in self:
+            devis = cargo.quote_request_id
+            if not devis:
+                continue
+            attendu = {
+                "vehicle_make": cargo.make or False,
+                "vehicle_model": cargo.model or False,
+                "vehicle_year": cargo.year or False,
+            }
+            actuel = {champ: devis[champ] or False for champ in attendu}
+            if actuel != attendu:
+                devis.sudo().write(attendu)
+
+    # Il n'y a **pas** de contrainte interdisant au devis de diverger du
+    # véhicule, et c'est un choix, pas un oubli.
+    #
+    # Une première version en posait une. Elle se déclenchait pendant `create`,
+    # avant que le miroir n'ait pu s'exécuter : le devis avait encore ses champs
+    # vides quand le véhicule portait déjà sa marque, et toute création
+    # échouait. La corriger aurait demandé de lutter contre l'ordre
+    # d'évaluation de l'ORM pour un gain douteux.
+    #
+    # Ce qui protège réellement est ailleurs, et c'est plus solide : le
+    # provisionnement ne lit **que** le véhicule. Un écart introduit par une
+    # écriture directe sur le devis n'a donc aucun effet sur l'expédition
+    # produite — il est cosmétique, et la prochaine écriture sur le véhicule le
+    # résorbe. `test_le_provisioning_ignore_les_champs_historiques` le prouve.
 
     @staticmethod
     def _dally_normalise(vals):

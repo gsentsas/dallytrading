@@ -52,6 +52,9 @@ a public read surface with no consumer is attack surface for nothing.
     "depends": [
         "dally_core",
         "dally_crm",
+        # Le point d'entrée public crée le véhicule décrit par une demande de
+        # transport de véhicule, dans la même transaction que la demande.
+        "dally_freight",
     ],
     "data": [
         "security/ir.model.access.csv",

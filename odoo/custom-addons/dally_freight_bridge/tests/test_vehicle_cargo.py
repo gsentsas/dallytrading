@@ -342,3 +342,59 @@ class TestVehicleSecurity(VehicleCommon):
         champs = self.env(user=self.client_a)["dally.freight.vehicle.cargo"].fields_get()
         for interdit in ("internal_notes", "purchase_price"):
             self.assertNotIn(interdit, champs)
+
+
+@tagged("post_install", "-at_install", "dally_freight")
+class TestVehicleSourceOfTruth(VehicleCommon):
+    """Le véhicule fait autorité ; les champs historiques ne sont qu'un miroir."""
+
+    def test_le_vehicule_alimente_les_champs_historiques(self):
+        """Trois consommateurs en dépendent : back-office, résumé, API.
+
+        Les retirer casserait ces trois-là pour un gain nul ; les laisser
+        vivre leur vie créerait deux vérités. Le miroir est donc à sens unique.
+        """
+        devis = self._devis("Miroir")
+        self._vehicule(devis, make="Peugeot", model="208", year="2021")
+        self.assertEqual(devis.vehicle_make, "Peugeot")
+        self.assertEqual(devis.vehicle_model, "208")
+        self.assertEqual(devis.vehicle_year, "2021")
+
+    def test_modifier_le_vehicule_met_a_jour_le_miroir(self):
+        devis = self._devis("MiroirMaj")
+        vehicule = self._vehicule(devis, make="Peugeot")
+        vehicule.write({"make": "Citroën"})
+        self.assertEqual(devis.vehicle_make, "Citroën")
+
+    def test_le_provisioning_ignore_les_champs_historiques(self):
+        """Le point qui compte : un écart n'affecte pas l'expédition produite.
+
+        On force volontairement la divergence en écrivant sur le devis, ce que
+        le miroir n'interdit pas. Le provisionnement doit continuer à lire le
+        véhicule — sans quoi une correction faite au mauvais endroit changerait
+        silencieusement ce qui est transporté.
+        """
+        devis = self._devis("Divergence")
+        vehicule = self._vehicule(devis, make="Toyota", mode="sea")
+        devis.write({"vehicle_make": "MARQUE FANTOME"})
+
+        devis.write({"state": "won"})
+
+        booking = self.env["shipment.freight.booking"].sudo().search(
+            [("dally_quote_request_id", "=", devis.id)], limit=1
+        )
+        expedition = self.env["freight.shipment"].sudo().search(
+            [("booking_id", "=", booking.id)], limit=1
+        )
+        # Le mode vient du véhicule, pas du devis : maritime, donc `ocean`.
+        self.assertEqual(expedition.transport, "ocean")
+        self.assertEqual(vehicule.make, "Toyota")
+
+    def test_la_relation_inverse_pointe_le_bon_vehicule(self):
+        devis = self._devis("Inverse")
+        vehicule = self._vehicule(devis)
+        self.assertEqual(devis.vehicle_cargo_id, vehicule)
+
+    def test_un_devis_sans_vehicule_a_une_relation_vide(self):
+        devis = self._devis("Vide", service=self.service_maritime)
+        self.assertFalse(devis.vehicle_cargo_id)

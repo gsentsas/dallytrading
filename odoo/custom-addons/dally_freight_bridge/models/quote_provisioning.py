@@ -76,7 +76,9 @@ from odoo.exceptions import UserError
 from .freight_mapping import (
     DIRECTION_TO_DIRECTION,
     TransportIndeterminable,
+    carries_own_mode,
     is_freight_service,
+    transport_from_vehicle_mode,
     mode_from_transport,
     state_from_stage,
     transport_from_service,
@@ -236,6 +238,21 @@ class DallyQuoteRequest(models.Model):
             return utilisateur
         return self.env.ref("base.user_root")
 
+    def _dally_freight_vehicle_cargo(self):
+        """Véhicule décrit par ce devis, s'il y en a un.
+
+        `sudo()` pour la même raison que le service : la transition a déjà été
+        autorisée, et lire la marchandise du dossier en est la conséquence
+        serveur. Aucune donnée d'un autre client n'y transite — la recherche est
+        bornée à ce devis.
+        """
+        self.ensure_one()
+        if "dally.freight.vehicle.cargo" not in self.env:
+            return self.env["dally.quote.request"].browse()
+        return self.env["dally.freight.vehicle.cargo"].sudo().search(
+            [("quote_request_id", "=", self.id)], limit=1
+        )
+
     def _dally_freight_parties(self):
         """Détermine expéditeur et destinataire.
 
@@ -301,6 +318,36 @@ class DallyQuoteRequest(models.Model):
         """
         self.ensure_one()
         service = self.sudo().service_type_id
+
+        # Services dont le mode voyage avec la marchandise — le transport de
+        # véhicule aujourd'hui. On lit le mode sur le véhicule lui-même : le
+        # service dit ce que le client achète, pas comment la voiture part.
+        if carries_own_mode(service):
+            vehicule = self._dally_freight_vehicle_cargo()
+            if not vehicule:
+                raise UserError(
+                    _(
+                        "Le devis %s demande un transport de véhicule mais aucun "
+                        "véhicule n'y est décrit. L'acceptation est annulée : "
+                        "aucune expédition n'a été créée."
+                    )
+                    % self.display_name
+                )
+            try:
+                return transport_from_vehicle_mode(vehicule.transport_mode)
+            except TransportIndeterminable as indeterminable:
+                raise UserError(
+                    _(
+                        "Le mode de transport du véhicule du devis %(devis)s "
+                        "n'est pas pris en charge (« %(mode)s »). L'acceptation "
+                        "est annulée : aucune expédition n'a été créée."
+                    )
+                    % {
+                        "devis": self.display_name,
+                        "mode": indeterminable.code or "non renseigné",
+                    }
+                ) from indeterminable
+
         try:
             return transport_from_service(service)
         except TransportIndeterminable as indeterminable:
@@ -351,6 +398,17 @@ class DallyQuoteRequest(models.Model):
                 booking.name,
                 expedition.name,
                 projection.display_name,
+            )
+
+        # Rattachement du véhicule à l'expédition. Écrit seulement s'il change :
+        # une resynchronisation ne doit pas produire d'écriture inutile, et
+        # surtout pas déplacer un véhicule déjà rattaché ailleurs.
+        vehicule = self._dally_freight_vehicle_cargo()
+        if vehicule and vehicule.shipment_id != projection:
+            vehicule.sudo().shipment_id = projection.id
+            _logger.info(
+                "Vehicule %s rattache a l'expedition %s.",
+                vehicule.id, projection.display_name,
             )
 
         projection._dally_freight_sync_from_tk()

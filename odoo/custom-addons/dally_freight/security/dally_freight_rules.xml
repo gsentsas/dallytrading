@@ -40,4 +40,20 @@
         </record>
 
     </data>
+    <!--
+      Cloisonnement multi-societe du vehicule cargo.
+
+      Regle GLOBALE, sans `groups` : une regle rattachee a des groupes ne
+      s'appliquerait pas a un utilisateur qui n'en fait partie d'aucun, et
+      laisserait donc passer exactement le cas qu'on veut fermer. Meme
+      raisonnement que pour les expeditions et leurs colis.
+    -->
+    <record id="dally_vehicle_cargo_rule_company" model="ir.rule">
+      <field name="name">Vehicle cargo: multi-company</field>
+      <field name="model_id" ref="model_dally_freight_vehicle_cargo"/>
+      <field name="domain_force">
+        ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]
+      </field>
+    </record>
+
 </odoo>

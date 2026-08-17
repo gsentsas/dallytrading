@@ -8,3 +8,7 @@ access_dally_package_readonly,dally.shipment.package read-only,model_dally_shipm
 access_dally_package_commercial,dally.shipment.package commercial,model_dally_shipment_package,dally_core.group_dally_commercial,1,1,1,1
 access_dally_package_logistics,dally.shipment.package logistics,model_dally_shipment_package,dally_core.group_dally_logistics,1,1,1,1
 access_dally_package_manager,dally.shipment.package manager,model_dally_shipment_package,dally_core.group_dally_manager,1,1,1,1
+access_dally_vehicle_cargo_readonly,dally.freight.vehicle.cargo read-only,model_dally_freight_vehicle_cargo,dally_core.group_dally_readonly,1,0,0,0
+access_dally_vehicle_cargo_commercial,dally.freight.vehicle.cargo commercial,model_dally_freight_vehicle_cargo,dally_core.group_dally_commercial,1,1,1,0
+access_dally_vehicle_cargo_logistics,dally.freight.vehicle.cargo logistics,model_dally_freight_vehicle_cargo,dally_core.group_dally_logistics,1,1,1,1
+access_dally_vehicle_cargo_manager,dally.freight.vehicle.cargo manager,model_dally_freight_vehicle_cargo,dally_core.group_dally_manager,1,1,1,1

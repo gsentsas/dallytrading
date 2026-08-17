@@ -87,11 +87,32 @@ DIRECTION_TO_DIRECTION = {
 #: maritime, mais le groupage aérien existe. « Le plus souvent » n'est pas une
 #: base pour créer une expédition.
 #:
-#: `freight_vehicle` n'y est pas non plus : le transport de véhicule est un
-#: métier distinct, non implémenté. Il ajoutera son mapping quand il existera.
+#: `freight_vehicle` n'y est pas non plus, mais pour une raison différente et
+#: durable : son mode physique est porté par la marchandise, pas par le service.
+#: Voir `SERVICES_A_MODE_PORTE` juste en dessous.
 SERVICE_CODE_TO_TRANSPORT = {
     "freight_sea": "ocean",
     "freight_air": "air",
+}
+
+#: Services dont le mode physique **ne se déduit pas du service**.
+#:
+#: `freight_vehicle` en est le cas d'école : « transport de véhicule » décrit ce
+#: que le client achète, pas la façon dont la voiture voyage. Paris → Dakar part
+#: par bateau, Dakar → Bamako par camion, et c'est le même service commercial.
+#:
+#: Ces services lisent donc leur mode sur la marchandise elle-même. Les inscrire
+#: ici plutôt que dans `SERVICE_CODE_TO_TRANSPORT` est délibéré : y mettre une
+#: valeur reviendrait à trancher à la place du client.
+SERVICES_A_MODE_PORTE = frozenset({"freight_vehicle"})
+
+#: Mode physique déclaré sur le véhicule → transport `tk_freight`.
+#:
+#: Le maritime devient `ocean` et non `land` : une voiture sur un roulier est
+#: une expédition maritime, quoi qu'en dise l'intitulé du service.
+VEHICLE_MODE_TO_TRANSPORT = {
+    "sea": "ocean",
+    "road": "land",
 }
 
 
@@ -141,13 +162,44 @@ def is_freight_service(service_type):
     return code.startswith(PREFIXE_SERVICE_FRET)
 
 
+def carries_own_mode(service_type):
+    """Le mode physique de ce service est-il porté par la marchandise ?"""
+    code = (service_type.code or "") if service_type else ""
+    return code in SERVICES_A_MODE_PORTE
+
+
+def transport_from_vehicle_mode(mode):
+    """Mode physique déclaré sur le véhicule → transport tk.
+
+    Lève `TransportIndeterminable` si le mode est absent ou inconnu. Aucun
+    repli : un véhicule dont on ignore s'il part par bateau ou par camion est
+    un dossier qu'on ne provisionne pas.
+    """
+    transport = VEHICLE_MODE_TO_TRANSPORT.get(mode or "")
+    if transport:
+        return transport
+    _logger.warning(
+        "Mode de transport vehicule %r non supporte : provisionnement refuse.",
+        mode or "(aucun)",
+    )
+    raise TransportIndeterminable(mode or "")
+
+
 def transport_from_service(service_type):
     """Transport tk déduit du service demandé.
 
     Lève `TransportIndeterminable` si le service relève du fret sans mode
-    supporté. Aucune valeur de repli : voir `SERVICE_CODE_TO_TRANSPORT`.
+    supporté, **ou** s'il porte son mode sur la marchandise : dans ce dernier
+    cas l'appelant doit passer par `transport_from_vehicle_mode`, et se tromper
+    de chemin doit échouer bruyamment plutôt que retomber sur un défaut.
     """
     code = (service_type.code or "") if service_type else ""
+    if code in SERVICES_A_MODE_PORTE:
+        _logger.warning(
+            "Service %r porte son mode sur la marchandise : "
+            "transport_from_service n'est pas le bon chemin.", code,
+        )
+        raise TransportIndeterminable(code)
     transport = SERVICE_CODE_TO_TRANSPORT.get(code)
     if transport:
         return transport

@@ -61,3 +61,4 @@ Thumbs.db
 # et propres à une machine. Elles n'ont rien à faire dans l'historique.
 rollback/
 .deploy-build/
+apps/web/.next.old/

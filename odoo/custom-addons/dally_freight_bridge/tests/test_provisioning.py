@@ -375,14 +375,21 @@ class TestModes(ProvisioningCommon):
         self.assertEqual(expedition.transport, "air")
         self.assertEqual(projection.transport_mode, "air")
 
-    def test_un_service_de_vehicule_est_refuse(self):
-        """Le transport de véhicule est un métier distinct, non implémenté.
+    def test_un_service_de_vehicule_sans_vehicule_est_refuse(self):
+        """Le transport de véhicule est désormais implémenté — mais pas deviné.
 
-        Il retombait auparavant sur `land`. Créer une expédition routière pour
-        un client qui a demandé un transport de véhicule est une réponse fausse,
-        pas une approximation acceptable.
+        Ce test disait autrefois « métier non implémenté » et attendait un refus
+        catégorique. Depuis `dally.freight.vehicle.cargo`, la règle est plus
+        fine et plus juste : le service est provisionnable, à condition qu'un
+        véhicule soit décrit et porte un mode physique.
+
+        Sans véhicule, il n'existe aucune information permettant de savoir si la
+        voiture part par bateau ou par camion. Provisionner reviendrait à
+        inventer ce mode — exactement le défaut que le fail-closed a supprimé.
         """
-        self._refuse_et_verifie_le_rollback("freight_vehicle", "Vehicule")
+        self._refuse_et_verifie_le_rollback(
+            "freight_vehicle", "Vehicule", motif="aucun véhicule"
+        )
 
     def test_un_devis_hors_fret_s_accepte_sans_rien_creer(self):
         """Le refus ne doit pas déborder sur les autres métiers.
@@ -420,7 +427,7 @@ class TestModes(ProvisioningCommon):
         """
         self._refuse_et_verifie_le_rollback("freight_groupage", "Groupage")
 
-    def _refuse_et_verifie_le_rollback(self, code, nom):
+    def _refuse_et_verifie_le_rollback(self, code, nom, motif="mode de transport"):
         """Le provisionnement est refusé ET rien ne subsiste.
 
         Le savepoint reproduit la frontière de transaction d'une requête HTTP :
@@ -434,7 +441,7 @@ class TestModes(ProvisioningCommon):
             with self.env.cr.savepoint():
                 devis.write({"state": "won"})
         except UserError as refus:
-            self.assertIn("mode de transport", str(refus))
+            self.assertIn(motif, str(refus))
         else:
             self.fail(f"Le service {code} aurait du etre refuse.")
 

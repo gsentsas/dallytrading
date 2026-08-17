@@ -1,0 +1,125 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Pile E2E **fret**, jetable et isolée.
+#
+# ## Pourquoi une pile séparée, et non une option du harness portail
+#
+# Le harness portail (`docker-compose.e2e.yml`) ne monte pas `tk_freight`,
+# et ne doit pas le monter : ses douze specs valident le portail sans
+# moteur fret, et y greffer un module tiers rendrait fragiles des tests
+# qui n'en dépendent pas. Une variante dédiée coûte un fichier ; une
+# option conditionnelle coûterait une régression un jour.
+#
+# ## Isolation
+#
+# Tout porte le label `com.dallytrading.freight-e2e=true`, ce qui rend le
+# cycle de vie de cette pile décidable sans jamais viser large : aucune
+# commande de nettoyage n'a besoin de `docker prune`.
+#
+# Rien ici ne touche la production : base distincte, filestore distinct,
+# réseau distinct, ports distincts publiés sur la seule loopback, et
+# PostgreSQL sans port publié du tout.
+#
+# ## Code du fournisseur
+#
+# `tk_freight` est sous licence OPL-1 et n'entre pas dans ce dépôt public.
+# Le chemin du workspace privé est **obligatoire** : sans lui, la pile
+# refuse de démarrer plutôt que de lancer une suite qui échouerait plus
+# tard sur un motif obscur.
+# ═══════════════════════════════════════════════════════════════════════
+
+name: ${FE2E_PROJECT:-dallytrading-freight-e2e}
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    container_name: ${FE2E_PG_CONTAINER:-dallytrading-freight-e2e-postgres}
+    hostname: ${FE2E_PG_CONTAINER:-dallytrading-freight-e2e-postgres}
+    labels:
+      com.dallytrading.freight-e2e: "true"
+    environment:
+      POSTGRES_USER: ${FE2E_DB_USER:?FE2E_DB_USER requis}
+      POSTGRES_PASSWORD: ${FE2E_DB_PASSWORD:?FE2E_DB_PASSWORD requis}
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+      TZ: ${TZ:-Africa/Dakar}
+    volumes:
+      - freight-e2e-postgres-data:/var/lib/postgresql/data
+    networks:
+      - freight-e2e-private
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: "no"
+
+  odoo:
+    image: ${ODOO_IMAGE:-odoo:19.0}
+    container_name: ${FE2E_ODOO_CONTAINER:-dallytrading-freight-e2e-odoo}
+    hostname: ${FE2E_ODOO_CONTAINER:-dallytrading-freight-e2e-odoo}
+    labels:
+      com.dallytrading.freight-e2e: "true"
+    user: "${FE2E_RUN_UID:?FE2E_RUN_UID requis}:${FE2E_RUN_GID:?FE2E_RUN_GID requis}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Comme en production : l'entrypoint de l'image passerait --db_password
+    # en ligne de commande, lisible via `ps aux`.
+    entrypoint: ["odoo"]
+    command: ["-c", "/etc/odoo/odoo.conf"]
+    environment:
+      TZ: ${TZ:-Africa/Dakar}
+    volumes:
+      - freight-e2e-filestore:/var/lib/odoo
+      - ${FE2E_ODOO_CONF:?FE2E_ODOO_CONF requis}:/etc/odoo/odoo.conf:ro
+      - ../odoo/custom-addons:/mnt/extra-addons:ro
+      # Workspace privé du fournisseur. Obligatoire, et en lecture seule :
+      # une suite de tests n'a aucune raison d'écrire dans le code tiers.
+      - ${FE2E_VENDOR_ADDONS:?FE2E_VENDOR_ADDONS requis (workspace tk_freight privé, hors dépôt)}:/mnt/vendor-addons:ro
+    ports:
+      - "127.0.0.1:${FE2E_ODOO_HTTP_PORT:-18379}:8069"
+    networks:
+      - freight-e2e-private
+      - freight-e2e-public
+    mem_limit: ${FE2E_ODOO_MEM_LIMIT:-3g}
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - |
+          import sys, urllib.request
+          try:
+              r = urllib.request.urlopen("http://localhost:8069/web/health", timeout=5)
+              sys.exit(0 if r.status == 200 else 1)
+          except Exception:
+              sys.exit(1)
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: "no"
+
+networks:
+  freight-e2e-private:
+    name: ${FE2E_PRIVATE_NETWORK:-dallytrading_freight_e2e_private}
+    driver: bridge
+    internal: true
+    labels:
+      com.dallytrading.freight-e2e: "true"
+  freight-e2e-public:
+    name: ${FE2E_PUBLIC_NETWORK:-dallytrading_freight_e2e_public}
+    driver: bridge
+    labels:
+      com.dallytrading.freight-e2e: "true"
+
+volumes:
+  freight-e2e-postgres-data:
+    name: ${FE2E_PG_VOLUME:-dallytrading_freight_e2e_pgdata}
+    labels:
+      com.dallytrading.freight-e2e: "true"
+  freight-e2e-filestore:
+    name: ${FE2E_FILESTORE_VOLUME:-dallytrading_freight_e2e_filestore}
+    labels:
+      com.dallytrading.freight-e2e: "true"

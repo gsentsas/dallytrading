@@ -45,7 +45,9 @@ PLAYWRIGHT_IMAGE="${FE2E_PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.62.1-
 #: Workspace privé contenant `tk_freight`. Jamais dans le dépôt.
 VENDOR_ADDONS="${FE2E_VENDOR_ADDONS:-/tmp/dallytrading-tk-freight-dev/vendor-addons}"
 
-SPEC="12-freight-bridge"
+#: Specs exécutées, dans l'ordre. Le pont fret d'abord : une régression sur lui
+#: doit se voir avant que la spec véhicule ne s'en serve.
+SPECS=(12-freight-bridge 13-vehicle-cargo)
 
 log() { printf '\n\033[1m── %s\033[0m\n' "$*"; }
 
@@ -182,6 +184,26 @@ ENV
   grep -E '^FREIGHT_' "$WORK/freight-seed.out" > "$WORK/freight-refs"
   chmod 600 "$WORK/freight-refs"
 
+  log "fixtures vehicule"
+  docker cp "$HERE/e2e-freight-vehicle-seed.py" "$ODOO_CONTAINER:/tmp/e2e-seed/vehicle.py" >/dev/null
+  docker exec "$ODOO_CONTAINER" sh -c \
+    "odoo shell -c /etc/odoo/odoo.conf -d $DB --no-http < /tmp/e2e-seed/vehicle.py" \
+    > "$WORK/vehicle-seed.out" 2>&1
+  # Le VIN est expurgé à l'affichage : il sert de sonde de fuite dans les
+  # journaux, et l'y écrire nous-mêmes rendrait ce balayage ininterprétable.
+  grep -E '^VEHICLE_' "$WORK/vehicle-seed.out" \
+    | sed -E 's/^(VEHICLE_VIN_[AB]=).*/\1<expurgé>/' | sed 's/^/   /'
+  grep -q 'VEHICLE_SEED_OK' "$WORK/vehicle-seed.out" || {
+    echo "seed vehicule échoué :" >&2; tail -20 "$WORK/vehicle-seed.out" >&2; exit 1; }
+  grep -E '^VEHICLE_' "$WORK/vehicle-seed.out" >> "$WORK/freight-refs"
+
+  # Charge les références produites par les graines — dont la clé d'API réelle,
+  # sans laquelle la page /devis affiche « Formulaire momentanément
+  # indisponible » : le catalogue de services passe par l'API serveur, pas par
+  # une session portail.
+  # shellcheck disable=SC1090
+  set -a; . "$WORK/freight-refs"; set +a
+
   log "frontend Next isolé (copie du dépôt, jamais le répertoire servi par systemd)"
   rm -rf "$WORK/web"; mkdir -p "$WORK/web"
   tar -C "$WEB" --exclude=node_modules --exclude=.next --exclude='.env*' -cf - . \
@@ -195,7 +217,7 @@ ENVIRONMENT=development
 ODOO_GATEWAY_ADAPTER=dally_api
 ODOO_URL=http://127.0.0.1:${ODOO_PORT}
 ODOO_DATABASE=${DB}
-ODOO_API_KEY=freight-e2e-placeholder-integration-key-000
+ODOO_API_KEY=${VEHICLE_API_KEY:-freight-e2e-placeholder-integration-key-000}
 ODOO_TIMEOUT_MS=15000
 PORTAL_SESSION_SECRET=$(cat "$WORK/portal-secret")
 ENV
@@ -253,6 +275,9 @@ playwright() {
     -e FREIGHT_DETAIL_REFERENCE="${FREIGHT_DETAIL_REFERENCE:-}" \
     -e FREIGHT_DETAIL_TOKEN="${FREIGHT_DETAIL_TOKEN:-}" \
     -e FREIGHT_PUBLISHED_DOCUMENT="${FREIGHT_PUBLISHED_DOCUMENT:-}" \
+    -e VEHICLE_VIN_A="${VEHICLE_VIN_A:-}" \
+    -e VEHICLE_VIN_B="${VEHICLE_VIN_B:-}" \
+    -e VEHICLE_REGISTRATION_A="${VEHICLE_REGISTRATION_A:-}" \
     --user "$(id -u):$(id -g)" \
     "$PLAYWRIGHT_IMAGE" npx playwright test --output=/tmp/pw-out "$@"
 }
@@ -269,6 +294,19 @@ reset_fixtures() {
   printf '%s\n' "$output" | grep -E "^PRECONDITION_" | sed 's/^/   /'
   if ! printf '%s' "$output" | grep -q "PRECONDITION_OK"; then
     echo "   précondition fret non satisfaite — arrêt" >&2
+    return 1
+  fi
+}
+
+#: Restaure le périmètre véhicule et vérifie ses préconditions.
+reset_vehicle() {
+  local output
+  output="$(docker exec -i "$ODOO_CONTAINER" \
+    odoo shell -c /etc/odoo/odoo.conf -d "$DB" --no-http \
+    < "$HERE/e2e-freight-vehicle-reset.py" 2>&1)"
+  printf '%s\n' "$output" | grep -E "^PRECONDITION_" | sed 's/^/   /'
+  if ! printf '%s' "$output" | grep -q "PRECONDITION_OK vehicle"; then
+    echo "   précondition véhicule non satisfaite — arrêt" >&2
     return 1
   fi
 }
@@ -290,9 +328,17 @@ run_tests() {
   log "restauration du périmètre fret"
   reset_fixtures || return 1
 
-  log "$SPEC"
-  restart_next
-  playwright "e2e/${SPEC}.spec.ts" || failed=1
+  log "restauration du périmètre véhicule"
+  reset_vehicle || return 1
+
+  # Une spec par invocation, avec redémarrage entre chacune : la limitation de
+  # débit sur la connexion vit en mémoire d'un seul processus, et deux specs
+  # d'affilée la déclencheraient.
+  for spec in "${SPECS[@]}"; do
+    log "$spec"
+    restart_next
+    playwright "e2e/${spec}.spec.ts" || failed=1
+  done
 
   verify_db || failed=1
   audit_logs "$depuis" || failed=1
@@ -352,6 +398,11 @@ fournisseur|DALLY_E2E_SECRET_SUPPLIER
 commission|DALLY_E2E_SECRET_COMMISSION
 note interne|DALLY_E2E_SECRET_INTERNAL_NOTE
 document interne|DALLY_E2E_SECRET_INTERNAL_DOCUMENT
+note interne vehicule|DALLY_E2E_SECRET_VEHICLE_INTERNAL_NOTE
+prix d achat vehicule|DALLY_E2E_SECRET_VEHICLE_PURCHASE_PRICE
+prix d achat (montant)|987654
+VIN de fixture A|DALLYE2EVIN000001
+VIN du formulaire public|DALLYE2EVINPUB001
 cookie de session|dt_portal_session=
 session Odoo|session_id=
 en-tête d'autorisation|Authorization:

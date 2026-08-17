@@ -118,6 +118,68 @@ export default async function ShipmentDetailPage({
         )}
       </section>
 
+      <section aria-labelledby="documents" className="mb-6">
+        <h2 id="documents" className="mb-4 text-lg font-semibold text-navy-800">
+          Documents
+        </h2>
+        {/*
+          Seuls les documents explicitement publiés remontent ici : la
+          projection Odoo filtre sur `published_to_portal`, en plus de la record
+          rule. Un document du dossier opérationnel n'apparaît jamais faute
+          d'avoir été publié — ce n'est pas un masquage d'affichage.
+
+          Le lien pointe sur la référence publique `DOC-<n>` et passe par le
+          BFF. L'identifiant de la pièce jointe Odoo n'apparaît nulle part :
+          le connaître inviterait à tenter `/web/content/<id>`, qui
+          court-circuiterait le contrôle.
+        */}
+        {shipment.documents.length === 0 ? (
+          <Card>
+            <p className="text-mist-600">
+              Aucun document n’est encore disponible pour cette expédition.
+            </p>
+          </Card>
+        ) : (
+          <TableWrapper>
+            <table className="w-full min-w-[36rem] border-collapse bg-white text-left">
+              <caption className="sr-only">
+                Documents disponibles pour cette expédition
+              </caption>
+              <thead>
+                <tr className="border-b border-mist-300 text-sm text-mist-600">
+                  <th scope="col" className="p-3">Document</th>
+                  <th scope="col" className="p-3">Type</th>
+                  <th scope="col" className="p-3">Publié le</th>
+                  <th scope="col" className="p-3">
+                    <span className="sr-only">Téléchargement</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {shipment.documents.map((document) => (
+                  <tr key={document.reference} className="border-b border-mist-200">
+                    <td className="p-3 font-medium text-navy-800">{document.name}</td>
+                    <td className="p-3 text-navy-800">
+                      {document.documentTypeLabel ?? '—'}
+                    </td>
+                    <td className="p-3 text-navy-800">{document.publishedOn ?? '—'}</td>
+                    <td className="p-3">
+                      <a
+                        href={`/api/portal/documents/${encodeURIComponent(document.reference)}`}
+                        className="rounded-lg border border-mist-300 px-3 py-2 text-sm font-medium text-navy-800 hover:bg-mist-100"
+                      >
+                        Télécharger
+                        <span className="sr-only"> {document.name}</span>
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrapper>
+        )}
+      </section>
+
       <section aria-labelledby="suivi">
         <h2 id="suivi" className="mb-4 text-lg font-semibold text-navy-800">Suivi</h2>
         {shipment.timeline.length === 0 ? (

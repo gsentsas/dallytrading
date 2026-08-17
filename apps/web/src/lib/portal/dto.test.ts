@@ -154,12 +154,43 @@ describe('contrats métier', () => {
         packageType: 'Crate', description: null, quantity: 4,
         totalWeightKg: 50, totalVolumeCbm: 1.2,
       }],
+      documents: [{
+        reference: 'DOC-7', name: 'connaissement.pdf',
+        documentType: 'transport', documentTypeLabel: 'Document de transport',
+        relatedTo: 'Expédition', relatedReference: 'DT-SHP-1',
+        publishedOn: '2026-08-15',
+      }],
     };
     const parsed = portalShipmentDetailSchema.parse(detail);
     expect(parsed.packages).toHaveLength(1);
     expect(parsed.timeline).toHaveLength(1);
+    expect(parsed.documents).toHaveLength(1);
     // Un événement interne porterait `internalNote` : le schéma le refuserait.
     expect(parsed.timeline[0]).not.toHaveProperty('internalNote');
+    // Et le document ne porte jamais l'identifiant de sa pièce jointe Odoo :
+    // le connaître inviterait à tenter `/web/content/<id>`.
+    expect(parsed.documents[0]).not.toHaveProperty('attachmentId');
+  });
+
+  it('le détail expédition refuse un champ interne sur un document', () => {
+    // `.strict()` refuse toute clé hors contrat : un document du dossier
+    // opérationnel ne peut pas se glisser dans la réponse en emportant ses
+    // champs internes.
+    const detail = {
+      reference: 'DT-SHP-2', transportMode: 'air', transportModeLabel: 'Air Freight',
+      origin: 'Paris', destination: 'Dakar', status: 'draft',
+      statusLabel: 'Draft', departureDate: null, estimatedArrival: null,
+      actualArrival: null, lastUpdate: null, carrierTrackingNumber: null,
+      containerNumber: null, goodsDescription: null, packagesCount: 0,
+      timeline: [], packages: [],
+      documents: [{
+        reference: 'DOC-8', name: 'interne.pdf',
+        documentType: 'other', documentTypeLabel: 'Autre',
+        relatedTo: 'Expédition', relatedReference: 'DT-SHP-2',
+        publishedOn: null, internalNote: 'CANARY_INTERNAL_DOCUMENT',
+      }],
+    };
+    expect(() => portalShipmentDetailSchema.parse(detail)).toThrow();
   });
 
   it('le document n’expose aucun identifiant de pièce jointe', () => {

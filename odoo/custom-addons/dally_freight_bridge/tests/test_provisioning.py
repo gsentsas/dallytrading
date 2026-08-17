@@ -7,7 +7,7 @@ intention : le workflow du fournisseur a été exécuté avant d'être décrit.
 
 import uuid
 
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, UserError
 from odoo.tests import TransactionCase, tagged
 
 from odoo.addons.dally_freight_bridge.models.freight_mapping import (
@@ -23,7 +23,12 @@ class ProvisioningCommon(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.service = cls.env["dally.service.type"].search([], limit=1)
+        # `freight_sea` explicitement, et non le premier service venu : le
+        # provisionnement refuse désormais tout service dont le mode n'est pas
+        # déductible, et le premier enregistrement est `import_export`.
+        cls.service = cls.env["dally.service.type"].search(
+            [("code", "=", "freight_sea")], limit=1
+        )
 
     @classmethod
     def _devis(cls, nom):
@@ -370,23 +375,77 @@ class TestModes(ProvisioningCommon):
         self.assertEqual(expedition.transport, "air")
         self.assertEqual(projection.transport_mode, "air")
 
-    def test_flux_vehicule_bascule_en_routier(self):
-        devis = self._devis_pour("freight_vehicle", "Route")
-        devis.write({"state": "won"})
-        expedition, projection = self._chaine(devis)
-        self.assertEqual(expedition.transport, "land")
-        self.assertEqual(projection.transport_mode, "road")
+    def test_un_service_de_vehicule_est_refuse(self):
+        """Le transport de véhicule est un métier distinct, non implémenté.
 
-    def test_un_service_sans_mode_retombe_sur_le_maritime(self):
-        """Comportement documenté, et volontairement distinct du fail-closed.
-
-        Un mode erroné est visible et corrigeable au back-office, et la
-        correction redescend au client puisque la projection est à sens unique.
+        Il retombait auparavant sur `land`. Créer une expédition routière pour
+        un client qui a demandé un transport de véhicule est une réponse fausse,
+        pas une approximation acceptable.
         """
-        devis = self._devis_pour("import_export", "Defaut")
+        self._refuse_et_verifie_le_rollback("freight_vehicle", "Vehicule")
+
+    def test_un_devis_hors_fret_s_accepte_sans_rien_creer(self):
+        """Le refus ne doit pas déborder sur les autres métiers.
+
+        Une première version refusait *tout* devis dont le service n'était ni
+        maritime ni aérien. Un devis de sourcing devenait inacceptable, et la
+        suite du portail se bloquait sur son test de concurrence. Un devis hors
+        fret s'accepte donc normalement — il ne crée simplement aucune
+        expédition.
+        """
+        devis = self._devis_pour("sourcing", "HorsFret")
         devis.write({"state": "won"})
-        expedition, _projection = self._chaine(devis)
-        self.assertEqual(expedition.transport, "ocean")
+        self.assertEqual(devis.state, "won")
+        self.assertEqual(
+            self._compte(devis), (0, 0, 0),
+            "Un devis hors fret a provisionne une expedition.",
+        )
+
+    def test_un_service_import_export_ne_provisionne_pas(self):
+        """`import_export` ne désigne aucun mode : rien n'est créé.
+
+        La version précédente en faisait une expédition maritime, visible dans
+        l'espace client, sans qu'aucun signal n'indique qu'il y avait quelque
+        chose à corriger.
+        """
+        devis = self._devis_pour("import_export", "SansMode")
+        devis.write({"state": "won"})
+        self.assertEqual(self._compte(devis), (0, 0, 0))
+
+    def test_un_groupage_est_refuse(self):
+        """Le groupage est le plus souvent du LCL maritime — mais pas toujours.
+
+        « Le plus souvent » n'est pas une base pour créer une expédition. Le
+        groupage aérien existe ; il faudra une décision métier explicite.
+        """
+        self._refuse_et_verifie_le_rollback("freight_groupage", "Groupage")
+
+    def _refuse_et_verifie_le_rollback(self, code, nom):
+        """Le provisionnement est refusé ET rien ne subsiste.
+
+        Le savepoint reproduit la frontière de transaction d'une requête HTTP :
+        sans lui, l'écriture de `state` déjà passée resterait en base et le test
+        conclurait à tort que le rollback n'a pas eu lieu.
+        """
+        devis = self._devis_pour(code, nom)
+        etat_initial = devis.state
+
+        try:
+            with self.env.cr.savepoint():
+                devis.write({"state": "won"})
+        except UserError as refus:
+            self.assertIn("mode de transport", str(refus))
+        else:
+            self.fail(f"Le service {code} aurait du etre refuse.")
+
+        self.env.invalidate_all()
+        self.assertEqual(
+            devis.state, etat_initial, "L'etat du devis n'a pas ete restaure."
+        )
+        self.assertEqual(
+            self._compte(devis), (0, 0, 0),
+            "Des enregistrements fret subsistent apres le refus.",
+        )
 
 
 @tagged("post_install", "-at_install", "dally_freight")

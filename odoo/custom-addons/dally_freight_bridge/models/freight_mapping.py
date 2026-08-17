@@ -63,44 +63,100 @@ DIRECTION_TO_DIRECTION = {
     "export": "export",
 }
 
-#: Code de `dally.service.type` → transport tk.
+#: Code de `dally.service.type` → transport tk, pour le **provisionnement**.
 #:
-#: C'est le devis qui porte l'information, via le service demandé par le client.
-#: La déduire d'ailleurs — ou la fixer en dur — reviendrait à décider à sa place.
+#: Volontairement court. N'y figure qu'un service dont le mode est déductible
+#: sans interprétation : « Sea Freight » est du maritime, « Air Freight » de
+#: l'aérien. Rien d'autre.
 #:
-#: `freight_groupage` est rattaché au maritime : le groupage de DallyTrading est
-#: du LCL. Si un groupage aérien apparaît un jour, il lui faudra son propre code
-#: de service, pas une exception ici.
+#: ## Pourquoi il n'y a plus de valeur par défaut
+#:
+#: Une version précédente retombait sur `ocean` pour tout code non reconnu. Le
+#: raisonnement — « le maritime est le flux majoritaire, et l'exploitation
+#: corrigera » — était faux sur le point qui compte : personne ne sait qu'il y a
+#: quelque chose à corriger. Un client demandant un transport de véhicule
+#: recevait une expédition maritime, créée, référencée, projetée et visible dans
+#: son espace, sans qu'aucun signal ne soit émis.
+#:
+#: Un code inconnu est désormais une **erreur métier** qui annule le
+#: provisionnement, et avec lui l'acceptation du devis — les deux étant dans la
+#: même transaction. Le devis reste en attente, ce qui est un état vrai et
+#: rattrapable, plutôt qu'une expédition fausse et silencieuse.
+#:
+#: `freight_groupage` n'y est pas : le groupage est le plus souvent du LCL
+#: maritime, mais le groupage aérien existe. « Le plus souvent » n'est pas une
+#: base pour créer une expédition.
+#:
+#: `freight_vehicle` n'y est pas non plus : le transport de véhicule est un
+#: métier distinct, non implémenté. Il ajoutera son mapping quand il existera.
 SERVICE_CODE_TO_TRANSPORT = {
     "freight_sea": "ocean",
     "freight_air": "air",
-    "freight_vehicle": "land",
-    "freight_groupage": "ocean",
 }
 
-#: Transport retenu quand le service ne désigne pas de mode — `import_export`,
-#: `logistics`, `other`…
+
+#: Préfixe des services qui relèvent du moteur fret.
 #:
-#: Le maritime est le flux très majoritaire. Ce n'est pas un « fail-closed »
-#: comme pour les états, et la nuance est délibérée : un mode erroné est visible
-#: et corrigeable au back-office, et la correction redescend au client puisque la
-#: projection est à sens unique. Un état final erroné, lui, fait cesser le suivi
-#: sans que personne ne s'en aperçoive.
-TRANSPORT_PAR_DEFAUT = "ocean"
+#: ## Pourquoi cette distinction existe
+#:
+#: Le refus d'un mode indéterminable ne doit pas déborder sur les devis qui
+#: n'ont rien à voir avec le fret. DallyTrading vend aussi du sourcing, du
+#: trading, de l'e-commerce : accepter un de ces devis ne doit créer aucune
+#: expédition, et surtout ne doit pas échouer parce que le moteur fret n'a pas
+#: su en déduire un mode de transport.
+#:
+#: Mesuré en le cassant : la première version du fail-closed refusait *tout*
+#: devis dont le service n'était ni maritime ni aérien. Un devis de sourcing
+#: devenait inacceptable, et la suite de tests du portail se bloquait sur son
+#: test de concurrence.
+#:
+#: La règle tient donc en deux temps :
+#:
+#: 1. le service relève-t-il du fret ? sinon, **aucun provisionnement**, et
+#:    l'acceptation suit son cours normal ;
+#: 2. s'il en relève, son mode doit être supporté — sinon **refus explicite**.
+PREFIXE_SERVICE_FRET = "freight_"
+
+
+class TransportIndeterminable(Exception):
+    """Un service **fret** ne désigne aucun mode de transport supporté.
+
+    Portée par le module de mapping plutôt que par le provisionnement : c'est
+    la traduction qui échoue, et l'appelant décide de ce qu'il en fait.
+    """
+
+    def __init__(self, code):
+        self.code = code
+        super().__init__(code)
+
+
+def is_freight_service(service_type):
+    """Le service demandé relève-t-il du moteur fret ?
+
+    Le test porte sur le préfixe du code, et non sur une liste close : un
+    `freight_rail` ajouté demain doit entrer dans le périmètre du fret — donc
+    être refusé faute de mapping — plutôt que d'être ignoré en silence.
+    """
+    code = (service_type.code or "") if service_type else ""
+    return code.startswith(PREFIXE_SERVICE_FRET)
 
 
 def transport_from_service(service_type):
-    """Transport tk déduit du service demandé, ou le défaut documenté."""
+    """Transport tk déduit du service demandé.
+
+    Lève `TransportIndeterminable` si le service relève du fret sans mode
+    supporté. Aucune valeur de repli : voir `SERVICE_CODE_TO_TRANSPORT`.
+    """
     code = (service_type.code or "") if service_type else ""
     transport = SERVICE_CODE_TO_TRANSPORT.get(code)
     if transport:
         return transport
-    _logger.info(
-        "Service %r sans mode de transport explicite : %s retenu par defaut.",
+    _logger.warning(
+        "Service fret %r sans mode de transport supporte : provisionnement "
+        "refuse. Completer SERVICE_CODE_TO_TRANSPORT apres decision metier.",
         code or "(aucun)",
-        TRANSPORT_PAR_DEFAUT,
     )
-    return TRANSPORT_PAR_DEFAUT
+    raise TransportIndeterminable(code)
 
 
 def state_from_stage(env, stage):

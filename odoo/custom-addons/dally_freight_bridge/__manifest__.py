@@ -29,7 +29,7 @@ Le portail client passe exclusivement par les projections de `dally_portal`.
     # tk_freight est un module tiers sous licence OPL-1. Il n'est pas versionné
     # dans ce dépôt : ce module ne s'installe que là où la copie licenciée est
     # présente dans l'addons_path.
-    "depends": ["base", "mail", "tk_freight", "dally_crm", "dally_freight", "dally_tracking"],
+    "depends": ["base", "mail", "tk_freight", "dally_crm", "dally_freight", "dally_tracking", "dally_portal"],
     "data": [
         "security/tk_freight_portal_lockdown.xml",
     ],

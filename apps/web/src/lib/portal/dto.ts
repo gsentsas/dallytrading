@@ -201,11 +201,6 @@ export const portalShipmentSchema = z
 
 export type PortalShipment = z.infer<typeof portalShipmentSchema>;
 
-export const portalShipmentDetailSchema = portalShipmentSchema
-  .extend({ packages: z.array(portalShipmentPackageSchema) })
-  .strict();
-
-export type PortalShipmentDetail = z.infer<typeof portalShipmentDetailSchema>;
 
 // ─── Documents ───────────────────────────────────────────────────────
 
@@ -225,6 +220,23 @@ export const portalDocumentSchema = z
   .strict();
 
 export type PortalDocument = z.infer<typeof portalDocumentSchema>;
+
+/**
+ * Le détail d'une expédition, tel que le portail le renvoie.
+ *
+ * Les documents y portent exactement la même forme que sur la page Documents :
+ * un document n'a qu'un seul contrat, quel que soit l'endroit d'où le client
+ * l'atteint. Deux formes finiraient par diverger, et c'est la moins relue qui
+ * exposerait un champ de trop.
+ */
+export const portalShipmentDetailSchema = portalShipmentSchema
+  .extend({
+    packages: z.array(portalShipmentPackageSchema),
+    documents: z.array(portalDocumentSchema),
+  })
+  .strict();
+
+export type PortalShipmentDetail = z.infer<typeof portalShipmentDetailSchema>;
 
 // ─── Profil ──────────────────────────────────────────────────────────
 

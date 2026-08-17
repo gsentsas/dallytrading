@@ -40,7 +40,9 @@ class TestCanaris(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        service = cls.env["dally.service.type"].search([], limit=1)
+        service = cls.env["dally.service.type"].search(
+            [("code", "=", "freight_sea")], limit=1
+        )
         partenaire = cls.env["res.partner"].create({"name": "Canari Client"})
         cls.devis = cls.env["dally.quote.request"].create({
             "partner_id": partenaire.id,

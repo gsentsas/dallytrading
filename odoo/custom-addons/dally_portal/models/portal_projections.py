@@ -289,6 +289,26 @@ class DallyShipmentPortal(models.Model):
             [("shipment_id", "=", self.id)], order="sequence, id",
         )
         payload["packages"] = packages._dally_portal_package_payload()
+
+        # Les documents publiés de cette expédition, dans la même forme que sur
+        # la page Documents : un seul contrat pour un document, quel que soit
+        # l'endroit d'où le client l'atteint. Deux formes divergeraient, et
+        # c'est la moins relue qui finirait par exposer un champ de trop.
+        #
+        # `search` et non `self.document_ids` : c'est le `search` qui applique
+        # la record rule. Le filtre sur `published_to_portal` est redondant avec
+        # elle, et c'est voulu — la publication est une décision explicite, elle
+        # mérite d'être exigée deux fois.
+        documents = self.env["dally.portal.document"].search(
+            [
+                ("shipment_id", "=", self.id),
+                ("published_to_portal", "=", True),
+            ],
+            order="create_date desc, id desc",
+        )
+        payload["documents"] = [
+            document._dally_portal_payload() for document in documents
+        ]
         return payload
 
 

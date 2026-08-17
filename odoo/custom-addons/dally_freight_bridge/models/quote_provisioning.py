@@ -75,6 +75,8 @@ from odoo.exceptions import UserError
 
 from .freight_mapping import (
     DIRECTION_TO_DIRECTION,
+    TransportIndeterminable,
+    is_freight_service,
     mode_from_transport,
     state_from_stage,
     transport_from_service,
@@ -111,7 +113,11 @@ class DallyQuoteRequest(models.Model):
         resultat = super().write(vals)
 
         for devis in a_provisionner:
-            devis._dally_freight_provision()
+            # Seuls les devis fret provisionnent. Un devis de sourcing, de
+            # trading ou d'e-commerce s'accepte normalement et ne crée aucune
+            # expédition — le moteur fret n'a rien à en dire.
+            if is_freight_service(devis.sudo().service_type_id):
+                devis._dally_freight_provision()
         return resultat
 
     # ------------------------------------------------------------------
@@ -271,6 +277,14 @@ class DallyQuoteRequest(models.Model):
         La lire évite de décider à la place du client — un mode fixé en dur
         aurait créé toutes les expéditions en maritime, y compris les aériennes.
 
+        ## Aucun repli
+
+        Un service dont le mode n'est pas déductible **annule le
+        provisionnement**, et avec lui l'acceptation du devis : les deux sont
+        dans la même transaction. Le devis reste en attente — un état vrai, que
+        l'exploitation voit et peut traiter — au lieu d'une expédition maritime
+        fausse que personne ne sait devoir corriger.
+
         ## Pourquoi `sudo()` ici
 
         Le provisionnement est déclenché par une transition d'état, y compris
@@ -286,7 +300,23 @@ class DallyQuoteRequest(models.Model):
         limité à un champ de configuration, sans donnée d'un autre client.
         """
         self.ensure_one()
-        return transport_from_service(self.sudo().service_type_id)
+        service = self.sudo().service_type_id
+        try:
+            return transport_from_service(service)
+        except TransportIndeterminable as indeterminable:
+            raise UserError(
+                _(
+                    "Le service « %(service)s » ne correspond à aucun mode de "
+                    "transport pris en charge par le moteur fret. L'acceptation "
+                    "du devis %(devis)s est annulée : aucune expédition n'a été "
+                    "créée. Choisissez un service maritime ou aérien, ou faites "
+                    "ajouter ce mode avant d'accepter."
+                )
+                % {
+                    "service": service.display_name or indeterminable.code or "-",
+                    "devis": self.display_name,
+                }
+            ) from indeterminable
 
     # ------------------------------------------------------------------
     # Projection
@@ -421,17 +451,25 @@ class DallyShipmentProjection(models.Model):
         suivis = self.env["shipment.tracking"].sudo().search(
             [("shipment_id", "=", expedition.id)], order="date, id"
         )
+
+        # Les dates déjà projetées sont lues **en une seule requête**, et non
+        # une par événement : une expédition longue accumule des dizaines de
+        # points de suivi, et resynchroniser en produisait autant de requêtes.
+        deja_projetees = {
+            ligne["event_date"]
+            for ligne in Event.search_read(
+                [("shipment_id", "=", self.id)], ["event_date"], load=""
+            )
+        }
+
+        a_creer = []
         for suivi in suivis:
             date = suivi.date
-            if not date:
+            if not date or date in deja_projetees:
                 continue
-            if Event.search_count([
-                ("shipment_id", "=", self.id),
-                ("event_date", "=", date),
-            ]):
-                continue
+            deja_projetees.add(date)
 
-            Event.create({
+            a_creer.append({
                 "shipment_id": self.id,
                 "event_date": date,
                 "location": suivi.location_id.display_name or "",
@@ -441,6 +479,10 @@ class DallyShipmentProjection(models.Model):
                 "visible_to_customer": False,
                 "is_automatic": True,
             })
+
+        # Création groupée : un seul INSERT plutôt qu'un par événement.
+        if a_creer:
+            Event.create(a_creer)
 
     @api.model
     def _dally_freight_sync_all(self):

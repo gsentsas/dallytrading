@@ -47,7 +47,7 @@ VENDOR_ADDONS="${FE2E_VENDOR_ADDONS:-/tmp/dallytrading-tk-freight-dev/vendor-add
 
 #: Specs exécutées, dans l'ordre. Le pont fret d'abord : une régression sur lui
 #: doit se voir avant que la spec véhicule ne s'en serve.
-SPECS=(12-freight-bridge 13-vehicle-cargo 14-groupage)
+SPECS=(12-freight-bridge 13-vehicle-cargo 14-groupage 15-shop-checkout)
 
 log() { printf '\n\033[1m── %s\033[0m\n' "$*"; }
 
@@ -150,7 +150,7 @@ ENV
 
   log "initialisation : tk_freight + modules DallyTrading + pont"
   docker exec "$ODOO_CONTAINER" odoo -c /etc/odoo/odoo.conf -d "$DB" \
-    -i base,tk_freight,dally_core,dally_crm,dally_api,dally_freight,dally_tracking,dally_portal,dally_freight_bridge \
+    -i base,tk_freight,dally_core,dally_crm,dally_api,dally_freight,dally_tracking,dally_portal,dally_freight_bridge,dally_shop \
     --stop-after-init > "$WORK/install.log" 2>&1 || {
       echo "installation échouée — voir $WORK/install.log" >&2
       grep -E ' (ERROR|CRITICAL) ' "$WORK/install.log" | tail -5 >&2
@@ -207,6 +207,19 @@ ENV
     echo "seed groupage échoué :" >&2; tail -20 "$WORK/groupage-seed.out" >&2; exit 1; }
   grep -E '^GROUPAGE_' "$WORK/groupage-seed.out" | grep '=' >> "$WORK/freight-refs"
 
+  log "fixtures boutique"
+  docker cp "$HERE/e2e-shop-seed.py" "$ODOO_CONTAINER:/tmp/e2e-seed/shop.py" >/dev/null
+  docker exec "$ODOO_CONTAINER" sh -c \
+    "odoo shell -c /etc/odoo/odoo.conf -d $DB --no-http < /tmp/e2e-seed/shop.py" \
+    > "$WORK/shop-seed.out" 2>&1
+  # Les deux clés sont expurgées à l'affichage : elles valent autorisation, et
+  # n'ont pas à traverser une sortie de terminal ou un journal d'intégration.
+  grep -E '^SHOP_' "$WORK/shop-seed.out" \
+    | sed -E 's/^(SHOP_API_KEY_[A-Z]+=).*/\1<expurgé>/' | sed 's/^/   /'
+  grep -q 'SHOP_SEED_OK' "$WORK/shop-seed.out" || {
+    echo "seed boutique échoué :" >&2; tail -20 "$WORK/shop-seed.out" >&2; exit 1; }
+  grep -E '^SHOP_' "$WORK/shop-seed.out" | grep '=' >> "$WORK/freight-refs"
+
   # Charge les références produites par les graines — dont la clé d'API réelle,
   # sans laquelle la page /devis affiche « Formulaire momentanément
   # indisponible » : le catalogue de services passe par l'API serveur, pas par
@@ -220,6 +233,11 @@ ENV
     | tar -C "$WORK/web" -xf -
   cp -al "$WEB/node_modules" "$WORK/web/node_modules"
 
+  # Secret de scellement du panier, distinct de celui du portail — le partager
+  # lierait la rotation d'un panier jetable à celle des sessions clientes.
+  openssl rand -base64 48 | tr -d '\n' > "$WORK/shop-cart-secret"
+  chmod 600 "$WORK/shop-cart-secret"
+
   cat > "$WORK/web/.env.local" <<ENV
 NEXT_PUBLIC_SITE_URL=${BASE_URL}
 NEXT_PUBLIC_ENVIRONMENT=development
@@ -230,6 +248,9 @@ ODOO_DATABASE=${DB}
 ODOO_API_KEY=${VEHICLE_API_KEY:-freight-e2e-placeholder-integration-key-000}
 ODOO_TIMEOUT_MS=15000
 PORTAL_SESSION_SECRET=$(cat "$WORK/portal-secret")
+SHOP_CART_SECRET=$(cat "$WORK/shop-cart-secret")
+ODOO_API_KEY_SHOP_READ=${SHOP_API_KEY_READ}
+ODOO_API_KEY_SHOP_CHECKOUT=${SHOP_API_KEY_CHECKOUT}
 ENV
   chmod 600 "$WORK/web/.env.local"
 
@@ -288,6 +309,14 @@ playwright() {
     -e VEHICLE_VIN_A="${VEHICLE_VIN_A:-}" \
     -e VEHICLE_VIN_B="${VEHICLE_VIN_B:-}" \
     -e VEHICLE_REGISTRATION_A="${VEHICLE_REGISTRATION_A:-}" \
+    -e SHOP_PUBLISHED_REF="${SHOP_PUBLISHED_REF:-}" \
+    -e SHOP_STOCK_REF="${SHOP_STOCK_REF:-}" \
+    -e SHOP_UNPUBLISHED_REF="${SHOP_UNPUBLISHED_REF:-}" \
+    -e SHOP_PRICE="${SHOP_PRICE:-}" \
+    -e SHOP_LIST_PRICE="${SHOP_LIST_PRICE:-}" \
+    -e SHOP_KNOWN_EMAIL="${SHOP_KNOWN_EMAIL:-}" \
+    -e SHOP_CANARY_NOTE="${SHOP_CANARY_NOTE:-}" \
+    -e SHOP_CANARY_SUPPLIER="${SHOP_CANARY_SUPPLIER:-}" \
     --user "$(id -u):$(id -g)" \
     "$PLAYWRIGHT_IMAGE" npx playwright test --output=/tmp/pw-out "$@"
 }
@@ -334,6 +363,33 @@ reset_groupage() {
   fi
 }
 
+#: Restaure le périmètre boutique et vérifie ses préconditions.
+reset_shop() {
+  local output
+  output="$(docker exec -i "$ODOO_CONTAINER" \
+    odoo shell -c /etc/odoo/odoo.conf -d "$DB" --no-http \
+    < "$HERE/e2e-shop-reset.py" 2>&1)"
+  printf '%s\n' "$output" | grep -E "^PRECONDITION_" | sed 's/^/   /'
+  if ! printf '%s' "$output" | grep -q "PRECONDITION_OK shop"; then
+    echo "   précondition boutique non satisfaite — arrêt" >&2
+    return 1
+  fi
+}
+
+#: Compte en base ce que la boutique a produit.
+verify_shop() {
+  log "vérification en base (boutique)"
+  local output
+  output="$(docker exec -i "$ODOO_CONTAINER" \
+    odoo shell -c /etc/odoo/odoo.conf -d "$DB" --no-http \
+    < "$HERE/e2e-shop-verify.py" 2>&1)"
+  printf '%s\n' "$output" | grep -E "^VERIFY" | sed 's/^/   /'
+  printf '%s' "$output" | grep -q "VERIFY_OK shop" || {
+    echo "   comptage boutique incorrect — arrêt" >&2
+    return 1
+  }
+}
+
 run_tests() {
   : > "$WORK/next.log"
   local failed=0
@@ -357,6 +413,9 @@ run_tests() {
   log "restauration du périmètre groupage"
   reset_groupage || return 1
 
+  log "restauration du périmètre boutique"
+  reset_shop || return 1
+
   # Une spec par invocation, avec redémarrage entre chacune : la limitation de
   # débit sur la connexion vit en mémoire d'un seul processus, et deux specs
   # d'affilée la déclencheraient.
@@ -367,6 +426,7 @@ run_tests() {
   done
 
   verify_db || failed=1
+  verify_shop || failed=1
   audit_logs "$depuis" || failed=1
   return "$failed"
 }

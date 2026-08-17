@@ -34,10 +34,13 @@ navigateur envoie ne participe à ce calcul, aujourd'hui pour l'affichage et
 demain pour la commande.
 """
 
+import logging
 import re
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+
+_logger = logging.getLogger(__name__)
 
 _SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -277,6 +280,70 @@ class ProductTemplate(models.Model):
             limit=limite,
             offset=decalage,
         )
+
+    @api.model
+    def _dally_shop_resolve_lines(self, demandes):
+        """Revalide un panier au moment de commander, et refuse s'il a bougé.
+
+        `demandes` est une liste de couples `(référence, quantité)`. Le retour est
+        une liste de couples `(product.template, quantité)` dans le même ordre.
+
+        ## Pourquoi une seconde lecture
+
+        Le panier vit dans un cookie qui peut avoir trente jours. Entre la mise au
+        panier et la commande, un produit peut avoir été dépublié, archivé, ou
+        rendu non vendable. Se fier à ce qui a été validé à l'ajout, c'est
+        commander sur un état du monde périmé.
+
+        La lecture porte sur les trois conditions à la fois. `sale_ok` s'ajoute à
+        la publication parce que ce sont deux décisions différentes : un produit
+        peut rester en vitrine pendant qu'on suspend sa vente, et l'oubli
+        produirait une commande qu'Odoo refuserait plus loin, à un endroit où le
+        message n'a plus de rapport avec la cause.
+
+        ## Le refus est global
+
+        Une seule référence en défaut fait échouer la commande entière. Retirer
+        silencieusement la ligne fautive serait plus doux et pire : le client
+        validerait un total qu'il n'a pas vu, pour un contenu qu'il n'a pas
+        choisi. Il doit revoir son panier.
+        """
+        if not demandes:
+            raise ValueError("empty_cart")
+
+        references = [reference for reference, _q in demandes]
+        publies = self.sudo().search(
+            self._dally_shop_domain() + [("dally_shop_slug", "in", references)]
+        )
+        # `sale_ok` est filtré après la recherche et non dans le domaine, pour que
+        # le message distingue « plus au catalogue » de « vente suspendue » dans
+        # les journaux internes. Côté client, les deux donnent le même refus.
+        par_reference = {
+            produit.dally_shop_slug: produit for produit in publies if produit.sale_ok
+        }
+        non_vendables = [
+            produit.dally_shop_slug for produit in publies if not produit.sale_ok
+        ]
+        if non_vendables:
+            _logger.info(
+                "Commande boutique refusee : produits non vendables %s", non_vendables
+            )
+
+        manquantes = [r for r in references if r not in par_reference]
+        if manquantes:
+            raise ValueError("unavailable_products:%s" % ",".join(sorted(manquantes)))
+
+        lignes = []
+        for reference, quantite in demandes:
+            produit = par_reference[reference]
+            if not produit.product_variant_id:
+                # Un modèle sans variante ne peut pas figurer sur une ligne de
+                # commande. Le cas n'existe pas normalement — Odoo crée toujours
+                # une variante — mais un produit dont toutes les variantes sont
+                # archivées y ressemble, et l'erreur brute serait incompréhensible.
+                raise ValueError("unavailable_products:%s" % reference)
+            lignes.append((produit, quantite))
+        return lignes
 
     @api.model
     def _dally_shop_find(self, reference):

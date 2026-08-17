@@ -8,10 +8,14 @@
  * la clé qui écrit des prospects et lit des dossiers clients serait accorder à la
  * page la plus attaquable la clé la plus large.
  *
- * `ODOO_API_KEY_SHOP` ne porte donc que `shop:read`, avec repli sur la clé par
- * défaut pour qu'une instance n'ayant pas encore séparé ses clés continue de
- * fonctionner — et échoue alors sur un 403 explicite d'Odoo plutôt que de
- * s'exécuter en silence sous une identité plus large.
+ * ## Aucun repli
+ *
+ * `ODOO_API_KEY_SHOP_READ` ne porte que `shop:read`, et son absence **ne retombe
+ * pas** sur `ODOO_API_KEY`. Un repli serait commode et irait dans le mauvais
+ * sens : la boutique continuerait de fonctionner, sous une identité capable
+ * d'écrire des prospects et de lire des clients, sans que rien ne le signale.
+ * Une clé absente est donc une panne — bruyante au démarrage en production,
+ * explicite ici partout ailleurs.
  *
  * ## Le prix ne remonte que dans un sens
  *
@@ -39,7 +43,9 @@ export type ShopErrorCode =
   | 'unavailable'
   | 'timeout'
   | 'invalid_response'
-  | 'forbidden';
+  | 'forbidden'
+  /** Clé absente ou secret manquant : panne d'exploitation, pas erreur client. */
+  | 'misconfigured';
 
 export class ShopGatewayError extends Error {
   constructor(
@@ -66,8 +72,16 @@ export class ShopOdooGateway {
   constructor() {
     const env = getServerEnv();
     this.baseUrl = env.ODOO_URL.replace(/\/+$/, '');
-    this.apiKey = env.ODOO_API_KEY_SHOP ?? env.ODOO_API_KEY;
     this.timeoutMs = env.ODOO_TIMEOUT_MS;
+    // Pas de `??` : l'absence de clé est une erreur de configuration, et la
+    // remplacer par une clé plus large serait exactement le repli qu'on refuse.
+    if (!env.ODOO_API_KEY_SHOP_READ) {
+      throw new ShopGatewayError(
+        'misconfigured',
+        'ODOO_API_KEY_SHOP_READ is not configured.',
+      );
+    }
+    this.apiKey = env.ODOO_API_KEY_SHOP_READ;
   }
 
   private async call<T>(

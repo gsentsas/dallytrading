@@ -6,7 +6,8 @@ import { CART_COOKIE, newCart, sealCart, unsealCart, type Cart } from '@/lib/sho
 const SITE = 'https://dallytrading.com';
 const CART_SECRET = 'c'.repeat(48);
 const PORTAL_SECRET = 'p'.repeat(48);
-const SHOP_KEY = 'shop-read-key-must-stay-server-side-0123';
+const SHOP_READ_KEY = 'shop-read-key-must-stay-server-side-0123';
+const SHOP_CHECKOUT_KEY = 'shop-checkout-key-must-stay-server-side-01';
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -102,7 +103,10 @@ beforeEach(() => {
   process.env.ODOO_URL = 'https://crm.shop.invalid';
   process.env.ODOO_DATABASE = 'test_db';
   process.env.ODOO_API_KEY = 'default-key-should-not-be-used-here-01234';
-  process.env.ODOO_API_KEY_SHOP = SHOP_KEY;
+  process.env.ODOO_API_KEY_SHOP_READ = SHOP_READ_KEY;
+  // Les deux clés boutique sont exigées en production, et la production est
+  // simulée ici pour vérifier l'attribut `Secure` du cookie.
+  process.env.ODOO_API_KEY_SHOP_CHECKOUT = SHOP_CHECKOUT_KEY;
   process.env.ODOO_TIMEOUT_MS = '2000';
   process.env.PORTAL_SESSION_SECRET = PORTAL_SECRET;
   process.env.SHOP_CART_SECRET = CART_SECRET;
@@ -438,13 +442,14 @@ describe('la clé d’API ne s’approche pas du navigateur', () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     // La clé `shop:read` est bien celle utilisée, et non la clé par défaut.
-    expect((init.headers as Record<string, string>)['X-API-Key']).toBe(SHOP_KEY);
+    expect((init.headers as Record<string, string>)['X-API-Key']).toBe(SHOP_READ_KEY);
 
     // Contrôle positif : le secret est une chaîne cherchable, non vide.
-    expect(SHOP_KEY.length).toBeGreaterThan(24);
+    expect(SHOP_READ_KEY.length).toBeGreaterThan(24);
     const corps = await response.text();
-    expect(corps).not.toContain(SHOP_KEY);
-    expect(cookieBrut(response)).not.toContain(SHOP_KEY);
+    expect(corps).not.toContain(SHOP_READ_KEY);
+    expect(corps).not.toContain(SHOP_CHECKOUT_KEY);
+    expect(cookieBrut(response)).not.toContain(SHOP_READ_KEY);
     // Ni le secret de scellement.
     expect(corps).not.toContain(CART_SECRET);
     expect(corps).not.toContain(PORTAL_SECRET);

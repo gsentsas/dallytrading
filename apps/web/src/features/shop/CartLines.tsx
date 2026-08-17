@@ -181,6 +181,12 @@ export function CartLines({ initial }: { initial: CartView }) {
           <p className="mt-1 text-xs text-mist-500">
             Hors frais de livraison, communiqués selon la destination.
           </p>
+          <Link
+            href="/boutique/commande"
+            className="mt-4 inline-flex rounded-lg bg-navy-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy-900"
+          >
+            Passer commande
+          </Link>
         </div>
       </div>
 

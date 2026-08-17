@@ -128,15 +128,59 @@ const serverEnvSchema = z.object({
     ),
 
   /**
-   * Optional key carrying `shop:read`.
+   * Shop keys — one per capability, and **no fallback to ODOO_API_KEY**.
    *
-   * Same reasoning as the other capability-scoped keys: the storefront is the
-   * most exposed surface of the site, and a key that only renders a public
-   * catalogue should not be able to write a lead or read a customer. Falls back
-   * to ODOO_API_KEY so an instance that has not split its keys still works.
+   * The other capability keys in this file fall back to the default key, on the
+   * grounds that an instance which has not split its keys should keep working.
+   * That reasoning does not survive contact with the shop, for two reasons.
+   *
+   * First, the direction of the failure. A missing sourcing key degrades to a
+   * wider identity that still only writes sourcing requests. A missing checkout
+   * key would degrade to an identity that writes leads, quotes and reads
+   * customers — reached from the storefront, the most exposed surface of the
+   * site. "Keeps working" would mean "silently escalated".
+   *
+   * Second, the two shop capabilities are not interchangeable. Rendering a public
+   * catalogue and creating a `sale.order` are different powers, and a key that
+   * only draws the vitrine has no business holding the second. Collapsing them
+   * into one key would undo the split at the moment it matters.
+   *
+   * So: absent means absent. In production the environment refuses to validate
+   * (see the refinement below); elsewhere the gateway that needs the key throws
+   * an explicit error when constructed. Neither path can end up using
+   * ODOO_API_KEY.
    */
-  ODOO_API_KEY_SHOP: z.string().min(24).optional(),
-});
+  ODOO_API_KEY_SHOP_READ: z.string().min(24).optional(),
+  ODOO_API_KEY_SHOP_CHECKOUT: z.string().min(24).optional(),
+})
+  /**
+   * Production must configure the shop keys explicitly.
+   *
+   * A refinement rather than a plain `.min()`: outside production the site must
+   * still boot without them — a developer working on the portal has no reason to
+   * provision shop credentials, and the 128 test failures caused by making
+   * SHOP_CART_SECRET unconditionally required showed what "just make it
+   * required" costs.
+   *
+   * In production the tradeoff inverts. A storefront that answers 503 because
+   * nobody set a key is a silent outage; failing at boot is a loud one, caught in
+   * preflight rather than by a customer.
+   */
+  .superRefine((env, ctx) => {
+    if (env.ENVIRONMENT !== 'production') return;
+    for (const clef of ['ODOO_API_KEY_SHOP_READ', 'ODOO_API_KEY_SHOP_CHECKOUT'] as const) {
+      if (!env[clef]) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [clef],
+          message:
+            `${clef} is required in production. The shop never falls back to ` +
+            'ODOO_API_KEY: that key can write leads and read customers, and the ' +
+            'storefront must not reach it.',
+        });
+      }
+    }
+  });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 

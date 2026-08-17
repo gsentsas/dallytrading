@@ -162,8 +162,55 @@ def cle(nom, scopes):
     return creee, secret
 
 
+# Trois clés, une par capacité, plus une sans le scope. Les capacités sont
+# séparées parce que lire un catalogue public et créer une `sale.order` sont deux
+# pouvoirs différents ; la clé sans scope existe pour que le refus d'autorisation
+# soit mesuré sur une clé réelle et valide, et non confondu avec « clé inconnue ».
 cle_boutique, secret_boutique = cle("Boutique dev (shop:read)", "shop:read,services:read")
+cle_checkout, secret_checkout = cle("Boutique dev (shop:checkout)", "shop:checkout")
 cle_sans_scope, secret_sans_scope = cle("Boutique dev (sans shop:read)", "services:read")
+
+# ── Client portail, pour la commande connectée ───────────────────────────
+#
+# La commande d'un client connecté passe par sa session portail, jamais par une
+# clé d'API : c'est la seule construction dans laquelle `request.env.user` est le
+# client. Il faut donc un vrai compte, avec un vrai mot de passe.
+MOT_DE_PASSE_CLIENT = "essai-boutique-client-2026"
+COURRIEL_CLIENT = "client.boutique@essai.invalid"
+
+partenaire_client = env["res.partner"].search([("email", "=", COURRIEL_CLIENT)], limit=1)
+if not partenaire_client:
+    partenaire_client = env["res.partner"].create({
+        "name": "Client Boutique (synthetique)",
+        "email": COURRIEL_CLIENT,
+        "phone": "+221 77 111 22 33",
+        "street": "12 avenue de la Boutique",
+        "city": "Dakar",
+        "zip": "11000",
+    })
+
+utilisateur_client = env["res.users"].with_context(active_test=False).search(
+    [("login", "=", COURRIEL_CLIENT)], limit=1
+)
+if not utilisateur_client:
+    utilisateur_client = env["res.users"].create({
+        "name": partenaire_client.name,
+        "login": COURRIEL_CLIENT,
+        "partner_id": partenaire_client.id,
+        "group_ids": [(6, 0, [env.ref("base.group_portal").id])],
+    })
+utilisateur_client.write({"password": MOT_DE_PASSE_CLIENT, "active": True})
+
+# ── Contact sans compte, portant une adresse connue ──────────────────────
+#
+# Le cas qui distingue « rapprocher par e-mail » de « demander une connexion ».
+COURRIEL_SANS_COMPTE = "connu.sans.compte@essai.invalid"
+sans_compte = env["res.partner"].search([("email", "=", COURRIEL_SANS_COMPTE)], limit=1)
+if not sans_compte:
+    sans_compte = env["res.partner"].create({
+        "name": "Contact Connu Sans Compte",
+        "email": COURRIEL_SANS_COMPTE,
+    })
 
 env.cr.commit()
 
@@ -171,6 +218,10 @@ print(f"SHOP_PRICELIST_ID={tarif.id}")
 print(f"SHOP_PRICE={PRIX_TARIF}")
 print(f"SHOP_LIST_PRICE={PRIX_LISTE}")
 print(f"SHOP_KEY={secret_boutique}")
+print(f"SHOP_KEY_CHECKOUT={secret_checkout}")
 print(f"SHOP_KEY_NO_SCOPE={secret_sans_scope}")
+print(f"SHOP_PORTAL_LOGIN={COURRIEL_CLIENT}")
+print(f"SHOP_PORTAL_PASSWORD={MOT_DE_PASSE_CLIENT}")
+print(f"SHOP_KNOWN_EMAIL_NO_ACCOUNT={COURRIEL_SANS_COMPTE}")
 print(f"SHOP_UNPUBLISHED_ID={p_non_publie.id}")
 print("SHOP_SEED_OK")

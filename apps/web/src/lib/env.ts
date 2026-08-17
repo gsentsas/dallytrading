@@ -167,16 +167,25 @@ const serverEnvSchema = z.object({
    * preflight rather than by a customer.
    */
   .superRefine((env, ctx) => {
-    if (env.ENVIRONMENT !== 'production') return;
+    // Le déclencheur est le schéma de l'URL du site, pas `ENVIRONMENT`.
+    //
+    // `ENVIRONMENT` n'est pas défini dans `apps/web/.env.production`, le fichier
+    // que systemd charge : il retombe donc sur `development` en production, et ce
+    // raffinement n'aurait jamais tiré là où il compte. Mesuré pendant la
+    // préparation du déploiement, pas déduit.
+    //
+    // Le schéma de l'URL, lui, ne peut pas se désynchroniser de la réalité :
+    // c'est l'adresse à laquelle le site répond.
+    if (!env.NEXT_PUBLIC_SITE_URL.startsWith('https://')) return;
     for (const clef of ['ODOO_API_KEY_SHOP_READ', 'ODOO_API_KEY_SHOP_CHECKOUT'] as const) {
       if (!env[clef]) {
         ctx.addIssue({
           code: 'custom',
           path: [clef],
           message:
-            `${clef} is required in production. The shop never falls back to ` +
-            'ODOO_API_KEY: that key can write leads and read customers, and the ' +
-            'storefront must not reach it.',
+            `${clef} is required when the site is served over https. The shop ` +
+            'never falls back to ODOO_API_KEY: that key can write leads and read ' +
+            'customers, and the storefront must not reach it.',
         });
       }
     }

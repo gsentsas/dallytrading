@@ -108,6 +108,8 @@ function cookiePose(response: Response): string | null {
 
 beforeEach(() => {
   process.env.NEXT_PUBLIC_SITE_URL = SITE;
+  // Le site de test est en https : le cookie de panier posé par cette route doit
+  // donc porter `Secure`, quelle que soit la valeur de `ENVIRONMENT`.
   process.env.ENVIRONMENT = 'development';
   process.env.ODOO_URL = 'https://crm.checkout.invalid';
   process.env.ODOO_DATABASE = 'test_db';
@@ -180,14 +182,39 @@ describe('commande invité', () => {
   it('échoue explicitement si la clé de commande n’est pas configurée', async () => {
     // Aucun repli sur ODOO_API_KEY : la boutique ne doit pas se mettre à
     // fonctionner sous une identité capable d'écrire des prospects.
+    //
+    // Deux couches refusent, et ce test porte sur la seconde. Le schéma
+    // d'environnement rejette dès le démarrage lorsque le site est en https —
+    // c'est le filet de production, vérifié dans `env`. Ici on éprouve la garde
+    // de la passerelle, qui est la seule à s'appliquer hors https : sur une
+    // instance locale, le site démarre sans clé boutique, et la commande doit
+    // alors échouer proprement plutôt que repartir avec une clé plus large.
+    process.env.NEXT_PUBLIC_SITE_URL = 'http://127.0.0.1:3000';
     delete process.env.ODOO_API_KEY_SHOP_CHECKOUT;
     resetServerEnvCache();
     const { cookie } = panierScelle();
 
-    const response = await (await POST())(requete({ cartCookie: cookie }));
+    const response = await (await POST())(
+      requete({ cartCookie: cookie, origin: 'http://127.0.0.1:3000' }),
+    );
 
     expect(response.status).toBe(503);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('le site en https exige les deux clés dès la validation d’environnement', async () => {
+    // Le filet de production. `ENVIRONMENT` ne peut pas servir de déclencheur :
+    // il est absent de `.env.production`, donc toujours `development` là où il
+    // compte. Le schéma de l'URL, lui, est l'adresse à laquelle le site répond.
+    const { resetServerEnvCache: reset, getServerEnv } = await import('@/lib/env');
+    for (const clef of ['ODOO_API_KEY_SHOP_READ', 'ODOO_API_KEY_SHOP_CHECKOUT'] as const) {
+      const sauve = process.env[clef];
+      delete process.env[clef];
+      reset();
+      expect(() => getServerEnv(), `${clef} manquante doit refuser`).toThrow(clef);
+      process.env[clef] = sauve;
+      reset();
+    }
   });
 });
 

@@ -43,6 +43,11 @@ beforeEach(() => {
   process.env.ODOO_API_KEY = 'k'.repeat(32);
   process.env.ODOO_TIMEOUT_MS = '2000';
   process.env.PORTAL_SESSION_SECRET = SECRET;
+  // Le site de test est en https, et le schéma exige alors les deux clés
+  // boutique : elles sont validées en bloc, y compris pour un test qui n'a
+  // rien à voir avec la boutique.
+  process.env.ODOO_API_KEY_SHOP_READ = 'shop-read-key-for-tests-only-0123456789';
+  process.env.ODOO_API_KEY_SHOP_CHECKOUT = 'shop-checkout-key-for-tests-only-01234';
   process.env.SHOP_CART_SECRET = 'shop-cart-secret-for-tests-'.padEnd(48, 'x');
   resetServerEnvCache();
   jar = new CookieJar();

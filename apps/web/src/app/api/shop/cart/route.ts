@@ -31,6 +31,7 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 
 import { getServerEnv } from '@/lib/env';
+import { siteIsHttps } from '@/lib/shop/deployment';
 import { logger } from '@/lib/logger';
 import { checkOrigin } from '@/lib/portal/csrf';
 import {
@@ -326,7 +327,7 @@ function repondre(reponse: Reponse): NextResponse {
     sortie.cookies.set(
       CART_COOKIE,
       sealCart(reponse.cart, env.SHOP_CART_SECRET),
-      cartCookieOptions(env.ENVIRONMENT === 'production'),
+      cartCookieOptions(siteIsHttps()),
     );
   }
   return sortie;

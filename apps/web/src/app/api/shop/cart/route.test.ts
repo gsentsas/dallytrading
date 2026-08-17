@@ -99,6 +99,10 @@ function cookieBrut(response: Response): string {
 
 beforeEach(() => {
   process.env.NEXT_PUBLIC_SITE_URL = SITE;
+  // `Secure` est dérivé du schéma de NEXT_PUBLIC_SITE_URL, pas de `ENVIRONMENT` :
+  // cette variable est absente de `.env.production` en production, et s'y fier
+  // aurait retiré `Secure` du cookie sans qu'aucune erreur ne le signale.
+  // SITE est en https, donc le cookie doit porter `Secure`.
   process.env.ENVIRONMENT = 'production';
   process.env.ODOO_URL = 'https://crm.shop.invalid';
   process.env.ODOO_DATABASE = 'test_db';

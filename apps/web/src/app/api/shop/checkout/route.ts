@@ -39,6 +39,7 @@
 import { NextResponse } from 'next/server';
 
 import { getServerEnv } from '@/lib/env';
+import { siteIsHttps } from '@/lib/shop/deployment';
 import { logger, newCorrelationId } from '@/lib/logger';
 import { checkOrigin } from '@/lib/portal/csrf';
 import { PORTAL_COOKIE, isExpired, unsealSession } from '@/lib/portal/session';
@@ -347,7 +348,7 @@ function repondre(reponse: Reponse): NextResponse {
     sortie.cookies.set(
       CART_COOKIE,
       sealCart(reponse.cart, env.SHOP_CART_SECRET),
-      cartCookieOptions(env.ENVIRONMENT === 'production'),
+      cartCookieOptions(siteIsHttps()),
     );
   }
   return sortie;

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Le tarif de la boutique, créé une fois et jamais réécrit.
+
+        `noupdate="1"` est essentiel : sans lui, chaque montée de version
+        réappliquerait ces valeurs et écraserait les règles que le propriétaire
+        aurait ajoutées entre-temps. Un tarif est une décision commerciale, et le
+        code n'a pas à la reprendre à chaque déploiement.
+
+        AUCUNE RÈGLE DE PRIX N'EST FOURNIE, et c'est délibéré.
+
+        Mesuré : un tarif sans règle fait rendre à Odoo le `list_price` du produit
+        — 777 777 sur la sonde, c'est-à-dire exactement le prix de liste. Écrire
+        ici une règle « prix fixe » ou « remise sur le prix de liste » serait
+        inventer un montant que personne n'a validé, pour cinq produits dont
+        quatre sont des lignes de frais internes.
+
+        La boutique refuse donc de servir un produit dont aucune règle ne fixe le
+        prix (voir `_dally_shop_price`). Le tarif existe, il est sélectionné, et
+        rien n'est vendable tant que le propriétaire n'a pas décidé des prix.
+
+        La devise est fixée ici, par `ref('base.XOF')`.
+
+        Vérifié : cet xmlid existe toujours — `base` livre toutes les devises du
+        monde et ne fait varier que leur `active`. Le référencer est donc sûr, et
+        surtout c'est le seul moyen d'obtenir XOF sur une **montée de version** :
+        `post_init_hook` ne s'exécute qu'à l'installation, et un premier essai
+        avait produit un tarif en USD sur une base déjà installée — c'est-à-dire
+        exactement le cas de la production.
+
+        L'activation de la devise, elle, reste au hook : écrire `active` sur un
+        enregistrement de `base` depuis nos données reviendrait à s'en approprier
+        la gestion.
+    -->
+    <data noupdate="1">
+
+        <record id="pricelist_dally_shop" model="product.pricelist">
+            <field name="name">Boutique DallyTrading</field>
+            <field name="currency_id" ref="base.XOF"/>
+            <field name="company_id" eval="False"/>
+            <field name="sequence">1</field>
+        </record>
+
+    </data>
+</odoo>

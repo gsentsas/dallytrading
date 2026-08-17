@@ -27,16 +27,21 @@ restent l'autorité sur le nom, le prix et le stock.
     "author": "DallyTrading",
     "website": "https://dallytrading.com",
     "category": "Sales/DallyTrading",
-    "version": "19.0.1.0.0",
+    "version": "19.0.1.1.0",
     "license": "LGPL-3",
     "depends": ["dally_core", "dally_portal", "product", "sale", "stock"],
     "data": [
         "security/ir.model.access.csv",
+        "data/dally_shop_integration_users.xml",
+        "data/dally_shop_pricelist.xml",
         "views/dally_shop_category_views.xml",
         "views/product_template_views.xml",
         "views/res_config_settings_views.xml",
         "views/dally_shop_menus.xml",
     ],
+    # Amorçage : complète une configuration absente, n'écrase jamais une
+    # configuration existante. Voir `hooks.py`.
+    "post_init_hook": "post_init_hook",
     "installable": True,
     "application": False,
     "auto_install": False,

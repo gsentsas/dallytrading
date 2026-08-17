@@ -45,7 +45,17 @@ export type ShopErrorCode =
   | 'invalid_response'
   | 'forbidden'
   /** Clé absente ou secret manquant : panne d'exploitation, pas erreur client. */
-  | 'misconfigured';
+  | 'misconfigured'
+  /**
+   * La boutique n'a pas encore de tarif, donc n'est pas ouverte.
+   *
+   * Distinct de `unavailable`, et c'est tout l'objet du code : une boutique en
+   * préparation n'est pas une panne. Les confondre faisait annoncer
+   * « momentanément indisponible » à un visiteur devant une vitrine qui n'a
+   * jamais ouvert — un message qui l'invite à revenir dans cinq minutes pour
+   * retrouver la même chose.
+   */
+  | 'not_open';
 
 export class ShopGatewayError extends Error {
   constructor(
@@ -126,6 +136,12 @@ export class ShopOdooGateway {
         // distinction qu'on a pris soin de supprimer.
         if (response.status === 404) {
           throw new ShopGatewayError('not_found', 'not found', 404);
+        }
+        // La boutique n'est pas ouverte. Reconnu avant les autres cas : c'est un
+        // état de configuration voulu, pas une panne, et il ne doit pas se
+        // retrouver dans le fourre-tout `unavailable`.
+        if (envelope?.error?.code === 'shop_pricelist_missing') {
+          throw new ShopGatewayError('not_open', 'shop is not open yet', response.status);
         }
         if (response.status === 401 || response.status === 403) {
           // Une clé mal configurée, pas une erreur du visiteur. Journalisée en

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Les deux identités d'intégration de la boutique.
+
+        ## Pourquoi elles sont versionnées, alors que les clés ne le sont pas
+
+        Une clé d'API Odoo agit sous UN utilisateur, et ce sont les groupes de cet
+        utilisateur qui bornent réellement ce que l'appel peut faire. L'identité
+        est donc une décision d'architecture — reproductible, sans secret, et qui
+        doit exister sur une base neuve sans intervention manuelle.
+
+        Le secret de la clé, lui, n'est jamais ici : il est engendré dans Odoo et
+        recopié dans l'environnement du frontend. Aucun mot de passe n'est défini
+        sur ces comptes : ils ne servent qu'à porter des groupes, et un compte sans
+        mot de passe ne peut pas se connecter.
+
+        ## Deux comptes, pas un
+
+        Réunir les deux capacités sous une seule identité annulerait la séparation
+        au niveau qui compte : la vitrine, surface la plus exposée du site,
+        pourrait alors créer des commandes.
+
+        `base.group_user` seul. Les contrôleurs boutique passent par `sudo()` après
+        autorisation pour lire le catalogue et écrire la commande ; ces identités
+        n'ont donc besoin d'aucun droit commercial. Mesuré sur la production : les
+        deux clés fonctionnent avec ce seul groupe.
+
+        `noupdate="1"` : si le propriétaire ajuste un groupe, une montée de version
+        ne doit pas le défaire.
+    -->
+    <data noupdate="1">
+
+        <record id="user_dally_shop_read" model="res.users">
+            <field name="name">DallyTrading API Boutique (lecture)</field>
+            <field name="login">dally_api_shop_read</field>
+            <field name="active" eval="True"/>
+            <field name="share" eval="False"/>
+            <field name="group_ids" eval="[(6, 0, [ref('base.group_user')])]"/>
+        </record>
+
+        <record id="user_dally_shop_checkout" model="res.users">
+            <field name="name">DallyTrading API Boutique (commande)</field>
+            <field name="login">dally_api_shop_checkout</field>
+            <field name="active" eval="True"/>
+            <field name="share" eval="False"/>
+            <field name="group_ids" eval="[(6, 0, [ref('base.group_user')])]"/>
+        </record>
+
+    </data>
+</odoo>

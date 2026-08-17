@@ -154,11 +154,52 @@ export function EmptyCatalogue() {
 }
 
 /**
+ * La boutique n'est pas encore ouverte.
+ *
+ * ## Pourquoi cet écran existe séparément
+ *
+ * Il disait auparavant « momentanément indisponible » — le message d'une panne.
+ * Mesuré en production le jour de la mise en service : la vitrine, déployée mais
+ * volontairement fermée, annonçait un incident. « Momentanément » invite à revenir
+ * dans cinq minutes pour retrouver exactement la même chose, et laisse croire que
+ * quelque chose est cassé alors que rien ne l'est.
+ *
+ * L'état est reconnu à un code précis venu d'Odoo, `shop_pricelist_missing`, et à
+ * lui seul. Une panne réelle — ERP muet, délai dépassé, tarif configuré mais
+ * introuvable — continue d'afficher l'écran technique.
+ *
+ * Le ton n'est pas une excuse : c'est une information. Et le renvoi vers le devis
+ * donne au visiteur quelque chose à faire, ce que « réessayez » ne fait pas.
+ */
+export function ShopNotOpenYet() {
+  return (
+    <div className="rounded-xl border border-mist-300 bg-white p-10 text-center">
+      <p className="text-lg font-semibold text-navy-900">Boutique en préparation</p>
+      <p className="mx-auto mt-3 max-w-md text-mist-600">
+        Notre catalogue sera bientôt disponible.
+      </p>
+      <p className="mx-auto mt-4 max-w-md text-sm text-mist-500">
+        En attendant, nos équipes répondent à toute demande par devis — fret,
+        sourcing, négoce et transport de véhicules.
+      </p>
+      <Link
+        href="/devis"
+        className="mt-6 inline-flex rounded-lg bg-navy-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy-900"
+      >
+        Demander un devis
+      </Link>
+    </div>
+  );
+}
+
+/**
  * Panne de l'ERP.
  *
  * Ni code d'erreur, ni URL Odoo, ni identifiant de corrélation : ce dernier vit
  * dans les journaux serveur, où le support le retrouve. Sur la page, il
  * n'aiderait personne et cartographierait notre infrastructure.
+ *
+ * Réservé aux vraies pannes. Une boutique fermée relève de `ShopNotOpenYet`.
  */
 export function ShopUnavailable() {
   return (

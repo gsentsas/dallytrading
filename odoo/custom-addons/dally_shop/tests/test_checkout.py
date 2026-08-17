@@ -346,9 +346,35 @@ class TestCheckoutBoutique(TransactionCase):
         self.assertNotIn("999999", serialise)
 
         # Aucun identifiant de partenaire ni de produit.
-        self.assertNotIn(str(self.partenaire_client.id), serialise)
-        self.assertNotIn(str(self.vendable.id), serialise)
-        self.assertNotIn(str(self.vendable.product_variant_id.id), serialise)
+        #
+        # Vérifié sur la STRUCTURE et non par sous-chaîne : sur une base neuve les
+        # identifiants valent 4 ou 7, et chercher « 4 » dans du JSON trouve
+        # n'importe quel montant. Le test échouait ainsi sur une base d'amorçage
+        # tout en passant sur une base chargée — un test qui dépend du volume de
+        # données ne mesure pas ce qu'il prétend.
+        interdits = {
+            self.partenaire_client.id,
+            self.vendable.id,
+            self.vendable.product_variant_id.id,
+        }
+        projection = commande._dally_shop_projection()
+
+        def valeurs(noeud):
+            if isinstance(noeud, dict):
+                for clef, valeur in noeud.items():
+                    yield clef
+                    yield from valeurs(valeur)
+            elif isinstance(noeud, list):
+                for element in noeud:
+                    yield from valeurs(element)
+            else:
+                yield noeud
+
+        entiers = {v for v in valeurs(projection) if isinstance(v, int) and not isinstance(v, bool)}
+        self.assertFalse(
+            entiers & interdits,
+            f"identifiant technique dans la projection : {entiers & interdits}",
+        )
 
         # `reference` est `sale.order.name` — la référence commerciale d'Odoo,
         # du type `S00779`. Sa séquence est corrélée à l'identifiant de ligne, et

@@ -47,11 +47,12 @@ import re
 from psycopg2.errors import SerializationFailure
 
 from odoo import http
-from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.exceptions import AccessError, ValidationError
 from odoo.http import request
 
 from odoo.addons.dally_api.controllers.main import DallyApiController, DallyApiError
 
+from ..models.product_template import ShopPricelistInvalid, ShopPricelistMissing
 from ..models.shop_order import MODES_REMISE, PortalAccountExists
 
 _logger = logging.getLogger(__name__)
@@ -248,8 +249,14 @@ class DallyShopCheckout(DallyApiController):
                 409, "unavailable_products",
                 "Some products are no longer available: %s" % detail,
             )
-        except UserError as pas_de_tarif:
-            _logger.error("Checkout sans tarif boutique : %s", pas_de_tarif)
+        except ShopPricelistMissing as ferme:
+            # La boutique n'est pas ouverte. Un panier ne devrait pas exister dans
+            # cet état — le catalogue ne sert rien — mais un cookie de trente jours
+            # peut survivre à une fermeture, et le refus doit rester lisible.
+            _logger.info("Checkout refuse : boutique fermee (%s).", ferme)
+            return self._error(503, "shop_pricelist_missing", "Shop is not open yet.")
+        except ShopPricelistInvalid as casse:
+            _logger.error("Checkout impossible : tarif boutique introuvable (%s).", casse)
             return self._error(503, "shop_unavailable", "Shop is not configured.")
 
         try:

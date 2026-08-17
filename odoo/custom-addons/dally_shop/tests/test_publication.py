@@ -17,8 +17,13 @@ Le contrôle positif est la raison d'être du premier : sans lui, chaque asserti
 d'invisibilité serait satisfaite par une base vide.
 """
 
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import ValidationError
 from odoo.tests import TransactionCase, tagged
+
+from ..models.product_template import (
+    ShopPricelistInvalid,
+    ShopPricelistMissing,
+)
 
 #: Marqueur planté dans un champ interne du produit publié.
 #:
@@ -273,9 +278,13 @@ class TestPublicationBoutique(TransactionCase):
         La même règle que le mode de transport du fret : sans la donnée, on
         refuse. Afficher un prix que personne n'a validé serait pire qu'un refus
         — dont le 1 912 000 de l'artefact de test présent en production.
+
+        L'exception est `ShopPricelistMissing` et non un `UserError` générique :
+        la page doit pouvoir dire « boutique en préparation » plutôt que
+        « momentanément indisponible », et un message partagé ne le permettait pas.
         """
         self.env["ir.config_parameter"].sudo().set_param("dally_shop.pricelist_id", "")
-        with self.assertRaises(UserError):
+        with self.assertRaises(ShopPricelistMissing):
             self.env["product.template"]._dally_shop_pricelist()
 
     def test_tarif_supprime_ne_fait_pas_tomber_la_boutique(self):
@@ -288,5 +297,7 @@ class TestPublicationBoutique(TransactionCase):
         self.env["ir.config_parameter"].sudo().set_param(
             "dally_shop.pricelist_id", "999999999"
         )
-        with self.assertRaises(UserError):
+        # `ShopPricelistInvalid`, pas `ShopPricelistMissing` : quelqu'un a choisi
+        # un tarif et il a disparu. C'est une panne, pas une boutique fermée.
+        with self.assertRaises(ShopPricelistInvalid):
             self.env["product.template"]._dally_shop_pricelist()

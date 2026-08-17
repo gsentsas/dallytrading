@@ -59,6 +59,29 @@ SLUGS_RESERVES = frozenset({"panier", "commande", "paiement", "confirmation"})
 #: Clé de configuration portant le tarif de la boutique.
 CLE_TARIF = "dally_shop.pricelist_id"
 
+
+class ShopPricelistMissing(Exception):
+    """Aucun tarif boutique n'est configuré.
+
+    Ce n'est **pas une panne** : c'est l'état d'une boutique qu'on n'a pas encore
+    ouverte. La distinction compte jusqu'à l'écran du visiteur — « momentanément
+    indisponible » évoque un incident et invite à revenir dans cinq minutes, alors
+    que la vérité est « pas encore en vente ». Deux messages, donc deux codes, donc
+    deux exceptions.
+    """
+
+
+class ShopPricelistInvalid(Exception):
+    """Un tarif est configuré, mais l'enregistrement n'existe plus.
+
+    Traité comme une panne et non comme une boutique fermée, parce que quelqu'un
+    a bel et bien pris la décision d'ouvrir : le paramètre porte un identifiant.
+    Le silence serait le pire des deux mondes — une boutique qui se présente comme
+    « en préparation » alors que sa configuration est cassée ne serait jamais
+    réparée.
+    """
+
+
 #: Politiques de stock proposées au MVP.
 #:
 #: `on_order` — l'article est approvisionné après la commande. C'est le cas
@@ -173,27 +196,74 @@ class ProductTemplate(models.Model):
 
         La même règle que pour le mode de transport du fret : quand la donnée
         manque, on refuse au lieu de deviner.
+
+        ## Deux échecs, et pourquoi ils ne se confondent pas
+
+        `ShopPricelistMissing` — le paramètre est vide. La boutique n'a pas été
+        ouverte, et le visiteur doit lire « en préparation ».
+
+        `ShopPricelistInvalid` — le paramètre porte un identifiant, mais
+        l'enregistrement a disparu, ou la valeur n'est pas un entier. Quelqu'un a
+        décidé d'ouvrir et la configuration est cassée : c'est une panne, elle doit
+        se voir comme telle.
+
+        Les deux étaient auparavant un seul `UserError`, et la boutique fermée
+        s'annonçait « momentanément indisponible ».
         """
-        brut = self.env["ir.config_parameter"].sudo().get_param(CLE_TARIF)
-        tarif = self.env["product.pricelist"].browse(int(brut)).exists() if brut else None
+        brut = (self.env["ir.config_parameter"].sudo().get_param(CLE_TARIF) or "").strip()
+        if not brut:
+            raise ShopPricelistMissing(CLE_TARIF)
+        try:
+            identifiant = int(brut)
+        except (TypeError, ValueError):
+            # Une valeur non numérique est une configuration cassée, pas une
+            # absence de configuration.
+            raise ShopPricelistInvalid(CLE_TARIF) from None
+        tarif = self.env["product.pricelist"].sudo().browse(identifiant).exists()
         if not tarif:
-            raise UserError(
-                _("La boutique n'a pas de tarif configuré (%s). Aucun prix ne "
-                  "sera affiché tant que ce tarif n'est pas défini.") % CLE_TARIF
-            )
+            raise ShopPricelistInvalid(CLE_TARIF)
         return tarif
 
     def _dally_shop_price(self, tarif=None):
-        """Prix unitaire public, calculé par Odoo pour la quantité 1.
+        """Prix unitaire public **explicitement décidé**, par produit.
 
-        Retourne un dictionnaire par produit, pas une valeur : les appelants
-        traitent des listes, et le tarif ne doit être résolu qu'une fois.
+        Retourne un dictionnaire ne contenant que les produits dont le prix vient
+        d'une règle du tarif. Les autres en sont **absents** — ils ne sont pas
+        vendables, et l'appelant doit les écarter plutôt que leur inventer un prix.
+
+        ## Le repli silencieux d'Odoo, mesuré
+
+        `_get_product_price` rend toujours un montant. Sur un tarif sans règle
+        applicable, ce montant est le `list_price` du produit. Mesuré : tarif sans
+        règle → 777 777, c'est-à-dire exactement le prix de liste, avec
+        `rule_id` vide.
+
+        C'est le repli que la boutique refuse depuis le premier jour, et il ne
+        suffisait pas de choisir un tarif pour s'en protéger : il faut vérifier
+        qu'une **règle** s'est appliquée. `_get_product_price_rule` rend le couple
+        `(prix, règle)`, et l'absence de règle est le signal.
+
+        Un prix de liste n'a pas été décidé pour la vente publique. Le servir,
+        c'est afficher un montant que personne n'a validé — dont le 1 912 000 de
+        l'artefact de test présent en production.
         """
         tarif = tarif or self._dally_shop_pricelist()
-        return {
-            produit.id: tarif._get_product_price(produit, 1.0)
-            for produit in self
-        }
+        prix = {}
+        sans_regle = []
+        for produit in self:
+            montant, regle = tarif._get_product_price_rule(produit, 1.0)
+            if not regle:
+                sans_regle.append(produit.dally_shop_slug or produit.display_name)
+                continue
+            prix[produit.id] = montant
+        if sans_regle:
+            _logger.warning(
+                "Boutique : %s produit(s) publie(s) sans regle de tarif, donc "
+                "ecarte(s) du catalogue : %s. Ajouter une regle au tarif %s pour "
+                "les mettre en vente.",
+                len(sans_regle), ", ".join(sorted(sans_regle)), tarif.display_name,
+            )
+        return prix
 
     # ------------------------------------------------------------------
     # Projection publique
@@ -216,6 +286,10 @@ class ProductTemplate(models.Model):
 
         projections = []
         for produit in self:
+            # Absent du dictionnaire = aucune règle de tarif ne s'applique. Le
+            # produit est publié mais son prix n'a pas été décidé : il ne sort pas.
+            if produit.id not in prix:
+                continue
             projection = {
                 "reference": produit.dally_shop_slug,
                 "name": produit.display_name,
@@ -262,11 +336,23 @@ class ProductTemplate(models.Model):
     def _dally_shop_domain(self):
         """Le domaine unique par lequel passe toute lecture publique.
 
-        Un seul endroit à corriger, et un seul à vérifier. Les deux conditions
-        comptent : `active` écarte les produits archivés, que la publication
-        laisserait visibles si on ne regardait que `dally_published`.
+        Un seul endroit à corriger, et un seul à vérifier. Les trois conditions
+        comptent, et chacune ferme un cas différent :
+
+        * `dally_published` — la décision d'exposer le produit ;
+        * `active` — un produit archivé est retiré de la circulation, et la
+          publication seule le laisserait en vitrine ;
+        * `sale_ok` — un produit peut rester publié pendant qu'on suspend sa
+          vente. Il était auparavant vérifié **seulement** à la commande : le
+          catalogue pouvait donc lister un article que la commande refuserait
+          ensuite, ce qui est la pire séquence — le client choisit, puis on lui
+          dit non.
         """
-        return [("dally_published", "=", True), ("active", "=", True)]
+        return [
+            ("dally_published", "=", True),
+            ("active", "=", True),
+            ("sale_ok", "=", True),
+        ]
 
     @api.model
     def _dally_shop_search(self, categorie_slug=None, limite=None, decalage=0):
@@ -315,23 +401,38 @@ class ProductTemplate(models.Model):
         publies = self.sudo().search(
             self._dally_shop_domain() + [("dally_shop_slug", "in", references)]
         )
-        # `sale_ok` est filtré après la recherche et non dans le domaine, pour que
-        # le message distingue « plus au catalogue » de « vente suspendue » dans
-        # les journaux internes. Côté client, les deux donnent le même refus.
-        par_reference = {
-            produit.dally_shop_slug: produit for produit in publies if produit.sale_ok
-        }
-        non_vendables = [
-            produit.dally_shop_slug for produit in publies if not produit.sale_ok
-        ]
-        if non_vendables:
-            _logger.info(
-                "Commande boutique refusee : produits non vendables %s", non_vendables
-            )
-
+        par_reference = {produit.dally_shop_slug: produit for produit in publies}
         manquantes = [r for r in references if r not in par_reference]
+
         if manquantes:
+            # Le domaine public porte les trois conditions ensemble : le refus
+            # rendu au client ne les distingue pas, et c'est voulu. Mais une
+            # exploitation a besoin de savoir laquelle a joué — « vente suspendue »
+            # et « dépublié » n'appellent pas le même geste. On le relit donc ici,
+            # dans le journal interne uniquement.
+            for produit in self.sudo().with_context(active_test=False).search(
+                [("dally_shop_slug", "in", manquantes)]
+            ):
+                _logger.info(
+                    "Commande boutique refusee : %s (publie=%s actif=%s vendable=%s)",
+                    produit.dally_shop_slug, produit.dally_published,
+                    produit.active, produit.sale_ok,
+                )
             raise ValueError("unavailable_products:%s" % ",".join(sorted(manquantes)))
+
+        # Un produit sans règle de tarif n'est pas commandable. Le contrôle est
+        # ici et non seulement à l'affichage : un panier de trente jours peut
+        # porter une référence dont la règle de tarif a été retirée depuis.
+        tarifes = publies._dally_shop_price()
+        sans_prix = [
+            slug for slug, produit in par_reference.items() if produit.id not in tarifes
+        ]
+        if sans_prix:
+            _logger.warning(
+                "Commande boutique refusee : aucune regle de tarif pour %s",
+                ", ".join(sorted(sans_prix)),
+            )
+            raise ValueError("unavailable_products:%s" % ",".join(sorted(sans_prix)))
 
         lignes = []
         for reference, quantite in demandes:
@@ -357,7 +458,15 @@ class ProductTemplate(models.Model):
         """
         if not reference or not isinstance(reference, str):
             return self.browse()
-        return self.sudo().search(
+        trouve = self.sudo().search(
             self._dally_shop_domain() + [("dally_shop_slug", "=", reference)],
             limit=1,
         )
+        if not trouve:
+            return trouve
+        # Publié, actif, vendable — mais sans prix décidé. La fiche doit répondre
+        # comme pour un produit inconnu : sinon elle s'ouvrirait sur un montant
+        # que personne n'a validé, ou sur une page en erreur.
+        if trouve.id not in trouve._dally_shop_price():
+            return self.browse()
+        return trouve

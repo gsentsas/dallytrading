@@ -42,6 +42,7 @@ export type CheckoutErrorCode =
   | 'portal_account_exists'
   | 'empty_cart'
   | 'shop_unavailable'
+  | 'shop_pricelist_missing'
   | 'rate_limited'
   | 'unavailable'
   | 'timeout'
@@ -251,6 +252,9 @@ export class ShopCheckoutGateway {
     const connus: readonly CheckoutErrorCode[] = [
       'invalid_checkout', 'forbidden_fields', 'unavailable_products',
       'portal_account_exists', 'empty_cart', 'shop_unavailable',
+      // La boutique fermée est un code métier à part : le BFF doit pouvoir dire
+      // « pas encore ouverte » plutôt que « indisponible ».
+      'shop_pricelist_missing',
     ];
     if (code && (connus as readonly string[]).includes(code)) {
       return new CheckoutGatewayError(

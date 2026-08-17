@@ -31,9 +31,10 @@ qui dépendrait du cas.
 import logging
 
 from odoo import http
-from odoo.exceptions import UserError
 
 from odoo.addons.dally_api.controllers.main import DallyApiController, DallyApiError
+
+from ..models.product_template import ShopPricelistInvalid, ShopPricelistMissing
 
 _logger = logging.getLogger(__name__)
 
@@ -53,6 +54,41 @@ MAX_QUANTITE_LIGNE = 999
 
 
 class DallyShopController(DallyApiController):
+
+    # ------------------------------------------------------------------
+    # Tarif : deux échecs, deux codes
+    # ------------------------------------------------------------------
+
+    def _refus_tarif(self, api_key, erreur):
+        """Traduit un échec de résolution du tarif en réponse HTTP.
+
+        Deux codes, parce que les deux situations n'appellent pas le même écran :
+
+        * `shop_pricelist_missing` — aucun tarif n'est configuré. La boutique n'a
+          pas été ouverte ; le visiteur doit lire « en préparation », pas
+          « momentanément indisponible ». Journalisé en **information** : c'est un
+          état voulu, et le noter en erreur remplirait les journaux d'une alarme
+          permanente que personne ne lirait plus ;
+        * `shop_unavailable` — un tarif est configuré mais introuvable. Quelqu'un a
+          décidé d'ouvrir et la configuration est cassée. Journalisé en **erreur**,
+          parce que cela doit se voir et se réparer.
+
+        Le statut reste 503 dans les deux cas : la boutique ne peut pas servir de
+        prix, et c'est bien un état du serveur. C'est le code qui porte la nuance.
+        """
+        api_key._register_use()
+        if isinstance(erreur, ShopPricelistMissing):
+            _logger.info(
+                "Boutique fermee : aucun tarif configure (%s). Etat attendu "
+                "tant que la boutique n'est pas ouverte.", erreur,
+            )
+            return self._error(
+                503, "shop_pricelist_missing", "Shop is not open yet."
+            )
+        _logger.error(
+            "Boutique mal configuree : le tarif %s est introuvable.", erreur
+        )
+        return self._error(503, "shop_unavailable", "Shop is not configured.")
 
     # ------------------------------------------------------------------
     # Catalogue
@@ -79,13 +115,8 @@ class DallyShopController(DallyApiController):
         Produit = env["product.template"]
         try:
             tarif = Produit._dally_shop_pricelist()
-        except UserError as erreur:
-            # La boutique n'a pas de tarif. C'est une erreur de configuration du
-            # serveur, pas une erreur du client : 503, et le message reste
-            # générique côté public.
-            _logger.error("boutique sans tarif configure: %s", erreur)
-            api_key._register_use()
-            return self._error(503, "shop_unavailable", "Shop is not configured.")
+        except (ShopPricelistMissing, ShopPricelistInvalid) as erreur:
+            return self._refus_tarif(api_key, erreur)
 
         produits = Produit._dally_shop_search(
             categorie_slug=categorie, limite=limite
@@ -125,10 +156,8 @@ class DallyShopController(DallyApiController):
         Produit = env["product.template"]
         try:
             tarif = Produit._dally_shop_pricelist()
-        except UserError as erreur:
-            _logger.error("boutique sans tarif configure: %s", erreur)
-            api_key._register_use()
-            return self._error(503, "shop_unavailable", "Shop is not configured.")
+        except (ShopPricelistMissing, ShopPricelistInvalid) as erreur:
+            return self._refus_tarif(api_key, erreur)
 
         produit = Produit._dally_shop_find(reference)
         api_key._register_use()
@@ -200,10 +229,8 @@ class DallyShopController(DallyApiController):
         Produit = env["product.template"]
         try:
             tarif = Produit._dally_shop_pricelist()
-        except UserError as erreur:
-            _logger.error("boutique sans tarif configure: %s", erreur)
-            api_key._register_use()
-            return self._error(503, "shop_unavailable", "Shop is not configured.")
+        except (ShopPricelistMissing, ShopPricelistInvalid) as erreur:
+            return self._refus_tarif(api_key, erreur)
 
         # Une seule recherche pour toutes les références. Une boucle d'appels à
         # `_dally_shop_find` produirait une requête par ligne, et le panier est

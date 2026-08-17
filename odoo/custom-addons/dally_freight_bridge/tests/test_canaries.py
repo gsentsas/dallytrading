@@ -19,6 +19,7 @@ Le contrôle vaut aussi comme non-régression : le jour où quelqu'un ajoute un
 champ à la projection, ces tests le voient passer.
 """
 
+import base64
 import uuid
 
 from odoo.tests import TransactionCase, tagged
@@ -30,6 +31,7 @@ CANARIS = {
     "CANARY_SUPPLIER": "fournisseur",
     "CANARY_COMMISSION": "commission",
     "CANARY_INTERNAL_NOTE": "note interne",
+    "CANARY_INTERNAL_DOCUMENT": "document interne",
 }
 
 
@@ -79,6 +81,15 @@ class TestCanaris(TransactionCase):
             "internal_notes": "CANARY_INTERNAL_NOTE CANARY_MARGIN CANARY_SUPPLIER",
         })
 
+        # Un document du dossier opérationnel, jamais publié. Son nom ET son
+        # contenu portent le canari : le premier fuirait par une projection
+        # trop large, le second par un téléchargement mal contrôlé.
+        cls.document_interne = cls.env["freight.documents"].sudo().create({
+            "freight_id": cls.expedition.id,
+            "file_name": "CANARY_INTERNAL_DOCUMENT-arbitrage.pdf",
+            "document": base64.b64encode(b"CANARY_INTERNAL_DOCUMENT").decode(),
+        })
+
     def _scan(self, valeur, chemin):
         """Échoue si un canari apparaît dans la valeur sérialisée."""
         texte = repr(valeur)
@@ -109,6 +120,25 @@ class TestCanaris(TransactionCase):
             repr(self.projection.sudo().read(["internal_notes"])),
             "Le canari n'a pas ete plante dans les notes internes.",
         )
+        self.assertIn(
+            "CANARY_INTERNAL_DOCUMENT",
+            repr(self.document_interne.sudo().read(["file_name"])),
+            "Le canari n'a pas ete plante dans le document interne.",
+        )
+
+    def test_le_document_interne_ne_fuit_dans_aucune_projection(self):
+        """Il n'a jamais été publié : il ne doit exister nulle part côté client."""
+        self.assertFalse(self.document_interne.dally_portal_document_id)
+        for nom, payload in (
+            ("portail", self.projection._dally_portal_payload()),
+            ("detail", self.projection._dally_portal_detail_payload()),
+            ("public", self.projection._dally_public_payload()),
+        ):
+            self.assertNotIn(
+                "CANARY_INTERNAL_DOCUMENT",
+                repr(payload),
+                f"Le document interne fuit dans la projection {nom}.",
+            )
 
     def test_la_projection_portail_ne_porte_aucun_canari(self):
         self._scan(

@@ -141,7 +141,20 @@ describe('PATCH /api/portal/profile', () => {
   it('refuse un cookie altéré sans appeler Odoo', async () => {
     validSession();
     const cookie = jar.get(PORTAL_COOKIE)?.value as string;
-    jar.seed(`${cookie.slice(0, -1)}X`);
+
+    // Altérer le DERNIER caractère ne suffit pas, et ce test l'a prouvé en
+    // échouant environ une fois sur quatre. Le tag GCM fait 16 octets, soit 22
+    // caractères base64url dont le dernier ne porte que 2 bits utiles : une
+    // substitution sur quatre redonne exactement les mêmes octets. Le tag
+    // restait valide, la session s'ouvrait, et la requête poursuivait — d'où un
+    // 503 au lieu du 401 attendu, de façon intermittente.
+    //
+    // On altère donc le PREMIER caractère du tag, dont les six bits sont tous
+    // significatifs, en imposant une valeur différente de l'actuelle.
+    const parts = cookie.split('.');
+    const tag = parts[3] as string;
+    parts[3] = (tag[0] === 'A' ? 'B' : 'A') + tag.slice(1);
+    jar.seed(parts.join('.'));
 
     const response = await (await route())(request({ phone: '+221 77 1' }));
     expect(response.status).toBe(401);

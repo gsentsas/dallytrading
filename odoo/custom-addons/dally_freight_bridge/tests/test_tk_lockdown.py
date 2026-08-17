@@ -242,3 +242,67 @@ class TestConfinementRoutes(HttpCase):
         ):
             with self.subTest(url=url):
                 self._refuse(self.url_open(url), url)
+
+
+@tagged("post_install", "-at_install", "dally_freight")
+class TestGardeFouRoutes(TransactionCase):
+    """Le garde-fou doit voir arriver une route que le pont ne couvre pas.
+
+    Vérifier que les 17 routes connues sont neutralisées ne protège que du
+    passé. Ce test simule ce qu'une mise à jour du fournisseur ferait : ajouter
+    une méthode portant une route destinée au client, sans que personne ne
+    pense à la neutraliser.
+    """
+
+    def test_une_nouvelle_route_vendeur_est_detectee(self):
+        from odoo import http
+        from odoo.addons.tk_freight.controllers import main as tk_main
+
+        garde = self.env["dally.freight.lockdown.guard"]
+        self.assertEqual(
+            garde._dally_audit_tk_routes(),
+            [],
+            "L'instance part deja avec des routes non couvertes.",
+        )
+
+        @http.route(
+            ["/freight/nouvelle/route/client"],
+            type="http",
+            auth="public",
+            website=True,
+        )
+        def route_ajoutee_par_une_mise_a_jour(self, **kw):  # pragma: no cover
+            return "ne doit jamais etre servi"
+
+        tk_main.BookingsCustom.route_ajoutee_par_une_mise_a_jour = (
+            route_ajoutee_par_une_mise_a_jour
+        )
+        try:
+            ouvertes = garde._dally_audit_tk_routes()
+            self.assertIn(
+                "/freight/nouvelle/route/client",
+                ouvertes,
+                "Une route vendeur ajoutee n'est pas detectee par le garde-fou.",
+            )
+        finally:
+            # La classe du fournisseur est un objet de processus : ne pas la
+            # restaurer contaminerait tous les tests suivants.
+            del tk_main.BookingsCustom.route_ajoutee_par_une_mise_a_jour
+
+        self.assertEqual(
+            garde._dally_audit_tk_routes(),
+            [],
+            "L'etat du garde-fou n'a pas ete restaure.",
+        )
+
+    def test_l_allowlist_de_routes_reste_vide(self):
+        """Le portail DallyTrading ne consomme aucune route du fournisseur.
+
+        Une allowlist non vide serait le premier pas vers un chemin client qui
+        traverse le moteur tiers.
+        """
+        from odoo.addons.dally_freight_bridge.models.lockdown_guard import (
+            ROUTES_AUTORISEES,
+        )
+
+        self.assertEqual(ROUTES_AUTORISEES, frozenset())

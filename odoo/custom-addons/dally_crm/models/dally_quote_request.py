@@ -130,6 +130,34 @@ class DallyQuoteRequest(models.Model):
     vehicle_model = fields.Char(string="Vehicle Model")
     vehicle_year = fields.Char(string="Vehicle Year")
 
+    groupage_transport_mode = fields.Selection(
+        selection=[
+            ("sea", "Groupage maritime"),
+            ("air", "Groupage aérien"),
+        ],
+        string="Mode de groupage",
+        help="Comment la marchandise groupée voyage physiquement. Obligatoire "
+             "pour le service de groupage, ignoré pour les autres.",
+    )
+    # Pourquoi ce champ existe alors que le groupage n'ajoute aucun objet métier.
+    #
+    # « Groupage » décrit ce que le client achète — un envoi consolidé — et non
+    # la façon dont il voyage. Le même service produit un LCL maritime ou une
+    # consolidation aérienne, et rien dans son intitulé ne permet de trancher.
+    #
+    # Le mode est donc porté explicitement, en valeurs closes et sans défaut.
+    # L'enjeu n'est pas cosmétique : `dally.shipment` calcule le poids taxable
+    # depuis `VOLUMETRIC_RATIOS`, où l'aérien vaut 167 kg/m³ et le maritime
+    # 1000. Deviner le mode d'un envoi léger et volumineux se paierait donc
+    # d'un facteur six sur la facturation — l'erreur que le commentaire de ces
+    # ratios dit précisément vouloir éviter.
+    #
+    # Volontairement distinct de `vehicle_transport_mode` : les deux services
+    # n'ont ni les mêmes valeurs (`sea|air` contre `sea|road`) ni les mêmes
+    # conséquences opérationnelles. Les fondre dans un champ générique
+    # imposerait une migration à une fonctionnalité déjà déployée, pour une
+    # symétrie dont personne n'a besoin aujourd'hui.
+
     budget = fields.Char(
         string="Budget / Target Price",
         help="Free text, and deliberately not a Monetary: customers write "

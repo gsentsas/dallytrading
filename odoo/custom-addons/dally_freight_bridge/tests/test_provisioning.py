@@ -419,13 +419,20 @@ class TestModes(ProvisioningCommon):
         devis.write({"state": "won"})
         self.assertEqual(self._compte(devis), (0, 0, 0))
 
-    def test_un_groupage_est_refuse(self):
-        """Le groupage est le plus souvent du LCL maritime — mais pas toujours.
+    def test_un_groupage_sans_mode_est_refuse(self):
+        """Le groupage est désormais implémenté — mais son mode reste exigé.
 
-        « Le plus souvent » n'est pas une base pour créer une expédition. Le
-        groupage aérien existe ; il faudra une décision métier explicite.
+        Ce test disait autrefois « il faudra une décision métier explicite » et
+        attendait un refus catégorique. Cette décision est prise : le groupage
+        est provisionnable, à condition que le devis porte son mode physique.
+
+        Sans mode, rien ne dit si la marchandise part par bateau ou par avion.
+        Deviner se paierait d'un facteur six sur le poids taxable — l'aérien
+        convertit à 167 kg/m³, le maritime à 1000.
         """
-        self._refuse_et_verifie_le_rollback("freight_groupage", "Groupage")
+        self._refuse_et_verifie_le_rollback(
+            "freight_groupage", "Groupage", motif="mode de groupage"
+        )
 
     def _refuse_et_verifie_le_rollback(self, code, nom, motif="mode de transport"):
         """Le provisionnement est refusé ET rien ne subsiste.

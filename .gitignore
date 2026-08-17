@@ -62,3 +62,4 @@ Thumbs.db
 rollback/
 .deploy-build/
 apps/web/.next.old/
+apps/web/.next.previous/

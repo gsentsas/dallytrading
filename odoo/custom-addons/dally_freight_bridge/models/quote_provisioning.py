@@ -78,6 +78,7 @@ from .freight_mapping import (
     TransportIndeterminable,
     carries_own_mode,
     is_freight_service,
+    transport_from_groupage_mode,
     transport_from_vehicle_mode,
     mode_from_transport,
     state_from_stage,
@@ -192,6 +193,7 @@ class DallyQuoteRequest(models.Model):
         self.ensure_one()
 
         expediteur, destinataire = self._dally_freight_parties()
+        transport, type_maritime = self._dally_freight_transport()
         valeurs = {
             "dally_quote_request_id": self.id,
             # L'opérateur est l'utilisateur courant s'il est interne, faute de
@@ -200,9 +202,14 @@ class DallyQuoteRequest(models.Model):
             "operator_id": self._dally_freight_operator().id,
             "shipper_id": expediteur.id,
             "consignee_id": destinataire.id,
-            "transport": self._dally_freight_transport(),
+            "transport": transport,
             "operation": "direct",
         }
+        # `ocean_shipment_type` n'est posé que lorsqu'il a un sens : LCL est une
+        # notion maritime. L'écrire sur une expédition aérienne serait une
+        # donnée fausse dans le dossier d'exploitation.
+        if type_maritime:
+            valeurs["ocean_shipment_type"] = type_maritime
 
         booking = self.env["shipment.freight.booking"].sudo().create(valeurs)
 
@@ -322,6 +329,26 @@ class DallyQuoteRequest(models.Model):
         # Services dont le mode voyage avec la marchandise — le transport de
         # véhicule aujourd'hui. On lit le mode sur le véhicule lui-même : le
         # service dit ce que le client achète, pas comment la voiture part.
+        code = (service.code or "") if service else ""
+
+        # Groupage : le mode voyage sur le devis, et le maritime emporte avec
+        # lui le type d'expédition LCL du fournisseur.
+        if code == "freight_groupage":
+            try:
+                return transport_from_groupage_mode(self.sudo().groupage_transport_mode)
+            except TransportIndeterminable as indeterminable:
+                raise UserError(
+                    _(
+                        "Le mode de groupage du devis %(devis)s n'est pas pris "
+                        "en charge (« %(mode)s »). L'acceptation est annulée : "
+                        "aucune expédition n'a été créée."
+                    )
+                    % {
+                        "devis": self.display_name,
+                        "mode": indeterminable.code or "non renseigné",
+                    }
+                ) from indeterminable
+
         if carries_own_mode(service):
             vehicule = self._dally_freight_vehicle_cargo()
             if not vehicule:
@@ -334,7 +361,7 @@ class DallyQuoteRequest(models.Model):
                     % self.display_name
                 )
             try:
-                return transport_from_vehicle_mode(vehicule.transport_mode)
+                return transport_from_vehicle_mode(vehicule.transport_mode), False
             except TransportIndeterminable as indeterminable:
                 raise UserError(
                     _(
@@ -349,7 +376,7 @@ class DallyQuoteRequest(models.Model):
                 ) from indeterminable
 
         try:
-            return transport_from_service(service)
+            return transport_from_service(service), False
         except TransportIndeterminable as indeterminable:
             raise UserError(
                 _(
@@ -385,10 +412,32 @@ class DallyQuoteRequest(models.Model):
             [("tk_shipment_id", "=", expedition.id)], limit=1
         )
         if not projection:
+            mode = mode_from_transport(expedition.transport) or "other"
+
+            # Garde-fou : le pont ne produit JAMAIS le mode historique
+            # « groupage ».
+            #
+            # Cette valeur existe encore sur `dally.shipment` pour les saisies
+            # manuelles et les enregistrements anciens, et elle y reste. Mais
+            # elle vaut 1000 kg/m³ dans `VOLUMETRIC_RATIOS`, comme le maritime :
+            # une consolidation aérienne projetée ainsi verrait son poids
+            # taxable calculé au ratio maritime au lieu de 167, soit un facteur
+            # six sur du fret léger et volumineux.
+            #
+            # « Groupage » est un service commercial ; le mode dit comment la
+            # marchandise voyage. Les confondre se paierait en facturation.
+            if mode == "groupage":
+                raise UserError(
+                    _("Le provisionnement a produit le mode « groupage », qui "
+                      "décrit un service et non un transport physique. "
+                      "L'expédition %s aurait été facturée au mauvais ratio "
+                      "volumétrique.") % expedition.display_name
+                )
+
             projection = self.env["dally.shipment"].sudo().create({
                 "tk_shipment_id": expedition.id,
                 "partner_id": self.sudo().partner_id.commercial_partner_id.id,
-                "transport_mode": mode_from_transport(expedition.transport) or "other",
+                "transport_mode": mode,
                 "direction": self._dally_freight_direction(),
                 "state": "draft",
             })

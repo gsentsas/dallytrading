@@ -85,7 +85,7 @@ DIRECTION_TO_DIRECTION = {
 #:
 #: `freight_groupage` n'y est pas : le groupage est le plus souvent du LCL
 #: maritime, mais le groupage aérien existe. « Le plus souvent » n'est pas une
-#: base pour créer une expédition.
+#: base pour créer une expédition. Il porte donc son mode, comme le véhicule.
 #:
 #: `freight_vehicle` n'y est pas non plus, mais pour une raison différente et
 #: durable : son mode physique est porté par la marchandise, pas par le service.
@@ -104,7 +104,23 @@ SERVICE_CODE_TO_TRANSPORT = {
 #: Ces services lisent donc leur mode sur la marchandise elle-même. Les inscrire
 #: ici plutôt que dans `SERVICE_CODE_TO_TRANSPORT` est délibéré : y mettre une
 #: valeur reviendrait à trancher à la place du client.
-SERVICES_A_MODE_PORTE = frozenset({"freight_vehicle"})
+SERVICES_A_MODE_PORTE = frozenset({"freight_vehicle", "freight_groupage"})
+
+#: Mode de groupage déclaré sur le devis → transport `tk_freight`.
+#:
+#: Le maritime s'accompagne de `ocean_shipment_type = "lcl"`, qui est une valeur
+#: réelle du fournisseur — vérifiée dans sa sélection `fcl`/`lcl` — et non une
+#: approximation posée dans une note ou une description.
+#:
+#: L'aérien, lui, n'a **aucun** équivalent chez le fournisseur : il n'existe pas
+#: de champ de consolidation aérienne. On ne détourne pas `operation = "house"`
+#: pour en tenir lieu — la LTA maison contre LTA mère décrit un rapport entre
+#: transitaires, pas le caractère groupé d'un envoi commercial. Le groupage
+#: aérien se lit donc sur le service du devis, et nulle part ailleurs.
+GROUPAGE_MODE_TO_TRANSPORT = {
+    "sea": ("ocean", "lcl"),
+    "air": ("air", False),
+}
 
 #: Mode physique déclaré sur le véhicule → transport `tk_freight`.
 #:
@@ -166,6 +182,23 @@ def carries_own_mode(service_type):
     """Le mode physique de ce service est-il porté par la marchandise ?"""
     code = (service_type.code or "") if service_type else ""
     return code in SERVICES_A_MODE_PORTE
+
+
+def transport_from_groupage_mode(mode):
+    """Mode de groupage → `(transport tk, type d'expédition maritime)`.
+
+    Lève `TransportIndeterminable` si le mode est absent ou inconnu. Aucun
+    repli : un envoi groupé dont on ignore s'il part par bateau ou par avion
+    serait facturé au mauvais ratio volumétrique.
+    """
+    couple = GROUPAGE_MODE_TO_TRANSPORT.get(mode or "")
+    if couple:
+        return couple
+    _logger.warning(
+        "Mode de groupage %r non supporte : provisionnement refuse.",
+        mode or "(aucun)",
+    )
+    raise TransportIndeterminable(mode or "")
 
 
 def transport_from_vehicle_mode(mode):

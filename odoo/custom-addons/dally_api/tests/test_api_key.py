@@ -168,9 +168,26 @@ class TestDallyApiKey(TransactionCase):
         key.unlink()
         self.assertFalse(key.exists())
 
-    def test_register_use_updates_counters(self):
+    def test_register_use_defers_counting_out_of_the_transaction(self):
+        """L'usage n'est plus compté pendant la requête, et c'est le but.
+
+        Ce test affirmait l'inverse : `_register_use()` puis `request_count == 1`
+        dans la foulée. Cette écriture immédiate était la source de la contention
+        — dix requêtes concurrentes sur la même clé produisaient cinq
+        `SerializationFailure`, mesurés en production.
+
+        Le compteur est désormais alimenté après le commit, par un événement que
+        le cron replie. La propriété vérifiée ici est donc l'absence d'écriture,
+        plus un contrôle positif : le callback est bien posé, sinon « rien n'est
+        écrit » serait vrai d'une télémétrie devenue muette.
+        """
         key = self._create_key()
         self.assertEqual(key.request_count, 0)
+        avant = len(self.env.cr.postcommit)
+
         key._register_use()
-        self.assertEqual(key.request_count, 1)
-        self.assertTrue(key.last_used_at)
+        self.env.cr.flush()
+
+        key.invalidate_recordset()
+        self.assertEqual(key.request_count, 0)
+        self.assertEqual(len(self.env.cr.postcommit), avant + 1)

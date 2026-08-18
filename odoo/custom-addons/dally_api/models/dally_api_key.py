@@ -8,6 +8,7 @@ public site talks to its own ``/api`` routes, which hold the key server-side
 
 import hashlib
 import hmac
+from functools import partial
 import secrets
 
 from odoo import _, api, fields, models
@@ -288,12 +289,48 @@ class DallyApiKey(models.Model):
         return source_ip in allowed
 
     def _register_use(self):
-        """Record usage. Best-effort: never fail a request over telemetry."""
+        """Note l'usage — sans rien écrire dans la transaction en cours.
+
+        ## Ce que faisait la version précédente, et pourquoi ça coûtait cher
+
+        Elle écrivait `request_count = request_count + 1` sur la ligne de la
+        clé, dans la transaction métier. Odoo impose `REPEATABLE READ` : deux
+        requêtes concurrentes sur la même clé ne s'attendent pas, elles
+        échouent. Mesuré en production, dix requêtes image simultanées : **cinq
+        `SerializationFailure`**, toutes sur `UPDATE dally_api_key`.
+
+        Aucune requête n'échouait — Odoo retente cinq fois — mais chaque
+        retentative rejouait **tout le gestionnaire**. La moitié du travail était
+        refaite pour tenir un compteur qui ne sert qu'à l'affichage.
+
+        Le `try/except` qui entourait l'écriture ne protégeait rien, et c'est le
+        point le plus instructif : `write()` ne fait que marquer le champ, le SQL
+        part au `flush()` déclenché par `retrying()`, **hors** de ce `try`. La
+        garde ne pouvait pas attraper la seule erreur contre laquelle elle
+        existait.
+
+        ## Ce que fait la version actuelle
+
+        Rien, tout de suite. Elle enregistre un callback `postcommit`, exécuté
+        par `Cursor.commit()` **après** que la transaction métier a été validée.
+        Si la requête échoue ou est retentée, `rollback()` appelle
+        `postcommit.clear()` : le callback disparaît, et aucun usage n'est
+        compté pour une transaction qui n'a pas abouti. C'est exactement la
+        sémantique voulue, et elle est fournie par le cœur — on ne la
+        reconstruit pas.
+
+        L'écriture elle-même, elle, part dans son propre curseur : voir
+        `dally.api.key.usage._dally_record`.
+        """
         self.ensure_one()
-        try:
-            self.sudo().write({
-                "last_used_at": fields.Datetime.now(),
-                "request_count": self.request_count + 1,
-            })
-        except Exception:  # noqa: BLE001 - telemetry must not break the API
-            pass
+        identifiant = self.id
+        dbname = self.env.cr.dbname
+        moment = fields.Datetime.now()
+        Usage = self.env["dally.api.key.usage"]
+
+        # `partial` plutôt qu'une lambda fermant sur `self` : le recordset porte
+        # un curseur qui sera fermé quand le callback s'exécutera. On ne capture
+        # que des valeurs simples.
+        self.env.cr.postcommit.add(
+            partial(Usage._dally_record, identifiant, dbname, moment)
+        )

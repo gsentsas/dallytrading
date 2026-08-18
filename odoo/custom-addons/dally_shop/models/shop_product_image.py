@@ -92,6 +92,23 @@ class DallyShopProductImage(models.Model):
              "produirait une vignette morte sur la fiche publique.",
     )
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Vérifie l'image à chaque création, y compris quand le champ est absent.
+
+        `required=True` ne suffit pas ici, et c'est mesuré : `image_1920` est un
+        `fields.Image` stocké **en pièce jointe**, donc sans colonne — PostgreSQL
+        n'a rien sur quoi poser un `NOT NULL`. Et `@api.constrains` ne se
+        déclenche que pour les champs présents dans les valeurs : passer
+        `image_1920: False` était refusé, **omettre le champ passait**, et la
+        galerie gagnait une vignette morte.
+
+        Le contrôle est donc rappelé ici, sur les enregistrements créés.
+        """
+        enregistrements = super().create(vals_list)
+        enregistrements._check_image()
+        return enregistrements
+
     @api.constrains("image_1920")
     def _check_image(self):
         """Une photo non vide, et d'un type que la vitrine sait servir.

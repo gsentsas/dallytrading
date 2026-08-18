@@ -5,3 +5,5 @@ access_shop_category_manager,dally.shop.category responsable,model_dally_shop_ca
 access_shop_product_image_readonly,dally.shop.product.image lecture,model_dally_shop_product_image,dally_core.group_dally_readonly,1,0,0,0
 access_shop_product_image_commercial,dally.shop.product.image commercial,model_dally_shop_product_image,dally_core.group_dally_commercial,1,1,1,1
 access_shop_product_image_manager,dally.shop.product.image responsable,model_dally_shop_product_image,dally_core.group_dally_manager,1,1,1,1
+access_shop_category_catalog,dally.shop.category catalogue,model_dally_shop_category,dally_shop.group_dally_shop_catalog,1,1,1,0
+access_shop_product_image_catalog,dally.shop.product.image catalogue,model_dally_shop_product_image,dally_shop.group_dally_shop_catalog,1,1,1,1

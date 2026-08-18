@@ -34,11 +34,13 @@ navigateur envoie ne participe à ce calcul, aujourd'hui pour l'affichage et
 demain pour la commande.
 """
 
+import base64
 import logging
 import re
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools.mimetypes import guess_mimetype
 
 _logger = logging.getLogger(__name__)
 
@@ -58,6 +60,33 @@ SLUGS_RESERVES = frozenset({"panier", "commande", "paiement", "confirmation"})
 
 #: Clé de configuration portant le tarif de la boutique.
 CLE_TARIF = "dally_shop.pricelist_id"
+
+#: Tailles d'image servies au public, et le champ Odoo derrière chacune.
+#:
+#: Une énumération fermée, et non une dimension libre passée dans l'URL. Un
+#: paramètre `?width=` arbitraire ferait redimensionner à la demande depuis
+#: l'extérieur : chaque valeur inédite est un calcul d'image et une entrée de
+#: cache, donc une amplification offerte à qui itère de 1 à 4000.
+#:
+#: `image_1920` reste la source de vérité ; ces deux champs en sont des dérivés
+#: stockés qu'Odoo recalcule tout seul quand l'original change.
+TAILLES_IMAGE = {
+    "card": "image_512",
+    "detail": "image_1024",
+}
+TAILLE_IMAGE_DEFAUT = "card"
+
+#: Types d'image que la boutique accepte de servir.
+#:
+#: Liste blanche, et l'absence de SVG est délibérée. Un SVG est un document XML
+#: qui peut porter du script : servi depuis notre origine, il s'exécuterait dans
+#: notre contexte. L'image d'un produit vient d'un champ que le personnel
+#: remplit — c'est-à-dire d'une source interne mais non vérifiée — et le même
+#: raisonnement que pour la description en `whitespace-pre-line` s'applique ici.
+#:
+#: Le type est déduit des **octets**, jamais du nom de fichier ni de ce que
+#: l'envoyeur a déclaré.
+MIMETYPES_IMAGE = frozenset({"image/png", "image/jpeg", "image/webp", "image/gif"})
 
 
 class ShopPricelistMissing(Exception):
@@ -279,10 +308,26 @@ class ProductTemplate(models.Model):
 
         Le stock n'est jamais un nombre. « 12 en stock » renseigne un concurrent
         sur les volumes d'achat ; la disponibilité suffit au client.
+
+        ## L'image n'est pas dans la projection
+
+        `imageVersion` porte un jeton court, jamais les octets. Une image de
+        produit pèse des centaines de kilooctets ; en base64 dans le JSON du
+        catalogue, dix produits feraient plusieurs mégaoctets **retransmis à
+        chaque affichage de page**, sans jamais être mis en cache par le
+        navigateur puisqu'ils voyageraient dans un document dynamique.
+
+        Le jeton est l'empreinte du contenu de l'image. Il sert d'adresse : tant
+        que l'image ne change pas il ne change pas, donc le navigateur garde la
+        sienne ; quand elle change, l'adresse change et le cache se renouvelle
+        sans que personne ait à le vider. `None` signifie « aucune image », et
+        c'est le signal qui fait afficher le substitut plutôt qu'une requête
+        vouée au 404.
         """
         tarif = tarif or self._dally_shop_pricelist()
         prix = self._dally_shop_price(tarif)
         devise = tarif.currency_id
+        versions = self._dally_shop_image_versions()
 
         projections = []
         for produit in self:
@@ -301,6 +346,7 @@ class ProductTemplate(models.Model):
                     produit.dally_stock_policy, ""
                 ),
                 "availability": produit._dally_shop_availability(),
+                "imageVersion": versions.get(produit.id),
                 "category": (
                     {
                         "reference": produit.dally_shop_category_id.slug,
@@ -315,6 +361,105 @@ class ProductTemplate(models.Model):
                 projection["unit"] = produit.uom_id.name
             projections.append(projection)
         return projections
+
+    # ------------------------------------------------------------------
+    # Image
+    # ------------------------------------------------------------------
+
+    def _dally_shop_image_versions(self):
+        """`{id du produit: jeton}` pour ceux qui portent une image.
+
+        ## Pourquoi passer par les pièces jointes plutôt que par le champ
+
+        `image_1920` est un champ `fields.Image`, donc stocké en pièce jointe et
+        non en colonne — vérifié sur la base de production, qui n'a aucune
+        colonne `image%` sur `product_template`. Lire le champ pour savoir s'il
+        est rempli chargerait donc les octets de **chaque** produit du catalogue,
+        à chaque affichage, pour n'en garder qu'un booléen.
+
+        La table des pièces jointes porte déjà l'empreinte du contenu. Une seule
+        requête, aucun octet d'image lu, et l'empreinte est exactement ce dont on
+        a besoin comme numéro de version.
+
+        `search` sur `ir.attachment` masque d'ordinaire les pièces jointes de
+        champ en ajoutant `res_field = False` au domaine ; il ne le fait pas
+        quand le domaine mentionne lui-même `res_field`, ce qui est le cas ici.
+        Le comportement est vérifié dans le source d'Odoo 19, pas supposé.
+
+        `sudo()` : la clé d'intégration n'a pas de droit de lecture sur
+        `ir.attachment`, et n'a aucune raison d'en avoir. Le domaine restreint la
+        lecture au seul champ image de produits dont l'appelant a déjà établi la
+        publication.
+        """
+        if not self.ids:
+            return {}
+        pieces = self.env["ir.attachment"].sudo().search_read(
+            [
+                ("res_model", "=", "product.template"),
+                ("res_field", "=", "image_1920"),
+                ("res_id", "in", self.ids),
+            ],
+            ["res_id", "checksum", "write_date"],
+        )
+        versions = {}
+        for piece in pieces:
+            # L'empreinte du contenu quand elle existe ; sinon la date de
+            # modification, qui change elle aussi à chaque remplacement d'image.
+            # Le second cas n'est pas théorique : une pièce jointe créée par un
+            # import peut arriver sans empreinte calculée.
+            brut = piece.get("checksum") or str(piece.get("write_date") or "")
+            if not brut:
+                continue
+            versions[piece["res_id"]] = brut[:16]
+        return versions
+
+    @api.model
+    def _dally_shop_image(self, reference, taille=None):
+        """Les octets de l'image d'un produit publié, ou `None`.
+
+        `None` recouvre volontairement quatre situations : référence inconnue,
+        produit non publié, produit publié sans image, image d'un type refusé.
+        L'appelant répond 404 dans les quatre cas, et ne peut donc pas les
+        distinguer — c'est la même règle que la fiche produit, pour la même
+        raison : distinguer « pas d'image » de « pas publié » suffirait à
+        énumérer un catalogue en préparation.
+
+        La visibilité passe par `_dally_shop_find`, et non par un domaine
+        recopié. Un second chemin de décision finirait par diverger du premier :
+        le jour où un produit devient invisible au catalogue, son image doit
+        disparaître au même instant, sans qu'on ait à y penser.
+
+        Le type est déduit des octets. Ni le nom du fichier, ni le `mimetype`
+        déclaré sur la pièce jointe ne sont consultés : tous deux viennent de
+        l'envoyeur, et servir un `text/html` depuis notre origine parce qu'un
+        fichier s'appelait `photo.png` serait une faille de script.
+        """
+        produit = self._dally_shop_find(reference)
+        if not produit:
+            return None
+
+        champ = TAILLES_IMAGE.get(taille or "", TAILLES_IMAGE[TAILLE_IMAGE_DEFAUT])
+        brut = produit.sudo()[champ]
+        if not brut:
+            return None
+
+        try:
+            octets = base64.b64decode(brut)
+        except (ValueError, TypeError):
+            _logger.warning(
+                "Boutique : l'image du produit %s n'est pas decodable.", reference
+            )
+            return None
+
+        mimetype = guess_mimetype(octets, default="")
+        if mimetype not in MIMETYPES_IMAGE:
+            _logger.warning(
+                "Boutique : image du produit %s refusee, type %r hors liste "
+                "blanche. Remplacer par un PNG, JPEG, WebP ou GIF.",
+                reference, mimetype,
+            )
+            return None
+        return octets, mimetype
 
     def _dally_shop_availability(self):
         """Disponibilité qualitative, jamais une quantité.

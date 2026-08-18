@@ -18,6 +18,7 @@ const PRODUIT = {
   stockPolicy: 'on_order',
   stockPolicyLabel: 'Sur commande',
   availability: 'on_order',
+  imageVersion: null,
   category: { reference: 'groupes-electrogenes', name: 'Groupes électrogènes' },
 } as const;
 
@@ -174,5 +175,55 @@ describe('contrat du panier résolu', () => {
     // Sans elles, la vue est incomplète : la page a besoin de connaître le
     // plafond pour le dire au client avant qu'il l'atteigne.
     expect(() => cartViewSchema.parse(PANIER)).toThrow();
+  });
+});
+
+describe('empreinte de l’image', () => {
+  it('accepte une empreinte', () => {
+    const produit = { ...PRODUIT, imageVersion: 'a1b2c3d4e5f60718' };
+    expect(shopProductSchema.parse(produit).imageVersion).toBe('a1b2c3d4e5f60718');
+  });
+
+  it('accepte l’absence d’image', () => {
+    expect(shopProductSchema.parse({ ...PRODUIT, imageVersion: null }).imageVersion)
+      .toBeNull();
+  });
+
+  it('tolère un Odoo qui ne l’envoie pas encore', () => {
+    /*
+     * La propriété qui rend l'ordre de déploiement libre.
+     *
+     * Le champ est ajouté des deux côtés. S'il était requis ici, ce frontend
+     * exigerait un Odoo déjà monté de version, et la boutique tomberait entre
+     * les deux opérations — l'incident décrit en tête de `dto.ts`, dans l'autre
+     * sens. Avec un défaut, les deux ordres fonctionnent.
+     */
+    const { imageVersion: _absent, ...sansChamp } = PRODUIT;
+    expect(shopProductSchema.parse(sansChamp).imageVersion).toBeNull();
+  });
+
+  it('refuse une empreinte vide', () => {
+    // Une chaîne vide produirait une URL sans jeton, donc un cache court sur
+    // une image qui n'existe pas. `null` est le seul « pas d'image » accepté.
+    expect(() =>
+      shopProductSchema.parse({ ...PRODUIT, imageVersion: '' }),
+    ).toThrow();
+  });
+
+  it('refuse des octets à la place de l’empreinte', () => {
+    // Le contrat interdit structurellement le base64 massif : le champ est une
+    // chaîne, mais un objet ou un tableau d'octets est rejeté, et rien dans le
+    // schéma n'offre d'endroit où poser une image.
+    expect(() =>
+      shopProductSchema.parse({ ...PRODUIT, imageVersion: { data: 'iVBORw0KGgo' } }),
+    ).toThrow();
+  });
+
+  it('la fiche et la tuile portent le même champ', () => {
+    // Un mécanisme unique : si la fiche avait son propre champ image, les deux
+    // divergeraient et le navigateur téléchargerait deux fois la même image.
+    const tuile = shopProductSchema.parse({ ...PRODUIT, imageVersion: 'aaaa1111' });
+    const fiche = shopProductDetailSchema.parse({ ...DETAIL, imageVersion: 'aaaa1111' });
+    expect(fiche.imageVersion).toBe(tuile.imageVersion);
   });
 });

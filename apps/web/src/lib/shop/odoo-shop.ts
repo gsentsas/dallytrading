@@ -35,6 +35,7 @@ import {
   type ShopCatalogue,
   type ShopProductDetail,
 } from './dto';
+import { shopImageMimeType, type ShopImageSize } from './image';
 import type { CartLine } from './cart';
 
 /** Codes stables, pour que l'appelant décide sans analyser un message. */
@@ -217,6 +218,106 @@ export class ShopOdooGateway {
       'product',
     );
     return parsed;
+  }
+
+  /**
+   * Les octets de l'image d'un produit publié.
+   *
+   * ## Pourquoi cette méthode ne passe pas par `call`
+   *
+   * `call` lit la réponse en texte et la parse en JSON. Une image passée par ce
+   * chemin serait décodée en UTF-8 — donc corrompue avant même d'échouer — puis
+   * rejetée comme réponse illisible. Le corps binaire a besoin d'un chemin
+   * distinct, mais la gestion des échecs reste identique : les erreurs d'Odoo
+   * sont du JSON, et se lisent comme partout ailleurs.
+   *
+   * ## Le type est vérifié ici aussi
+   *
+   * Odoo le contrôle déjà à partir des octets. Le vérifier une seconde fois
+   * n'est pas de la défiance envers Odoo : c'est que ce BFF est ce qui parle au
+   * navigateur, et que rien de ce qui sort d'ici ne doit pouvoir devenir un
+   * document exécutable servi depuis notre origine. Les deux contrôles
+   * protègent deux frontières différentes.
+   */
+  async getProductImage(
+    reference: string,
+    size: ShopImageSize,
+    correlationId: string,
+  ): Promise<{ bytes: ArrayBuffer; contentType: string }> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const path =
+      `/api/v1/shop/products/${encodeURIComponent(reference)}/image` +
+      `?size=${encodeURIComponent(size)}`;
+
+    try {
+      const response = await fetch(`${this.baseUrl}${path}`, {
+        method: 'GET',
+        headers: {
+          'X-API-Key': this.apiKey,
+          'X-Correlation-Id': correlationId,
+        },
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        // Non publié, inconnu, sans image : Odoo répond 404 aux quatre cas, et
+        // cette passerelle n'a pas à inventer la distinction qu'on a supprimée.
+        if (response.status === 404) {
+          throw new ShopGatewayError('not_found', 'not found', 404);
+        }
+        let code: string | undefined;
+        try {
+          code = (JSON.parse(await response.text()) as OdooEnvelope<unknown>).error
+            ?.code;
+        } catch {
+          // Corps illisible : le statut suffit à décider.
+        }
+        if (code === 'shop_pricelist_missing') {
+          throw new ShopGatewayError('not_open', 'shop is not open yet', response.status);
+        }
+        if (response.status === 401 || response.status === 403) {
+          logger.error('Shop image rejected by Odoo', {
+            correlationId,
+            status: response.status,
+            code,
+          });
+          throw new ShopGatewayError('forbidden', 'shop key rejected', response.status);
+        }
+        throw new ShopGatewayError(
+          'unavailable',
+          code ?? `HTTP ${response.status}`,
+          response.status,
+        );
+      }
+
+      const contentType = shopImageMimeType(response.headers.get('content-type'));
+      if (contentType === null) {
+        logger.error('Shop image has an unexpected content type', {
+          correlationId,
+          // Le type est journalisé, jamais renvoyé : il décrirait la réponse
+          // interne d'Odoo à qui a demandé l'image.
+          contentType: response.headers.get('content-type'),
+        });
+        throw new ShopGatewayError('invalid_response', 'unexpected image type');
+      }
+
+      return {
+        bytes: await response.arrayBuffer(),
+        contentType,
+      };
+    } catch (error) {
+      if (error instanceof ShopGatewayError) throw error;
+      const aborted = error instanceof Error && error.name === 'AbortError';
+      logger.error('Shop image call failed', { correlationId, aborted });
+      throw new ShopGatewayError(
+        aborted ? 'timeout' : 'unavailable',
+        'The ERP is unreachable.',
+      );
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**

@@ -123,7 +123,8 @@ class TestProjectionCatalogue(TransactionCase):
         self.assertEqual(
             set(projection),
             {"reference", "name", "summary", "price", "currency",
-             "stockPolicy", "stockPolicyLabel", "availability", "category"},
+             "stockPolicy", "stockPolicyLabel", "availability", "imageVersion",
+             "category"},
         )
 
     def test_le_detail_ajoute_deux_cles_et_pas_plus(self):
@@ -131,8 +132,8 @@ class TestProjectionCatalogue(TransactionCase):
         self.assertEqual(
             set(projection),
             {"reference", "name", "summary", "price", "currency",
-             "stockPolicy", "stockPolicyLabel", "availability", "category",
-             "description", "unit"},
+             "stockPolicy", "stockPolicyLabel", "availability", "imageVersion",
+             "category", "description", "unit"},
         )
 
     def test_aucun_canari_dans_la_projection(self):

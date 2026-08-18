@@ -31,6 +31,7 @@ qui dépendrait du cas.
 import logging
 
 from odoo import http
+from odoo.http import Response
 
 from odoo.addons.dally_api.controllers.main import DallyApiController, DallyApiError
 
@@ -171,6 +172,81 @@ class DallyShopController(DallyApiController):
             {"success": True, "data": {"product": projection}},
             status=200,
             cache_control="public, max-age=120",
+        )
+
+    # ------------------------------------------------------------------
+    # Image
+    # ------------------------------------------------------------------
+
+    @http.route(
+        "/api/v1/shop/products/<string:reference>/image",
+        type="http",
+        auth="none",
+        readonly=False,
+        methods=["GET"],
+        csrf=False,
+        save_session=False,
+    )
+    def product_image(self, reference, **kwargs):
+        """Les octets de l'image d'un produit publié.
+
+        ## Une adresse publique, pas une adresse technique
+
+        Odoo sert déjà les images par `/web/image/product.template/<id>/image_1920`.
+        Cette route existe pour ne pas s'en servir : l'adresse générique publie le
+        nom du modèle et l'identifiant de base, c'est-à-dire exactement les deux
+        choses que la boutique s'interdit de laisser franchir la frontière depuis
+        le premier jour. Elle ouvrirait aussi une énumération — les identifiants
+        se suivent — et servirait l'image d'un produit **non publié** à qui
+        devine son numéro.
+
+        Ici la clé est le slug, et la publication est vérifiée à chaque appel.
+
+        ## Le refus est le même pour tout le monde
+
+        Inconnu, non publié, sans image, image d'un type refusé : un seul 404,
+        même code, même corps. Le modèle rend `None` sans dire lequel des quatre
+        cas s'applique, et ce contrôleur n'a donc rien à divulguer même par
+        inadvertance.
+
+        ## Le cache ne s'applique qu'à ce qui est publié
+
+        Une image publiée est identique pour tous les visiteurs : elle est
+        cachable, et l'en-tête le dit. Un 404 passe par `_error`, qui pose
+        `no-store` — sans quoi la non-publication d'aujourd'hui serait servie
+        depuis un cache intermédiaire après la publication de demain.
+        """
+        try:
+            api_key, env = self._authenticate("shop:read")
+        except DallyApiError as error:
+            return self._error(error.status, error.code, error.message)
+
+        Produit = env["product.template"]
+        try:
+            resultat = Produit._dally_shop_image(reference, kwargs.get("size"))
+        except (ShopPricelistMissing, ShopPricelistInvalid) as erreur:
+            # La visibilité de l'image suit celle du catalogue, tarif compris :
+            # une boutique fermée ne sert pas plus d'images que de prix.
+            return self._refus_tarif(api_key, erreur)
+
+        api_key._register_use()
+
+        if resultat is None:
+            return self._error(404, "not_found", "Product not found.")
+
+        octets, mimetype = resultat
+        return Response(
+            octets,
+            status=200,
+            headers=[
+                ("Content-Type", mimetype),
+                ("Content-Length", str(len(octets))),
+                # `inline` : l'image s'affiche dans la page. Sans en-tête, un
+                # navigateur peut choisir de la télécharger.
+                ("Content-Disposition", "inline"),
+                ("Cache-Control", "public, max-age=120"),
+                ("X-Content-Type-Options", "nosniff"),
+            ],
         )
 
     # ------------------------------------------------------------------

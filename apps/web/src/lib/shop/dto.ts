@@ -80,6 +80,22 @@ export const shopProductSchema = z
     stockPolicy: shopStockPolicySchema,
     stockPolicyLabel: z.string(),
     availability: shopAvailabilitySchema,
+    /**
+     * L'empreinte de l'image du produit, ou `null` s'il n'en a pas.
+     *
+     * Jamais les octets : une image en base64 dans ce contrat ferait plusieurs
+     * mégaoctets de charge RSC par affichage de catalogue, retransmis à chaque
+     * navigation et jamais mis en cache par le navigateur. Ce jeton sert à
+     * construire une URL, et c'est cette URL que le navigateur met en cache.
+     *
+     * `.default(null)` et non un champ requis : la valeur est *ajoutée* par une
+     * version d'Odoo plus récente que ce frontend. Un champ requis imposerait de
+     * déployer Odoo en premier, et la boutique tomberait pendant la fenêtre
+     * inverse — c'est précisément l'incident décrit en tête de ce fichier, dans
+     * l'autre sens. Avec un défaut, ce frontend fonctionne avant comme après la
+     * montée de version d'Odoo, et l'ordre de déploiement reste libre.
+     */
+    imageVersion: z.string().min(1).nullable().default(null),
     category: shopCategoryRefSchema.nullable(),
   })
   .strict();

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { AddToCart } from '@/features/shop/AddToCart';
-import { AvailabilityBadge, formatPrice } from '@/features/shop/ui';
+import { AvailabilityBadge, ProductImage, formatPrice } from '@/features/shop/ui';
 import { logger, newCorrelationId } from '@/lib/logger';
 import { ShopGatewayError, ShopOdooGateway } from '@/lib/shop/odoo-shop';
 import type { ShopProductDetail } from '@/lib/shop/dto';
@@ -130,6 +130,18 @@ export default async function ProduitPage({
         </Link>
         {product.category && <span> · {product.category.name}</span>}
       </nav>
+
+      {/*
+        L'image en `detail` et non en `card` : c'est le même mécanisme et la
+        même URL de base, seule la taille change. Le substitut occupe la même
+        place quand le produit n'a pas d'image, pour que la fiche ait la même
+        allure dans les deux cas.
+      */}
+      <ProductImage
+        product={product}
+        size="detail"
+        className="mb-8 aspect-[4/3] w-full"
+      />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <h1 className="text-3xl font-bold text-navy-900">{product.name}</h1>

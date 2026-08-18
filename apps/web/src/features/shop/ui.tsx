@@ -19,6 +19,11 @@
 import Link from 'next/link';
 
 import type { ShopAvailability, ShopProduct } from '@/lib/shop/dto';
+import {
+  SHOP_IMAGE_DIMENSIONS,
+  shopImageUrl,
+  type ShopImageSize,
+} from '@/lib/shop/image';
 
 /**
  * Met un montant en forme pour l'affichage.
@@ -89,10 +94,97 @@ export function AvailabilityBadge({
   );
 }
 
+/**
+ * L'image d'un produit, ou son substitut.
+ *
+ * ## Un seul composant pour les deux cas
+ *
+ * Le catalogue et la fiche affichent la même image du même produit, dans deux
+ * tailles. Laisser chaque page décider aurait produit deux traitements de
+ * l'absence d'image — et l'absence est le cas normal tant que le catalogue se
+ * remplit, donc celui qu'il faut soigner en premier.
+ *
+ * ## Le substitut ne fait aucune requête
+ *
+ * `shopImageUrl` rend `null` quand le produit n'a pas d'image, et le substitut
+ * s'affiche sans qu'aucun octet parte sur le réseau. Une image de secours
+ * chargée par URL coûterait un aller-retour par tuile et remplirait les
+ * journaux de 404 qui ne signalent rien.
+ *
+ * ## Pourquoi `alt=""`
+ *
+ * Le nom du produit est affiché juste à côté, dans un titre qui est aussi le
+ * lien vers la fiche. Répéter ce nom en texte alternatif ferait entendre deux
+ * fois la même chose à un lecteur d'écran, sans rien ajouter. L'image est donc
+ * déclarée décorative — ce qu'elle est ici, puisqu'elle ne porte aucune
+ * information que la page ne donne pas déjà par ailleurs.
+ */
+export function ProductImage({
+  product,
+  size = 'card',
+  className = '',
+}: {
+  product: Pick<ShopProduct, 'reference' | 'imageVersion'>;
+  size?: ShopImageSize;
+  className?: string;
+}) {
+  const src = shopImageUrl(product.reference, product.imageVersion, size);
+  const { width, height } = SHOP_IMAGE_DIMENSIONS[size];
+  const cadre = `flex items-center justify-center overflow-hidden rounded-lg bg-mist-50 ${className}`;
+
+  if (src === null) {
+    return (
+      <div className={`${cadre} border border-dashed border-mist-300`} aria-hidden="true">
+        {/*
+          Un dessin inline plutôt qu'un fichier : quelques centaines d'octets
+          dans le document, aucune requête, et il suit la charte par `currentColor`.
+        */}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          className="h-10 w-10 text-mist-400"
+        >
+          <path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" strokeLinejoin="round" />
+          <path d="M3 7.5 12 12m0 0 9-4.5M12 12v9" strokeLinejoin="round" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cadre}>
+      {/*
+        Un <img> simple, comme la marque : ces images arrivent déjà
+        redimensionnées par Odoo et servies sous une URL immuable, si bien que
+        l'optimiseur de next/image n'ajouterait qu'un cache et un aller-retour
+        de plus devant un cache qui fait déjà le travail.
+
+        `width` et `height` sont posés pour réserver la place : sans eux, la
+        grille du catalogue saute quand les images arrivent.
+      */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        aria-hidden="true"
+        width={width}
+        height={height}
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full object-cover"
+      />
+    </div>
+  );
+}
+
 /** Une tuile du catalogue. Cliquable en entier, vers la fiche. */
 export function ProductCard({ product }: { product: ShopProduct }) {
   return (
     <article className="flex flex-col rounded-xl border border-mist-200 bg-white p-5 transition hover:border-navy-300 hover:shadow-sm">
+      <ProductImage product={product} size="card" className="mb-4 aspect-square w-full" />
+
       <div className="flex items-start justify-between gap-3">
         <h2 className="text-lg font-semibold text-navy-900">
           <Link

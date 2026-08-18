@@ -4,3 +4,4 @@ from . import test_services_endpoint
 from . import test_leads_endpoint
 from . import test_quotes_endpoint
 from . import test_sourcing_endpoint
+from . import test_key_usage

@@ -47,7 +47,19 @@ const nextConfig = {
       {
         // API routes are per-request and must never be cached by an
         // intermediary — they can carry customer data.
-        source: '/api/:path*',
+        //
+        // L'exception : les images de la boutique. Elles sont publiques,
+        // identiques pour tous, et leur URL porte l'empreinte du contenu — leur
+        // gestionnaire décide donc lui-même de son `Cache-Control`, immuable un
+        // an quand l'URL est versionnée. Cette règle globale l'écrasait :
+        // mesuré en Playwright, une image servie en 200 repartait en
+        // `no-store`, et le navigateur la retéléchargeait à chaque affichage.
+        // Toute la stratégie de jeton était annulée par une ligne de
+        // configuration, sans qu'aucun test de balisage puisse le voir.
+        //
+        // L'exclusion est étroite : elle ne vise que ce chemin, et le
+        // gestionnaire pose `no-store` lui-même sur tout refus.
+        source: '/api/:path((?!shop/products/[^/]+/image).*)',
         headers: [{ key: 'Cache-Control', value: 'no-store' }],
       },
       {

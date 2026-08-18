@@ -133,7 +133,7 @@ class TestProjectionCatalogue(TransactionCase):
             set(projection),
             {"reference", "name", "summary", "price", "currency",
              "stockPolicy", "stockPolicyLabel", "availability", "imageVersion",
-             "category", "description", "unit"},
+             "category", "description", "unit", "gallery"},
         )
 
     def test_aucun_canari_dans_la_projection(self):

@@ -174,7 +174,6 @@ describe('le refus est unique', () => {
     ['produit inconnu', () => odooErreur(404, 'not_found')],
     ['produit non publié', () => odooErreur(404, 'not_found')],
     ['boutique fermée', () => odooErreur(503, 'shop_pricelist_missing')],
-    ['ERP en panne', () => odooErreur(500, 'internal_error')],
   ];
 
   for (const [nom, reponse] of CAS) {
@@ -215,6 +214,28 @@ describe('le refus est unique', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
 
+  it('distingue une panne d’ERP d’une absence de produit', async () => {
+    /*
+     * Correction d'une décision antérieure, prise après mesure.
+     *
+     * Cette route rendait 404 pour tout, panne comprise. En E2E, sous charge,
+     * l'Odoo de test refusait quelques appels : une photo bien présente
+     * devenait alors introuvable, et la suite rougissait par intermittence sans
+     * que rien ne désigne la cause.
+     *
+     * L'indiscernabilité qui compte est intacte — inconnu et non publié restent
+     * deux 404 identiques. Seul l'état de l'ERP devient visible, et il ne dit
+     * rien sur l'existence d'un produit.
+     */
+    fetchMock.mockResolvedValueOnce(odooErreur(500, 'internal_error'));
+
+    const response = await appeler('groupe-5kva');
+
+    expect(response.status).toBe(502);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.text()).toBe('');
+  });
+
   it('ne dit pas pourquoi c’est absent', async () => {
     fetchMock.mockResolvedValueOnce(odooErreur(503, 'shop_pricelist_missing'));
 
@@ -228,6 +249,16 @@ describe('le refus est unique', () => {
 });
 
 describe('le type de la réponse est contraint', () => {
+  /*
+   * Une image de mauvais type est un problème de contenu, pas de disponibilité.
+   *
+   * Elle rejoint donc le 404 indistinguable, avec « inconnu » et « non
+   * publié » : du point de vue du visiteur, il n'y a pas d'image. Seule une
+   * panne de transport vers l'ERP produit un 502 — voir le test dédié plus
+   * haut. La distinction s'est imposée en corrigeant le masquage des pannes :
+   * regrouper les deux aurait fait d'un SVG déposé par erreur une alerte
+   * d'exploitation, et d'un ERP muet une photo inexistante.
+   */
   it('refuse un contenu qui n’est pas une image', async () => {
     // Odoo contrôle déjà le type à partir des octets. Ce second contrôle protège
     // une autre frontière : rien de ce qui sort d'ici ne doit pouvoir devenir un

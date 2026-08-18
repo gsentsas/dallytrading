@@ -89,6 +89,58 @@ TAILLE_IMAGE_DEFAUT = "card"
 MIMETYPES_IMAGE = frozenset({"image/png", "image/jpeg", "image/webp", "image/gif"})
 
 
+def empreintes_image(env, modele, ids):
+    """`{id: jeton}` pour les enregistrements portant une `image_1920`.
+
+    Une seule implémentation pour la photo principale du produit et pour les
+    photos de galerie : le jeton doit se calculer de la même façon des deux
+    côtés, sinon l'un des deux caches se comporterait autrement que l'autre
+    sans que rien ne le signale.
+
+    ## Pourquoi les pièces jointes plutôt que le champ
+
+    `image_1920` est un `fields.Image`, donc stocké en pièce jointe et non en
+    colonne — vérifié sur la base de production, qui n'a aucune colonne
+    `image%` sur `product_template`. Lire le champ pour savoir s'il est rempli
+    chargerait les octets de **chaque** produit du catalogue, à chaque
+    affichage, pour n'en garder qu'un booléen.
+
+    La table des pièces jointes porte déjà l'empreinte du contenu : une requête,
+    aucun octet lu, et l'empreinte est exactement le numéro de version voulu.
+
+    `search` sur `ir.attachment` masque d'ordinaire les pièces jointes de champ
+    en ajoutant `res_field = False` au domaine ; il ne le fait pas quand le
+    domaine mentionne lui-même `res_field`, ce qui est le cas ici. Comportement
+    vérifié dans le source d'Odoo 19, pas supposé.
+
+    `sudo()` : la clé d'intégration n'a pas de droit de lecture sur
+    `ir.attachment`, et n'a aucune raison d'en avoir. Le domaine borne la
+    lecture au seul champ image d'enregistrements dont l'appelant a déjà établi
+    la visibilité.
+    """
+    if not ids:
+        return {}
+    pieces = env["ir.attachment"].sudo().search_read(
+        [
+            ("res_model", "=", modele),
+            ("res_field", "=", "image_1920"),
+            ("res_id", "in", list(ids)),
+        ],
+        ["res_id", "checksum", "write_date"],
+    )
+    empreintes = {}
+    for piece in pieces:
+        # L'empreinte du contenu quand elle existe ; sinon la date de
+        # modification, qui change elle aussi à chaque remplacement d'image. Le
+        # second cas n'est pas théorique : une pièce jointe créée par un import
+        # peut arriver sans empreinte calculée.
+        brut = piece.get("checksum") or str(piece.get("write_date") or "")
+        if not brut:
+            continue
+        empreintes[piece["res_id"]] = brut[:16]
+    return empreintes
+
+
 class ShopPricelistMissing(Exception):
     """Aucun tarif boutique n'est configuré.
 
@@ -164,6 +216,15 @@ class ProductTemplate(models.Model):
         string="Politique de stock",
         default="on_order",
         required=True,
+    )
+    dally_shop_image_ids = fields.One2many(
+        comodel_name="dally.shop.product.image",
+        inverse_name="product_tmpl_id",
+        string="Galerie boutique",
+        copy=True,
+        help="Photos supplémentaires. La photo principale reste le champ image "
+             "natif du produit : la galerie ne la recopie pas, la vitrine la "
+             "place d'office en première position.",
     )
     dally_shop_summary = fields.Text(
         string="Résumé boutique",
@@ -359,6 +420,12 @@ class ProductTemplate(models.Model):
             if detail:
                 projection["description"] = produit.description_sale or None
                 projection["unit"] = produit.uom_id.name
+                # La galerie n'est **que** dans le détail. Sur le catalogue,
+                # trente vignettes de galerie voyageraient dans la charge de la
+                # page pour n'afficher qu'une image par tuile ; l'absence du
+                # champ en liste rend cette erreur impossible plutôt que
+                # simplement déconseillée.
+                projection["gallery"] = produit._dally_shop_gallery()
             projections.append(projection)
         return projections
 
@@ -391,30 +458,56 @@ class ProductTemplate(models.Model):
         lecture au seul champ image de produits dont l'appelant a déjà établi la
         publication.
         """
-        if not self.ids:
-            return {}
-        pieces = self.env["ir.attachment"].sudo().search_read(
-            [
-                ("res_model", "=", "product.template"),
-                ("res_field", "=", "image_1920"),
-                ("res_id", "in", self.ids),
-            ],
-            ["res_id", "checksum", "write_date"],
+        return empreintes_image(self.env, "product.template", self.ids)
+
+    def _dally_shop_gallery(self):
+        """Les photos supplémentaires du produit, ordonnées, sans octets.
+
+        Chaque entrée porte un `reference` — le jeton opaque de la photo — et sa
+        `sequence`. La photo principale n'y figure pas : elle a son propre jeton
+        dans `imageVersion`, et la fiche publique la place en première position
+        sans qu'une ligne de galerie ait à exister pour elle. Recopier l'image
+        principale dans la galerie créerait deux vérités sur le même objet.
+
+        Une photo dont l'empreinte est introuvable est **omise** plutôt que
+        servie avec un jeton vide : sans jeton il n'y a pas d'URL, et une
+        vignette morte vaut moins qu'une vignette absente.
+        """
+        self.ensure_one()
+        photos = self.sudo().dally_shop_image_ids
+        empreintes = empreintes_image(
+            self.env, "dally.shop.product.image", photos.ids
         )
-        versions = {}
-        for piece in pieces:
-            # L'empreinte du contenu quand elle existe ; sinon la date de
-            # modification, qui change elle aussi à chaque remplacement d'image.
-            # Le second cas n'est pas théorique : une pièce jointe créée par un
-            # import peut arriver sans empreinte calculée.
-            brut = piece.get("checksum") or str(piece.get("write_date") or "")
-            if not brut:
-                continue
-            versions[piece["res_id"]] = brut[:16]
-        return versions
+        return [
+            {"reference": empreintes[photo.id], "sequence": photo.sequence}
+            for photo in photos
+            if photo.id in empreintes
+        ]
+
+    def _dally_shop_photo_galerie(self, jeton):
+        """La photo de galerie **de ce produit** portant ce jeton, ou vide.
+
+        La recherche est bornée aux photos du produit déjà autorisé. C'est ce qui
+        rend inutile de faire confiance au navigateur : le jeton n'est pas un
+        identifiant qu'on irait chercher dans la base, c'est une valeur qu'on
+        compare à celles qu'on vient de calculer pour ce produit-là. Un jeton
+        valide pour un autre produit ne trouve rien ici, et un identifiant de
+        base n'a aucune chance de ressembler à une empreinte.
+        """
+        self.ensure_one()
+        if not jeton or not isinstance(jeton, str):
+            return self.env["dally.shop.product.image"]
+        photos = self.sudo().dally_shop_image_ids
+        empreintes = empreintes_image(
+            self.env, "dally.shop.product.image", photos.ids
+        )
+        for photo in photos:
+            if empreintes.get(photo.id) == jeton:
+                return photo
+        return self.env["dally.shop.product.image"]
 
     @api.model
-    def _dally_shop_image(self, reference, taille=None):
+    def _dally_shop_image(self, reference, taille=None, jeton_galerie=None):
         """Les octets de l'image d'un produit publié, ou `None`.
 
         `None` recouvre volontairement quatre situations : référence inconnue,
@@ -433,13 +526,27 @@ class ProductTemplate(models.Model):
         déclaré sur la pièce jointe ne sont consultés : tous deux viennent de
         l'envoyeur, et servir un `text/html` depuis notre origine parce qu'un
         fichier s'appelait `photo.png` serait une faille de script.
+
+        ## La galerie passe par le même chemin
+
+        `jeton_galerie` désigne une photo supplémentaire. Le produit est
+        d'abord résolu et autorisé exactement comme pour la photo principale ;
+        la galerie n'ouvre donc aucune seconde porte. Un jeton inconnu, ou
+        valide mais appartenant à un autre produit, rend `None` — donc le même
+        404 que tout le reste.
         """
         produit = self._dally_shop_find(reference)
         if not produit:
             return None
 
         champ = TAILLES_IMAGE.get(taille or "", TAILLES_IMAGE[TAILLE_IMAGE_DEFAUT])
-        brut = produit.sudo()[champ]
+        if jeton_galerie:
+            porteur = produit._dally_shop_photo_galerie(jeton_galerie)
+            if not porteur:
+                return None
+        else:
+            porteur = produit
+        brut = porteur.sudo()[champ]
         if not brut:
             return None
 

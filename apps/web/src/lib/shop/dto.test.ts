@@ -26,6 +26,7 @@ const DETAIL = {
   ...PRODUIT,
   description: 'Description commerciale.',
   unit: 'Units',
+  gallery: [{ reference: 'bbbb000000000002', sequence: 10 }],
 } as const;
 
 describe('contrat produit', () => {
@@ -225,5 +226,71 @@ describe('empreinte de l’image', () => {
     const tuile = shopProductSchema.parse({ ...PRODUIT, imageVersion: 'aaaa1111' });
     const fiche = shopProductDetailSchema.parse({ ...DETAIL, imageVersion: 'aaaa1111' });
     expect(fiche.imageVersion).toBe(tuile.imageVersion);
+  });
+});
+
+describe('contrat de la galerie', () => {
+  it('accepte une galerie de plusieurs photos', () => {
+    const fiche = shopProductDetailSchema.parse({
+      ...DETAIL,
+      gallery: [
+        { reference: 'a'.repeat(16), sequence: 10 },
+        { reference: 'b'.repeat(16), sequence: 20 },
+      ],
+    });
+    expect(fiche.gallery).toHaveLength(2);
+  });
+
+  it('accepte une fiche sans galerie', () => {
+    expect(shopProductDetailSchema.parse({ ...DETAIL, gallery: [] }).gallery).toEqual([]);
+  });
+
+  it('tolère un Odoo qui n’envoie pas encore le champ', () => {
+    // Même raison qu'`imageVersion` : l'ordre de déploiement doit rester libre.
+    const { gallery: _absente, ...sansChamp } = DETAIL;
+    expect(shopProductDetailSchema.parse(sansChamp).gallery).toEqual([]);
+  });
+
+  it('refuse la galerie sur le schéma de liste', () => {
+    // La propriété structurelle : une tuile de catalogue ne peut pas porter
+    // trente jetons, parce que le contrat n'a pas d'endroit où les mettre.
+    expect(() =>
+      shopProductSchema.parse({ ...PRODUIT, gallery: [] }),
+    ).toThrow();
+  });
+
+  it('refuse un identifiant de base dans une photo', () => {
+    for (const extra of [{ id: 42 }, { productImageId: 42 }, { product_tmpl_id: 384 }]) {
+      expect(() =>
+        shopProductDetailSchema.parse({
+          ...DETAIL,
+          gallery: [{ reference: 'a'.repeat(16), sequence: 10, ...extra }],
+        }),
+      ).toThrow();
+    }
+  });
+
+  it('refuse des octets à la place du jeton', () => {
+    expect(() =>
+      shopProductDetailSchema.parse({
+        ...DETAIL,
+        gallery: [{ reference: { data: 'iVBORw0KGgo' }, sequence: 10 }],
+      }),
+    ).toThrow();
+    expect(() =>
+      shopProductDetailSchema.parse({
+        ...DETAIL,
+        gallery: [{ reference: '', sequence: 10 }],
+      }),
+    ).toThrow();
+  });
+
+  it('exige une séquence entière', () => {
+    expect(() =>
+      shopProductDetailSchema.parse({
+        ...DETAIL,
+        gallery: [{ reference: 'a'.repeat(16), sequence: 1.5 }],
+      }),
+    ).toThrow();
   });
 });

@@ -107,10 +107,41 @@ export type ShopProduct = z.infer<typeof shopProductSchema>;
  * `extend` et non un schéma séparé : les onze champs communs n'ont ainsi qu'une
  * seule définition, et une divergence entre liste et fiche est impossible.
  */
+/**
+ * Une photo de galerie : un jeton et un rang, rien d'autre.
+ *
+ * `reference` est l'empreinte du contenu de la photo, la même nature de valeur
+ * qu'`imageVersion`. Ce n'est pas un identifiant de base : le serveur ne s'en
+ * sert pas comme clé de recherche, il le compare aux empreintes qu'il calcule
+ * pour le produit déjà autorisé. Un jeton valable pour un autre produit ne
+ * désigne donc rien.
+ */
+export const shopGalleryImageSchema = z
+  .object({
+    reference: z.string().min(1),
+    sequence: z.number().int(),
+  })
+  .strict();
+export type ShopGalleryImage = z.infer<typeof shopGalleryImageSchema>;
+
 export const shopProductDetailSchema = shopProductSchema
   .extend({
     description: z.string().nullable(),
     unit: z.string().min(1),
+    /**
+     * La galerie n'existe que sur la fiche.
+     *
+     * Elle est absente de `shopProductSchema`, donc des tuiles du catalogue et
+     * des lignes de panier — non par discipline, mais par structure : trente
+     * jetons de galerie voyageraient dans la charge d'une page qui n'affiche
+     * qu'une image par produit, et `.strict()` refuserait le champ s'il
+     * arrivait quand même.
+     *
+     * `.default([])` pour la même raison qu'`imageVersion` : ce frontend doit
+     * fonctionner avant comme après la montée de version d'Odoo, sans imposer
+     * d'ordre de déploiement.
+     */
+    gallery: z.array(shopGalleryImageSchema).default([]),
   })
   .strict();
 export type ShopProductDetail = z.infer<typeof shopProductDetailSchema>;

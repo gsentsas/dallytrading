@@ -27,7 +27,7 @@ restent l'autorité sur le nom, le prix et le stock.
     "author": "DallyTrading",
     "website": "https://dallytrading.com",
     "category": "Sales/DallyTrading",
-    "version": "19.0.1.2.0",
+    "version": "19.0.1.3.0",
     "license": "LGPL-3",
     "depends": ["dally_core", "dally_portal", "product", "sale", "stock"],
     "data": [

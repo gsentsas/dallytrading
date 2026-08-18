@@ -93,6 +93,63 @@ p_publie = produit("Groupe E2E 5 kVA", "e2e-groupe-5kva", True, "on_order")
 p_stock = produit("Groupe E2E 12 kVA", "e2e-groupe-12kva", True, "managed", stockable=True)
 p_cache = produit("Groupe E2E 30 kVA", "e2e-groupe-30kva", False, "on_order")
 
+# ── Photos ──────────────────────────────────────────────────────────────
+#
+# Cinq PNG de 1×1 pixel, de couleurs distinctes. Les octets diffèrent réellement,
+# et c'est la condition pour que la spec puisse affirmer « la photo a changé » :
+# quatre images identiques porteraient la même empreinte, donc le même jeton, et
+# la comparaison ne prouverait rien.
+ROUGE = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+VERT = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNg+M8AAAICAQB7CYF4AAAAAElFTkSuQmCC"
+BLEU = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC"
+JAUNE = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4/58BAAT/Af9dfQKHAAAAAElFTkSuQmCC"
+CYAN = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNg+P8fAAMBAf+2EqLVAAAAAElFTkSuQmCC"
+
+Photo = env["dally.shop.product.image"]
+
+
+def galerie(produit, photos):
+    """Remonte la galerie du produit à l'identique, quel que soit l'état d'avant.
+
+    La graine est rejouée entre les specs : ajouter sans nettoyer accumulerait
+    les photos d'une exécution à l'autre, et « la fiche montre quatre photos »
+    deviendrait faux au deuxième passage sans que le code ait changé.
+    """
+    produit.dally_shop_image_ids.unlink()
+    for rang, (nom, image) in enumerate(photos, start=1):
+        Photo.create({
+            "name": nom,
+            "sequence": rang * 10,
+            "product_tmpl_id": produit.id,
+            "image_1920": image,
+        })
+
+
+# Le produit publié : une photo principale et trois photos de galerie.
+p_publie.write({"image_1920": ROUGE})
+galerie(p_publie, [
+    ("Vue avant E2E", VERT),
+    ("Vue arrière E2E", BLEU),
+    ("Intérieur E2E", JAUNE),
+])
+
+# Le produit NON publié en porte aussi : c'est ce qui rend informatives les
+# assertions de refus. Sans photos, « son image répond 404 » serait vrai d'un
+# produit qui n'a jamais eu d'image.
+p_cache.write({"image_1920": CYAN})
+galerie(p_cache, [("Photo cachée E2E", ROUGE)])
+
+# Le troisième produit reste volontairement sans photo : la vitrine doit
+# afficher un substitut propre, et c'est le cas le plus fréquent au démarrage
+# d'un catalogue.
+p_stock.write({"image_1920": False})
+p_stock.dally_shop_image_ids.unlink()
+
+assert p_publie.image_1920, "photo principale non plantee"
+assert len(p_publie.dally_shop_image_ids) == 3, "galerie incomplete"
+assert p_cache.image_1920, "photo du produit cache non plantee"
+assert not p_stock.image_1920, "le produit sans photo en a une"
+
 # ── Canaris ─────────────────────────────────────────────────────────────
 fournisseur = env["res.partner"].search([("name", "=", CANARI_FOURNISSEUR)], limit=1)
 if not fournisseur:
@@ -161,6 +218,8 @@ print(f"SHOP_PUBLISHED_REF={p_publie.dally_shop_slug}")
 print(f"SHOP_STOCK_REF={p_stock.dally_shop_slug}")
 print(f"SHOP_UNPUBLISHED_REF={p_cache.dally_shop_slug}")
 print(f"SHOP_UNPUBLISHED_ID={p_cache.id}")
+print(f"SHOP_NO_IMAGE_REF={p_stock.dally_shop_slug}")
+print(f"SHOP_GALLERY_COUNT={len(p_publie.dally_shop_image_ids)}")
 print(f"SHOP_KNOWN_EMAIL={COURRIEL_CONNU}")
 print(f"SHOP_CANARY_NOTE={CANARI_NOTE}")
 print(f"SHOP_CANARY_SUPPLIER={CANARI_FOURNISSEUR}")

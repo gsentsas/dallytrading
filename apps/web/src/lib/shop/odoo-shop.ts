@@ -243,12 +243,18 @@ export class ShopOdooGateway {
     reference: string,
     size: ShopImageSize,
     correlationId: string,
+    galleryToken?: string,
   ): Promise<{ bytes: ArrayBuffer; contentType: string }> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    // Le jeton est réémis tel quel : il n'est pas interprété ici, et Odoo le
+    // compare aux empreintes des photos du produit déjà autorisé. Ce BFF n'a
+    // donc aucune décision de visibilité à prendre — il n'en a pas les moyens,
+    // ce qui est exactement la propriété recherchée.
     const path =
       `/api/v1/shop/products/${encodeURIComponent(reference)}/image` +
-      `?size=${encodeURIComponent(size)}`;
+      `?size=${encodeURIComponent(size)}` +
+      (galleryToken ? `&gallery=${encodeURIComponent(galleryToken)}` : '');
 
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {

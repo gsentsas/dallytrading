@@ -47,7 +47,7 @@ VENDOR_ADDONS="${FE2E_VENDOR_ADDONS:-/tmp/dallytrading-tk-freight-dev/vendor-add
 
 #: Specs exécutées, dans l'ordre. Le pont fret d'abord : une régression sur lui
 #: doit se voir avant que la spec véhicule ne s'en serve.
-SPECS=(12-freight-bridge 13-vehicle-cargo 14-groupage 15-shop-checkout)
+SPECS=(12-freight-bridge 13-vehicle-cargo 14-groupage 15-shop-checkout 16-shop-gallery)
 
 log() { printf '\n\033[1m── %s\033[0m\n' "$*"; }
 
@@ -108,7 +108,17 @@ db_port = 5432
 db_user = fe2e_odoo
 db_password = $(cat "$WORK/db-password")
 db_name = ${DB}
-db_maxconn = 8
+# Aligné sur la production (32), et non laissé à 8.
+#
+# Le banc servait de garde-fou sur la propreté des journaux Odoo, tout en étant
+# quatre fois plus étroit que la machine réelle. Depuis que la fiche produit
+# charge une photo principale et sa galerie, chaque affichage ouvre plusieurs
+# appels concurrents : le pool se remplissait, Odoo levait
+# « The Connection Pool Is Full », et l'audit signalait des traces qui ne
+# disaient rien du produit — seulement que le banc était sous-dimensionné.
+#
+# Un banc qui échoue là où la production tiendrait ne mesure pas la production.
+db_maxconn = 32
 db_template = template0
 addons_path = /mnt/vendor-addons,/mnt/extra-addons,/usr/lib/python3/dist-packages/odoo/addons
 data_dir = /var/lib/odoo
@@ -318,6 +328,8 @@ playwright() {
     -e SHOP_KNOWN_EMAIL="${SHOP_KNOWN_EMAIL:-}" \
     -e SHOP_CANARY_NOTE="${SHOP_CANARY_NOTE:-}" \
     -e SHOP_CANARY_SUPPLIER="${SHOP_CANARY_SUPPLIER:-}" \
+    -e SHOP_NO_IMAGE_REF="${SHOP_NO_IMAGE_REF:-}" \
+    -e SHOP_GALLERY_COUNT="${SHOP_GALLERY_COUNT:-}" \
     --user "$(id -u):$(id -g)" \
     "$PLAYWRIGHT_IMAGE" npx playwright test --output=/tmp/pw-out "$@"
 }

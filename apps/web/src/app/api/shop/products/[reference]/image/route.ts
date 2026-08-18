@@ -36,12 +36,19 @@ import {
 import { ShopGatewayError, ShopOdooGateway } from '@/lib/shop/odoo-shop';
 
 /**
- * Rendu à la demande.
+ * Pas de `dynamic = 'force-dynamic'`, et c'est une correction.
  *
- * La dépublication d'un produit doit retirer son image tout de suite. Une route
- * pré-rendue continuerait de la servir jusqu'à la prochaine régénération.
+ * Cette route l'a porté, et **Next posait alors `Cache-Control: no-store` sur
+ * la réponse**, écrasant l'en-tête du gestionnaire. Mesuré en Playwright : une
+ * image servie en 200 repartait en `no-store`, si bien que le navigateur la
+ * retéléchargeait à chaque affichage. Toute la stratégie de jeton de contenu —
+ * une URL qui change quand l'image change, donc un cache d'un an — était
+ * annulée sans qu'aucun test de balisage puisse le voir.
+ *
+ * La route reste dynamique de toute façon : elle lit `request.url`, ce qui
+ * suffit à interdire toute mise en cache du rendu par le framework. La
+ * dépublication prend donc effet immédiatement, comme avant.
  */
-export const dynamic = 'force-dynamic';
 
 /** Un an, parce que l'URL change dès que l'image change. */
 const CACHE_IMAGE_VERSIONNEE = 'public, max-age=31536000, immutable';
@@ -76,11 +83,25 @@ export async function GET(
   const size: ShopImageSize = isShopImageSize(brut) ? brut : SHOP_IMAGE_SIZE_DEFAULT;
   const versionnee = Boolean(url.searchParams.get('v'));
 
+  /**
+   * Le jeton de galerie, transmis sans être interprété.
+   *
+   * Il est borné en longueur avant de partir : une valeur démesurée n'irait
+   * nulle part côté Odoo, mais elle voyagerait dans une URL et dans les
+   * journaux d'accès. Le format exact n'est pas validé ici — le seul juge est
+   * la comparaison faite côté Odoo aux empreintes du produit autorisé, et
+   * dupliquer ce jugement créerait deux vérités.
+   */
+  const brutGalerie = url.searchParams.get('gallery');
+  const galleryToken =
+    brutGalerie && brutGalerie.length <= 64 ? brutGalerie : undefined;
+
   try {
     const { bytes, contentType } = await new ShopOdooGateway().getProductImage(
       reference,
       size,
       correlationId,
+      galleryToken,
     );
 
     return new NextResponse(bytes, {
@@ -103,12 +124,36 @@ export async function GET(
     // boutique fermée n'a pas d'image à montrer, et le dire distinguerait cet
     // état sur une route qui n'a pas à le faire — la page `/boutique` s'en
     // charge déjà, avec les mots qu'il faut.
-    if (code === 'not_found' || code === 'not_open') {
+    /*
+     * `invalid_response` rejoint le 404, et ce n'est pas un détail.
+     *
+     * Il désigne une image d'un type refusé — un SVG déposé dans le
+     * back-office, par exemple. C'est un problème de **contenu**, pas de
+     * disponibilité : du point de vue du visiteur, il n'y a pas d'image, et le
+     * cahier des charges le range explicitement avec « inconnu » et « non
+     * publié ». Le refus reste donc indiscernable, et le motif réel n'existe
+     * que dans les journaux d'Odoo, qui le consigne en avertissement.
+     */
+    if (code === 'not_found' || code === 'not_open' || code === 'invalid_response') {
       return refus();
     }
 
+    /*
+     * Une panne de l'ERP n'est pas une absence de produit.
+     *
+     * Cette route rendait 404 pour tout, panne comprise. Mesuré en E2E : sous
+     * charge, l'Odoo de test refusait quelques appels, et une photo bien
+     * présente devenait un 404 — c'est-à-dire, du point de vue de l'appelant,
+     * une photo qui n'existe pas. Le symptôme était une image manquante et une
+     * suite rouge par intermittence, sans rien qui désigne la vraie cause.
+     *
+     * 502 ne rouvre pas la porte que le 404 unique ferme : « inconnu » et « non
+     * publié » restent indiscernables, tous deux en 404. Ce qui devient
+     * distinguable, c'est l'état de l'ERP — qui ne dit rien sur l'existence
+     * d'un produit, et que l'exploitant a besoin de voir.
+     */
     logger.error('Shop image unavailable', { correlationId, code });
-    return refus();
+    return new NextResponse(null, { status: 502, headers: REFUS });
   }
 }
 

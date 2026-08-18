@@ -103,3 +103,24 @@ export function shopImageUrl(
   const params = new URLSearchParams({ v: imageVersion, size });
   return `/api/shop/products/${encodeURIComponent(reference)}/image?${params.toString()}`;
 }
+
+/**
+ * L'URL d'une photo de galerie.
+ *
+ * Même route et même forme d'URL que la photo principale : le jeton passe en
+ * `gallery`, et il sert **à la fois** de désignation et de version. C'est ce
+ * qui permet de garder la réponse immuable — le jeton étant l'empreinte du
+ * contenu, une photo remplacée change de jeton, donc d'adresse.
+ *
+ * Le jeton n'est pas un identifiant : le serveur le compare aux empreintes des
+ * photos du produit déjà autorisé, jamais à une clé primaire.
+ */
+export function shopGalleryImageUrl(
+  reference: string,
+  galleryToken: string,
+  size: ShopImageSize = SHOP_IMAGE_SIZE_DEFAULT,
+): string | null {
+  if (!reference || !galleryToken) return null;
+  const params = new URLSearchParams({ gallery: galleryToken, v: galleryToken, size });
+  return `/api/shop/products/${encodeURIComponent(reference)}/image?${params.toString()}`;
+}

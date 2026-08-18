@@ -202,11 +202,23 @@ class DallyShopController(DallyApiController):
 
         Ici la clé est le slug, et la publication est vérifiée à chaque appel.
 
+        ## La galerie ne prend pas d'identifiant
+
+        `?gallery=<jeton>` désigne une photo supplémentaire. Le jeton est
+        l'empreinte du contenu de la photo, jamais son identifiant de base : le
+        modèle le compare aux empreintes qu'il vient de calculer **pour ce
+        produit**, si bien qu'aucune valeur venue du navigateur n'est utilisée
+        comme clé de recherche. Un jeton valide pour un autre produit ne trouve
+        rien, et un entier n'a aucune chance de ressembler à une empreinte.
+
+        Sans `gallery`, c'est la photo principale — `image_1920` du produit.
+
         ## Le refus est le même pour tout le monde
 
-        Inconnu, non publié, sans image, image d'un type refusé : un seul 404,
-        même code, même corps. Le modèle rend `None` sans dire lequel des quatre
-        cas s'applique, et ce contrôleur n'a donc rien à divulguer même par
+        Inconnu, non publié, sans image, image d'un type refusé, jeton de
+        galerie inconnu ou appartenant à un autre produit : un seul 404, même
+        code, même corps. Le modèle rend `None` sans dire lequel des cas
+        s'applique, et ce contrôleur n'a donc rien à divulguer même par
         inadvertance.
 
         ## Le cache ne s'applique qu'à ce qui est publié
@@ -223,7 +235,9 @@ class DallyShopController(DallyApiController):
 
         Produit = env["product.template"]
         try:
-            resultat = Produit._dally_shop_image(reference, kwargs.get("size"))
+            resultat = Produit._dally_shop_image(
+                reference, kwargs.get("size"), kwargs.get("gallery")
+            )
         except (ShopPricelistMissing, ShopPricelistInvalid) as erreur:
             # La visibilité de l'image suit celle du catalogue, tarif compris :
             # une boutique fermée ne sert pas plus d'images que de prix.

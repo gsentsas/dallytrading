@@ -15,6 +15,7 @@ import {
   SHOP_IMAGE_SIZES,
   isShopImageMimeType,
   isShopImageSize,
+  shopGalleryImageUrl,
   shopImageUrl,
 } from './image';
 
@@ -146,6 +147,48 @@ describe('liste blanche des tailles', () => {
     for (const size of SHOP_IMAGE_SIZES) {
       expect(SHOP_IMAGE_DIMENSIONS[size].width).toBeGreaterThan(0);
       expect(SHOP_IMAGE_DIMENSIONS[size].height).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('shopGalleryImageUrl', () => {
+  const JETON = 'b1b2c3d4e5f60718';
+
+  it('emprunte la même route que la photo principale', () => {
+    // Une seconde route aurait sa propre vérification de visibilité, donc sa
+    // propre façon de se tromper.
+    const url = shopGalleryImageUrl('groupe-5kva', JETON) ?? '';
+
+    expect(url).toContain('/api/shop/products/groupe-5kva/image');
+    expect(url).toContain(`gallery=${JETON}`);
+  });
+
+  it('sert de désignation et de version à la fois', () => {
+    // Le jeton étant l'empreinte du contenu, il suffit à faire changer l'URL
+    // quand la photo change — ce qui autorise le cache immuable.
+    const url = shopGalleryImageUrl('groupe-5kva', JETON) ?? '';
+
+    expect(url).toContain(`v=${JETON}`);
+  });
+
+  it('rend null sans jeton', () => {
+    expect(shopGalleryImageUrl('groupe-5kva', '')).toBeNull();
+    expect(shopGalleryImageUrl('', JETON)).toBeNull();
+  });
+
+  it('échappe la référence et le jeton', () => {
+    const url = shopGalleryImageUrl('a/../b', 'x&y=z') ?? '';
+
+    expect(url).not.toContain('../');
+    expect(url).not.toContain('&y=z');
+  });
+
+  it('n’expose aucun identifiant technique', () => {
+    const url = shopGalleryImageUrl('groupe-5kva', JETON) ?? '';
+
+    expect(url).toContain('groupe-5kva');
+    for (const interdit of ['/web/image', 'product.template', 'dally.shop', 'model=', 'field=']) {
+      expect(url).not.toContain(interdit);
     }
   });
 });

@@ -173,6 +173,18 @@
                                 <field name="sale_order_count" widget="statinfo"
                                        string="Ventes"/>
                             </button>
+                            <button name="action_view_costs" type="object"
+                                    class="oe_stat_button" icon="fa-money"
+                                    groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance">
+                                <field name="cost_count" widget="statinfo"
+                                       string="Coûts"/>
+                            </button>
+                            <button name="action_view_commissions" type="object"
+                                    class="oe_stat_button" icon="fa-handshake-o"
+                                    groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance">
+                                <field name="commission_count" widget="statinfo"
+                                       string="Commissions"/>
+                            </button>
                             <button name="action_view_shipments" type="object"
                                     class="oe_stat_button" icon="fa-ship"
                                     invisible="shipment_count == 0">
@@ -335,11 +347,28 @@
                                 <div class="mt-2">
                                     <button name="action_create_sale_order"
                                             type="object"
+                                            groups="sales_team.group_sale_salesman"
                                             string="Créer la commande de vente"
                                             class="btn-primary"
                                             invisible="state not in ('contracted', 'purchasing', 'executing', 'settling') or sale_order_count &gt; 0"/>
                                 </div>
+                                <!--
+                                    Réservé à qui peut lire `sale.order`.
+
+                                    Nos modules n'accordent aucune ACL sur ce
+                                    modèle : elle vient de l'application
+                                    Ventes. Sans elle, le client échouait à
+                                    lire ce champ et l'affaire ne s'ouvrait pas
+                                    — la même mécanique que pour les coûts, à
+                                    ceci près qu'ici c'est la lecture des
+                                    données, et non la description du modèle,
+                                    qui était refusée.
+
+                                    Le « Volet achat » est déjà cloisonné de la
+                                    même façon, aux groupes financiers.
+                                -->
                                 <field name="sale_order_ids" nolabel="1" readonly="1"
+                                       groups="sales_team.group_sale_salesman"
                                        invisible="sale_order_count == 0">
                                     <list>
                                         <field name="name"/>
@@ -352,44 +381,50 @@
                                 </field>
                             </page>
 
-                            <page string="Coûts" name="costs"
-                                  groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance">
-                                <field name="cost_ids" nolabel="1">
-                                    <list editable="bottom">
-                                        <field name="category"/>
-                                        <field name="name" required="1"/>
-                                        <field name="partner_id" optional="show"/>
-                                        <field name="amount"/>
-                                        <field name="currency_id"/>
-                                        <field name="conversion_rate" optional="hide"/>
-                                        <field name="is_estimate" widget="boolean_toggle"/>
-                                        <field name="invoice_reference" optional="hide"/>
-                                        <field name="incurred_date" optional="hide"/>
-                                    </list>
-                                </field>
-                            </page>
+                            <!--
+                                Les coûts et les commissions ne sont plus ici.
 
-                            <page string="Commissions" name="commissions"
-                                  groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance">
-                                <field name="commission_ids" nolabel="1">
-                                    <list editable="bottom">
-                                        <field name="direction"/>
-                                        <field name="name" required="1"/>
-                                        <field name="partner_id"/>
-                                        <field name="basis"/>
-                                        <field name="fixed_amount"
-                                               column_invisible="False"/>
-                                        <field name="rate"/>
-                                        <field name="base_field"/>
-                                        <field name="custom_base_amount" optional="hide"/>
-                                        <field name="computed_amount" readonly="1"/>
-                                        <field name="currency_id"/>
-                                        <field name="conversion_rate" optional="hide"/>
-                                        <field name="is_settled" widget="boolean_toggle"/>
-                                    </list>
-                                </field>
-                            </page>
+                                ## Ce qui ne marchait pas
 
+                                Ils occupaient deux onglets, chacun protégé par
+                                `groups=`. Le masquage fonctionnait : un
+                                commercial ne voyait ni onglet, ni champ. Mais
+                                il ne pouvait plus ouvrir le pipeline du tout :
+
+                                    AccessError: DallyTrading Trade Cost
+                                    (dally.trade.cost)
+
+                                `get_view` renvoie, à côté de l'architecture,
+                                la liste des modèles qu'elle utilise. Cette
+                                liste est calculée par `_get_view_cache`
+                                **tous groupes confondus**, et mise en cache
+                                pour tout le monde ; le filtrage par groupe
+                                (`_postprocess_access_rights`) ne s'applique
+                                qu'à l'architecture, jamais à cette liste.
+                                `get_views` appelle ensuite `fields_get` sur
+                                chaque modèle annoncé — et notre propre garde
+                                de schéma (`dally_portal`,
+                                `internal_schema_guard.py`) y exige une ACL de
+                                lecture, précisément pour qu'un client ne
+                                puisse pas se faire décrire nos modèles
+                                internes.
+
+                                Le garde a raison. C'est la vue qui avait tort
+                                d'annoncer un modèle que le lecteur n'a pas le
+                                droit de connaître. Aucun `groups=`, sur le
+                                nœud comme sur une vue héritée, ne peut retirer
+                                un modèle de cette annonce : seule son absence
+                                de l'architecture le peut.
+
+                                ## Ce qui les remplace
+
+                                Deux boutons de la barre supérieure, eux aussi
+                                réservés aux mêmes groupes, qui ouvrent l'écran
+                                dédié déjà existant, filtré sur l'affaire. Un
+                                bouton ne référence aucun modèle : rien n'est
+                                annoncé, et l'onglet « Marge » peut rester ici
+                                puisqu'il ne lit que des champs de l'affaire.
+                            -->
                             <page string="Marge" name="margin"
                                   groups="dally_trade.group_dally_trade_manager,dally_core.group_dally_finance">
                                 <group>

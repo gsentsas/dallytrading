@@ -428,6 +428,22 @@ class DallyTradeOpportunity(models.Model):
     )
 
     # ─── Margin (internal) ──────────────────────────────────────────
+    # Les deux compteurs qui alimentent les boutons de la fiche.
+    #
+    # Non stockés, et protégés par `groups=` comme tout le bloc financier : un
+    # champ calculé non stocké n'est évalué qu'à la lecture, et un utilisateur
+    # sans droit ne peut pas le lire — l'architecture de la vue ne le contient
+    # pas, et `read` refuserait de toute façon. Le calcul ne s'exécute donc
+    # jamais pour lui, et ne tente jamais de parcourir `cost_ids`.
+    cost_count = fields.Integer(
+        string="Nb de coûts", compute="_compute_internal_counts",
+        groups=INTERNAL_GROUPS,
+    )
+    commission_count = fields.Integer(
+        string="Nb de commissions", compute="_compute_internal_counts",
+        groups=INTERNAL_GROUPS,
+    )
+
     margin_computable = fields.Boolean(
         string="Marge calculable",
         compute="_compute_margin",
@@ -580,16 +596,56 @@ class DallyTradeOpportunity(models.Model):
         for deal in self:
             deal.line_count = len(deal.line_ids)
 
+    @api.model
+    def _dally_utilisateur_interne(self):
+        """Vrai si l'utilisateur voit le volet financier de l'affaire.
+
+        Même liste que `INTERNAL_GROUPS`, qui protège les champs eux-mêmes :
+        une seule définition de « interne », et `has_group` tient compte des
+        groupes impliqués, si bien qu'un manager qui implique Finance passe
+        sans qu'on ait à l'énumérer ici.
+        """
+        return any(self.env.user.has_group(g) for g in INTERNAL_GROUPS.split(","))
+
     @api.depends("purchase_order_ids", "sale_order_ids")
     def _compute_order_counts(self):
+        """Deux compteurs qui doivent rester lisibles par tout le monde.
+
+        `sale_order_count` n'est protégé par aucun groupe : le formulaire s'en
+        sert pour montrer ou masquer le bloc des commandes de vente, et le
+        client le lit donc pour n'importe quel utilisateur. Or ce calcul-ci
+        n'est pas stocké, et `compute_sudo` ne vaut True par défaut que pour
+        les champs stockés (`odoo/orm/fields.py`, ligne 448) : il s'exécute
+        avec les droits de l'appelant. Deux échecs mesurés, l'un et l'autre
+        suffisant à empêcher un commercial d'ouvrir une affaire :
+
+        * `purchase_order_ids` porte `groups=`, donc le simple fait de le
+          parcourir lève pour qui n'est pas dans ces groupes — y compris quand
+          c'est l'autre compteur qu'on lui demande ;
+        * `sale_order_ids` exige une ACL de lecture sur `sale.order`, que nos
+          modules n'accordent pas : elle vient de l'application Ventes.
+
+        Renvoyer zéro dans ces deux cas n'accorde ni ne cache rien : le bloc
+        correspondant est de toute façon réservé aux mêmes personnes, et un
+        compteur qu'on n'a pas le droit de calculer n'a pas de valeur à
+        montrer.
+        """
+        interne = self._dally_utilisateur_interne()
+        acces_vente = self.env["sale.order"].has_access("read")
         for deal in self:
-            deal.purchase_order_count = len(deal.purchase_order_ids)
-            deal.sale_order_count = len(deal.sale_order_ids)
+            deal.purchase_order_count = len(deal.purchase_order_ids) if interne else 0
+            deal.sale_order_count = len(deal.sale_order_ids) if acces_vente else 0
 
     @api.depends("shipment_ids")
     def _compute_shipment_count(self):
         for deal in self:
             deal.shipment_count = len(deal.shipment_ids)
+
+    @api.depends("cost_ids", "commission_ids")
+    def _compute_internal_counts(self):
+        for deal in self:
+            deal.cost_count = len(deal.cost_ids)
+            deal.commission_count = len(deal.commission_ids)
 
     @api.depends(
         "line_ids.purchase_subtotal", "line_ids.sale_subtotal", "operation_type",
@@ -1706,3 +1762,46 @@ class DallyTradeOpportunity(models.Model):
         return self._dally_open_records(
             "dally.shipment", self.shipment_ids.ids, _("Expéditions"),
         )
+
+    def action_view_costs(self):
+        """Ouvrir les coûts de l'affaire, sur leur propre écran.
+
+        Ils étaient auparavant édités dans un onglet de cette fiche. Cet onglet
+        a dû partir : voir la note du formulaire, dans
+        `dally_trade_opportunity_views.xml`. La perte est faible — l'écran
+        dédié existait déjà, sous « Coûts et commissions » — et le bouton évite
+        d'avoir à y naviguer puis à filtrer sur l'affaire.
+
+        Aucun `sudo` : quelqu'un qui appellerait cette méthode sans droits
+        obtiendrait le dictionnaire d'action, puis un refus à l'ouverture de la
+        vue. C'est le comportement voulu, et c'est l'ACL qui le produit.
+        """
+        self.ensure_one()
+        return self._dally_open_internal_lines(
+            "dally.trade.cost", _("Coûts — %s", self.reference or self.name),
+        )
+
+    def action_view_commissions(self):
+        """Ouvrir les commissions de l'affaire. Voir `action_view_costs`."""
+        self.ensure_one()
+        return self._dally_open_internal_lines(
+            "dally.trade.commission",
+            _("Commissions — %s", self.reference or self.name),
+        )
+
+    def _dally_open_internal_lines(self, model, name):
+        """Liste filtrée sur l'affaire, prête à recevoir une nouvelle ligne.
+
+        `view_mode` reste « list,form » même pour une seule ligne, à la
+        différence de `_dally_open_records` : on vient ici pour tenir un
+        ensemble — ajouter un coût, en corriger un autre — et non pour
+        consulter un enregistrement précis.
+        """
+        return {
+            "type": "ir.actions.act_window",
+            "name": name,
+            "res_model": model,
+            "view_mode": "list,form",
+            "domain": [("opportunity_id", "=", self.id)],
+            "context": {"default_opportunity_id": self.id},
+        }

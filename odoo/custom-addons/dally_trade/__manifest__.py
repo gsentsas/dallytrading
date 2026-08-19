@@ -40,7 +40,7 @@ Purchase prices, cost lines, margins, negotiation notes and approval history car
 public payload is an explicit allowlist, and the API user is scoped to creating its
 own records and nothing else.
 """,
-    "version": "19.0.1.0.0",
+    "version": "19.0.1.1.0",
     "category": "Sales",
     "author": "DallyTrading",
     "website": "https://dallytrading.com",

@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        L'acheminement d'une demande, sur sa propre page.
+
+        ## Pourquoi ne pas compléter l'onglet « Details »
+
+        Cet onglet porte une note explicite : ce sont les mots du client, tels
+        que soumis, et ils ne sont pas modifiés pendant la qualification — la
+        demande est la trace de ce qui a été demandé. Y glisser des champs
+        qu'un commercial remplit brouillerait cette frontière, et on ne saurait
+        plus, en relisant un dossier, ce que le client avait écrit.
+
+        L'acheminement structuré est un travail de qualification : il a donc sa
+        page. Les quantités déclarées y sont rappelées en lecture seule, pour
+        qu'on puisse choisir un port sans changer d'onglet, sans qu'elles
+        deviennent modifiables ici pour autant.
+
+        ## Le mode ne se saisit pas
+
+        Il se déduit du service, et pour le groupage et le véhicule de la
+        marchandise. Il est donc affiché sans être modifiable : le rendre
+        éditable ouvrirait une seconde façon de le décider, qui finirait par
+        contredire la première.
+    -->
+    <record id="dally_quote_request_view_form_routing" model="ir.ui.view">
+        <field name="name">dally.quote.request.form.routing</field>
+        <field name="model">dally.quote.request</field>
+        <field name="inherit_id" ref="dally_crm.dally_quote_request_view_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//page[@name='details']" position="after">
+                <page string="Acheminement" name="routing">
+
+                    <field name="freight_transport" invisible="1"/>
+                    <field name="port_domain" invisible="1"/>
+                    <field name="carrier_domain" invisible="1"/>
+                    <field name="frequent_route_domain" invisible="1"/>
+
+                    <div class="alert alert-info" role="alert"
+                         invisible="freight_transport">
+                        Le mode de transport se déduit du service — et, pour le
+                        groupage et le transport de véhicule, de la marchandise.
+                        Tant qu'il n'est pas déterminé, les lieux et les
+                        transporteurs ne sont pas filtrés.
+                    </div>
+
+                    <group>
+                        <group string="Origine">
+                            <field name="origin_country_id"
+                                   options="{'no_create': True}"/>
+                            <field name="origin_state_id"
+                                   options="{'no_create': True}"
+                                   domain="[('country_id', '=?', origin_country_id)]"/>
+                            <field name="origin_city"/>
+                            <field name="origin_port_id"
+                                   options="{'no_create': True}"
+                                   domain="port_domain"
+                                   invisible="not freight_transport"/>
+                        </group>
+                        <group string="Destination">
+                            <field name="destination_country_id"
+                                   options="{'no_create': True}"/>
+                            <field name="destination_state_id"
+                                   options="{'no_create': True}"
+                                   domain="[('country_id', '=?', destination_country_id)]"/>
+                            <field name="destination_city"/>
+                            <field name="destination_port_id"
+                                   options="{'no_create': True}"
+                                   domain="port_domain"
+                                   invisible="not freight_transport"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <group string="Transport">
+                            <field name="freight_transport" readonly="1"
+                                   invisible="not freight_transport"/>
+                            <field name="frequent_route_id"
+                                   options="{'no_create': True}"
+                                   domain="frequent_route_domain"
+                                   invisible="not freight_transport"/>
+                            <field name="carrier_partner_id"
+                                   options="{'no_create': True}"
+                                   domain="carrier_domain"
+                                   invisible="freight_transport == 'air'"/>
+                            <field name="vessel_id"
+                                   invisible="freight_transport != 'ocean'"/>
+                            <field name="airline_id"
+                                   options="{'no_create': True}"
+                                   invisible="freight_transport != 'air'"/>
+                            <field name="incoterm_id"
+                                   options="{'no_create': True}"/>
+                        </group>
+                        <group string="Marchandise déclarée">
+                            <field name="goods_description" readonly="1"/>
+                            <field name="packages_count" readonly="1"/>
+                            <field name="weight_kg" readonly="1"/>
+                            <field name="volume_cbm" readonly="1"/>
+                        </group>
+                    </group>
+
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!--
+        Chercher une demande par son port, comme on cherche une expédition.
+    -->
+    <record id="dally_quote_request_view_search_routing" model="ir.ui.view">
+        <field name="model">dally.quote.request</field>
+        <field name="name">dally.quote.request.search.routing</field>
+        <field name="inherit_id" ref="dally_crm.dally_quote_request_view_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <field name="origin_port_id"/>
+                <field name="destination_port_id"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

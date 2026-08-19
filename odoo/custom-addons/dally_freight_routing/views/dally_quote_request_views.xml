@@ -93,6 +93,18 @@
                             <field name="incoterm_id"
                                    options="{'no_create': True}"/>
                         </group>
+                        <group string="Demande du client">
+                            <field name="desired_date"/>
+                            <field name="pickup_requested"/>
+                            <field name="pickup_address"
+                                   invisible="not pickup_requested"/>
+                            <field name="delivery_requested"/>
+                            <field name="delivery_address"
+                                   invisible="not delivery_requested"/>
+                        </group>
+                    </group>
+
+                    <group>
                         <group string="Marchandise déclarée">
                             <field name="goods_description" readonly="1"/>
                             <field name="packages_count" readonly="1"/>

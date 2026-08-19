@@ -26,6 +26,7 @@ import type {
   SourcingRequestRef,
   TradeOpportunityInput,
   TradeOpportunityRef,
+  ReferenceEntry,
 } from './types';
 
 export interface OdooGateway {
@@ -112,6 +113,20 @@ export interface OdooGateway {
    * from caching and the stale-on-error fallback.
    */
   listServiceTypes(correlationId: string): Promise<ReadonlyArray<ServiceType>>;
+
+  /**
+   * Un référentiel public : pays, subdivisions, lieux desservis, incoterms.
+   *
+   * `param` est le seul argument que le référentiel accepte — le code pays
+   * pour les subdivisions, le mode pour les lieux — et il est ignoré par les
+   * autres. Le contenu n'est jamais commercial : ni transporteur, ni
+   * compagnie, ni tarif.
+   */
+  listReferences(
+    kind: string,
+    param: string | undefined,
+    correlationId: string,
+  ): Promise<ReadonlyArray<ReferenceEntry>>;
 
   /** Liveness probe used by monitoring and by deployment smoke tests. */
   healthCheck(correlationId: string): Promise<{ ok: boolean; database?: string }>;

@@ -111,6 +111,15 @@ export interface ServiceType {
   readonly requires_goods: boolean;
 }
 
+/**
+ * Une entrée de référentiel public, telle qu'Odoo la projette.
+ *
+ * Volontairement large : la passerelle ne connaît pas la forme exacte de
+ * chaque référentiel, c'est le DTO Zod qui la valide au moment de s'en servir.
+ * Un type précis ici obligerait à le tenir à jour à deux endroits.
+ */
+export type ReferenceEntry = Readonly<Record<string, string | boolean | null>>;
+
 /** A quote request submitted from the public site. */
 export interface QuoteInput {
   readonly serviceCode: string;
@@ -126,6 +135,24 @@ export interface QuoteInput {
   readonly originCity?: string;
   readonly destinationCountryCode?: string;
   readonly destinationCity?: string;
+  /**
+   * Acheminement structuré, transmis en **codes** et jamais en identifiants.
+   *
+   * Odoo résout chaque code dans son référentiel et vérifie qu'il correspond
+   * au mode déduit du service : un port maritime déclaré sur une demande
+   * aérienne est écarté plutôt que stocké.
+   */
+  readonly originStateCode?: string;
+  readonly destinationStateCode?: string;
+  readonly originPortCode?: string;
+  readonly destinationPortCode?: string;
+  readonly incotermCode?: string;
+  readonly pickupRequested?: boolean;
+  readonly pickupAddress?: string;
+  readonly deliveryRequested?: boolean;
+  readonly deliveryAddress?: string;
+  /** Date souhaitée par le client, au format ISO `AAAA-MM-JJ`. */
+  readonly desiredDate?: string;
   readonly goodsDescription?: string;
   readonly quantity?: string;
   readonly weightKg?: number;

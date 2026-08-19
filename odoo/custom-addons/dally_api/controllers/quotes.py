@@ -49,6 +49,26 @@ QUOTE_INPUT_FIELDS = (
     # `_validate_groupage`.
     "groupage_transport_mode",
 
+    # ── Acheminement structuré ──
+    #
+    # Des **codes**, jamais des identifiants : « SNDKR », « SN-DK », « FOB ».
+    # Un identifiant venu du navigateur ne se vérifie pas — il est toujours
+    # plausible — tandis qu'un code se résout dans un référentiel, et la
+    # résolution échoue si le code n'existe pas ou ne correspond pas au mode
+    # demandé. La correspondance est faite par `dally_freight_routing` ; tant
+    # que ce module n'est pas installé, ces clés sont acceptées puis ignorées,
+    # ce qui laisse le point d'entrée public compatible dans les deux sens.
+    "origin_state_code",
+    "destination_state_code",
+    "origin_port_code",
+    "destination_port_code",
+    "incoterm_code",
+    "pickup_requested",
+    "pickup_address",
+    "delivery_requested",
+    "delivery_address",
+    "desired_date",
+
     # ── Véhicule transporté ──
     #
     # Préfixés `vehicle_` et déclarés un par un, comme le reste : la liste

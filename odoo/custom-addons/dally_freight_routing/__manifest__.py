@@ -39,7 +39,7 @@ module qu'on peut retirer sans toucher au reste.
     "author": "DallyTrading",
     "website": "https://dallytrading.com",
     "license": "LGPL-3",
-    "depends": ["dally_freight_data"],
+    "depends": ["dally_freight_data", "dally_api"],
     "data": [
         "views/dally_quote_request_views.xml",
         "views/dally_shipment_views.xml",

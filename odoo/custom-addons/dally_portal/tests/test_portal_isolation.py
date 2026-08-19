@@ -111,7 +111,13 @@ class TestPortalIsolation(TransactionCase):
             "name": f"PORTAL-TEST opération {tag}", "operation_type": "purchase_resale",
             "customer_id": partner.id,
         })
-        shipment = cls.env["dally.shipment"].create({"partner_id": partner.id})
+        # Un état publiable, et non le défaut « brouillon » :
+        # `dally_freight_notifications` ne publie pas ce dernier au portail — un
+        # dossier que personne n'a relu et qui peut encore être supprimé n'a
+        # rien à faire dans l'espace client. Ce fichier éprouve le
+        # cloisonnement entre sociétés, pas la visibilité par état.
+        shipment = cls.env["dally.shipment"].create({
+            "partner_id": partner.id, "state": "in_transit"})
         attachment = cls.env["ir.attachment"].create({
             "name": f"PORTAL-TEST doc {tag}.pdf", "datas": b"JVBERi0xLjQK",
         })

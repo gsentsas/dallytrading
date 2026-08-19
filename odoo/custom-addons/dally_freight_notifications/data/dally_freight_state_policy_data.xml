@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        La politique des quatorze états.
+
+        ## Ce que chaque ligne décide
+
+        Trois questions indépendantes : le portail montre-t-il cet état, le
+        suivi public publie-t-il l'événement, et écrit-on au client. Les
+        séparer est le point du modèle : un état peut se voir sans qu'on
+        dérange le client pour autant.
+
+        ## `draft` reste interne
+
+        Une expédition en brouillon est un dossier de travail que personne n'a
+        encore relu — le provisionnement la crée dans cet état. Elle peut
+        encore être supprimée : `unlink()` n'autorise justement la suppression
+        qu'en « brouillon » et « annulée ». Annoncer une expédition puis la
+        faire disparaître est le seul scénario que cette politique doit rendre
+        impossible.
+
+        ## `preparing` se voit mais ne notifie pas
+
+        Entre « marchandise reçue », « en préparation » et « prête à partir »,
+        il peut s'écouler quelques heures : trois courriels pour une seule
+        réalité. Le risque n'est pas l'agacement mais le classement en
+        indésirable — un client qui nous y range cesse de recevoir « partie »
+        et « disponible », qui sont les deux messages utiles. L'état reste donc
+        visible partout, sans courriel.
+
+        C'est une donnée, pas une règle : décocher la case suffit à changer
+        d'avis.
+
+        ## `email_template_id` reste vide
+
+        Aucun gabarit n'existe encore. La conséquence est explicite et voulue :
+        chaque transition notifiable produit une ligne **ignorée**, motif
+        `no_template`. La file se remplit, rien ne part, et le jour où les
+        gabarits arriveront, il suffira de les rattacher.
+
+        `noupdate="1"` : libellés, ordre et arbitrages appartiennent à
+        l'exploitation dès l'installation.
+    -->
+    <data noupdate="1">
+
+        <record id="policy_draft" model="dally.freight.state.policy">
+            <field name="state">draft</field>
+            <field name="customer_label">Brouillon</field>
+            <field name="sequence">10</field>
+            <field name="visible_in_portal" eval="False"/>
+            <field name="visible_in_tracking" eval="False"/>
+            <field name="notify_customer" eval="False"/>
+        </record>
+
+        <record id="policy_request_received" model="dally.freight.state.policy">
+            <field name="state">request_received</field>
+            <field name="customer_label">Demande reçue</field>
+            <field name="sequence">20</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="True"/>
+        </record>
+
+        <record id="policy_awaiting_goods" model="dally.freight.state.policy">
+            <field name="state">awaiting_goods</field>
+            <field name="customer_label">En attente de la marchandise</field>
+            <field name="sequence">30</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="True"/>
+        </record>
+
+        <record id="policy_goods_received" model="dally.freight.state.policy">
+            <field name="state">goods_received</field>
+            <field name="customer_label">Marchandise reçue</field>
+            <field name="sequence">40</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="True"/>
+        </record>
+
+        <record id="policy_preparing" model="dally.freight.state.policy">
+            <field name="state">preparing</field>
+            <field name="customer_label">En préparation</field>
+            <field name="sequence">50</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="False"/>
+        </record>
+
+        <record id="policy_ready" model="dally.freight.state.policy">
+            <field name="state">ready</field>
+            <field name="customer_label">Prête à partir</field>
+            <field name="sequence">60</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="True"/>
+        </record>
+
+        <record id="policy_departed" model="dally.freight.state.policy">
+            <field name="state">departed</field>
+            <field name="customer_label">Partie</field>
+            <field name="sequence">70</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="True"/>
+        </record>
+
+        <record id="policy_in_transit" model="dally.freight.state.policy">
+            <field name="state">in_transit</field>
+            <field name="customer_label">En transit</field>
+            <field name="sequence">80</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="True"/>
+        </record>
+
+        <record id="policy_arrived" model="dally.freight.state.policy">
+            <field name="state">arrived</field>
+            <field name="customer_label">Arrivée à destination</field>
+            <field name="sequence">90</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="True"/>
+        </record>
+
+        <record id="policy_customs" model="dally.freight.state.policy">
+            <field name="state">customs</field>
+            <field name="customer_label">En dédouanement</field>
+            <field name="sequence">100</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="True"/>
+        </record>
+
+        <record id="policy_available" model="dally.freight.state.policy">
+            <field name="state">available</field>
+            <field name="customer_label">Disponible pour enlèvement</field>
+            <field name="sequence">110</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="True"/>
+        </record>
+
+        <record id="policy_out_for_delivery" model="dally.freight.state.policy">
+            <field name="state">out_for_delivery</field>
+            <field name="customer_label">En cours de livraison</field>
+            <field name="sequence">120</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="True"/>
+        </record>
+
+        <record id="policy_delivered" model="dally.freight.state.policy">
+            <field name="state">delivered</field>
+            <field name="customer_label">Livrée</field>
+            <field name="sequence">130</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="True"/>
+        </record>
+
+        <record id="policy_cancelled" model="dally.freight.state.policy">
+            <field name="state">cancelled</field>
+            <field name="customer_label">Annulée</field>
+            <field name="sequence">140</field>
+            <field name="visible_in_portal" eval="True"/>
+            <field name="visible_in_tracking" eval="True"/>
+            <field name="notify_customer" eval="True"/>
+        </record>
+
+    </data>
+</odoo>

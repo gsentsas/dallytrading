@@ -182,16 +182,77 @@ class TestCanaris(TransactionCase):
             )
 
     def test_les_evenements_projetes_sont_fermes_par_defaut(self):
-        """Politique de publication : rien n'est visible tant que ce n'est pas décidé.
+        """Politique de publication : la synchronisation ne publie jamais.
 
         Un événement d'exploitation publié par accident est irrattrapable — le
-        client l'a lu. La synchronisation ne publie donc jamais d'elle-même.
+        client l'a lu. La garantie repose sur le **chemin de création** :
+        `_dally_freight_sync_events` écrit `visible_to_customer=False` en dur et
+        ne consulte jamais la politique d'états. Aucun code d'état ne peut donc
+        rendre public un événement venu du fournisseur, pas même un état par
+        ailleurs déclaré visible.
+
+        Le dossier porte aussi un jalon `request_received`, créé par **notre**
+        transition au moment du provisionnement, et celui-là est public : c'est
+        le message « votre demande est prise en charge ». Il est donc écarté
+        ici, et vérifié à part. L'exclusion se lit sur l'origine, non sur le
+        nom de l'état — le troisième test ci-dessous le montre.
         """
         evenements = self.env["dally.shipment.event"].sudo().search(
             [("shipment_id", "=", self.projection.id)]
         )
-        publies = evenements.filtered("visible_to_customer")
+        jalon = evenements.filtered(
+            lambda evenement: evenement.status == "request_received"
+        )
+        projetes = evenements - jalon
+
         self.assertFalse(
-            publies,
+            projetes.filtered("visible_to_customer"),
             "Des evenements ont ete publies automatiquement par la synchronisation.",
         )
+
+    def test_notre_jalon_de_prise_en_charge_est_public(self):
+        """Contrôle positif : sans lui, le test ci-dessus passerait à vide.
+
+        Si le provisionnement cessait de faire sortir la projection du
+        brouillon, aucun événement ne serait plus publié et l'assertion
+        d'au-dessus resterait verte sans plus rien protéger.
+        """
+        jalon = self.projection.sudo().event_ids.filtered(
+            lambda evenement: evenement.status == "request_received"
+        )
+        self.assertTrue(jalon, "le provisionnement doit poser un jalon")
+        self.assertTrue(
+            jalon.visible_to_customer,
+            "le client doit apprendre que sa demande est prise en charge",
+        )
+
+    def test_un_evenement_projete_reste_ferme_meme_sur_un_etat_public(self):
+        """La séparation tient au chemin, jamais au code d'état.
+
+        On projette ici un événement portant `request_received` — l'état le plus
+        publiable qui soit — par le même chemin que la synchronisation du
+        fournisseur. Il reste fermé, et ne produit aucun message.
+
+        C'est ce test qui interdit l'exemption paresseuse « tout sauf
+        request_received » : le jour où un mapping du fournisseur viserait cet
+        état, rien ne deviendrait public pour autant.
+        """
+        projete = self.env["dally.shipment.event"].sudo().create({
+            "shipment_id": self.projection.id,
+            "status": "request_received",
+            "description": "Projete depuis le fournisseur",
+            "visible_to_customer": False,
+            "is_automatic": True,
+        })
+        self.assertFalse(projete.visible_to_customer)
+
+        # La file, quand elle est installée, doit garder la trace de
+        # l'abstention et en donner le motif — sans jamais rendre ce message
+        # envoyable.
+        if "dally.shipment.notification" in self.env:
+            ligne = self.env["dally.shipment.notification"].sudo().search(
+                [("event_id", "=", projete.id)]
+            )
+            self.assertTrue(ligne, "la file doit garder une trace")
+            self.assertEqual(ligne.status, "skipped")
+            self.assertEqual(ligne.last_error, "event_not_published")

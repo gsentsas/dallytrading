@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_dally_freight_state_policy_readonly,state policy readonly,model_dally_freight_state_policy,dally_core.group_dally_readonly,1,0,0,0
+access_dally_freight_state_policy_manager,state policy manager,model_dally_freight_state_policy,dally_core.group_dally_manager,1,1,1,1
+access_dally_shipment_notification_readonly,notification readonly,model_dally_shipment_notification,dally_core.group_dally_readonly,1,0,0,0
+access_dally_shipment_notification_manager,notification manager,model_dally_shipment_notification,dally_core.group_dally_manager,1,1,1,1

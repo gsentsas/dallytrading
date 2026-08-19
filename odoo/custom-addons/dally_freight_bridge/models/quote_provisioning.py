@@ -504,6 +504,25 @@ class DallyShipmentProjection(models.Model):
             projection._dally_freight_sync_packages(expedition)
             projection._dally_freight_sync_events(expedition)
 
+            # Un dossier provisionné n'est plus un brouillon.
+            #
+            # La projection naît en `draft` — état de travail, invisible du
+            # client — et l'étape du fournisseur, à ce moment, vaut « Draft »
+            # elle aussi : rien ne la faisait avancer. Le client dont le devis
+            # venait d'être accepté ne voyait donc **rien** dans son espace
+            # jusqu'à ce qu'un opérateur touche le dossier à la main.
+            #
+            # `request_received` est l'état qui dit exactement ce qui vient de
+            # se passer : la demande est prise en charge. On y passe par
+            # `write()` et non en forçant la colonne, pour que la mécanique
+            # habituelle se déclenche — `state_changed_on`, l'événement de
+            # suivi, et la mise en file de la notification. Une écriture
+            # directe produirait un dossier avancé dont le client n'aurait
+            # jamais été prévenu, ce qui est précisément le défaut qu'on
+            # corrige.
+            if projection.sudo().state == "draft":
+                projection.sudo().write({"state": "request_received"})
+
     def _dally_freight_sync_packages(self, expedition):
         """Projette les colis opérationnels vers les colis client.
 

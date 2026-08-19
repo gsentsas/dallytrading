@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Les aéroports desservis.
+
+        ## Un seul modèle pour trois natures de lieu
+
+        `freight.port` porte trois drapeaux — `ocean`, `air`, `land` — et le
+        fournisseur impose qu'au moins un soit levé. C'est donc lui, et lui
+        seul, qui sert de référentiel des lieux : un port maritime, un aéroport
+        et un point terrestre sont trois lignes du même modèle. Créer
+        `dally.port` ou `dally.airport` à côté aurait dédoublé la géographie
+        pour rien.
+
+        ## Les codes
+
+        Le code est l'**IATA** à trois lettres — DSS, CDG, DXB. Le modèle du
+        fournisseur ne prévoit pas de champ OACI pour un lieu : il en a un pour
+        les compagnies, pas pour les aéroports. Aucun code OACI n'est donc
+        inventé ici.
+
+        Le fournisseur impose l'unicité du code sur **tous** les lieux
+        confondus, ports et aéroports mélangés. Les deux nomenclatures ne se
+        recoupant pas, la contrainte tient sans arrangement.
+
+        ## Les régions
+
+        `state_id` n'est renseigné que pour les pays dont ce module crée
+        lui-même les subdivisions. Ailleurs — France, Pays-Bas, Belgique,
+        Allemagne, Émirats, Chine — Odoo en fournit, mais les désigner
+        supposerait de connaître leurs identifiants XML : une référence
+        approximative vaut moins qu'un champ vide, qui se complète en deux
+        clics le jour où c'est utile.
+    -->
+    <data noupdate="1">
+
+        <record id="airport_dss" model="freight.port">
+            <field name="name">Aéroport international Blaise Diagne</field>
+            <field name="code">DSS</field>
+            <field name="country_id" ref="base.sn"/>
+            <field name="state_id" ref="state_sn_th"/>
+            <field name="city">Diass</field>
+            <field name="ocean" eval="False"/>
+            <field name="air" eval="True"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="airport_cdg" model="freight.port">
+            <field name="name">Paris-Charles de Gaulle</field>
+            <field name="code">CDG</field>
+            <field name="country_id" ref="base.fr"/>
+            <field name="city">Roissy-en-France</field>
+            <field name="ocean" eval="False"/>
+            <field name="air" eval="True"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="airport_ory" model="freight.port">
+            <field name="name">Paris-Orly</field>
+            <field name="code">ORY</field>
+            <field name="country_id" ref="base.fr"/>
+            <field name="city">Orly</field>
+            <field name="ocean" eval="False"/>
+            <field name="air" eval="True"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="airport_cmn" model="freight.port">
+            <field name="name">Casablanca Mohammed V</field>
+            <field name="code">CMN</field>
+            <field name="country_id" ref="base.ma"/>
+            <field name="state_id" ref="state_ma_06"/>
+            <field name="city">Nouaceur</field>
+            <field name="ocean" eval="False"/>
+            <field name="air" eval="True"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="airport_ist" model="freight.port">
+            <field name="name">Istanbul</field>
+            <field name="code">IST</field>
+            <field name="country_id" ref="base.tr"/>
+            <field name="city">Istanbul</field>
+            <field name="ocean" eval="False"/>
+            <field name="air" eval="True"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="airport_dxb" model="freight.port">
+            <field name="name">Dubaï International</field>
+            <field name="code">DXB</field>
+            <field name="country_id" ref="base.ae"/>
+            <field name="city">Dubaï</field>
+            <field name="ocean" eval="False"/>
+            <field name="air" eval="True"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="airport_bru" model="freight.port">
+            <field name="name">Bruxelles-Zaventem</field>
+            <field name="code">BRU</field>
+            <field name="country_id" ref="base.be"/>
+            <field name="city">Zaventem</field>
+            <field name="ocean" eval="False"/>
+            <field name="air" eval="True"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="airport_ams" model="freight.port">
+            <field name="name">Amsterdam-Schiphol</field>
+            <field name="code">AMS</field>
+            <field name="country_id" ref="base.nl"/>
+            <field name="city">Haarlemmermeer</field>
+            <field name="ocean" eval="False"/>
+            <field name="air" eval="True"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="airport_fra" model="freight.port">
+            <field name="name">Francfort-sur-le-Main</field>
+            <field name="code">FRA</field>
+            <field name="country_id" ref="base.de"/>
+            <field name="city">Francfort-sur-le-Main</field>
+            <field name="ocean" eval="False"/>
+            <field name="air" eval="True"/>
+            <field name="land" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

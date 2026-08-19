@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Les liaisons qui reviennent assez souvent pour mériter un raccourci.
+
+        ## Ce qu'une route fréquente est, et n'est pas
+
+        `freight.frequent.route` n'a que trois champs : un nom, une origine, une
+        destination. Ce n'est ni un tarif, ni un horaire, ni un contrat — c'est
+        une paire de lieux qu'on saisit souvent, offerte en un clic. **Aucune
+        durée de transit ni aucun prix n'est inscrit** : ces valeurs dépendent
+        de la compagnie, de la saison et du contrat du moment, et une constante
+        posée ici serait fausse avant d'avoir servi.
+
+        ## Pourquoi les deux sens pour l'aérien
+
+        Le maritime vers Dakar est très majoritairement de l'import : les dix
+        liaisons maritimes ne sont donc déclarées que dans ce sens. L'aérien
+        travaille dans les deux, d'où Paris–Dakar **et** Dakar–Paris ; le modèle
+        n'ayant pas de notion d'aller-retour, ce sont deux enregistrements.
+
+        ## Le nom
+
+        Le fournisseur compose « origine - destination » par un `onchange`, qui
+        ne se déclenche que dans un formulaire. Un fichier de données ne
+        déclenche aucun `onchange` : le nom est donc écrit explicitement, dans
+        le format exact que produirait la saisie manuelle, pour qu'une route
+        créée à l'écran et une route livrée ici se ressemblent.
+
+        ## Dubaï
+
+        « Dubaï → Dakar » est ici la liaison **maritime** depuis Jebel Ali, qui
+        est le port de la place. La liaison aérienne DXB–DSS n'est pas déclarée :
+        elle passe presque toujours par une correspondance, et une route directe
+        laisserait croire à un vol sans escale.
+    -->
+    <data noupdate="1">
+
+        <record id="route_frleh_sndkr" model="freight.frequent.route">
+            <field name="name">Port du Havre - Port autonome de Dakar</field>
+            <field name="source_location_id" ref="port_frleh"/>
+            <field name="destination_location_id" ref="port_sndkr"/>
+        </record>
+
+        <record id="route_frfos_sndkr" model="freight.frequent.route">
+            <field name="name">Marseille-Fos - Port autonome de Dakar</field>
+            <field name="source_location_id" ref="port_frfos"/>
+            <field name="destination_location_id" ref="port_sndkr"/>
+        </record>
+
+        <record id="route_maptm_sndkr" model="freight.frequent.route">
+            <field name="name">Tanger Med - Port autonome de Dakar</field>
+            <field name="source_location_id" ref="port_maptm"/>
+            <field name="destination_location_id" ref="port_sndkr"/>
+        </record>
+
+        <record id="route_cnsha_sndkr" model="freight.frequent.route">
+            <field name="name">Port de Shanghai - Port autonome de Dakar</field>
+            <field name="source_location_id" ref="port_cnsha"/>
+            <field name="destination_location_id" ref="port_sndkr"/>
+        </record>
+
+        <record id="route_cnngb_sndkr" model="freight.frequent.route">
+            <field name="name">Ningbo-Zhoushan - Port autonome de Dakar</field>
+            <field name="source_location_id" ref="port_cnngb"/>
+            <field name="destination_location_id" ref="port_sndkr"/>
+        </record>
+
+        <record id="route_cnszx_sndkr" model="freight.frequent.route">
+            <field name="name">Port de Shenzhen - Port autonome de Dakar</field>
+            <field name="source_location_id" ref="port_cnszx"/>
+            <field name="destination_location_id" ref="port_sndkr"/>
+        </record>
+
+        <record id="route_aejea_sndkr" model="freight.frequent.route">
+            <field name="name">Jebel Ali - Port autonome de Dakar</field>
+            <field name="source_location_id" ref="port_aejea"/>
+            <field name="destination_location_id" ref="port_sndkr"/>
+        </record>
+
+        <record id="route_cdg_dss" model="freight.frequent.route">
+            <field name="name">Paris-Charles de Gaulle - Aéroport international Blaise Diagne</field>
+            <field name="source_location_id" ref="airport_cdg"/>
+            <field name="destination_location_id" ref="airport_dss"/>
+        </record>
+
+        <record id="route_dss_cdg" model="freight.frequent.route">
+            <field name="name">Aéroport international Blaise Diagne - Paris-Charles de Gaulle</field>
+            <field name="source_location_id" ref="airport_dss"/>
+            <field name="destination_location_id" ref="airport_cdg"/>
+        </record>
+
+        <record id="route_ist_dss" model="freight.frequent.route">
+            <field name="name">Istanbul - Aéroport international Blaise Diagne</field>
+            <field name="source_location_id" ref="airport_ist"/>
+            <field name="destination_location_id" ref="airport_dss"/>
+        </record>
+
+    </data>
+</odoo>

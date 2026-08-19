@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Les compagnies maritimes qui desservent réellement nos routes.
+
+        Sept sociétés, pas davantage : celles dont un connaissement peut sortir
+        dès le premier mois d'exploitation sur l'axe Europe–Asie–Afrique de
+        l'Ouest. Un référentiel plus large donnerait l'illusion de la couverture
+        et obligerait à trier à chaque saisie.
+
+        Chaque fiche ne porte que ce qui est vérifiable : la raison sociale et
+        le pays du siège. **Aucun tarif, aucun contrat, aucun contact, aucune
+        clé d'API** — ces informations naissent d'une relation commerciale, et
+        les inventer serait pire que les laisser vides, puisque quelqu'un
+        finirait par s'y fier.
+
+        L'étiquette « DallyTrading / Freight / Shipping Line » les distingue.
+        Elles restent des partenaires ordinaires : facturables, contactables,
+        rattachables à une expédition, sans traitement particulier.
+    -->
+    <data noupdate="1">
+
+        <record id="partner_cma_cgm" model="res.partner">
+            <field name="name">CMA CGM</field>
+            <field name="is_company" eval="True"/>
+            <field name="country_id" ref="base.fr"/>
+            <field name="category_id" eval="[(4, ref('partner_category_shipping_line'))]"/>
+        </record>
+
+        <record id="partner_maersk" model="res.partner">
+            <field name="name">Maersk</field>
+            <field name="is_company" eval="True"/>
+            <field name="country_id" ref="base.dk"/>
+            <field name="category_id" eval="[(4, ref('partner_category_shipping_line'))]"/>
+        </record>
+
+        <record id="partner_msc" model="res.partner">
+            <field name="name">Mediterranean Shipping Company (MSC)</field>
+            <field name="is_company" eval="True"/>
+            <field name="country_id" ref="base.ch"/>
+            <field name="category_id" eval="[(4, ref('partner_category_shipping_line'))]"/>
+        </record>
+
+        <record id="partner_hapag_lloyd" model="res.partner">
+            <field name="name">Hapag-Lloyd</field>
+            <field name="is_company" eval="True"/>
+            <field name="country_id" ref="base.de"/>
+            <field name="category_id" eval="[(4, ref('partner_category_shipping_line'))]"/>
+        </record>
+
+        <record id="partner_cosco" model="res.partner">
+            <field name="name">COSCO Shipping Lines</field>
+            <field name="is_company" eval="True"/>
+            <field name="country_id" ref="base.cn"/>
+            <field name="category_id" eval="[(4, ref('partner_category_shipping_line'))]"/>
+        </record>
+
+        <record id="partner_grimaldi" model="res.partner">
+            <field name="name">Grimaldi Group</field>
+            <field name="is_company" eval="True"/>
+            <field name="country_id" ref="base.it"/>
+            <field name="category_id" eval="[(4, ref('partner_category_shipping_line'))]"/>
+        </record>
+
+        <record id="partner_one" model="res.partner">
+            <field name="name">Ocean Network Express (ONE)</field>
+            <field name="is_company" eval="True"/>
+            <field name="country_id" ref="base.sg"/>
+            <field name="category_id" eval="[(4, ref('partner_category_shipping_line'))]"/>
+        </record>
+
+    </data>
+</odoo>

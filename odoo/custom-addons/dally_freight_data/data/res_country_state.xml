@@ -1,0 +1,619 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Les subdivisions administratives des pays où DallyTrading opère.
+
+        ## Pourquoi elles manquaient
+
+        Odoo livre `res.country.state` peuplé pour une partie du monde
+        seulement. Mesuré sur la base de production : 81 subdivisions pour la
+        Türkiye, 37 pour le Nigeria, 34 pour la Chine — et **zéro** pour le
+        Sénégal, la Côte d'Ivoire, le Mali, le Burkina, la Guinée, le Togo, le
+        Bénin, le Niger, le Ghana et le Maroc. Le référentiel était donc vide
+        exactement là où l'activité se fait.
+
+        ## Les codes
+
+        Ce sont les codes ISO 3166-2, privés de leur préfixe pays : Odoo range
+        le pays dans `country_id` et impose l'unicité sur le couple
+        (pays, code). « SN-DK » s'écrit donc `DK`. Aucun code n'est inventé :
+        quand la norme n'attribue qu'un numéro — Mali, Niger, Burkina, Maroc —
+        c'est ce numéro qui est repris, même s'il se lit moins bien qu'une
+        abréviation.
+
+        ## `noupdate`
+
+        Une région peut être redécoupée, renommée, fusionnée. Le jour où
+        quelqu'un corrige une entrée à la main, la correction doit survivre à la
+        mise à jour suivante du module. D'où `noupdate="1"` : ces lignes sont
+        posées une fois, puis appartiennent à l'exploitation.
+    -->
+    <data noupdate="1">
+
+        <!-- Sénégal : 14 subdivisions -->
+        <record id="state_sn_dk" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Dakar</field>
+            <field name="code">DK</field>
+        </record>
+        <record id="state_sn_db" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Diourbel</field>
+            <field name="code">DB</field>
+        </record>
+        <record id="state_sn_fk" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Fatick</field>
+            <field name="code">FK</field>
+        </record>
+        <record id="state_sn_ka" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Kaffrine</field>
+            <field name="code">KA</field>
+        </record>
+        <record id="state_sn_kd" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Kolda</field>
+            <field name="code">KD</field>
+        </record>
+        <record id="state_sn_ke" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Kédougou</field>
+            <field name="code">KE</field>
+        </record>
+        <record id="state_sn_kl" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Kaolack</field>
+            <field name="code">KL</field>
+        </record>
+        <record id="state_sn_lg" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Louga</field>
+            <field name="code">LG</field>
+        </record>
+        <record id="state_sn_mt" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Matam</field>
+            <field name="code">MT</field>
+        </record>
+        <record id="state_sn_se" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Sédhiou</field>
+            <field name="code">SE</field>
+        </record>
+        <record id="state_sn_sl" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Saint-Louis</field>
+            <field name="code">SL</field>
+        </record>
+        <record id="state_sn_tc" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Tambacounda</field>
+            <field name="code">TC</field>
+        </record>
+        <record id="state_sn_th" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Thiès</field>
+            <field name="code">TH</field>
+        </record>
+        <record id="state_sn_zg" model="res.country.state">
+            <field name="country_id" ref="base.sn"/>
+            <field name="name">Ziguinchor</field>
+            <field name="code">ZG</field>
+        </record>
+
+        <!-- Côte d'Ivoire : 14 subdivisions -->
+        <record id="state_ci_ab" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Abidjan</field>
+            <field name="code">AB</field>
+        </record>
+        <record id="state_ci_bs" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Bas-Sassandra</field>
+            <field name="code">BS</field>
+        </record>
+        <record id="state_ci_cm" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Comoé</field>
+            <field name="code">CM</field>
+        </record>
+        <record id="state_ci_dn" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Denguélé</field>
+            <field name="code">DN</field>
+        </record>
+        <record id="state_ci_gd" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Gôh-Djiboua</field>
+            <field name="code">GD</field>
+        </record>
+        <record id="state_ci_lc" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Lacs</field>
+            <field name="code">LC</field>
+        </record>
+        <record id="state_ci_lg" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Lagunes</field>
+            <field name="code">LG</field>
+        </record>
+        <record id="state_ci_mg" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Montagnes</field>
+            <field name="code">MG</field>
+        </record>
+        <record id="state_ci_sm" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Sassandra-Marahoué</field>
+            <field name="code">SM</field>
+        </record>
+        <record id="state_ci_sv" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Savanes</field>
+            <field name="code">SV</field>
+        </record>
+        <record id="state_ci_vb" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Vallée du Bandama</field>
+            <field name="code">VB</field>
+        </record>
+        <record id="state_ci_wr" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Woroba</field>
+            <field name="code">WR</field>
+        </record>
+        <record id="state_ci_ym" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Yamoussoukro</field>
+            <field name="code">YM</field>
+        </record>
+        <record id="state_ci_zz" model="res.country.state">
+            <field name="country_id" ref="base.ci"/>
+            <field name="name">Zanzan</field>
+            <field name="code">ZZ</field>
+        </record>
+
+        <!-- Mali : 11 subdivisions -->
+        <record id="state_ml_1" model="res.country.state">
+            <field name="country_id" ref="base.ml"/>
+            <field name="name">Kayes</field>
+            <field name="code">1</field>
+        </record>
+        <record id="state_ml_2" model="res.country.state">
+            <field name="country_id" ref="base.ml"/>
+            <field name="name">Koulikoro</field>
+            <field name="code">2</field>
+        </record>
+        <record id="state_ml_3" model="res.country.state">
+            <field name="country_id" ref="base.ml"/>
+            <field name="name">Sikasso</field>
+            <field name="code">3</field>
+        </record>
+        <record id="state_ml_4" model="res.country.state">
+            <field name="country_id" ref="base.ml"/>
+            <field name="name">Ségou</field>
+            <field name="code">4</field>
+        </record>
+        <record id="state_ml_5" model="res.country.state">
+            <field name="country_id" ref="base.ml"/>
+            <field name="name">Mopti</field>
+            <field name="code">5</field>
+        </record>
+        <record id="state_ml_6" model="res.country.state">
+            <field name="country_id" ref="base.ml"/>
+            <field name="name">Tombouctou</field>
+            <field name="code">6</field>
+        </record>
+        <record id="state_ml_7" model="res.country.state">
+            <field name="country_id" ref="base.ml"/>
+            <field name="name">Gao</field>
+            <field name="code">7</field>
+        </record>
+        <record id="state_ml_8" model="res.country.state">
+            <field name="country_id" ref="base.ml"/>
+            <field name="name">Kidal</field>
+            <field name="code">8</field>
+        </record>
+        <record id="state_ml_9" model="res.country.state">
+            <field name="country_id" ref="base.ml"/>
+            <field name="name">Taoudénit</field>
+            <field name="code">9</field>
+        </record>
+        <record id="state_ml_10" model="res.country.state">
+            <field name="country_id" ref="base.ml"/>
+            <field name="name">Ménaka</field>
+            <field name="code">10</field>
+        </record>
+        <record id="state_ml_bko" model="res.country.state">
+            <field name="country_id" ref="base.ml"/>
+            <field name="name">Bamako</field>
+            <field name="code">BKO</field>
+        </record>
+
+        <!-- Burkina Faso : 13 subdivisions -->
+        <record id="state_bf_01" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Boucle du Mouhoun</field>
+            <field name="code">01</field>
+        </record>
+        <record id="state_bf_02" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Cascades</field>
+            <field name="code">02</field>
+        </record>
+        <record id="state_bf_03" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Centre</field>
+            <field name="code">03</field>
+        </record>
+        <record id="state_bf_04" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Centre-Est</field>
+            <field name="code">04</field>
+        </record>
+        <record id="state_bf_05" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Centre-Nord</field>
+            <field name="code">05</field>
+        </record>
+        <record id="state_bf_06" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Centre-Ouest</field>
+            <field name="code">06</field>
+        </record>
+        <record id="state_bf_07" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Centre-Sud</field>
+            <field name="code">07</field>
+        </record>
+        <record id="state_bf_08" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Est</field>
+            <field name="code">08</field>
+        </record>
+        <record id="state_bf_09" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Hauts-Bassins</field>
+            <field name="code">09</field>
+        </record>
+        <record id="state_bf_10" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Nord</field>
+            <field name="code">10</field>
+        </record>
+        <record id="state_bf_11" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Plateau-Central</field>
+            <field name="code">11</field>
+        </record>
+        <record id="state_bf_12" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Sahel</field>
+            <field name="code">12</field>
+        </record>
+        <record id="state_bf_13" model="res.country.state">
+            <field name="country_id" ref="base.bf"/>
+            <field name="name">Sud-Ouest</field>
+            <field name="code">13</field>
+        </record>
+
+        <!-- Guinée : 8 subdivisions -->
+        <record id="state_gn_b" model="res.country.state">
+            <field name="country_id" ref="base.gn"/>
+            <field name="name">Boké</field>
+            <field name="code">B</field>
+        </record>
+        <record id="state_gn_c" model="res.country.state">
+            <field name="country_id" ref="base.gn"/>
+            <field name="name">Conakry</field>
+            <field name="code">C</field>
+        </record>
+        <record id="state_gn_d" model="res.country.state">
+            <field name="country_id" ref="base.gn"/>
+            <field name="name">Kindia</field>
+            <field name="code">D</field>
+        </record>
+        <record id="state_gn_f" model="res.country.state">
+            <field name="country_id" ref="base.gn"/>
+            <field name="name">Faranah</field>
+            <field name="code">F</field>
+        </record>
+        <record id="state_gn_k" model="res.country.state">
+            <field name="country_id" ref="base.gn"/>
+            <field name="name">Kankan</field>
+            <field name="code">K</field>
+        </record>
+        <record id="state_gn_l" model="res.country.state">
+            <field name="country_id" ref="base.gn"/>
+            <field name="name">Labé</field>
+            <field name="code">L</field>
+        </record>
+        <record id="state_gn_m" model="res.country.state">
+            <field name="country_id" ref="base.gn"/>
+            <field name="name">Mamou</field>
+            <field name="code">M</field>
+        </record>
+        <record id="state_gn_n" model="res.country.state">
+            <field name="country_id" ref="base.gn"/>
+            <field name="name">Nzérékoré</field>
+            <field name="code">N</field>
+        </record>
+
+        <!-- Togo : 5 subdivisions -->
+        <record id="state_tg_c" model="res.country.state">
+            <field name="country_id" ref="base.tg"/>
+            <field name="name">Centrale</field>
+            <field name="code">C</field>
+        </record>
+        <record id="state_tg_k" model="res.country.state">
+            <field name="country_id" ref="base.tg"/>
+            <field name="name">Kara</field>
+            <field name="code">K</field>
+        </record>
+        <record id="state_tg_m" model="res.country.state">
+            <field name="country_id" ref="base.tg"/>
+            <field name="name">Maritime</field>
+            <field name="code">M</field>
+        </record>
+        <record id="state_tg_p" model="res.country.state">
+            <field name="country_id" ref="base.tg"/>
+            <field name="name">Plateaux</field>
+            <field name="code">P</field>
+        </record>
+        <record id="state_tg_s" model="res.country.state">
+            <field name="country_id" ref="base.tg"/>
+            <field name="name">Savanes</field>
+            <field name="code">S</field>
+        </record>
+
+        <!-- Bénin : 12 subdivisions -->
+        <record id="state_bj_al" model="res.country.state">
+            <field name="country_id" ref="base.bj"/>
+            <field name="name">Alibori</field>
+            <field name="code">AL</field>
+        </record>
+        <record id="state_bj_ak" model="res.country.state">
+            <field name="country_id" ref="base.bj"/>
+            <field name="name">Atacora</field>
+            <field name="code">AK</field>
+        </record>
+        <record id="state_bj_aq" model="res.country.state">
+            <field name="country_id" ref="base.bj"/>
+            <field name="name">Atlantique</field>
+            <field name="code">AQ</field>
+        </record>
+        <record id="state_bj_bo" model="res.country.state">
+            <field name="country_id" ref="base.bj"/>
+            <field name="name">Borgou</field>
+            <field name="code">BO</field>
+        </record>
+        <record id="state_bj_co" model="res.country.state">
+            <field name="country_id" ref="base.bj"/>
+            <field name="name">Collines</field>
+            <field name="code">CO</field>
+        </record>
+        <record id="state_bj_ko" model="res.country.state">
+            <field name="country_id" ref="base.bj"/>
+            <field name="name">Couffo</field>
+            <field name="code">KO</field>
+        </record>
+        <record id="state_bj_do" model="res.country.state">
+            <field name="country_id" ref="base.bj"/>
+            <field name="name">Donga</field>
+            <field name="code">DO</field>
+        </record>
+        <record id="state_bj_li" model="res.country.state">
+            <field name="country_id" ref="base.bj"/>
+            <field name="name">Littoral</field>
+            <field name="code">LI</field>
+        </record>
+        <record id="state_bj_mo" model="res.country.state">
+            <field name="country_id" ref="base.bj"/>
+            <field name="name">Mono</field>
+            <field name="code">MO</field>
+        </record>
+        <record id="state_bj_ou" model="res.country.state">
+            <field name="country_id" ref="base.bj"/>
+            <field name="name">Ouémé</field>
+            <field name="code">OU</field>
+        </record>
+        <record id="state_bj_pl" model="res.country.state">
+            <field name="country_id" ref="base.bj"/>
+            <field name="name">Plateau</field>
+            <field name="code">PL</field>
+        </record>
+        <record id="state_bj_zo" model="res.country.state">
+            <field name="country_id" ref="base.bj"/>
+            <field name="name">Zou</field>
+            <field name="code">ZO</field>
+        </record>
+
+        <!-- Niger : 8 subdivisions -->
+        <record id="state_ne_1" model="res.country.state">
+            <field name="country_id" ref="base.ne"/>
+            <field name="name">Agadez</field>
+            <field name="code">1</field>
+        </record>
+        <record id="state_ne_2" model="res.country.state">
+            <field name="country_id" ref="base.ne"/>
+            <field name="name">Diffa</field>
+            <field name="code">2</field>
+        </record>
+        <record id="state_ne_3" model="res.country.state">
+            <field name="country_id" ref="base.ne"/>
+            <field name="name">Dosso</field>
+            <field name="code">3</field>
+        </record>
+        <record id="state_ne_4" model="res.country.state">
+            <field name="country_id" ref="base.ne"/>
+            <field name="name">Maradi</field>
+            <field name="code">4</field>
+        </record>
+        <record id="state_ne_5" model="res.country.state">
+            <field name="country_id" ref="base.ne"/>
+            <field name="name">Tahoua</field>
+            <field name="code">5</field>
+        </record>
+        <record id="state_ne_6" model="res.country.state">
+            <field name="country_id" ref="base.ne"/>
+            <field name="name">Tillabéri</field>
+            <field name="code">6</field>
+        </record>
+        <record id="state_ne_7" model="res.country.state">
+            <field name="country_id" ref="base.ne"/>
+            <field name="name">Zinder</field>
+            <field name="code">7</field>
+        </record>
+        <record id="state_ne_8" model="res.country.state">
+            <field name="country_id" ref="base.ne"/>
+            <field name="name">Niamey</field>
+            <field name="code">8</field>
+        </record>
+
+        <!-- Ghana : 16 subdivisions -->
+        <record id="state_gh_af" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Ahafo</field>
+            <field name="code">AF</field>
+        </record>
+        <record id="state_gh_ah" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Ashanti</field>
+            <field name="code">AH</field>
+        </record>
+        <record id="state_gh_be" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Bono East</field>
+            <field name="code">BE</field>
+        </record>
+        <record id="state_gh_bo" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Bono</field>
+            <field name="code">BO</field>
+        </record>
+        <record id="state_gh_cp" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Central</field>
+            <field name="code">CP</field>
+        </record>
+        <record id="state_gh_ep" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Eastern</field>
+            <field name="code">EP</field>
+        </record>
+        <record id="state_gh_aa" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Greater Accra</field>
+            <field name="code">AA</field>
+        </record>
+        <record id="state_gh_ne" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">North East</field>
+            <field name="code">NE</field>
+        </record>
+        <record id="state_gh_np" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Northern</field>
+            <field name="code">NP</field>
+        </record>
+        <record id="state_gh_ot" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Oti</field>
+            <field name="code">OT</field>
+        </record>
+        <record id="state_gh_sv" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Savannah</field>
+            <field name="code">SV</field>
+        </record>
+        <record id="state_gh_ue" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Upper East</field>
+            <field name="code">UE</field>
+        </record>
+        <record id="state_gh_uw" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Upper West</field>
+            <field name="code">UW</field>
+        </record>
+        <record id="state_gh_tv" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Volta</field>
+            <field name="code">TV</field>
+        </record>
+        <record id="state_gh_wp" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Western</field>
+            <field name="code">WP</field>
+        </record>
+        <record id="state_gh_wn" model="res.country.state">
+            <field name="country_id" ref="base.gh"/>
+            <field name="name">Western North</field>
+            <field name="code">WN</field>
+        </record>
+
+        <!-- Maroc : 12 subdivisions -->
+        <record id="state_ma_01" model="res.country.state">
+            <field name="country_id" ref="base.ma"/>
+            <field name="name">Tanger-Tétouan-Al Hoceïma</field>
+            <field name="code">01</field>
+        </record>
+        <record id="state_ma_02" model="res.country.state">
+            <field name="country_id" ref="base.ma"/>
+            <field name="name">L'Oriental</field>
+            <field name="code">02</field>
+        </record>
+        <record id="state_ma_03" model="res.country.state">
+            <field name="country_id" ref="base.ma"/>
+            <field name="name">Fès-Meknès</field>
+            <field name="code">03</field>
+        </record>
+        <record id="state_ma_04" model="res.country.state">
+            <field name="country_id" ref="base.ma"/>
+            <field name="name">Rabat-Salé-Kénitra</field>
+            <field name="code">04</field>
+        </record>
+        <record id="state_ma_05" model="res.country.state">
+            <field name="country_id" ref="base.ma"/>
+            <field name="name">Béni Mellal-Khénifra</field>
+            <field name="code">05</field>
+        </record>
+        <record id="state_ma_06" model="res.country.state">
+            <field name="country_id" ref="base.ma"/>
+            <field name="name">Casablanca-Settat</field>
+            <field name="code">06</field>
+        </record>
+        <record id="state_ma_07" model="res.country.state">
+            <field name="country_id" ref="base.ma"/>
+            <field name="name">Marrakech-Safi</field>
+            <field name="code">07</field>
+        </record>
+        <record id="state_ma_08" model="res.country.state">
+            <field name="country_id" ref="base.ma"/>
+            <field name="name">Drâa-Tafilalet</field>
+            <field name="code">08</field>
+        </record>
+        <record id="state_ma_09" model="res.country.state">
+            <field name="country_id" ref="base.ma"/>
+            <field name="name">Souss-Massa</field>
+            <field name="code">09</field>
+        </record>
+        <record id="state_ma_10" model="res.country.state">
+            <field name="country_id" ref="base.ma"/>
+            <field name="name">Guelmim-Oued Noun</field>
+            <field name="code">10</field>
+        </record>
+        <record id="state_ma_11" model="res.country.state">
+            <field name="country_id" ref="base.ma"/>
+            <field name="name">Laâyoune-Sakia El Hamra</field>
+            <field name="code">11</field>
+        </record>
+        <record id="state_ma_12" model="res.country.state">
+            <field name="country_id" ref="base.ma"/>
+            <field name="name">Dakhla-Oued Ed-Dahab</field>
+            <field name="code">12</field>
+        </record>
+
+    </data>
+</odoo>

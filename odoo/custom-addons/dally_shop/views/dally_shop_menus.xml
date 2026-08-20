@@ -6,6 +6,13 @@
               parent="dally_core.menu_dally_root"
               sequence="45"/>
 
+    <menuitem id="menu_dally_shop_orders"
+              name="Commandes"
+              parent="menu_dally_shop"
+              action="dally_shop_order_action"
+              groups="dally_shop.group_dally_shop_operations,dally_core.group_dally_manager"
+              sequence="5"/>
+
     <menuitem id="menu_dally_shop_products"
               name="Produits"
               parent="menu_dally_shop"

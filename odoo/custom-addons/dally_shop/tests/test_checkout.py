@@ -397,12 +397,30 @@ class TestCheckoutBoutique(TransactionCase):
         self.assertEqual(
             set(projection),
             {"reference", "status", "deliveryMode", "deliveryModeLabel", "currency",
-             "amountUntaxed", "amountTax", "amountTotal", "lines"},
+             "amountUntaxed", "amountTax", "amountTotal", "delivery", "grandTotal",
+             "lines"},
         )
         self.assertEqual(
             set(projection["lines"][0]),
             {"reference", "name", "quantity", "unitPrice", "subtotal"},
         )
+        self.assertEqual(
+            set(projection["delivery"]),
+            {"method", "fee", "shippingAddress", "fulfillment"},
+        )
+        self.assertEqual(
+            set(projection["delivery"]["method"]),
+            {"code", "name", "kind", "requiresAddress"},
+        )
+        self.assertEqual(
+            set(projection["delivery"]["fee"]),
+            {"status", "amount", "currency"},
+        )
+        self.assertEqual(
+            set(projection["delivery"]["fulfillment"]),
+            {"state", "label"},
+        )
+        self.assertIsNone(projection["delivery"]["shippingAddress"])
 
     # ------------------------------------------------------------------
     # Cohérence de la commande boutique

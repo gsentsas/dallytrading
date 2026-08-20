@@ -32,6 +32,7 @@ déclenché automatiquement par le checkout.
         "views/product_template_views.xml",
         "views/dally_shop_delivery_views.xml",
         "views/sale_order_views.xml",
+        "views/dally_shop_shipping_management_views.xml",
         "views/res_config_settings_views.xml",
         "views/dally_shop_menus.xml",
     ],

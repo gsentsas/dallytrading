@@ -89,6 +89,7 @@ export function CheckoutForm({
   if (!method) return null;
 
   const enCours = etat.phase === 'envoi';
+  const adresseProfilRequise = method.requiresAddress && !adresseDistincte;
 
   return (
     <form onSubmit={envoyer} className="grid gap-8 lg:grid-cols-[3fr_2fr]">
@@ -105,8 +106,8 @@ export function CheckoutForm({
               <Champ nom="name" label="Nom complet" requis valeur={identite.name} onChange={(v) => setIdentite({ ...identite, name: v })} />
               <Champ nom="email" label="E-mail" type="email" requis valeur={identite.email} onChange={(v) => setIdentite({ ...identite, email: v })} />
               <Champ nom="phone" label="Téléphone" type="tel" valeur={identite.phone} onChange={(v) => setIdentite({ ...identite, phone: v })} />
-              <Champ nom="street" label="Adresse" valeur={identite.street} onChange={(v) => setIdentite({ ...identite, street: v })} />
-              <Champ nom="city" label="Ville" valeur={identite.city} onChange={(v) => setIdentite({ ...identite, city: v })} />
+              <Champ nom="street" label="Adresse" requis={adresseProfilRequise} valeur={identite.street} onChange={(v) => setIdentite({ ...identite, street: v })} />
+              <Champ nom="city" label="Ville" requis={adresseProfilRequise} valeur={identite.city} onChange={(v) => setIdentite({ ...identite, city: v })} />
               <Champ nom="zip" label="Code postal" valeur={identite.zip} onChange={(v) => setIdentite({ ...identite, zip: v })} />
             </div>
           </fieldset>

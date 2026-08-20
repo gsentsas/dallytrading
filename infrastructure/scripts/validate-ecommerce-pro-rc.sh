@@ -205,8 +205,8 @@ refresh_shop_runtime() {
     -H "X-API-Key: $SHOP_API_KEY_READ" \
     "http://127.0.0.1:${ODOO_PORT}/api/v1/shop/delivery-methods")"
   if [ "$delivery_code" != "200" ] || \
-     ! grep -q '"code":"pickup"' "$delivery_body" || \
-     ! grep -q '"code":"delivery_to_confirm"' "$delivery_body"; then
+     ! grep -Eq '"code"[[:space:]]*:[[:space:]]*"pickup"' "$delivery_body" || \
+     ! grep -Eq '"code"[[:space:]]*:[[:space:]]*"delivery_to_confirm"' "$delivery_body"; then
     echo "   HTTP méthodes de remise: $delivery_code" >&2
     cat "$delivery_body" >&2 || true
     fail "sonde méthodes de remise Odoo"

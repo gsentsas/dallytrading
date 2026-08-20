@@ -91,7 +91,12 @@ class SaleOrderPortal(models.Model):
         self.ensure_one()
         method = self.dally_shop_delivery_method_id
         if method:
-            return method.code, method.name
+            # Le portail n'obtient volontairement aucune ACL générique sur le
+            # modèle de configuration. On élève uniquement le record de méthode
+            # après que la commande elle-même a été autorisée par les règles
+            # natives Sale, puis on ne projette que deux champs publics.
+            public_method = method.sudo()
+            return public_method.code, public_method.name
         return (
             self.dally_shop_delivery_mode or None,
             dict(MODES_REMISE).get(self.dally_shop_delivery_mode, ""),
@@ -112,9 +117,14 @@ class SaleOrderPortal(models.Model):
     def _dally_shop_portal_address(self):
         self.ensure_one()
         method = self.dally_shop_delivery_method_id
-        if method and not method.requires_address:
+        # Même frontière que pour le libellé ci-dessus : la méthode est une
+        # configuration interne sans ACL portail. Seul son booléen public est
+        # consulté sous sudo ; la commande et son adresse restent sous l'identité
+        # réelle du client.
+        public_method = method.sudo() if method else method
+        if public_method and not public_method.requires_address:
             return None
-        if method and method.requires_address:
+        if public_method and public_method.requires_address:
             country = None
             if self.dally_shop_shipping_country_code:
                 country_record = self.env["res.country"].sudo().search(

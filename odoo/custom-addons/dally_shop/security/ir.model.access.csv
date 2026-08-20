@@ -11,3 +11,5 @@ access_shop_order_transition_operations,dally.shop.order.transition operations,m
 access_shop_order_transition_manager,dally.shop.order.transition manager,model_dally_shop_order_transition,dally_core.group_dally_manager,1,0,0,0
 access_shop_order_transition_wizard_operations,dally.shop.order.transition.wizard operations,model_dally_shop_order_transition_wizard,dally_shop.group_dally_shop_operations,1,1,1,1
 access_shop_order_transition_wizard_manager,dally.shop.order.transition.wizard manager,model_dally_shop_order_transition_wizard,dally_core.group_dally_manager,1,1,1,1
+access_shop_delivery_method_operations,dally.shop.delivery.method operations,model_dally_shop_delivery_method,dally_shop.group_dally_shop_operations,1,0,0,0
+access_shop_delivery_method_manager,dally.shop.delivery.method manager,model_dally_shop_delivery_method,dally_core.group_dally_manager,1,1,1,1

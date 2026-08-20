@@ -188,7 +188,10 @@ main() {
   assert_worktree_clean
 
   log "montage de la pile jetable"
-  "$HARNESS" up
+  # Le seed véhicule produit une clé API éphémère utile au navigateur, mais sa
+  # valeur n'a pas à traverser stdout. Le fichier 0600 du harnais garde la vraie
+  # valeur; seule la représentation console est expurgée ici.
+  "$HARNESS" up | sed -E 's/^([[:space:]]*VEHICLE_API_KEY=).*/\1<expurgé>/'
 
   install_release_modules
   run_odoo_tests

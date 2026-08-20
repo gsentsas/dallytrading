@@ -18,8 +18,13 @@ DB="dallytrading_freight_e2e"
 ODOO_CONTAINER="dallytrading-freight-e2e-odoo"
 NEXT_PORT="${FE2E_NEXT_PORT:-3030}"
 ODOO_PORT="${FE2E_ODOO_PORT:-18379}"
+# Port interne dédié au second processus Odoo qui exécute les HttpCase.
+# Le PID 1 du conteneur écoute déjà sur 8069 : réutiliser 8069 fait échouer
+# immédiatement la suite avec « Address already in use ».
+ODOO_TEST_HTTP_PORT="${FE2E_TEST_HTTP_PORT:-18079}"
 BASE_URL="http://127.0.0.1:${NEXT_PORT}"
 PLAYWRIGHT_IMAGE="${FE2E_PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.62.1-noble}"
+PRODUCTION_WORKTREE="/var/www/vhosts/dallytrading.com/platform"
 
 # Le harnais historique installe déjà le noyau Freight/Portal/Shop. On ajoute
 # ici le reste du lot et les deux modules voisins dont la non-régression est
@@ -40,6 +45,14 @@ assert_isolated() {
     3000|3010|80|443) fail "port frontend réservé: $NEXT_PORT" ;;
   esac
   [ "$ODOO_CONTAINER" != "dallytrading-odoo" ] || fail "conteneur production interdit"
+
+  # Le worktree /platform est celui servi par la production. Même si ce script
+  # ne vise que des conteneurs jetables, y basculer une branche feature change
+  # les fichiers montés par l'Odoo de production. La recette doit donc vivre
+  # dans un worktree de développement séparé.
+  if [ "$(readlink -f "$ROOT")" = "$PRODUCTION_WORKTREE" ]; then
+    fail "recette interdite depuis le worktree production $PRODUCTION_WORKTREE"
+  fi
 }
 
 cleanup() {
@@ -51,7 +64,8 @@ trap cleanup EXIT INT TERM
 install_release_modules() {
   log "installation des modules FREIGHT PRO sur la base jetable"
   docker exec "$ODOO_CONTAINER" odoo -c /etc/odoo/odoo.conf -d "$DB" \
-    -i "$NEW_MODULES" --stop-after-init > "$WORK/freight-pro-install.log" 2>&1 || {
+    -i "$NEW_MODULES" --no-http --stop-after-init \
+    > "$WORK/freight-pro-install.log" 2>&1 || {
       tail -80 "$WORK/freight-pro-install.log" >&2
       fail "installation des modules FREIGHT PRO"
     }
@@ -65,8 +79,12 @@ install_release_modules() {
 
 run_odoo_tests() {
   log "tests Odoo du lot complet"
+  # Les HttpCase ont besoin d'un serveur HTTP, donc pas de --no-http ici.
+  # On donne au runner son propre port interne au conteneur au lieu d'entrer
+  # en collision avec le serveur principal du harnais sur 8069.
   docker exec "$ODOO_CONTAINER" odoo -c /etc/odoo/odoo.conf -d "$DB" \
     -u "$TEST_MODULES" \
+    --http-interface=127.0.0.1 --http-port="$ODOO_TEST_HTTP_PORT" \
     --test-enable --test-tags=dally --stop-after-init \
     > "$WORK/freight-pro-tests.log" 2>&1 || {
       tail -120 "$WORK/freight-pro-tests.log" >&2

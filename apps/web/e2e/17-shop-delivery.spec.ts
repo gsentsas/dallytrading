@@ -46,7 +46,7 @@ test.describe('boutique — livraison Lot C', () => {
     await expect(page.getByTestId('order-reference')).toBeVisible();
     const confirmation = normalize(await page.locator('body').innerText());
     expect(confirmation).toContain('Livraison');
-    expect(confirmation).toContain('Tarif à confirmer');
+    expect(confirmation).toContain('À confirmer');
     expect(confirmation).toContain('Aucun paiement n’a été demandé');
 
     // Aucun montant de livraison inventé avant la cotation Odoo.

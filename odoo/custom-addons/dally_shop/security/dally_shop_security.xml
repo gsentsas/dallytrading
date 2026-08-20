@@ -4,46 +4,14 @@
     <!--
         Le groupe qui gère la vitrine, et rien d'autre.
 
-        ## Pourquoi il existe
+        La personne qui administre les produits ne doit pas recevoir le rôle
+        Commercial uniquement pour publier une photo ou une catégorie : ce rôle
+        ouvrirait en écriture plusieurs modèles de fret et de CRM sans rapport
+        avec le catalogue.
 
-        La personne qui administre les produits ne pouvait pas ajouter de photo :
-        elle appartenait à « DallyTrading / Read Only », et le client web masque
-        le bouton de création quand le droit manque — comportement correct, mais
-        symptôme illisible, une zone galerie vide sans explication.
-
-        La réponse évidente était de la passer dans « Commercial ». L'audit du
-        delta réel l'a écartée. Commercial ajoute, par rapport à Read Only :
-
-          · dally.quote.request          gagne write + create
-          · dally.shipment               gagne write + create
-          · dally.shipment.event         gagne write + create
-          · dally.shipment.package       gagne write + create + unlink
-          · dally.portal.document        gagne write + create
-          · dally.freight.vehicle.cargo  gagne write + create
-          · dally.shop.category          gagne write + create
-          · dally.shop.product.image     gagne write + create + unlink
-
-        Sept modèles métier en écriture — devis de fret, expéditions, colis,
-        documents de portail — pour obtenir la gestion d'un seul. Le besoin est
-        « publier un catalogue » ; le privilège accordé serait « conduire les
-        opérations ». Ce n'est pas le même métier, et ce n'est pas au correctif
-        d'un bouton d'ergonomie de l'accorder.
-
-        ## Ce que celui-ci accorde, exactement
-
-        Deux modèles, tous deux propres à la vitrine :
-
-        * `dally.shop.product.image` — créer, modifier, supprimer une photo ;
-        * `dally.shop.category` — créer et modifier une catégorie, **sans
-          suppression** : une catégorie est partagée entre produits, et la
-          retirer les déclasse tous à la fois. C'est déjà le choix retenu pour
-          Commercial ; le reprendre ici garde une seule règle.
-
-        Rien sur le fret, rien sur les expéditions, rien sur le portail, rien sur
-        le négoce.
-
-        `implied_ids` vers Read Only : le groupe **ajoute** sans retirer. Quelqu'un
-        qui passe de Read Only à celui-ci conserve toutes ses lectures.
+        Ce groupe accorde donc seulement les capacités boutique prévues par les
+        ACL de `dally_shop`, en plus des lectures de base : galerie produit et
+        catégories. Rien sur le fret, les expéditions, le portail ou le négoce.
     -->
     <record id="group_dally_shop_catalog" model="res.groups">
         <field name="name">Boutique — catalogue</field>
@@ -57,22 +25,28 @@
     <!--
         E-commerce Pro : rôle d'exploitation des commandes boutique.
 
-        Il n'implique volontairement aucun groupe Vente. Donner le groupe Sales
-        pour afficher les commandes ouvrirait l'ensemble des devis et commandes
-        commerciales de la société. Ce rôle reçoit donc uniquement les ACL et
-        record rules déclarées par `dally_shop`.
+        Il n'implique volontairement aucun groupe Vente. Les ACL génériques sur
+        `sale.order` et `sale.order.line` restent en lecture seule et limitées aux
+        commandes boutique. Les mutations passent exclusivement par les méthodes
+        métier gardées : workflow commercial, cotation des frais, correction de
+        l'adresse avant préparation et suivi de remise.
 
-        Premier lot : lecture seule. Les actions de validation, paiement,
-        facturation et préparation seront ajoutées séparément quand leurs
-        invariants métier seront définis et testés.
+        Le Lot C autorise une confirmation Vente native dans un seul cas :
+        `action_dally_shop_authorize_fulfillment`, après validation commerciale,
+        frais connus et adresse complète. Le verrou sur `action_confirm()` empêche
+        le même utilisateur de contourner ces préconditions par une autre vue ou
+        un RPC. Ce rôle n'obtient toujours aucun droit générique sur les ventes
+        ordinaires, les factures ou les paiements.
     -->
     <record id="group_dally_shop_operations" model="res.groups">
         <field name="name">Boutique — opérations</field>
         <field name="privilege_id" ref="dally_core.privilege_dallytrading"/>
         <field name="implied_ids" eval="[(4, ref('dally_core.group_dally_readonly'))]"/>
-        <field name="comment">Consulter les commandes issues de la boutique,
-            exclusivement. Aucun droit sur les ventes ordinaires, aucune
-            confirmation, facturation, préparation ou suppression.</field>
+        <field name="comment">Exploiter uniquement les commandes boutique via les
+            actions métier gardées : validation commerciale, frais, adresse,
+            autorisation de préparation et suivi de remise. Aucun droit générique
+            d'écriture sur les ventes, aucune facture, aucun paiement et aucun
+            accès aux ventes ordinaires.</field>
     </record>
 
 </odoo>

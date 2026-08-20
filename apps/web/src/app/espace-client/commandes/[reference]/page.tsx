@@ -10,22 +10,6 @@ import { newCorrelationId } from '@/lib/logger';
 export const metadata: Metadata = { title: 'Commande' };
 export const dynamic = 'force-dynamic';
 
-/**
- * Le détail d'une commande boutique.
- *
- * ## La référence ne suffit pas à autoriser
- *
- * `S00042` est la référence commerciale d'Odoo : lisible, séquentielle, imprimée
- * sur les documents. La connaître ne donne rien, parce que la recherche côté Odoo
- * s'exécute sous la session du client — la commande d'un autre est absente du
- * recordset, et la route répond 404.
- *
- * `loadPortal` traduit ce 404 en `notFound()`, la même page que pour une référence
- * inventée. Une commande d'un autre client, une commande invité, une commande
- * non-boutique et une référence qui n'a jamais existé donnent donc exactement la
- * même chose — l'indistinction que le contrôleur a établie est conservée jusqu'à
- * l'écran.
- */
 export default async function CommandePage({
   params,
 }: {
@@ -66,23 +50,32 @@ export default async function CommandePage({
           <StatusBadge label={commande.stateLabel} />
         </div>
 
-        {/*
-          L'état est dit une fois de plus, en clair. L'étiquette seule est
-          discrète, et ce qu'elle signifie — la balle est dans notre camp —
-          mérite une phrase complète plutôt qu'une déduction.
-        */}
-        {commande.state === 'draft' && (
+        {commande.state === 'received' && (
           <p className="mt-6 rounded-lg border border-mist-200 bg-mist-50 p-4 text-sm text-mist-700">
             Nous avons bien reçu cette commande. Nos équipes vérifient la
-            disponibilité et vous recontactent pour la confirmer, ainsi que pour
-            le coût de la remise et les modalités de règlement. Aucun paiement n’a
+            disponibilité et vous recontactent pour la valider, ainsi que pour le
+            coût de la remise et les modalités de règlement. Aucun paiement n’a
             été demandé.
           </p>
         )}
-        {commande.state === 'cancel' && (
+        {commande.state === 'validated' && (
+          <p className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+            Votre commande a été validée par nos équipes. Les prochaines étapes de
+            remise, de paiement et de préparation vous seront communiquées selon
+            les modalités convenues.
+          </p>
+        )}
+        {commande.state === 'rejected' && (
           <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            Cette commande a été annulée. Contactez-nous si ce n’est pas ce que
-            vous attendiez.
+            Cette commande ne peut pas être validée dans son état actuel. Le motif
+            communiqué par nos équipes figure dans le statut ci-dessus.
+          </p>
+        )}
+        {commande.state === 'cancelled' && (
+          <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            Cette commande a été annulée. Le motif communiqué par nos équipes
+            figure dans le statut ci-dessus. Contactez-nous si vous avez besoin
+            d’aide.
           </p>
         )}
       </Card>
@@ -104,10 +97,6 @@ export default async function CommandePage({
           <tbody>
             {commande.lines.map((ligne, index) => (
               <tr
-                // La référence produit n'est pas dans la projection de ligne : le
-                // nom retenu à la commande y est, et il doit rester stable même si
-                // le produit est renommé. L'index suffit donc comme clé, la liste
-                // étant en lecture seule et jamais réordonnée.
                 key={`${ligne.productName}-${index}`}
                 className="border-b border-mist-200"
               >
@@ -140,11 +129,6 @@ export default async function CommandePage({
             <dd>{formatOrderAmount(commande.amountTotal, commande.currency)}</dd>
           </div>
         </dl>
-        {/*
-          Dire ce que le total ne contient pas. Aucun frais de livraison n'est
-          décidé au MVP, et un montant « indicatif » reviendrait à inventer un
-          tarif.
-        */}
         <p className="mt-4 text-xs text-mist-500 sm:text-right">
           Hors frais de livraison, communiqués selon la destination.
         </p>

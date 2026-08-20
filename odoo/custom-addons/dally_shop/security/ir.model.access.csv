@@ -7,7 +7,3 @@ access_shop_product_image_commercial,dally.shop.product.image commercial,model_d
 access_shop_product_image_manager,dally.shop.product.image responsable,model_dally_shop_product_image,dally_core.group_dally_manager,1,1,1,1
 access_shop_category_catalog,dally.shop.category catalogue,model_dally_shop_category,dally_shop.group_dally_shop_catalog,1,1,1,0
 access_shop_product_image_catalog,dally.shop.product.image catalogue,model_dally_shop_product_image,dally_shop.group_dally_shop_catalog,1,1,1,1
-access_shop_order_operations,sale.order boutique operations,sale.model_sale_order,dally_shop.group_dally_shop_operations,1,0,0,0
-access_shop_order_line_operations,sale.order.line boutique operations,sale.model_sale_order_line,dally_shop.group_dally_shop_operations,1,0,0,0
-access_shop_order_manager,sale.order boutique manager,sale.model_sale_order,dally_core.group_dally_manager,1,0,0,0
-access_shop_order_line_manager,sale.order.line boutique manager,sale.model_sale_order_line,dally_core.group_dally_manager,1,0,0,0

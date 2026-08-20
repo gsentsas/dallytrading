@@ -127,6 +127,19 @@ projection = env["dally.shipment"].sudo().search(
 )
 assert expedition and projection, "chaine fret incomplete pour le dossier enrichi"
 
+# Le lot Freight Pro installe ensuite une politique globale qui masque aux
+# utilisateurs externes les états non publiables. Une projection laissée en
+# `draft` serait donc correctement cachée, ce qui rendrait cette fixture de
+# détail illisible au portail malgré ses colis, événements et documents.
+#
+# On fait passer la fixture par l'action canonique vers un jalon réellement
+# client (`in_transit`) AVANT l'installation du module de politique. Au moment
+# où son champ stocké `dally_portal_visible` sera créé/recalculé, la fixture
+# sera donc visible pour la bonne raison métier — jamais par contournement de
+# règle d'accès.
+projection.action_set_state("in_transit")
+assert projection.state == "in_transit", "le dossier enrichi n'est pas passe en transit"
+
 # Canaris dans les champs internes du dossier opérationnel du fournisseur.
 valeurs_internes = {}
 for champ in ("notes", "dangerous_goods_notes"):

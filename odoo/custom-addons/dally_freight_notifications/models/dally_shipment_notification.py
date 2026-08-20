@@ -1,50 +1,31 @@
 # -*- coding: utf-8 -*-
-"""La file d'attente de ce qu'on écrit au client.
+"""Durable freight notification outbox and delivery worker.
 
-## Pourquoi une file plutôt qu'un envoi
+The business transition never sends mail. It only writes one durable outbox row
+per automatic customer-visible event. A cron later claims pending rows with
+``FOR UPDATE SKIP LOCKED`` and performs the SMTP send.
 
-Un courriel envoyé pendant la transaction ferait dépendre un changement d'état
-métier de la santé du serveur de messagerie : un SMTP muet annulerait le
-passage en « livré ». Ici, la transition écrit une **intention** en base, dans
-sa propre transaction, et rend la main. L'envoi viendra après, d'ailleurs, et
-pourra échouer sans rien casser.
-
-## Pourquoi une ligne même quand rien ne part
-
-Les lignes `skipped` sont l'essentiel de l'intérêt de cette table. La question
-qu'on posera dans six mois n'est pas « combien de courriels sont partis » mais
-« pourquoi ce client-là n'a rien reçu » — et un booléen sur l'expédition n'y
-répond jamais. Chaque abstention porte donc son motif.
-
-## L'unicité, et ce qu'elle garantit
-
-`unique(event_id)` : une notification par événement de transition. Comme
-l'événement n'est créé que sur une **vraie** transition — réécrire l'état qu'un
-dossier a déjà n'en produit aucun — la propriété demandée tient sans surveiller
-personne : une transition, au plus un message ; une réécriture, aucun.
-
-## La photographie
-
-Les colonnes `shipment_*`, `customer_*`, `origin_*`, `destination_*` et
-`tracking_url` sont figées à la création. Le futur gabarit lira **elles**, et
-jamais l'expédition. Ce n'est pas de la commodité : le rendu d'un courriel
-s'exécute avec un utilisateur technique, pour qui le `groups=` qui protège un
-coût d'achat ou une marge ne protège plus rien. Ce qui n'est pas dans cette
-table ne peut pas fuir dans un courriel.
+Concurrency is exactly-once at the database claim level, not at the SMTP
+protocol level: if SMTP accepts a message and the worker dies before PostgreSQL
+commits ``status='sent'``, a later retry can theoretically send the same message
+again. SMTP does not provide an external idempotency key, so claiming more would
+be incorrect.
 """
 
-from odoo import fields, models
+import re
 
-#: Motifs d'abstention. Écrits une fois, lus dans les journaux et les tests.
-#: L'événement n'a pas été publié au client. Motif **de chemin** et non
-#: d'état : un événement projeté depuis `tk_freight` naît fermé, quel que soit
-#: son code d'état, et ne peut donc jamais devenir un courriel.
+from odoo import api, fields, models
+
+
 MOTIF_NON_PUBLIE = "event_not_published"
 MOTIF_POLITIQUE = "policy_no_notify"
 MOTIF_SANS_GABARIT = "no_template"
 MOTIF_SANS_ADRESSE = "no_email"
 MOTIF_REFUS_CLIENT = "partner_opted_out"
 MOTIF_SANS_DESTINATAIRE = "no_partner"
+
+MAX_ATTEMPTS = 5
+CRON_BATCH_SIZE = 100
 
 
 class DallyShipmentNotification(models.Model):
@@ -53,35 +34,36 @@ class DallyShipmentNotification(models.Model):
     _order = "created_at desc, id desc"
     _rec_name = "shipment_reference"
 
-    # ─── Rattachements ───────────────────────────────────────────────
-
+    # Rattachements techniques. Les templates ne doivent jamais naviguer vers
+    # ces relations : leur contenu vient exclusivement du snapshot ci-dessous.
     shipment_id = fields.Many2one(
-        comodel_name="dally.shipment", string="Expédition",
-        required=True, ondelete="cascade", index=True,
+        "dally.shipment", string="Expédition", required=True,
+        ondelete="cascade", index=True,
     )
     event_id = fields.Many2one(
-        comodel_name="dally.shipment.event", string="Événement",
-        required=True, ondelete="cascade", index=True,
-        help="L'événement de transition qui a motivé ce message. C'est la clé "
-             "d'unicité : un événement, au plus une notification.",
+        "dally.shipment.event", string="Événement", required=True,
+        ondelete="cascade", index=True,
     )
     state = fields.Selection(
         related="event_id.status", string="État", store=True, index=True,
     )
     partner_id = fields.Many2one(
-        comodel_name="res.partner", string="Destinataire",
-        ondelete="restrict", index=True,
+        "res.partner", string="Destinataire", ondelete="restrict", index=True,
     )
     email = fields.Char(
         string="Adresse",
-        help="Figée au moment de la mise en file : si le partenaire change "
-             "d'adresse ensuite, on sait où le message est parti.",
+        help="Adresse qui sera utilisée pour l'envoi. Elle est initialisée lors "
+             "de la mise en file et rafraîchie avec l'adresse courante du "
+             "partenaire juste avant l'envoi.",
+    )
+    language_code = fields.Char(
+        string="Langue", readonly=True,
+        help="Langue figée à la mise en file : langue du partenaire, puis de la "
+             "société, puis fr_FR en dernier recours.",
     )
 
-    # ─── Cycle de vie ────────────────────────────────────────────────
-
     status = fields.Selection(
-        selection=[
+        [
             ("pending", "En attente"),
             ("sent", "Envoyée"),
             ("failed", "Échec"),
@@ -90,13 +72,13 @@ class DallyShipmentNotification(models.Model):
         string="Statut", default="pending", required=True, index=True,
     )
     mail_id = fields.Many2one(
-        comodel_name="mail.mail", string="Courriel", ondelete="set null",
+        "mail.mail", string="Courriel", ondelete="set null", readonly=True,
     )
     attempts = fields.Integer(string="Tentatives", default=0, readonly=True)
     last_error = fields.Char(
-        string="Dernier motif",
-        help="Motif d'abstention ou message d'échec. Toujours renseigné quand "
-             "le statut n'est ni « en attente » ni « envoyée ».",
+        string="Dernier motif", readonly=True,
+        help="Motif d'abstention ou erreur de livraison nettoyée. Les URL et "
+             "jetons de suivi n'y sont jamais conservés.",
     )
     created_at = fields.Datetime(
         string="Créée le", required=True, readonly=True,
@@ -104,25 +86,148 @@ class DallyShipmentNotification(models.Model):
     )
     sent_at = fields.Datetime(string="Envoyée le", readonly=True)
 
-    # ─── Photographie sûre, destinée au gabarit ──────────────────────
-
+    # Snapshot client-safe. Les templates n'utilisent que ces colonnes.
     shipment_reference = fields.Char(string="Référence", readonly=True)
     customer_label = fields.Char(string="Libellé client", readonly=True)
-    customer_message = fields.Char(
-        string="Message client", readonly=True,
-        help="Phrase publiée dans la frise pour cette transition. Le gabarit "
-             "s'en sert comme corps de message.",
-    )
+    customer_message = fields.Char(string="Message client", readonly=True)
     origin_label = fields.Char(string="Origine", readonly=True)
     destination_label = fields.Char(string="Destination", readonly=True)
     event_date = fields.Datetime(string="Date de l'événement", readonly=True)
-    tracking_url = fields.Char(
-        string="Lien de suivi", readonly=True,
-        help="Adresse publique portant le jeton de suivi. Aucun identifiant "
-             "de base n'y figure.",
-    )
+    tracking_url = fields.Char(string="Lien de suivi", readonly=True)
 
     _event_uniq = models.Constraint(
-        "unique(event_id)",
-        "Cet événement a déjà sa notification.",
-    )
+        "unique(event_id)", "Cet événement a déjà sa notification.")
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Freeze rendering language at enqueue time.
+
+        The template itself never follows ``partner_id`` or ``shipment_id``.
+        That keeps the rendered surface limited to the allowlisted snapshot.
+        """
+        Partner = self.env["res.partner"]
+        Shipment = self.env["dally.shipment"]
+        for vals in vals_list:
+            if vals.get("language_code"):
+                continue
+            partner = Partner.browse(vals.get("partner_id")).exists()
+            shipment = Shipment.browse(vals.get("shipment_id")).exists()
+            company = shipment.company_id if shipment else self.env.company
+            vals["language_code"] = (
+                (partner.lang if partner else False)
+                or company.partner_id.lang
+                or self.env.lang
+                or "fr_FR"
+            )
+        return super().create(vals_list)
+
+    def _dally_delivery_skip_reason(self):
+        """Revalidate all customer-facing conditions immediately before send."""
+        self.ensure_one()
+
+        if not self.event_id or not self.event_id.visible_to_customer:
+            return MOTIF_NON_PUBLIE
+
+        policy = self.env["dally.freight.state.policy"]._dally_policy_for(self.state)
+        if (
+            not policy
+            or not policy.visible_in_tracking
+            or not policy.notify_customer
+        ):
+            return MOTIF_POLITIQUE
+        if not policy.email_template_id:
+            return MOTIF_SANS_GABARIT
+        if not self.partner_id:
+            return MOTIF_SANS_DESTINATAIRE
+        if not self.partner_id.dally_freight_notify:
+            return MOTIF_REFUS_CLIENT
+        if not self.partner_id.email or not self.email:
+            return MOTIF_SANS_ADRESSE
+        return False
+
+    def _dally_sanitize_delivery_error(self, exc):
+        """Keep diagnostics while removing URLs and query-string secrets."""
+        self.ensure_one()
+        text = str(exc or "delivery_failed")
+        if self.tracking_url:
+            text = text.replace(self.tracking_url, "[tracking-url-redacted]")
+        text = re.sub(r"https?://[^\s<>\"']+", "[url-redacted]", text)
+        text = re.sub(
+            r"(?i)([?&](?:t|token|v)=)[^&\s<>\"']+",
+            r"\1[redacted]",
+            text,
+        )
+        text = text.replace("\r", " ").replace("\n", " ")
+        return "%s: %s" % (exc.__class__.__name__, text[:1500])
+
+    def _dally_mark_skipped(self, reason):
+        self.ensure_one()
+        self.sudo().write({"status": "skipped", "last_error": reason})
+
+    def _dally_deliver_one(self):
+        """Deliver one claimed pending row without affecting the shipment state."""
+        self.ensure_one()
+        if self.status != "pending":
+            return False
+
+        reason = self._dally_delivery_skip_reason()
+        if reason:
+            self._dally_mark_skipped(reason)
+            return False
+
+        # Revalidate the actual destination. If the customer corrected their
+        # address after enqueue, use the current address and retain the address
+        # that was effectively used in the outbox audit row.
+        current_email = (self.partner_id.email or "").strip()
+        if current_email != (self.email or "").strip():
+            self.sudo().write({"email": current_email})
+
+        policy = self.env["dally.freight.state.policy"]._dally_policy_for(self.state)
+        template = policy.email_template_id
+        attempt_no = self.attempts + 1
+
+        try:
+            with self.env.cr.savepoint():
+                mail_id = template.with_context(
+                    lang=self.language_code or "fr_FR",
+                ).send_mail(
+                    self.id,
+                    force_send=True,
+                    raise_exception=True,
+                )
+                self.sudo().write({
+                    "status": "sent",
+                    "mail_id": mail_id or False,
+                    "attempts": attempt_no,
+                    "sent_at": fields.Datetime.now(),
+                    "last_error": False,
+                })
+            return True
+        except Exception as exc:  # SMTP/provider errors must not escape the cron.
+            values = {
+                "attempts": attempt_no,
+                "last_error": self._dally_sanitize_delivery_error(exc),
+                "status": "failed" if attempt_no >= MAX_ATTEMPTS else "pending",
+            }
+            self.sudo().write(values)
+            return False
+
+    @api.model
+    def _cron_process_pending_notifications(self):
+        """Claim and deliver at most one batch, safely across concurrent workers."""
+        self.env.cr.execute(
+            """
+            SELECT id
+              FROM dally_shipment_notification
+             WHERE status = 'pending'
+               AND attempts < %s
+             ORDER BY created_at, id
+             FOR UPDATE SKIP LOCKED
+             LIMIT %s
+            """,
+            (MAX_ATTEMPTS, CRON_BATCH_SIZE),
+        )
+        ids = [row[0] for row in self.env.cr.fetchall()]
+        for notification in self.browse(ids):
+            notification._dally_deliver_one()
+        return len(ids)

@@ -10,3 +10,4 @@ from . import test_order_backoffice
 from . import test_order_workflow
 from . import test_delivery
 from . import test_confirmation_guard
+from . import test_delivery_immutability

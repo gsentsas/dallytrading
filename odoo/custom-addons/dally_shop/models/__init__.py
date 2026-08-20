@@ -10,6 +10,7 @@ from . import shop_delivery_atomic
 from . import shop_order_workflow
 from . import shop_fulfillment
 from . import shop_confirmation_guard
+from . import shop_shipping_management
 from . import shop_order_workflow_projection
 from . import shop_order_portal
 from . import res_config_settings

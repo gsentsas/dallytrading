@@ -32,7 +32,7 @@ function commandeOdoo(surcharge: Record<string, unknown> = {}) {
       data: {
         order: {
           reference: 'S00042',
-          status: 'draft',
+          status: 'received',
           deliveryMode: 'pickup',
           deliveryModeLabel: 'Retrait sur place',
           currency: 'XOF',

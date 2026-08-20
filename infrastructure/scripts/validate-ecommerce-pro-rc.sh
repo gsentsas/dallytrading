@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Validation intégrée du lot A E-COMMERCE PRO sur une pile éphémère uniquement.
+# Validation intégrée E-COMMERCE PRO Lot B sur une pile éphémère uniquement.
 #
-# Le script refuse le worktree de production, prépare les dépendances du worktree
-# de développement, monte le harnais Odoo/PostgreSQL/Next jetable déjà éprouvé,
-# met à jour dally_shop, exécute sa suite Odoo, vérifie les canaris de sécurité et
-# rejoue les régressions navigateur boutique existantes via e2e-freight.sh.
-#
-# Aucune commande ne vise la base, les conteneurs ou les ports de production.
+# Le Lot B ajoute le workflow commercial des commandes boutique sans confirmer
+# la vente Odoo native : aucune facture, aucun paiement et aucun picking ne doit
+# naître de la validation métier. La recette refuse le worktree de production,
+# vérifie le frontend, upgrade dally_shop, exécute ses tests Odoo, contrôle les
+# canaris du workflow puis rejoue les régressions navigateur existantes.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,7 +19,7 @@ NEXT_PORT="${FE2E_NEXT_PORT:-3042}"
 ODOO_PORT="${FE2E_ODOO_PORT:-18479}"
 ODOO_TEST_HTTP_PORT="${FE2E_TEST_HTTP_PORT:-18179}"
 PRODUCTION_WORKTREE="/var/www/vhosts/dallytrading.com/platform"
-EXPECTED_MODULE_VERSION="19.0.1.5.0"
+EXPECTED_MODULE_VERSION="19.0.1.6.0"
 
 log() { printf '\n\033[1m── %s\033[0m\n' "$*"; }
 fail() { echo "ERREUR: $*" >&2; exit 1; }
@@ -71,6 +70,14 @@ static_validation() {
     fail "validation statique des addons"
 }
 
+frontend_validation() {
+  log "validation frontend E-commerce Pro"
+  (
+    cd "$WEB"
+    npm run verify
+  ) || fail "validation frontend"
+}
+
 cleanup() {
   set +e
   FE2E_WORK_DIR="$WORK" FE2E_NEXT_PORT="$NEXT_PORT" FE2E_ODOO_PORT="$ODOO_PORT" \
@@ -80,9 +87,6 @@ trap cleanup EXIT INT TERM
 
 start_stack() {
   log "pile jetable Odoo/PostgreSQL/Next"
-  # Le harnais historique affiche la clé véhicule issue de la fixture. Elle est
-  # éphémère, mais une recette ne doit jamais apprendre à ses opérateurs que les
-  # secrets sont acceptables dans stdout.
   FE2E_WORK_DIR="$WORK" FE2E_NEXT_PORT="$NEXT_PORT" FE2E_ODOO_PORT="$ODOO_PORT" \
     "$HARNESS" up | sed -E 's/^([[:space:]]*VEHICLE_API_KEY=).*/\1<expurgé>/' ||
     fail "montage du harnais E2E"
@@ -100,7 +104,7 @@ run_odoo_tests() {
     --test-tags=dally_shop \
     --stop-after-init \
     > "$WORK/ecommerce-pro-tests.log" 2>&1 || {
-      tail -140 "$WORK/ecommerce-pro-tests.log" >&2
+      tail -160 "$WORK/ecommerce-pro-tests.log" >&2
       fail "tests Odoo dally_shop"
     }
 
@@ -115,7 +119,7 @@ run_odoo_tests() {
     "$WORK/ecommerce-pro-tests.log" | tail -1 || true)"
 
   [ -n "$result_line" ] || {
-    tail -140 "$WORK/ecommerce-pro-tests.log" >&2
+    tail -160 "$WORK/ecommerce-pro-tests.log" >&2
     fail "résumé final des tests Odoo introuvable"
   }
 
@@ -127,11 +131,6 @@ run_odoo_tests() {
 
 refresh_shop_runtime() {
   log "rafraîchissement runtime Odoo après upgrade"
-
-  # L'upgrade/tests tourne dans un second processus Odoo. Avant d'exercer les
-  # routes HTTP du PID 1, on redémarre uniquement le conteneur jetable afin que
-  # le serveur long-vivant ouvre un registre construit sur la version qui vient
-  # réellement d'être testée.
   docker restart "$ODOO_CONTAINER" >/dev/null || fail "redémarrage Odoo jetable"
 
   local ready=0
@@ -148,12 +147,6 @@ refresh_shop_runtime() {
   }
 
   log "réamorçage boutique après tests"
-
-  # Le harnais amorce la boutique avant les tests Odoo. Une suite de tests peut
-  # légitimement créer/faire tourner des clés ou modifier une configuration dans
-  # ses transactions. La frontière E2E doit donc repartir d'un état métier
-  # déterministe APRES les tests, pas supposer que les secrets/configuration du
-  # seed initial ont survécu inchangés.
   docker cp "$HERE/e2e-shop-seed.py" "$ODOO_CONTAINER:/tmp/e2e-seed/shop.py" >/dev/null
   docker exec "$ODOO_CONTAINER" sh -c \
     "odoo shell -c /etc/odoo/odoo.conf -d $DB --no-http < /tmp/e2e-seed/shop.py" \
@@ -169,8 +162,6 @@ refresh_shop_runtime() {
     fail "marqueur SHOP_SEED_OK absent"
   }
 
-  # Remplace atomiquement les références boutique du seed initial. Le reste des
-  # références fret/véhicule/groupage reste intact.
   local refs_tmp="$WORK/freight-refs.new"
   grep -v '^SHOP_' "$WORK/freight-refs" > "$refs_tmp" || true
   grep -E '^SHOP_[A-Z0-9_]+=' "$WORK/shop-reseed.out" >> "$refs_tmp"
@@ -182,9 +173,6 @@ refresh_shop_runtime() {
   [ -n "${SHOP_API_KEY_READ:-}" ] || fail "clé shop:read absente après réamorçage"
   [ -n "${SHOP_API_KEY_CHECKOUT:-}" ] || fail "clé shop:checkout absente après réamorçage"
 
-  # Le serveur Next isolé est lancé plus tard par le harnais et source ce fichier
-  # à chaque redémarrage. On remplace donc les deux secrets sans rebuild et sans
-  # les imprimer.
   local env_tmp="$WORK/web/.env.local.new"
   awk \
     -v read_key="$SHOP_API_KEY_READ" \
@@ -202,8 +190,6 @@ refresh_shop_runtime() {
   mv "$env_tmp" "$WORK/web/.env.local"
   chmod 600 "$WORK/web/.env.local"
 
-  # Sonde directe avant Playwright : un échec ici donne le statut de l'API Odoo
-  # au lieu de produire trente erreurs UI en cascade.
   local body="$WORK/shop-runtime-probe.json" code
   code="$(curl -sS -o "$body" -w '%{http_code}' \
     -H "X-API-Key: $SHOP_API_KEY_READ" \
@@ -218,9 +204,10 @@ refresh_shop_runtime() {
 }
 
 verify_release_models() {
-  log "canaris structurels E-commerce Pro Lot A"
+  log "canaris structurels E-commerce Pro Lot B"
   docker exec -i "$ODOO_CONTAINER" \
     odoo shell -c /etc/odoo/odoo.conf -d "$DB" --no-http <<PY
+import uuid
 from odoo.tools.safe_eval import safe_eval
 
 module = env['ir.module.module'].search([('name', '=', 'dally_shop')], limit=1)
@@ -240,13 +227,83 @@ assert ('dally_shop_order', '=', True) in safe_eval(action.domain)
 
 rule_order = env.ref('dally_shop.rule_shop_operations_orders')
 rule_line = env.ref('dally_shop.rule_shop_operations_order_lines')
-assert rule_order.active and rule_line.active
-assert "dally_shop_order" in rule_order.domain_force
-assert "order_id.dally_shop_order" in rule_line.domain_force
-assert rule_order.perm_read and not rule_order.perm_write and not rule_order.perm_create and not rule_order.perm_unlink
-assert rule_line.perm_read and not rule_line.perm_write and not rule_line.perm_create and not rule_line.perm_unlink
+rule_transition = env.ref('dally_shop.rule_shop_operations_transitions')
+for rule in (rule_order, rule_line, rule_transition):
+    assert rule.active
+    assert rule.perm_read
+    assert not rule.perm_write and not rule.perm_create and not rule.perm_unlink
+assert 'dally_shop_order' in rule_order.domain_force
+assert 'order_id.dally_shop_order' in rule_line.domain_force
+assert 'order_id.dally_shop_order' in rule_transition.domain_force
 
-print('ECOMMERCE_PRO_LOT_A_CANARIES_OK')
+Order = env['sale.order']
+Transition = env['dally.shop.order.transition']
+assert 'dally_shop_workflow_state' in Order._fields
+assert 'dally_shop_customer_reason' in Order._fields
+assert 'dally_shop_transition_ids' in Order._fields
+assert set(dict(Order._fields['dally_shop_workflow_state'].selection)) == {
+    'received', 'validated', 'rejected', 'cancelled'
+}
+assert Transition._name == 'dally.shop.order.transition'
+
+form_arch = env.ref('dally_shop.view_dally_shop_order_form').arch_db
+for method in (
+    'action_dally_shop_validate',
+    'action_dally_shop_open_reject',
+    'action_dally_shop_open_cancel',
+):
+    assert method in form_arch
+assert 'action_confirm' not in form_arch
+
+product = env['product.template'].search([
+    ('dally_shop_slug', '=', 'e2e-groupe-5kva'),
+    ('dally_published', '=', True),
+], limit=1)
+assert product
+partner = env['res.partner'].create({
+    'name': 'Canari Workflow Lot B',
+    'email': 'workflow-canary@e2e.invalid',
+})
+order = Order.create({
+    'partner_id': partner.id,
+    'dally_shop_order': True,
+    'dally_shop_cart_uuid': str(uuid.uuid4()),
+    'dally_shop_delivery_mode': 'pickup',
+    'state': 'draft',
+    'order_line': [(0, 0, {
+        'product_id': product.product_variant_id.id,
+        'product_uom_qty': 1,
+    })],
+})
+assert order.state == 'draft'
+assert order.dally_shop_workflow_state == 'received'
+assert len(order.dally_shop_transition_ids) == 1
+assert order.dally_shop_transition_ids.to_state == 'received'
+assert order.dally_shop_transition_ids.notification_queued
+assert not order.invoice_ids
+assert not env['stock.picking'].search_count([('origin', '=', order.name)])
+
+order.action_dally_shop_validate()
+assert order.state == 'draft'
+assert order.dally_shop_workflow_state == 'validated'
+assert Transition.search_count([
+    ('order_id', '=', order.id), ('to_state', '=', 'validated')
+]) == 1
+assert not order.invoice_ids
+assert not env['stock.picking'].search_count([('origin', '=', order.name)])
+
+# Rejouer la validation ne doit ni journaliser ni notifier deux fois.
+before_transitions = Transition.search_count([('order_id', '=', order.id)])
+before_mails = env['mail.mail'].sudo().search_count([
+    ('email_to', '=', partner.email), ('subject', 'ilike', order.name)
+])
+order.action_dally_shop_validate()
+assert Transition.search_count([('order_id', '=', order.id)]) == before_transitions
+assert env['mail.mail'].sudo().search_count([
+    ('email_to', '=', partner.email), ('subject', 'ilike', order.name)
+]) == before_mails
+
+print('ECOMMERCE_PRO_LOT_B_CANARIES_OK')
 env.cr.rollback()
 PY
 }
@@ -262,6 +319,7 @@ main() {
   assert_worktree_clean
   static_validation
   prepare_frontend_dependencies
+  frontend_validation
   start_stack
   run_odoo_tests
   refresh_shop_runtime
@@ -270,10 +328,12 @@ main() {
   assert_worktree_clean
 
   printf '\n============================================================\n'
-  printf ' ECOMMERCE PRO LOT A — RELEASE CANDIDATE VALIDATED\n'
+  printf ' ECOMMERCE PRO LOT B — RELEASE CANDIDATE VALIDATED\n'
   printf ' Production touched: NO\n'
   printf ' Production DB: NO\n'
   printf ' Production frontend: NO\n'
+  printf ' Native sale confirmation: NO\n'
+  printf ' Picking / invoice / payment: NO\n'
   printf '============================================================\n'
 }
 

@@ -26,19 +26,30 @@ export const deliveryMethodsEnvelopeSchema = z
 export type DeliveryMethod = z.infer<typeof deliveryMethodSchema>;
 export type DeliveryMethodCode = z.infer<typeof deliveryMethodCodeSchema>;
 
+const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((value) => (value === '' ? undefined : value))
+    .optional();
+
 export const shippingAddressSchema = z
   .object({
-    name: z.string().trim().max(128).optional(),
-    phone: z.string().trim().max(32).optional(),
-    street: z.string().trim().max(200).optional(),
-    street2: z.string().trim().max(200).optional(),
-    city: z.string().trim().max(100).optional(),
-    zip: z.string().trim().max(20).optional(),
+    name: optionalText(128),
+    phone: optionalText(32),
+    street: optionalText(200),
+    street2: optionalText(200),
+    city: optionalText(100),
+    zip: optionalText(20),
     country_code: z
       .string()
       .trim()
       .toUpperCase()
-      .regex(/^[A-Z]{2}$/)
+      .refine((value) => value === '' || /^[A-Z]{2}$/.test(value), {
+        message: 'Le code pays doit comporter deux lettres.',
+      })
+      .transform((value) => (value === '' ? undefined : value))
       .optional(),
   })
   .strict();

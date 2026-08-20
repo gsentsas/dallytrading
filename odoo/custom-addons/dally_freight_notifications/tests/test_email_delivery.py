@@ -64,7 +64,7 @@ class TestFreightEmailDelivery(TransactionCase):
             self.env.ref("dally_freight_notifications.mail_template_livraison"),
             self.env.ref("dally_freight_notifications.mail_template_annulation"),
         ]
-        self.assertEqual(len(set(templates.ids)), 5)
+        self.assertEqual(len({template.id for template in templates}), 5)
         self.assertEqual(
             self.Policy.search_count([
                 ("notify_customer", "=", True),

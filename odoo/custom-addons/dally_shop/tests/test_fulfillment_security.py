@@ -46,4 +46,4 @@ class TestFulfillmentSecurity(TransactionCase):
         visible = self.env["dally.shop.fulfillment.event"].with_user(self.operator).search([
             ("id", "in", [shop_event.id, regular_event.id]),
         ])
-        self.assertEqual(visible, shop_event)
+        self.assertEqual(visible.ids, [shop_event.id])

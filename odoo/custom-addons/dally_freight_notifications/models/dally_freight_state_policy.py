@@ -74,23 +74,61 @@ class DallyFreightStatePolicy(models.Model):
     _state_uniq = models.Constraint(
         "unique(state)", "Cet état a déjà une politique.")
 
+    @api.model
+    def _dally_refresh_portal_visibility(self, states):
+        """Recalcule le drapeau stocké des dossiers portant ``states``.
+
+        Le champ ``dally.shipment.dally_portal_visible`` doit être stocké pour
+        pouvoir servir dans une règle d'enregistrement. Sa valeur dépend pourtant
+        d'une *autre table* — la politique — qu'``@api.depends`` ne peut pas
+        exprimer directement.
+
+        Le recalcul doit donc être déclenché à chaque mutation de politique,
+        y compris à sa **création**. C'est essentiel à l'installation du module :
+        Odoo crée d'abord la colonne calculée sur les expéditions existantes, puis
+        charge les lignes XML de politique. Sans ce rappel à la création, les
+        dossiers existants gardent la valeur fail-closed calculée avant que les
+        politiques n'existent et restent invisibles jusqu'à leur prochain changement
+        d'état.
+        """
+        states = {state for state in states if state}
+        if not states:
+            return
+        expeditions = self.env["dally.shipment"].sudo().search(
+            [("state", "in", list(states))]
+        )
+        if expeditions:
+            expeditions._compute_dally_portal_visible()
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        politiques = super().create(vals_list)
+        politiques._dally_refresh_portal_visibility(politiques.mapped("state"))
+        return politiques
+
     def write(self, vals):
         """Répercuter un changement de politique sur les dossiers en cours.
 
-        `dally.shipment.dally_portal_visible` est **stocké** — une règle
-        d'enregistrement doit pouvoir s'y appuyer — et ne dépend que de
-        `state`. Sans ce rappel, décocher « visible au portail » ne changerait
-        rien aux expéditions déjà dans cet état : elles resteraient visibles
-        jusqu'à leur prochaine transition.
+        ``dally.shipment.dally_portal_visible`` est stocké : décocher la
+        visibilité, archiver une politique ou déplacer sa ligne vers un autre
+        état doit donc recalculer immédiatement les dossiers concernés.
 
-        Mesuré, et c'est le pire des deux mondes : la case décochée affiche une
-        décision qui n'est pas appliquée.
+        Pour un changement de ``state``, on recalcule **l'ancien et le nouveau**
+        code. Sinon les dossiers restés sur l'ancien état conserveraient une
+        valeur périmée après le déplacement de la politique.
         """
+        anciens_etats = set(self.mapped("state"))
         resultat = super().write(vals)
         if {"visible_in_portal", "active", "state"} & set(vals):
-            expeditions = self.env["dally.shipment"].sudo().search(
-                [("state", "in", self.mapped("state"))])
-            expeditions._compute_dally_portal_visible()
+            nouveaux_etats = set(self.mapped("state"))
+            self._dally_refresh_portal_visibility(anciens_etats | nouveaux_etats)
+        return resultat
+
+    def unlink(self):
+        """Une politique supprimée ferme immédiatement les dossiers concernés."""
+        etats = set(self.mapped("state"))
+        resultat = super().unlink()
+        self._dally_refresh_portal_visibility(etats)
         return resultat
 
     @api.model

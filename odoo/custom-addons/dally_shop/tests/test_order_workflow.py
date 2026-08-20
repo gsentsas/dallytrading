@@ -166,10 +166,11 @@ class TestOrderWorkflow(TransactionCase):
 
         projection = order._dally_shop_portal_detail()
         self.assertEqual(projection["state"], "rejected")
-        self.assertEqual(projection["stateLabel"], "Commande refusée")
         self.assertEqual(
-            projection["stateReason"], "Référence momentanément indisponible"
+            projection["stateLabel"],
+            "Commande refusée — Référence momentanément indisponible",
         )
+        self.assertNotIn("stateReason", projection)
         self.assertNotIn("NOTE_INTERNE_NE_DOIT_PAS_SORTIR", str(projection))
 
     def test_journal_est_lecture_seule_pour_operateur(self):

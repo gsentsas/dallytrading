@@ -35,6 +35,7 @@ modèle de commande.
     "data": [
         "security/dally_shop_security.xml",
         "security/ir.model.access.csv",
+        "security/dally_shop_order_acl.xml",
         "security/dally_shop_order_rules.xml",
         "data/dally_shop_integration_users.xml",
         "data/dally_shop_pricelist.xml",

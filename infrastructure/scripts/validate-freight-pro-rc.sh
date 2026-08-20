@@ -61,6 +61,25 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+prepare_frontend_dependencies() {
+  # Un git worktree ne partage pas node_modules avec le worktree principal.
+  # Le harnais e2e-freight accélère le build en clonant ce répertoire par
+  # hardlinks ; sur un worktree neuf il n'existe donc pas encore. On installe
+  # ici depuis le package-lock de LA branche testée, dans le worktree de dev
+  # uniquement. node_modules est ignoré par Git et la production n'est pas
+  # modifiée.
+  if [ ! -f "$WEB/node_modules/next/package.json" ]; then
+    log "dépendances frontend du worktree de recette"
+    (
+      cd "$WEB"
+      npm ci --no-audit --no-fund
+    ) || fail "npm ci du frontend de recette"
+  fi
+
+  [ -f "$WEB/node_modules/next/package.json" ] ||
+    fail "Next.js absent après préparation des dépendances"
+}
+
 install_release_modules() {
   log "installation des modules FREIGHT PRO sur la base jetable"
   docker exec "$ODOO_CONTAINER" odoo -c /etc/odoo/odoo.conf -d "$DB" \
@@ -186,6 +205,7 @@ assert_worktree_clean() {
 main() {
   assert_isolated
   assert_worktree_clean
+  prepare_frontend_dependencies
 
   log "montage de la pile jetable"
   # Le seed véhicule produit une clé API éphémère utile au navigateur, mais sa

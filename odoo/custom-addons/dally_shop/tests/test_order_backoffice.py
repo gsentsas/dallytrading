@@ -63,7 +63,7 @@ class TestOrderBackoffice(TransactionCase):
             ("id", "in", [self.shop_order.id, self.regular_order.id]),
         ])
 
-        self.assertEqual(commandes, self.shop_order)
+        self.assertEqual(commandes.ids, self.shop_order.ids)
 
     def test_operateur_ne_voit_que_les_lignes_boutique(self):
         lignes = self.env["sale.order.line"].with_user(self.operator).search([
@@ -72,7 +72,7 @@ class TestOrderBackoffice(TransactionCase):
             ).ids),
         ])
 
-        self.assertEqual(lignes, self.shop_order.order_line)
+        self.assertEqual(lignes.ids, self.shop_order.order_line.ids)
 
     def test_operateur_peut_lire_mais_pas_modifier(self):
         commande = self.env["sale.order"].with_user(self.operator).browse(

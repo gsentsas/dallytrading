@@ -1,36 +1,15 @@
 /**
- * Le contrat des commandes boutique dans l'espace client.
+ * Contrat des commandes boutique dans l'espace client.
  *
- * ## Séparé de `checkout-schema.ts`, et pas par goût du rangement
- *
- * La commande rendue juste après un paiement de panier et la commande relue des
- * mois plus tard dans l'espace client ne portent pas la même chose. La première a
- * besoin de `replayed`, qui n'a de sens que dans la seconde qui suit l'envoi ; la
- * seconde a besoin d'une date et d'une adresse, qui n'ont rien à faire dans une
- * confirmation.
- *
- * Fusionner les deux imposerait des champs optionnels partout, et un champ
- * optionnel est un champ dont personne ne sait s'il doit être là.
- *
- * ## `.strict()` sans exception
- *
- * Une commande Odoo porte la marge, le vendeur, les conditions de paiement, la
- * position fiscale et l'historique de messagerie. Un schéma permissif laisserait
- * l'un d'eux atteindre la charge RSC envoyée au navigateur — donc lisible, même si
- * aucun composant ne l'affiche.
+ * Les schémas sont stricts : une `sale.order` porte de nombreuses données
+ * internes, et aucune ne doit atteindre la charge RSC simplement parce qu'un
+ * module Odoo ajoute un champ.
  */
 
 import { z } from 'zod';
 
-import { deliveryModeSchema } from './checkout-schema';
+import { deliveryModeSchema, shopWorkflowStateSchema } from './checkout-schema';
 
-/**
- * Une ligne de commande, vue du client.
- *
- * `quantity` est un flottant : Odoo stocke `product_uom_qty` en `Float`, et la
- * mesure sur l'instance rend bien `2.0`. Le déclarer entier ferait échouer le
- * contrat sur une donnée parfaitement normale.
- */
 export const shopOrderLineSchema = z
   .object({
     productName: z.string().min(1),
@@ -41,18 +20,6 @@ export const shopOrderLineSchema = z
   .strict();
 export type ShopOrderLine = z.infer<typeof shopOrderLineSchema>;
 
-/**
- * Une commande dans la liste.
- *
- * `stateLabel` vient d'Odoo et n'est pas recalculé ici. Ce n'est pas de la
- * paresse : le libellé affirme quelque chose au client — « en attente de
- * validation » — et cette affirmation doit avoir une seule source. Deux tables de
- * correspondance finiraient par diverger, et la version qui mentirait serait
- * celle que le client lit.
- *
- * `state` brut n'y figure pas : la liste n'en a pas besoin, et l'exposer
- * inviterait un composant à s'en servir pour reconstruire un libellé.
- */
 export const shopOrderListItemSchema = z
   .object({
     reference: z.string().min(1),
@@ -74,13 +41,6 @@ export const shopOrderListSchema = z
   .strict();
 export type ShopOrderList = z.infer<typeof shopOrderListSchema>;
 
-/**
- * L'adresse rappelée sur le détail.
- *
- * Uniquement ce que le client a lui-même fourni, pour qu'il vérifie ce que nous
- * avons enregistré. Aucun identifiant ne l'accompagne : le nom et l'adresse ne
- * désignent rien d'autre que lui.
- */
 export const shopOrderAddressSchema = z
   .object({
     name: z.string().min(1),
@@ -92,18 +52,15 @@ export const shopOrderAddressSchema = z
   .strict();
 
 /**
- * Le détail d'une commande.
- *
- * `state` y est, contrairement à la liste : la page peut avoir besoin de traiter
- * `cancel` différemment de `draft` — un encart, une couleur — et le faire depuis
- * un libellé traduit serait fragile. Le libellé reste néanmoins la seule chose
- * affichée.
+ * `state` est l'état métier public du workflow boutique, pas `sale.order.state`.
+ * Le libellé reste la seule valeur affichée : il peut inclure le motif client
+ * d'un refus ou d'une annulation, fourni par Odoo.
  */
 export const shopOrderDetailSchema = z
   .object({
     reference: z.string().min(1),
     date: z.string().nullable(),
-    state: z.enum(['draft', 'sent', 'sale', 'cancel']),
+    state: shopWorkflowStateSchema,
     stateLabel: z.string().min(1),
     deliveryMode: deliveryModeSchema.nullable(),
     deliveryModeLabel: z.string(),

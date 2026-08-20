@@ -4,6 +4,7 @@ import {
   checkoutRequestSchema,
   guestCustomerSchema,
   shopOrderSchema,
+  shopWorkflowStateSchema,
 } from './checkout-schema';
 
 const INVITE = {
@@ -18,7 +19,7 @@ const INVITE = {
 
 const COMMANDE = {
   reference: 'S00042',
-  status: 'draft' as const,
+  status: 'received' as const,
   deliveryMode: 'pickup' as const,
   deliveryModeLabel: 'Retrait sur place',
   currency: 'XOF',
@@ -52,12 +53,6 @@ describe('demande de commande', () => {
     });
   });
 
-  /**
-   * Le cœur du contrat. Chaque nom listé ici décide d'un prix, d'une identité ou
-   * d'un état de la commande. Un schéma permissif les ignorerait ; celui-ci les
-   * refuse, parce qu'« ignorer » et « refuser » ne disent pas la même chose à qui
-   * lit les journaux.
-   */
   it.each([
     ['price_unit', { price_unit: 1 }],
     ['prix', { price: 1 }],
@@ -101,8 +96,6 @@ describe('identité invité', () => {
   });
 
   it('transforme un champ facultatif vide en absence, jamais en chaîne vide', () => {
-    // Une chaîne vide écrirait `city = ''` dans Odoo, ce qui est différent de
-    // « non renseigné » et rend le champ impossible à distinguer d'une saisie.
     const analyse = guestCustomerSchema.parse({
       name: 'X', email: 'x@essai.invalid', phone: '   ', city: '',
     });
@@ -128,8 +121,6 @@ describe('identité invité', () => {
   });
 
   it('accepte les formes valides inhabituelles', () => {
-    // Contrôle négatif : un contrôle trop strict refuserait des adresses réelles,
-    // et le client n'aurait aucun moyen de commander.
     for (const email of [
       'a+etiquette@essai.invalid',
       'prenom.nom@sous.domaine.invalid',
@@ -171,7 +162,7 @@ describe('identité invité', () => {
 });
 
 describe('commande rendue', () => {
-  it('accepte la projection mesurée sur l’instance', () => {
+  it('accepte la projection mesurée au checkout', () => {
     expect(shopOrderSchema.parse(COMMANDE)).toEqual(COMMANDE);
   });
 
@@ -187,16 +178,19 @@ describe('commande rendue', () => {
   });
 
   it('refuse un état inconnu', () => {
-    // Énumération fermée sur les quatre états de `sale.order`. Au MVP seul
-    // `draft` sort d'ici ; fermer l'énumération fait échouer le contrat le jour
-    // où quelque chose commencerait à confirmer, plutôt qu'afficher un état
-    // inconnu au client.
     expect(() => shopOrderSchema.parse({ ...COMMANDE, status: 'done' })).toThrow();
   });
 
-  it('accepte les quatre états réels de sale.order', () => {
-    for (const status of ['draft', 'sent', 'sale', 'cancel'] as const) {
+  it('accepte exactement les quatre états publics du workflow boutique', () => {
+    for (const status of ['received', 'validated', 'rejected', 'cancelled'] as const) {
+      expect(shopWorkflowStateSchema.parse(status)).toBe(status);
       expect(shopOrderSchema.parse({ ...COMMANDE, status }).status).toBe(status);
+    }
+  });
+
+  it('refuse les états natifs de sale.order dans le contrat public', () => {
+    for (const status of ['draft', 'sent', 'sale', 'cancel']) {
+      expect(() => shopOrderSchema.parse({ ...COMMANDE, status })).toThrow();
     }
   });
 
@@ -210,9 +204,6 @@ describe('commande rendue', () => {
   });
 
   it('exige le drapeau de rejeu', () => {
-    // Sans lui le BFF ne saurait pas s'il vient de créer une commande ou d'en
-    // retrouver une, et il ferait tourner l'identifiant de panier dans les deux
-    // cas — ce qui est correct, mais il faut pouvoir le dire.
     const { replayed: _ignore, ...sans } = COMMANDE;
     expect(() => shopOrderSchema.parse(sans)).toThrow();
   });

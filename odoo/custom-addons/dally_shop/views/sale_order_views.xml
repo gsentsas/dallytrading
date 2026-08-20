@@ -1,14 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!--
-        Vues volontairement distinctes de celles de l'application Vente.
-
-        Le premier lot E-commerce Pro est une console de lecture : voir ce que la
-        boutique a reçu sans accorder les droits généraux de Sales et sans laisser
-        croire qu'une commande publique peut déjà être confirmée, facturée ou
-        expédiée depuis ce nouvel écran.
-    -->
     <record id="view_dally_shop_order_list" model="ir.ui.view">
         <field name="name">sale.order.list.dally.shop</field>
         <field name="model">sale.order</field>
@@ -20,7 +12,7 @@
                 <field name="partner_id"/>
                 <field name="dally_shop_guest" optional="show"/>
                 <field name="dally_shop_delivery_mode"/>
-                <field name="state"/>
+                <field name="dally_shop_workflow_state" string="État boutique"/>
                 <field name="currency_id" column_invisible="1"/>
                 <field name="amount_total" sum="Total"/>
             </list>
@@ -34,7 +26,26 @@
         <field name="arch" type="xml">
             <form string="Commande boutique" create="0" edit="0" delete="0">
                 <header>
-                    <field name="state" widget="statusbar" readonly="1"/>
+                    <button name="action_dally_shop_validate"
+                            string="Valider la commande"
+                            type="object"
+                            class="btn-primary"
+                            groups="dally_shop.group_dally_shop_operations,dally_core.group_dally_manager"
+                            invisible="dally_shop_workflow_state != 'received'"/>
+                    <button name="action_dally_shop_open_reject"
+                            string="Refuser"
+                            type="object"
+                            groups="dally_shop.group_dally_shop_operations,dally_core.group_dally_manager"
+                            invisible="dally_shop_workflow_state != 'received'"/>
+                    <button name="action_dally_shop_open_cancel"
+                            string="Annuler"
+                            type="object"
+                            groups="dally_shop.group_dally_shop_operations,dally_core.group_dally_manager"
+                            invisible="dally_shop_workflow_state != 'validated'"/>
+                    <field name="dally_shop_workflow_state"
+                           widget="statusbar"
+                           statusbar_visible="received,validated,rejected,cancelled"
+                           readonly="1"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
@@ -49,6 +60,9 @@
                         </group>
                         <group string="Remise">
                             <field name="dally_shop_delivery_mode" readonly="1"/>
+                            <field name="dally_shop_customer_reason"
+                                   readonly="1"
+                                   invisible="dally_shop_workflow_state not in ['rejected', 'cancelled']"/>
                         </group>
                     </group>
                     <group string="Montants">
@@ -59,13 +73,50 @@
                             <field name="amount_total" readonly="1"/>
                         </group>
                     </group>
+
+                    <notebook>
+                        <page string="Historique" name="shop_workflow_history">
+                            <field name="dally_shop_transition_ids" readonly="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="changed_at"/>
+                                    <field name="from_state"/>
+                                    <field name="to_state"/>
+                                    <field name="reason" optional="show"/>
+                                    <field name="changed_by_id"/>
+                                    <field name="notification_queued" optional="show"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+
                     <div class="alert alert-info" role="status">
-                        Ce premier écran E-commerce Pro est en lecture seule. La
-                        validation commerciale, le paiement, la facturation et la
-                        préparation seront ajoutés dans des lots séparés avec leurs
-                        propres garde-fous.
+                        La validation E-commerce Pro est un engagement commercial
+                        explicite. Elle ne confirme pas encore la vente Odoo et ne
+                        crée ni transfert de stock, ni facture, ni paiement.
                     </div>
                 </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_dally_shop_order_transition_wizard" model="ir.ui.view">
+        <field name="name">dally.shop.order.transition.wizard.form</field>
+        <field name="model">dally.shop.order.transition.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Motif de la transition">
+                <group>
+                    <field name="order_id" readonly="1"/>
+                    <field name="target_state" readonly="1"/>
+                    <field name="reason"
+                           placeholder="Motif clair et approprié à communiquer au client."/>
+                </group>
+                <footer>
+                    <button name="action_apply"
+                            string="Confirmer"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Fermer" special="cancel" class="btn-secondary"/>
+                </footer>
             </form>
         </field>
     </record>
@@ -80,21 +131,24 @@
                 <field name="partner_id"/>
                 <filter name="shop_waiting"
                         string="À valider"
-                        domain="[('state', 'in', ['draft', 'sent'])]"/>
-                <filter name="shop_confirmed"
+                        domain="[('dally_shop_workflow_state', '=', 'received')]"/>
+                <filter name="shop_validated"
                         string="Validées"
-                        domain="[('state', '=', 'sale')]"/>
+                        domain="[('dally_shop_workflow_state', '=', 'validated')]"/>
+                <filter name="shop_rejected"
+                        string="Refusées"
+                        domain="[('dally_shop_workflow_state', '=', 'rejected')]"/>
                 <filter name="shop_cancelled"
                         string="Annulées"
-                        domain="[('state', '=', 'cancel')]"/>
+                        domain="[('dally_shop_workflow_state', '=', 'cancelled')]"/>
                 <separator/>
                 <filter name="shop_guest"
                         string="Invités"
                         domain="[('dally_shop_guest', '=', True)]"/>
                 <group>
-                    <filter name="group_state"
-                            string="État"
-                            context="{'group_by': 'state'}"/>
+                    <filter name="group_shop_state"
+                            string="État boutique"
+                            context="{'group_by': 'dally_shop_workflow_state'}"/>
                     <filter name="group_delivery_mode"
                             string="Mode de remise"
                             context="{'group_by': 'dally_shop_delivery_mode'}"/>

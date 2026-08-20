@@ -2,16 +2,6 @@
 <odoo>
     <data noupdate="0">
 
-        <!--
-            Un opérateur boutique lit uniquement les commandes issues du checkout
-            DallyTrading. Le domaine vit au niveau ORM : masquer les autres ventes
-            dans une action ne serait pas une frontière de sécurité.
-
-            Le groupe Manager est inclus explicitement. Un manager peut avoir par
-            ailleurs des droits Vente plus larges ; ce module ne les retire pas.
-            Pour un utilisateur qui ne porte que « Boutique — opérations », ces
-            deux règles sont sa seule fenêtre sur sale.order et sale.order.line.
-        -->
         <record id="rule_shop_operations_orders" model="ir.rule">
             <field name="name">Boutique — commandes boutique uniquement</field>
             <field name="model_id" ref="sale.model_sale_order"/>
@@ -26,6 +16,17 @@
         <record id="rule_shop_operations_order_lines" model="ir.rule">
             <field name="name">Boutique — lignes des commandes boutique uniquement</field>
             <field name="model_id" ref="sale.model_sale_order_line"/>
+            <field name="groups" eval="[(4, ref('dally_shop.group_dally_shop_operations')), (4, ref('dally_core.group_dally_manager'))]"/>
+            <field name="domain_force">[('order_id.dally_shop_order', '=', True)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="rule_shop_operations_transitions" model="ir.rule">
+            <field name="name">Boutique — historique des commandes boutique uniquement</field>
+            <field name="model_id" ref="model_dally_shop_order_transition"/>
             <field name="groups" eval="[(4, ref('dally_shop.group_dally_shop_operations')), (4, ref('dally_core.group_dally_manager'))]"/>
             <field name="domain_force">[('order_id.dally_shop_order', '=', True)]</field>
             <field name="perm_read" eval="True"/>

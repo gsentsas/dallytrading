@@ -8,7 +8,6 @@ import {
   shopOrderListSchema,
 } from './order-dto';
 
-/** Une ligne, dans la forme exacte mesurée sur l'instance. */
 const LIGNE = {
   productName: 'Article portail',
   quantity: 2,
@@ -32,7 +31,7 @@ const ELEMENT = {
 const DETAIL = {
   reference: 'S00042',
   date: '2026-08-17T09:15:00',
-  state: 'draft' as const,
+  state: 'received' as const,
   stateLabel: 'Commande reçue — en attente de validation',
   deliveryMode: 'pickup' as const,
   deliveryModeLabel: 'Retrait sur place',
@@ -56,16 +55,9 @@ describe('ligne de commande', () => {
   });
 
   it('accepte une quantité flottante', () => {
-    // Odoo stocke `product_uom_qty` en `Float` et rend bien `2.0`. Exiger un
-    // entier ferait échouer le contrat sur une donnée parfaitement normale.
     expect(shopOrderLineSchema.parse({ ...LIGNE, quantity: 2.5 }).quantity).toBe(2.5);
   });
 
-  /**
-   * Le cœur du contrat. Chaque nom est un champ réel qu'une `sale.order.line`
-   * porte, et dont la présence dans une réponse client serait une fuite : le coût
-   * donne la marge, donc la limite de négociation.
-   */
   it.each([
     ['coût', { cost: 12000 }],
     ['coût interne Odoo', { purchase_price: 12000 }],
@@ -89,9 +81,6 @@ describe('élément de liste', () => {
   });
 
   it('accepte une date et un mode de remise nuls', () => {
-    // `date_order` peut être vide sur une commande fraîchement créée, et le mode
-    // de remise est absent d'une commande non-boutique qu'un futur filtre
-    // laisserait passer par erreur — mieux vaut l'accepter que de tomber.
     const analyse = shopOrderListItemSchema.parse({
       ...ELEMENT, date: null, deliveryMode: null,
     });
@@ -100,16 +89,11 @@ describe('élément de liste', () => {
   });
 
   it('exige un libellé d’état non vide', () => {
-    // Un libellé vide laisserait le client devant un blanc, ce qui est pire qu'un
-    // libellé générique. Le contrat le refuse plutôt que de l'afficher.
     expect(() => shopOrderListItemSchema.parse({ ...ELEMENT, stateLabel: '' })).toThrow();
   });
 
-  it('n’expose pas l’état brut', () => {
-    // La liste n'en a pas besoin, et l'exposer inviterait un composant à
-    // reconstruire un libellé — donc à créer une seconde version de ce que
-    // l'état affirme au client.
-    expect(() => shopOrderListItemSchema.parse({ ...ELEMENT, state: 'draft' })).toThrow();
+  it('n’expose pas l’état brut dans la liste', () => {
+    expect(() => shopOrderListItemSchema.parse({ ...ELEMENT, state: 'received' })).toThrow();
   });
 
   it.each([
@@ -126,7 +110,6 @@ describe('élément de liste', () => {
   });
 
   it('accepte une liste vide', () => {
-    // Un client sans commande est un état normal, pas une erreur.
     expect(shopOrderListSchema.parse({ orders: [] })).toEqual({ orders: [] });
   });
 
@@ -140,14 +123,16 @@ describe('détail de commande', () => {
     expect(shopOrderDetailSchema.parse(DETAIL)).toEqual(DETAIL);
   });
 
-  it('accepte les quatre états réels de sale.order', () => {
-    for (const state of ['draft', 'sent', 'sale', 'cancel'] as const) {
+  it('accepte exactement les quatre états du workflow boutique', () => {
+    for (const state of ['received', 'validated', 'rejected', 'cancelled'] as const) {
       expect(shopOrderDetailSchema.parse({ ...DETAIL, state }).state).toBe(state);
     }
   });
 
-  it('refuse un état inconnu', () => {
-    expect(() => shopOrderDetailSchema.parse({ ...DETAIL, state: 'done' })).toThrow();
+  it('refuse les états natifs de sale.order et les états inconnus', () => {
+    for (const state of ['draft', 'sent', 'sale', 'cancel', 'done']) {
+      expect(() => shopOrderDetailSchema.parse({ ...DETAIL, state })).toThrow();
+    }
   });
 
   it.each([
@@ -176,8 +161,6 @@ describe('détail de commande', () => {
   });
 
   it('refuse une ligne portant une clé de trop, au travers du détail', () => {
-    // Le contrôle doit porter en profondeur : une clé glissée dans une ligne est
-    // le cas intéressant, et un schéma strict de surface la laisserait passer.
     expect(() =>
       shopOrderDetailSchema.parse({
         ...DETAIL,
@@ -200,20 +183,25 @@ describe('correspondance des états, vue du contrat', () => {
   it('« Commande reçue » est un libellé accepté', () => {
     const analyse = shopOrderDetailSchema.parse({
       ...DETAIL,
-      state: 'draft',
+      state: 'received',
       stateLabel: 'Commande reçue — en attente de validation',
     });
     expect(analyse.stateLabel).toContain('Commande reçue');
-    // Et surtout, ce n'est pas le mot d'Odoo.
     expect(analyse.stateLabel.toLowerCase()).not.toContain('brouillon');
   });
 
-  /**
-   * Le contrat ne peut pas empêcher Odoo d'envoyer un libellé mensonger : c'est
-   * la table de correspondance côté Odoo qui en est garante, et ses tests le
-   * vérifient. Ce test-ci documente la frontière : le libellé traverse tel quel,
-   * et c'est pourquoi il n'y a qu'une seule source.
-   */
+  it('le motif client peut être porté par le libellé sans nouvelle clé', () => {
+    const analyse = shopOrderDetailSchema.parse({
+      ...DETAIL,
+      state: 'rejected',
+      stateLabel: 'Commande refusée — Référence momentanément indisponible',
+    });
+    expect(analyse.stateLabel).toContain('Référence momentanément indisponible');
+    expect(() =>
+      shopOrderDetailSchema.parse({ ...analyse, stateReason: 'clé non contractuelle' }),
+    ).toThrow();
+  });
+
   it('le libellé traverse tel quel, sans être recalculé ici', () => {
     const inattendu = 'Un libellé que le frontend ne connaît pas';
     expect(

@@ -1,14 +1,13 @@
-/**
- * Contrat des commandes boutique dans l'espace client.
- *
- * Les schémas sont stricts : une `sale.order` porte de nombreuses données
- * internes, et aucune ne doit atteindre la charge RSC simplement parce qu'un
- * module Odoo ajoute un champ.
- */
+/** Contrats stricts des commandes boutique dans l'espace client. */
 
 import { z } from 'zod';
 
-import { deliveryModeSchema, shopWorkflowStateSchema } from './checkout-schema';
+import {
+  deliveryFeeStateSchema,
+  deliveryModeSchema,
+  fulfillmentStateSchema,
+  shopWorkflowStateSchema,
+} from './checkout-schema';
 
 export const shopOrderLineSchema = z
   .object({
@@ -19,6 +18,14 @@ export const shopOrderLineSchema = z
   })
   .strict();
 export type ShopOrderLine = z.infer<typeof shopOrderLineSchema>;
+
+const deliveryStatusFields = {
+  deliveryFeeStatus: deliveryFeeStateSchema.nullable(),
+  deliveryFee: z.number().nonnegative().nullable(),
+  grandTotal: z.number().nonnegative().nullable(),
+  fulfillmentState: fulfillmentStateSchema,
+  fulfillmentLabel: z.string().min(1),
+};
 
 export const shopOrderListItemSchema = z
   .object({
@@ -31,6 +38,7 @@ export const shopOrderListItemSchema = z
     amountTotal: z.number().nonnegative(),
     deliveryMode: deliveryModeSchema.nullable(),
     deliveryModeLabel: z.string(),
+    ...deliveryStatusFields,
     itemCount: z.number().int().nonnegative(),
   })
   .strict();
@@ -51,11 +59,6 @@ export const shopOrderAddressSchema = z
   })
   .strict();
 
-/**
- * `state` est l'état métier public du workflow boutique, pas `sale.order.state`.
- * Le libellé reste la seule valeur affichée : il peut inclure le motif client
- * d'un refus ou d'une annulation, fourni par Odoo.
- */
 export const shopOrderDetailSchema = z
   .object({
     reference: z.string().min(1),
@@ -68,8 +71,9 @@ export const shopOrderDetailSchema = z
     amountUntaxed: z.number().nonnegative(),
     amountTax: z.number().nonnegative(),
     amountTotal: z.number().nonnegative(),
+    ...deliveryStatusFields,
     lines: z.array(shopOrderLineSchema),
-    deliveryAddress: shopOrderAddressSchema,
+    deliveryAddress: shopOrderAddressSchema.nullable(),
   })
   .strict();
 export type ShopOrderDetail = z.infer<typeof shopOrderDetailSchema>;

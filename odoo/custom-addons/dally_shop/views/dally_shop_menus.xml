@@ -25,4 +25,11 @@
               action="dally_shop_category_action"
               sequence="20"/>
 
+    <menuitem id="menu_dally_shop_delivery_methods"
+              name="Méthodes de remise"
+              parent="menu_dally_shop"
+              action="action_dally_shop_delivery_methods"
+              groups="dally_shop.group_dally_shop_operations,dally_core.group_dally_manager"
+              sequence="30"/>
+
 </odoo>

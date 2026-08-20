@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Le tableau de bord : une tuile par carte, chacune cliquable en entier.
+
+        ## Pourquoi un kanban et pas un widget
+
+        Un kanban est une vue Odoo ordinaire : elle se traduit, se restreint par
+        groupe, s'ouvre sur mobile et ne demande aucun code à compiler. Le clic
+        passe par un `<button type="object">` qui rend une action — le mécanisme
+        le plus banal du framework, et celui qui a le moins de chances de casser
+        à la prochaine version.
+
+        ## Toute la tuile est le bouton
+
+        Le bouton enveloppe le contenu plutôt que d'être posé à côté : on clique
+        sur le chiffre, sur le libellé, sur le blanc autour. `w-100 h-100` et
+        `text-start` lui retirent l'allure de bouton pour lui laisser celle
+        d'une carte.
+
+        ## L'affordance, et rien de plus
+
+        `oe_kanban_global_click` donne le curseur en main et l'ombre au survol,
+        comme partout ailleurs dans Odoo. Aucune couleur, aucune taille, aucune
+        disposition n'est inventée ici : la consigne était d'ajouter le clic,
+        pas de refaire l'écran.
+    -->
+    <record id="dally_freight_dashboard_view_kanban" model="ir.ui.view">
+        <field name="name">dally.freight.dashboard.kanban</field>
+        <field name="model">dally.freight.dashboard</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_dashboard" create="false" edit="false"
+                    default_group_by="group" records_draggable="false">
+                <field name="code"/>
+                <field name="group"/>
+                <templates>
+                    <t t-name="card">
+                        <button name="action_open" type="object"
+                                class="btn btn-link w-100 h-100 p-3 text-start text-decoration-none">
+                            <div class="o_kanban_primary_left">
+                                <span class="fs-2 fw-bold text-primary">
+                                    <field name="count"/>
+                                </span>
+                            </div>
+                            <div class="text-muted">
+                                <field name="name"/>
+                            </div>
+                        </button>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!--
+        Une liste, pour vérifier d'un coup d'œil ce que chaque carte compte —
+        utile en exploitation, et c'est la vue que les tests interrogent.
+    -->
+    <record id="dally_freight_dashboard_view_list" model="ir.ui.view">
+        <field name="name">dally.freight.dashboard.list</field>
+        <field name="model">dally.freight.dashboard</field>
+        <field name="arch" type="xml">
+            <list create="false" edit="false">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="group"/>
+                <field name="count"/>
+                <button name="action_open" type="object" string="Ouvrir"
+                        icon="fa-external-link"/>
+            </list>
+        </field>
+    </record>
+
+    <!--
+        `available` dans le domaine : une carte dont le modèle source n'est pas
+        lisible par cet utilisateur n'apparaît pas. Pas de tuile morte, pas de
+        zéro trompeur.
+    -->
+    <record id="dally_freight_dashboard_action" model="ir.actions.act_window">
+        <field name="name">Tableau de bord Freight</field>
+        <field name="res_model">dally.freight.dashboard</field>
+        <field name="view_mode">kanban,list</field>
+        <field name="domain">[('available', '=', True)]</field>
+    </record>
+
+    <menuitem id="menu_dally_freight_dashboard"
+              name="Tableau de bord Freight"
+              parent="dally_core.menu_dally_operations"
+              action="dally_freight_dashboard_action"
+              sequence="5"
+              groups="dally_core.group_dally_readonly"/>
+
+</odoo>

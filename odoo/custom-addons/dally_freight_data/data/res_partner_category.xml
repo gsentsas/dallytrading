@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        La classification des partenaires du fret.
+
+        ## Pourquoi des étiquettes plutôt qu'un modèle
+
+        Une compagnie maritime, un transporteur routier, un agent en douane sont
+        des **sociétés**. Elles ont une adresse, un contact, des factures, un
+        historique — tout ce que `res.partner` porte déjà. Leur créer un modèle
+        propre reviendrait à recopier la fiche société pour ajouter un mot, puis
+        à tenir deux répertoires qui divergeraient.
+
+        ## Pourquoi pas `shipper` / `consignee`
+
+        `tk_freight` pose trois booléens sur le partenaire : `shipper`,
+        `consignee`, `agent`. Ils décrivent un **rôle dans une expédition
+        donnée** — qui expédie, qui réceptionne — et non la nature de la
+        société. Le même client est expéditeur à l'aller et destinataire au
+        retour. S'en servir pour dire « compagnie maritime » mélangerait deux
+        questions et rendrait les deux inexploitables.
+
+        ## Le transport routier reste vide
+
+        L'étiquette « Road Carrier » est créée sans aucun partenaire. Les vrais
+        transporteurs seront saisis quand ils travailleront avec nous : inventer
+        des sociétés de camionnage pour meubler un référentiel produirait des
+        fiches sans numéro de téléphone, sans contrat, que personne n'oserait
+        appeler.
+    -->
+    <data noupdate="1">
+
+        <record id="partner_category_dally" model="res.partner.category">
+            <field name="name">DallyTrading</field>
+        </record>
+
+        <record id="partner_category_freight" model="res.partner.category">
+            <field name="name">Freight</field>
+            <field name="parent_id" ref="partner_category_dally"/>
+        </record>
+
+        <record id="partner_category_shipping_line" model="res.partner.category">
+            <field name="name">Shipping Line</field>
+            <field name="parent_id" ref="partner_category_freight"/>
+        </record>
+
+        <record id="partner_category_road_carrier" model="res.partner.category">
+            <field name="name">Road Carrier</field>
+            <field name="parent_id" ref="partner_category_freight"/>
+        </record>
+
+        <record id="partner_category_customs_broker" model="res.partner.category">
+            <field name="name">Customs Broker</field>
+            <field name="parent_id" ref="partner_category_freight"/>
+        </record>
+
+    </data>
+</odoo>

@@ -221,7 +221,10 @@ class TestPublicPayload(TransactionCase):
 
     def test_last_update_ignores_internal_events(self):
         """An internal update must not make the customer think something moved."""
-        self.shipment.state = "preparing"          # internal-only milestone
+        # Aucune transition d'état ici : elle en engendrerait un événement
+        # automatique, dont la publication dépend de la politique. Ce test
+        # porte sur les deux événements posés explicitement ci-dessous, et sur
+        # rien d'autre.
         self.Event.create({
             "shipment_id": self.shipment.id,
             "event_date": "2026-04-01 10:00:00",

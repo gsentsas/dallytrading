@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Retrait du tableau de bord du fournisseur.
+
+        ## Pourquoi il est retiré
+
+        Trois raisons, toutes lisibles dans son code
+        (`tk_freight/models/freight_dashboard.py`) :
+
+        * ses compteurs sont **tous en `sudo()`** — ils montrent à chacun les
+          dossiers de tout le monde, quel que soit son droit de lecture ;
+        * ils portent sur `freight.shipment`, le modèle du fournisseur, alors
+          que l'exploitation vit sur `dally.shipment` : ses quatorze états, de
+          « en transit » à « en livraison », n'y existent pas ;
+        * aucun de ses chiffres n'ouvre quoi que ce soit.
+
+        Deux tableaux de bord qui donnent des nombres différents pour la même
+        question, c'est un de trop : celui qu'on consulte finit par être celui
+        qu'on a sous la main, pas celui qui a raison.
+
+        ## Ce qui est fait, et ce qui ne l'est pas
+
+        Seul le **menu** est désactivé, par son identifiant XML. L'action
+        cliente `tk_freight.action_freight_dashboard` reste intacte et reste
+        joignable — par une URL directe, par un raccourci enregistré, ou le
+        jour où quelqu'un voudra la remettre. Rien n'est supprimé, aucun fichier
+        du fournisseur n'est touché, aucun droit n'est modifié.
+
+        Écraser un enregistrement du fournisseur par son xmlid est le seul moyen
+        d'y arriver sans éditer son code : c'est déjà le mécanisme retenu pour
+        le confinement du portail, dans `dally_freight_bridge`.
+
+        ## La conséquence à connaître
+
+        Comme pour ce confinement, une mise à jour de `tk_freight` **seul**
+        rechargerait son menu et le rendrait à nouveau visible. La règle du
+        projet vaut ici aussi : le fournisseur ne se met jamais à jour seul.
+
+            odoo -u tk_freight,dally_freight_bridge,dally_freight_dashboard
+
+        Pas de `noupdate` sur ce bloc, délibérément : cette désactivation doit
+        être **réappliquée** à chaque mise à jour de notre module, précisément
+        parce que celle du fournisseur peut l'avoir défaite entre-temps.
+    -->
+    <record id="tk_freight.dasboard_id" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+
+</odoo>

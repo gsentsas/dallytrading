@@ -164,6 +164,19 @@ env["shipment.package.line"].sudo().create({
 # les colis sont saisis ensuite.
 projection._dally_freight_sync_from_tk()
 
+# La resynchronisation ci-dessus recopie aussi l'étape du fournisseur. Sur une
+# expédition tk fraîchement créée, cette étape est encore « Draft » ; le pont la
+# traduit puis applique son garde-fou métier `request_received`. C'est donc
+# seulement APRÈS la dernière synchro tk → Dally qu'on place cette fixture de
+# lecture sur un jalon client stable. Le faire avant serait immédiatement
+# écrasé par la source opérationnelle, ce qu'a révélé le gate RC.
+#
+# `dally_freight_notifications` est installé plus tard. Son champ stocké
+# `dally_portal_visible` sera alors calculé depuis la politique de `in_transit`,
+# donc la fixture restera visible au portail pour une raison métier réelle.
+projection.action_set_state("in_transit")
+assert projection.state == "in_transit", "le dossier enrichi n'est pas passe en transit"
+
 # ── Événement de suivi, publié explicitement ─────────────────────────────
 #
 # La synchronisation crée les événements fermés par défaut. Ici on publie

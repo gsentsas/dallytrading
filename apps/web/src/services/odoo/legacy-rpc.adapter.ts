@@ -37,6 +37,7 @@ import {
   type PublicShipment,
   type QuoteInput,
   type QuoteRef,
+  type ReferenceEntry,
   type ServiceType,
   type SourcingRequestInput,
   type SourcingRequestRef,
@@ -93,6 +94,14 @@ export class LegacyRpcAdapter implements OdooGateway {
   async listServiceTypes(
     _correlationId: string,
   ): Promise<ReadonlyArray<ServiceType>> {
+    throw new OdooGatewayError('unavailable', NOT_IMPLEMENTED, 501);
+  }
+
+  async listReferences(
+    _kind: string,
+    _param: string | undefined,
+    _correlationId: string,
+  ): Promise<ReadonlyArray<ReferenceEntry>> {
     throw new OdooGatewayError('unavailable', NOT_IMPLEMENTED, 501);
   }
 

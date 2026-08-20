@@ -3,6 +3,7 @@ import { Breadcrumbs, Container, CtaLink } from '@/components/ui/primitives';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { QuoteForm } from '@/features/quote/QuoteForm';
 import { getServiceCatalogue } from '@/services/odoo/catalogue-cache';
+import { getPublicReferences } from '@/services/odoo/references-cache';
 import { newCorrelationId } from '@/lib/logger';
 import { breadcrumbJsonLd, pageMetadata } from '@/lib/seo';
 
@@ -55,6 +56,12 @@ export default async function QuotePage({
     unavailable = true;
   }
 
+  // Les référentiels ne conditionnent pas l'ouverture du formulaire : sans eux,
+  // les pays et les lieux ne sont pas proposés, mais les villes restent
+  // saisissables à la main. `getPublicReferences` ne lève donc jamais et rend
+  // des listes vides en dernier recours.
+  const references = await getPublicReferences(correlationId);
+
   return (
     <main id="contenu">
       <Container className="py-12 sm:py-16" size="narrow">
@@ -94,6 +101,9 @@ export default async function QuotePage({
             <QuoteForm
               services={services}
               catalogueStale={stale}
+              countries={references.countries}
+              locations={references.locations}
+              incoterms={references.incoterms}
               {...(requestedService ? { initialServiceCode: requestedService } : {})}
             />
           </div>

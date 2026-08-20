@@ -70,20 +70,31 @@ class TestShipmentEvents(TransactionCase):
             "Delivery is exactly the milestone a customer wants to see",
         )
 
-    def test_internal_milestone_is_not_published(self):
-        """'awaiting_goods' means nothing to a customer and must stay internal."""
-        self.shipment.state = "awaiting_goods"
-        event = self.shipment.event_ids.filtered(
-            lambda e: e.status == "awaiting_goods"
-        )
-        self.assertTrue(event, "The transition must still be recorded")
-        self.assertFalse(event.visible_to_customer)
+    def test_publication_follows_the_state_wording(self):
+        """Publication follows `_dally_public_state_wording()`, not a fixed list.
 
-    def test_cancelled_is_not_published(self):
-        """Cancellation is communicated by a human, not by an automatic line."""
-        self.shipment.state = "cancelled"
-        event = self.shipment.event_ids.filtered(lambda e: e.status == "cancelled")
-        self.assertFalse(event.visible_to_customer)
+        Two tests used to live here, asserting that `awaiting_goods` and
+        `cancelled` were never published. That was true of the hardcoded
+        dictionary this module once owned; it stops being true the moment
+        `dally_freight_notifications` moves the decision into a configuration
+        table, where both states are publishable.
+
+        What holds in either case is the rule itself: the transition is always
+        recorded, and it is published if and only if the state appears among the
+        publishable wordings. Testing the rule rather than one of its outcomes
+        is what lets an operator change the policy without breaking this file.
+        """
+        publishable = self.env["dally.shipment"]._dally_public_state_wording()
+
+        for state in ("awaiting_goods", "cancelled"):
+            self.shipment.state = state
+            event = self.shipment.event_ids.filtered(lambda e: e.status == state)
+            self.assertTrue(event, "The transition must still be recorded")
+            self.assertEqual(
+                event.visible_to_customer,
+                state in publishable,
+                "%s: publication disagrees with the policy" % state,
+            )
 
     def test_departure_event_carries_the_origin(self):
         self.shipment.state = "departed"

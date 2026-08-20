@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Les ports maritimes desservis.
+
+        ## Un seul modèle pour trois natures de lieu
+
+        `freight.port` porte trois drapeaux — `ocean`, `air`, `land` — et le
+        fournisseur impose qu'au moins un soit levé. C'est donc lui, et lui
+        seul, qui sert de référentiel des lieux : un port maritime, un aéroport
+        et un point terrestre sont trois lignes du même modèle. Créer
+        `dally.port` ou `dally.airport` à côté aurait dédoublé la géographie
+        pour rien.
+
+        ## Les codes
+
+        Le code est l'**UN/LOCODE** du lieu — SNDKR pour Dakar, FRLEH pour Le Havre.
+        C'est la référence que portent les connaissements et les avis d'arrivée ;
+        s'en écarter obligerait à traduire à chaque échange.
+
+        Le fournisseur impose l'unicité du code sur **tous** les lieux
+        confondus, ports et aéroports mélangés. Les deux nomenclatures ne se
+        recoupant pas, la contrainte tient sans arrangement.
+
+        ## Les régions
+
+        `state_id` n'est renseigné que pour les pays dont ce module crée
+        lui-même les subdivisions. Ailleurs — France, Pays-Bas, Belgique,
+        Allemagne, Émirats, Chine — Odoo en fournit, mais les désigner
+        supposerait de connaître leurs identifiants XML : une référence
+        approximative vaut moins qu'un champ vide, qui se complète en deux
+        clics le jour où c'est utile.
+    -->
+    <data noupdate="1">
+
+        <record id="port_sndkr" model="freight.port">
+            <field name="name">Port autonome de Dakar</field>
+            <field name="code">SNDKR</field>
+            <field name="country_id" ref="base.sn"/>
+            <field name="state_id" ref="state_sn_dk"/>
+            <field name="city">Dakar</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_ciabj" model="freight.port">
+            <field name="name">Port autonome d'Abidjan</field>
+            <field name="code">CIABJ</field>
+            <field name="country_id" ref="base.ci"/>
+            <field name="state_id" ref="state_ci_ab"/>
+            <field name="city">Abidjan</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_ghtem" model="freight.port">
+            <field name="name">Port de Tema</field>
+            <field name="code">GHTEM</field>
+            <field name="country_id" ref="base.gh"/>
+            <field name="state_id" ref="state_gh_aa"/>
+            <field name="city">Tema</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_tglfw" model="freight.port">
+            <field name="name">Port autonome de Lomé</field>
+            <field name="code">TGLFW</field>
+            <field name="country_id" ref="base.tg"/>
+            <field name="state_id" ref="state_tg_m"/>
+            <field name="city">Lomé</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_bjcoo" model="freight.port">
+            <field name="name">Port autonome de Cotonou</field>
+            <field name="code">BJCOO</field>
+            <field name="country_id" ref="base.bj"/>
+            <field name="state_id" ref="state_bj_li"/>
+            <field name="city">Cotonou</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_gncky" model="freight.port">
+            <field name="name">Port autonome de Conakry</field>
+            <field name="code">GNCKY</field>
+            <field name="country_id" ref="base.gn"/>
+            <field name="state_id" ref="state_gn_c"/>
+            <field name="city">Conakry</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_mrnkc" model="freight.port">
+            <field name="name">Port de Nouakchott</field>
+            <field name="code">MRNKC</field>
+            <field name="country_id" ref="base.mr"/>
+            <field name="city">Nouakchott</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_maptm" model="freight.port">
+            <field name="name">Tanger Med</field>
+            <field name="code">MAPTM</field>
+            <field name="country_id" ref="base.ma"/>
+            <field name="state_id" ref="state_ma_01"/>
+            <field name="city">Ksar el-Majaz</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_macas" model="freight.port">
+            <field name="name">Port de Casablanca</field>
+            <field name="code">MACAS</field>
+            <field name="country_id" ref="base.ma"/>
+            <field name="state_id" ref="state_ma_06"/>
+            <field name="city">Casablanca</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_frleh" model="freight.port">
+            <field name="name">Port du Havre</field>
+            <field name="code">FRLEH</field>
+            <field name="country_id" ref="base.fr"/>
+            <field name="city">Le Havre</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_frfos" model="freight.port">
+            <field name="name">Marseille-Fos</field>
+            <field name="code">FRFOS</field>
+            <field name="country_id" ref="base.fr"/>
+            <field name="city">Fos-sur-Mer</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_nlrtm" model="freight.port">
+            <field name="name">Port de Rotterdam</field>
+            <field name="code">NLRTM</field>
+            <field name="country_id" ref="base.nl"/>
+            <field name="city">Rotterdam</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_beanr" model="freight.port">
+            <field name="name">Port d'Anvers-Bruges</field>
+            <field name="code">BEANR</field>
+            <field name="country_id" ref="base.be"/>
+            <field name="city">Anvers</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_deham" model="freight.port">
+            <field name="name">Port de Hambourg</field>
+            <field name="code">DEHAM</field>
+            <field name="country_id" ref="base.de"/>
+            <field name="city">Hambourg</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_aejea" model="freight.port">
+            <field name="name">Jebel Ali</field>
+            <field name="code">AEJEA</field>
+            <field name="country_id" ref="base.ae"/>
+            <field name="city">Dubaï</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_cnsha" model="freight.port">
+            <field name="name">Port de Shanghai</field>
+            <field name="code">CNSHA</field>
+            <field name="country_id" ref="base.cn"/>
+            <field name="city">Shanghai</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_cnngb" model="freight.port">
+            <field name="name">Ningbo-Zhoushan</field>
+            <field name="code">CNNGB</field>
+            <field name="country_id" ref="base.cn"/>
+            <field name="city">Ningbo</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_cnszx" model="freight.port">
+            <field name="name">Port de Shenzhen</field>
+            <field name="code">CNSZX</field>
+            <field name="country_id" ref="base.cn"/>
+            <field name="city">Shenzhen</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+        <record id="port_cntao" model="freight.port">
+            <field name="name">Port de Qingdao</field>
+            <field name="code">CNTAO</field>
+            <field name="country_id" ref="base.cn"/>
+            <field name="city">Qingdao</field>
+            <field name="ocean" eval="True"/>
+            <field name="air" eval="False"/>
+            <field name="land" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

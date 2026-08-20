@@ -91,8 +91,37 @@ class DallyFreightLockdownGuard(models.AbstractModel):
         return {
             modele.model
             for modele in modeles
-            if (modele.modules or "").strip() == "tk_freight"
+            if self._dally_est_modele_fournisseur(modele.modules)
         }
+
+    @api.model
+    def _dally_est_modele_fournisseur(self, modules):
+        """Vrai si le modèle est **défini** par le fournisseur.
+
+        Le critère n'est plus « `modules` vaut exactement tk_freight » : cette
+        égalité tenait tant que personne n'étendait un modèle du fournisseur, et
+        elle a cédé au premier qui l'a fait. Mesuré : après l'ajout de champs
+        publics sur `freight.port`, ses modules valaient
+        « dally_freight_routing, tk_freight » et le port sortait du périmètre —
+        le garde-fou surveillait 31 modèles au lieu de 32, silencieusement.
+
+        C'est le pire mode de défaillance possible pour un garde-fou : il
+        continuait d'annoncer que tout allait bien, sur un ensemble rétréci.
+
+        Le critère est donc : `tk_freight` est présent, et tout le reste nous
+        appartient. Les modèles que le fournisseur se contente d'**étendre** —
+        `res.partner`, `sale.order`, `account.move`, `stock.picking` — portent
+        `base`, `account`, `sale`… et restent exclus, ce qui préserve la raison
+        d'être du filtre : ne pas fermer au portail les droits du noyau Odoo sur
+        sa propre facture ou son propre bon de livraison.
+        """
+        presents = {m.strip() for m in (modules or "").split(",") if m.strip()}
+        if "tk_freight" not in presents:
+            return False
+        return all(
+            module == "tk_freight" or module.startswith("dally_")
+            for module in presents
+        )
 
     @api.model
     def _dally_tk_acl_xmlids(self):

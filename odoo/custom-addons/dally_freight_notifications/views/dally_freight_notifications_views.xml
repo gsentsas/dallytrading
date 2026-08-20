@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        La politique se règle à l'écran : c'est tout l'intérêt d'en avoir fait
+        une donnée. Une liste éditable en ligne, parce qu'on y vient pour
+        cocher trois cases, pas pour ouvrir quatorze fiches.
+    -->
+    <record id="dally_freight_state_policy_view_list" model="ir.ui.view">
+        <field name="name">dally.freight.state.policy.list</field>
+        <field name="model">dally.freight.state.policy</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="state" readonly="1"/>
+                <field name="customer_label"/>
+                <field name="visible_in_portal" widget="boolean_toggle"/>
+                <field name="visible_in_tracking" widget="boolean_toggle"/>
+                <field name="notify_customer" widget="boolean_toggle"/>
+                <field name="email_template_id" options="{'no_create': True}"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="dally_freight_state_policy_action" model="ir.actions.act_window">
+        <field name="name">Politique des états Freight</field>
+        <field name="res_model">dally.freight.state.policy</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <!--
+        La file, en lecture. On y vient pour une seule question — pourquoi ce
+        client n'a-t-il rien reçu — d'où le motif en colonne plutôt que caché
+        dans une fiche.
+    -->
+    <record id="dally_shipment_notification_view_list" model="ir.ui.view">
+        <field name="name">dally.shipment.notification.list</field>
+        <field name="model">dally.shipment.notification</field>
+        <field name="arch" type="xml">
+            <list create="false" edit="false">
+                <field name="created_at"/>
+                <field name="shipment_reference"/>
+                <field name="state"/>
+                <field name="customer_label"/>
+                <field name="partner_id"/>
+                <field name="email"/>
+                <field name="status" widget="badge"
+                       decoration-success="status == 'sent'"
+                       decoration-danger="status == 'failed'"
+                       decoration-muted="status == 'skipped'"/>
+                <field name="last_error"/>
+                <field name="attempts" optional="hide"/>
+                <field name="sent_at" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="dally_shipment_notification_view_form" model="ir.ui.view">
+        <field name="name">dally.shipment.notification.form</field>
+        <field name="model">dally.shipment.notification</field>
+        <field name="arch" type="xml">
+            <form string="Notification" create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group string="Dossier">
+                            <field name="shipment_id"/>
+                            <field name="event_id"/>
+                            <field name="state"/>
+                            <field name="event_date"/>
+                        </group>
+                        <group string="Destinataire">
+                            <field name="partner_id"/>
+                            <field name="email"/>
+                            <field name="status"/>
+                            <field name="last_error"/>
+                            <field name="attempts"/>
+                            <field name="mail_id"/>
+                            <field name="sent_at"/>
+                        </group>
+                    </group>
+                    <!--
+                        La photographie destinée au futur gabarit. Elle est
+                        montrée telle quelle : ce qui figure ici est exactement
+                        ce qui pourra partir, et rien d'autre.
+                    -->
+                    <group string="Contenu figé">
+                        <field name="shipment_reference"/>
+                        <field name="customer_label"/>
+                        <field name="customer_message"/>
+                        <field name="origin_label"/>
+                        <field name="destination_label"/>
+                        <field name="tracking_url" widget="url"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="dally_shipment_notification_action" model="ir.actions.act_window">
+        <field name="name">Notifications client</field>
+        <field name="res_model">dally.shipment.notification</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_dally_freight_state_policy"
+              name="Politique des états Freight"
+              parent="dally_core.menu_dally_configuration"
+              action="dally_freight_state_policy_action"
+              sequence="30"
+              groups="dally_core.group_dally_manager"/>
+
+    <menuitem id="menu_dally_shipment_notification"
+              name="Notifications client"
+              parent="dally_core.menu_dally_operations"
+              action="dally_shipment_notification_action"
+              sequence="25"
+              groups="dally_core.group_dally_readonly"/>
+
+</odoo>

@@ -12,8 +12,16 @@
  * retry: that is what makes a double-click or a flaky connection safe (§41).
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ServiceType } from '@/services/odoo/types';
+import {
+  locationsForMode,
+  modeForService,
+  type ReferenceCountry,
+  type ReferenceIncoterm,
+  type ReferenceLocation,
+  type ReferenceState,
+} from '@/lib/references/dto';
 import {
   STEP_LABELS,
   quoteRequestSchema,
@@ -59,6 +67,17 @@ interface FormState {
   countryCode: string;
   message: string;
   website: string;
+  // ── Acheminement structuré ──
+  originStateCode: string;
+  destinationStateCode: string;
+  originPortCode: string;
+  destinationPortCode: string;
+  incotermCode: string;
+  pickupRequested: boolean;
+  pickupAddress: string;
+  deliveryRequested: boolean;
+  deliveryAddress: string;
+  desiredDate: string;
 }
 
 const EMPTY: FormState = {
@@ -79,7 +98,48 @@ const EMPTY: FormState = {
   email: '', phone: '', whatsapp: '',
   city: '', countryCode: '', message: '',
   website: '',
+  originStateCode: '', destinationStateCode: '',
+  originPortCode: '', destinationPortCode: '',
+  incotermCode: '',
+  pickupRequested: false, pickupAddress: '',
+  deliveryRequested: false, deliveryAddress: '',
+  desiredDate: '',
 };
+
+/**
+ * Les subdivisions d'un pays, via le BFF.
+ *
+ * Ne lève jamais : une liste de régions indisponible ne doit pas empêcher de
+ * demander un devis, et la ville reste saisissable à la main.
+ */
+async function chargerSubdivisions(
+  countryCode: string,
+  signal: AbortSignal,
+): Promise<ReadonlyArray<ReferenceState>> {
+  try {
+    const reponse = await fetch(
+      `/api/references/states?q=${encodeURIComponent(countryCode)}`,
+      { signal },
+    );
+    if (!reponse.ok) return [];
+    const charge: unknown = await reponse.json();
+    const brutes =
+      charge && typeof charge === 'object' && 'states' in charge
+        ? (charge as { states: unknown }).states
+        : null;
+    return Array.isArray(brutes)
+      ? (brutes.filter(
+          (entree): entree is ReferenceState =>
+            typeof entree === 'object' &&
+            entree !== null &&
+            typeof (entree as ReferenceState).code === 'string' &&
+            typeof (entree as ReferenceState).name === 'string',
+        ) as ReadonlyArray<ReferenceState>)
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 type Status = 'editing' | 'submitting' | 'sent' | 'error';
 
@@ -87,9 +147,27 @@ export function QuoteForm({
   services,
   catalogueStale,
   initialServiceCode,
+  countries = [],
+  locations = [],
+  incoterms = [],
 }: {
   services: ReadonlyArray<ServiceType>;
   catalogueStale: boolean;
+  /**
+   * Référentiels publics, chargés avec la page.
+   *
+   * Pays, lieux et incoterms tiennent en quelques kilo-octets et ne changent
+   * pas pendant une session : les envoyer avec la page évite un aller-retour au
+   * premier clic. Les subdivisions, elles, sont plus de deux mille et se
+   * demandent par pays — celles-là passent par la route BFF.
+   *
+   * Les listes ont une valeur par défaut vide : si Odoo est injoignable au
+   * rendu, le formulaire s'ouvre quand même et les villes restent saisissables
+   * à la main. Un formulaire dégradé vaut mieux qu'une page en erreur.
+   */
+  countries?: ReadonlyArray<ReferenceCountry>;
+  locations?: ReadonlyArray<ReferenceLocation>;
+  incoterms?: ReadonlyArray<ReferenceIncoterm>;
   /**
    * Service to start on, from `?service=` — set by the CTAs on activity pages.
    *
@@ -119,6 +197,89 @@ export function QuoteForm({
   );
   const steps = useMemo(() => stepsForService(service), [service]);
   const currentStep: QuoteStepId = steps[stepIndex] ?? 'service';
+
+  /**
+   * Le mode physique de la demande.
+   *
+   * Déduit du service, et du sous-mode pour le groupage — jamais saisi
+   * directement. C'est lui qui décide quels lieux sont proposés et ce qui
+   * s'affiche. `undefined` signifie « pas de mode déterminé » : les lieux ne
+   * sont alors pas proposés du tout, plutôt que proposés au hasard.
+   */
+  const mode = useMemo(
+    () =>
+      modeForService(
+        form.serviceCode,
+        form.groupageTransportMode === 'sea' || form.groupageTransportMode === 'air'
+          ? form.groupageTransportMode
+          : undefined,
+      ),
+    [form.serviceCode, form.groupageTransportMode],
+  );
+
+  const lieuxDuMode = useMemo(
+    () => locationsForMode(locations, mode),
+    [locations, mode],
+  );
+
+  /**
+   * Les subdivisions déjà chargées, par code pays.
+   *
+   * Une table plutôt que deux listes, et des valeurs **dérivées** plutôt que
+   * synchronisées : la liste affichée est simplement l'entrée du pays courant.
+   * Écrire un état dans un effet pour le remettre en phase avec un autre état
+   * provoque un rendu en cascade — et surtout, cela crée un instant où les deux
+   * se contredisent. Ici cet instant n'existe pas.
+   *
+   * La table sert aussi de cache : revenir à un pays déjà consulté n'entraîne
+   * aucun nouvel appel.
+   */
+  const [statesByCountry, setStatesByCountry] = useState<
+    Record<string, ReadonlyArray<ReferenceState>>
+  >({});
+
+  const originCountry = form.originCountryCode.trim().toUpperCase();
+  const destinationCountry = form.destinationCountryCode.trim().toUpperCase();
+
+  useEffect(() => {
+    if (originCountry.length !== 2) return;
+    const controller = new AbortController();
+    void chargerSubdivisions(originCountry, controller.signal).then((etats) =>
+      setStatesByCountry((precedent) => ({ ...precedent, [originCountry]: etats })),
+    );
+    return () => controller.abort();
+  }, [originCountry]);
+
+  useEffect(() => {
+    if (destinationCountry.length !== 2) return;
+    const controller = new AbortController();
+    void chargerSubdivisions(destinationCountry, controller.signal).then((etats) =>
+      setStatesByCountry((precedent) => ({
+        ...precedent,
+        [destinationCountry]: etats,
+      })),
+    );
+    return () => controller.abort();
+  }, [destinationCountry]);
+
+  const originStates = statesByCountry[originCountry] ?? [];
+  const destinationStates = statesByCountry[destinationCountry] ?? [];
+
+  /**
+   * Les valeurs réellement retenues, une fois confrontées au mode et au pays.
+   *
+   * Un port maritime choisi puis rendu incompatible par un passage à l'aérien
+   * n'est pas effacé de l'état : il est simplement **ignoré**. La différence
+   * compte — si le client revient au maritime, son choix est toujours là.
+   * Rien n'est perdu, et rien d'incompatible n'est jamais affiché ni envoyé.
+   */
+  const valeurRetenue = (code: string, valides: ReadonlyArray<{ code: string }>) =>
+    valides.some((entree) => entree.code === code) ? code : '';
+
+  const originPort = valeurRetenue(form.originPortCode, lieuxDuMode);
+  const destinationPort = valeurRetenue(form.destinationPortCode, lieuxDuMode);
+  const originState = valeurRetenue(form.originStateCode, originStates);
+  const destinationState = valeurRetenue(form.destinationStateCode, destinationStates);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -220,6 +381,16 @@ export function QuoteForm({
       originCity: form.originCity || undefined,
       destinationCountryCode: form.destinationCountryCode || undefined,
       destinationCity: form.destinationCity || undefined,
+      originStateCode: originState || undefined,
+      destinationStateCode: destinationState || undefined,
+      originPortCode: originPort || undefined,
+      destinationPortCode: destinationPort || undefined,
+      incotermCode: form.incotermCode || undefined,
+      pickupRequested: form.pickupRequested || undefined,
+      pickupAddress: form.pickupAddress || undefined,
+      deliveryRequested: form.deliveryRequested || undefined,
+      deliveryAddress: form.deliveryAddress || undefined,
+      desiredDate: form.desiredDate || undefined,
       goodsDescription: form.goodsDescription || undefined,
       quantity: form.quantity || undefined,
       weightKg: form.weightKg || undefined,
@@ -393,31 +564,181 @@ export function QuoteForm({
         )}
 
         {currentStep === 'route' && service && (
-          <div className="grid gap-5 sm:grid-cols-2">
-            {service.requires_origin && (
-              <>
-                <Field label="Ville d’origine" value={form.originCity}
-                       onChange={(v) => update('originCity', v)}
-                       error={errors.originCity}
-                       required />
-                <Field label="Pays d’origine (code ISO)"
-                       value={form.originCountryCode}
-                       onChange={(v) => update('originCountryCode', v)}
-                       placeholder="FR" />
-              </>
-            )}
-            {service.requires_destination && (
-              <>
-                <Field label="Ville de destination" value={form.destinationCity}
-                       onChange={(v) => update('destinationCity', v)}
-                       error={errors.destinationCity}
-                       required />
-                <Field label="Pays de destination (code ISO)"
-                       value={form.destinationCountryCode}
-                       onChange={(v) => update('destinationCountryCode', v)}
-                       placeholder="SN" />
-              </>
-            )}
+          <div className="space-y-6">
+            {/*
+              Du plus large au plus précis : pays, région, ville, lieu. C'est
+              l'ordre dans lequel on décrit un trajet à l'oral, et celui dans
+              lequel chaque champ restreint le suivant.
+
+              Le lieu n'est proposé que lorsque le mode est connu — et il n'est
+              jamais filtré par le pays : une marchandise partie du Mali
+              s'embarque à Dakar, et brider la liste au pays d'origine
+              interdirait le cas le plus courant de la sous-région.
+            */}
+            <div className="grid gap-5 sm:grid-cols-2">
+              {service.requires_origin && (
+                <fieldset className="space-y-4">
+                  <legend className="text-sm font-semibold text-navy-800">
+                    Origine
+                  </legend>
+                  <SelectField
+                    label="Pays d’origine"
+                    value={form.originCountryCode}
+                    onChange={(v) => update('originCountryCode', v)}
+                    options={countries.map((pays) => ({
+                      value: pays.code,
+                      label: pays.name,
+                    }))}
+                    placeholder="Choisir un pays"
+                  />
+                  {originStates.length > 0 && (
+                    <SelectField
+                      label="Région d’origine"
+                      value={originState}
+                      onChange={(v) => update('originStateCode', v)}
+                      options={originStates.map((etat) => ({
+                        value: etat.code,
+                        label: etat.name,
+                      }))}
+                      placeholder="Choisir une région"
+                    />
+                  )}
+                  <Field
+                    label="Ville d’origine"
+                    value={form.originCity}
+                    onChange={(v) => update('originCity', v)}
+                    error={errors.originCity}
+                    required
+                  />
+                  {mode && lieuxDuMode.length > 0 && (
+                    <SelectField
+                      label={mode === 'air' ? 'Aéroport de départ' : 'Port de départ'}
+                      value={originPort}
+                      onChange={(v) => update('originPortCode', v)}
+                      options={lieuxDuMode.map((lieu) => ({
+                        value: lieu.code,
+                        label: `${lieu.name} (${lieu.code})`,
+                      }))}
+                      placeholder="Si vous le connaissez"
+                    />
+                  )}
+                </fieldset>
+              )}
+
+              {service.requires_destination && (
+                <fieldset className="space-y-4">
+                  <legend className="text-sm font-semibold text-navy-800">
+                    Destination
+                  </legend>
+                  <SelectField
+                    label="Pays de destination"
+                    value={form.destinationCountryCode}
+                    onChange={(v) => update('destinationCountryCode', v)}
+                    options={countries.map((pays) => ({
+                      value: pays.code,
+                      label: pays.name,
+                    }))}
+                    placeholder="Choisir un pays"
+                  />
+                  {destinationStates.length > 0 && (
+                    <SelectField
+                      label="Région de destination"
+                      value={destinationState}
+                      onChange={(v) => update('destinationStateCode', v)}
+                      options={destinationStates.map((etat) => ({
+                        value: etat.code,
+                        label: etat.name,
+                      }))}
+                      placeholder="Choisir une région"
+                    />
+                  )}
+                  <Field
+                    label="Ville de destination"
+                    value={form.destinationCity}
+                    onChange={(v) => update('destinationCity', v)}
+                    error={errors.destinationCity}
+                    required
+                  />
+                  {mode && lieuxDuMode.length > 0 && (
+                    <SelectField
+                      label={mode === 'air' ? 'Aéroport d’arrivée' : 'Port d’arrivée'}
+                      value={destinationPort}
+                      onChange={(v) => update('destinationPortCode', v)}
+                      options={lieuxDuMode.map((lieu) => ({
+                        value: lieu.code,
+                        label: `${lieu.name} (${lieu.code})`,
+                      }))}
+                      placeholder="Si vous le connaissez"
+                    />
+                  )}
+                </fieldset>
+              )}
+            </div>
+
+            {/*
+              Conditions de l'envoi. L'incoterm et la date sont déclaratifs :
+              ils disent ce que le client souhaite, pas ce qui sera contracté.
+            */}
+            <fieldset className="space-y-4 border-t border-mist-200 pt-5">
+              <legend className="text-sm font-semibold text-navy-800">
+                Conditions souhaitées
+              </legend>
+              <div className="grid gap-5 sm:grid-cols-2">
+                {incoterms.length > 0 && (
+                  <SelectField
+                    label="Incoterm"
+                    value={form.incotermCode}
+                    onChange={(v) => update('incotermCode', v)}
+                    options={incoterms.map((incoterm) => ({
+                      value: incoterm.code,
+                      label: `${incoterm.code} — ${incoterm.name}`,
+                    }))}
+                    placeholder="Si vous le connaissez"
+                  />
+                )}
+                <Field
+                  label="Date souhaitée"
+                  type="date"
+                  value={form.desiredDate}
+                  onChange={(v) => update('desiredDate', v)}
+                  error={errors.desiredDate}
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-navy-800">
+                <input
+                  type="checkbox"
+                  checked={form.pickupRequested}
+                  onChange={(event) => update('pickupRequested', event.target.checked)}
+                />
+                Enlèvement à l’adresse d’origine
+              </label>
+              {form.pickupRequested && (
+                <Field
+                  label="Adresse d’enlèvement"
+                  value={form.pickupAddress}
+                  onChange={(v) => update('pickupAddress', v)}
+                />
+              )}
+
+              <label className="flex items-center gap-2 text-sm text-navy-800">
+                <input
+                  type="checkbox"
+                  checked={form.deliveryRequested}
+                  onChange={(event) =>
+                    update('deliveryRequested', event.target.checked)
+                  }
+                />
+                Livraison à l’adresse de destination
+              </label>
+              {form.deliveryRequested && (
+                <Field
+                  label="Adresse de livraison"
+                  value={form.deliveryAddress}
+                  onChange={(v) => update('deliveryAddress', v)}
+                />
+              )}
+            </fieldset>
           </div>
         )}
 
@@ -779,6 +1100,59 @@ function Field({
       />
       {error && (
         <p id={`${id}-error`} className="mt-1 text-sm text-red-700" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Une liste déroulante alimentée par un référentiel.
+ *
+ * Un `<select>` natif plutôt qu'un composant maison : il est accessible au
+ * clavier, cherchable en tapant les premières lettres, et sur mobile il ouvre
+ * le sélecteur du système. Une liste de deux cent cinquante pays est
+ * exactement le cas où ces trois choses comptent.
+ *
+ * L'option vide reste toujours disponible : aucun de ces champs n'est
+ * obligatoire, et un visiteur qui ne connaît pas son port doit pouvoir
+ * continuer.
+ */
+function SelectField({
+  label, value, onChange, options, placeholder, error,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  placeholder?: string;
+  error?: string | undefined;
+}) {
+  const id = `select-${label.replace(/[^a-zA-Z]/g, '')}`;
+  return (
+    <div>
+      <label className="block font-medium text-navy-800" htmlFor={id}>
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-invalid={error ? true : undefined}
+        className={`mt-2 w-full rounded-lg border p-3 ${
+          error ? 'border-red-400' : 'border-mist-300'
+        }`}
+      >
+        <option value="">{placeholder ?? '—'}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {error && (
+        <p className="mt-1 text-sm text-red-700" role="alert">
           {error}
         </p>
       )}

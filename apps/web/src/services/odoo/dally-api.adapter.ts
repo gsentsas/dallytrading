@@ -18,6 +18,7 @@ import {
   type PublicShipment,
   type QuoteInput,
   type QuoteRef,
+  type ReferenceEntry,
   type ServiceType,
   type SourcingRequestInput,
   type SourcingRequestRef,
@@ -61,6 +62,11 @@ interface ServicesResponse {
     requires_budget: boolean;
     requires_goods: boolean;
   }>;
+}
+
+/** Shape returned by GET /api/v1/references/<kind>. */
+interface ReferencesResponse {
+  [kind: string]: ReadonlyArray<Record<string, string | boolean | null>>;
 }
 
 /** Shape returned by GET /api/v1/tracking/<reference>. */
@@ -510,6 +516,24 @@ export class DallyApiAdapter implements OdooGateway {
       .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
   }
 
+
+  async listReferences(
+    kind: string,
+    param: string | undefined,
+    correlationId: string,
+  ): Promise<ReadonlyArray<ReferenceEntry>> {
+    // Le paramètre est encodé, jamais concaténé tel quel : il vient d'une
+    // requête, et un code pays est vite remplacé par autre chose.
+    const query = param ? `?${new URLSearchParams({ q: param }).toString()}` : '';
+    const path = `/api/v1/references/${encodeURIComponent(kind)}${query}`;
+    const data = await this.call<ReferencesResponse>(
+      path,
+      { method: 'GET' },
+      correlationId,
+    );
+    return data[kind] ?? [];
+  }
+
   async createQuoteRequest(
     input: QuoteInput,
     idempotencyKey: string,
@@ -532,6 +556,17 @@ export class DallyApiAdapter implements OdooGateway {
       origin_city: input.originCity ?? '',
       destination_country_code: input.destinationCountryCode ?? '',
       destination_city: input.destinationCity ?? '',
+      // Acheminement structuré : des codes, qu'Odoo résout et vérifie.
+      origin_state_code: input.originStateCode ?? '',
+      destination_state_code: input.destinationStateCode ?? '',
+      origin_port_code: input.originPortCode ?? '',
+      destination_port_code: input.destinationPortCode ?? '',
+      incoterm_code: input.incotermCode ?? '',
+      pickup_requested: input.pickupRequested ? 'true' : '',
+      pickup_address: input.pickupAddress ?? '',
+      delivery_requested: input.deliveryRequested ? 'true' : '',
+      delivery_address: input.deliveryAddress ?? '',
+      desired_date: input.desiredDate ?? '',
       goods_description: input.goodsDescription ?? '',
       quantity: input.quantity ?? '',
       groupage_transport_mode: input.groupageTransportMode ?? '',

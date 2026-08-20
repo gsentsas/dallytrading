@@ -80,7 +80,13 @@ class TestPortalHttp(HttpCase):
             "name": f"HTTP opération {tag}", "operation_type": "purchase_resale",
             "customer_id": partner.id,
         })
-        shipment = cls.env["dally.shipment"].create({"partner_id": partner.id})
+        # `in_transit` et non l'état par défaut : `dally_freight_notifications`
+        # ne publie au portail que les états déclarés publiables, et
+        # « brouillon » n'en est pas — un dossier que personne n'a encore relu
+        # et qui peut encore être supprimé n'a rien à faire dans l'espace
+        # client. Un état réel rend cette fixture juste avec ou sans ce module.
+        shipment = cls.env["dally.shipment"].create({
+            "partner_id": partner.id, "state": "in_transit"})
         attachment = cls.env["ir.attachment"].create({
             "name": f"HTTP doc {tag}.pdf", "datas": b"JVBERi0xLjQK",
         })

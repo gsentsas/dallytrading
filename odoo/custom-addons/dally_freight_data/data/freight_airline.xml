@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Les compagnies aériennes utiles aux liaisons Dakar et aux hubs retenus.
+
+        ## Ce qui est renseigné, et pourquoi pas le reste
+
+        Quatre champs seulement : raison sociale, code IATA, code OACI, pays.
+        Ce sont des identifiants publics et stables, ceux que porte une lettre
+        de transport aérien.
+
+        `aircraft_type` et `capacity` restent **vides**. Le modèle du
+        fournisseur les propose au niveau de la compagnie, ce qui n'a pas de
+        sens : une compagnie exploite plusieurs types d'appareils, et la
+        capacité dépend du vol, de la route et du jour. Y écrire une valeur
+        donnerait une précision que la donnée n'a pas. Elles se renseigneront
+        au niveau du trajet, où `freight.route` porte déjà le numéro de vol.
+
+        ## Le code
+
+        `code` est l'IATA à deux caractères ; le fournisseur en impose
+        l'unicité. Attention à la lecture : « SN » y désigne Brussels Airlines,
+        pas le Sénégal — c'est la norme IATA qui le veut, et la confusion est
+        assez classique pour mériter d'être écrite ici.
+    -->
+    <data noupdate="1">
+
+        <record id="airline_af" model="freight.airline">
+            <field name="name">Air France</field>
+            <field name="code">AF</field>
+            <field name="icao">AFR</field>
+            <field name="country" ref="base.fr"/>
+        </record>
+
+        <record id="airline_hc" model="freight.airline">
+            <field name="name">Air Sénégal</field>
+            <field name="code">HC</field>
+            <field name="icao">SZN</field>
+            <field name="country" ref="base.sn"/>
+        </record>
+
+        <record id="airline_sn" model="freight.airline">
+            <field name="name">Brussels Airlines</field>
+            <field name="code">SN</field>
+            <field name="icao">BEL</field>
+            <field name="country" ref="base.be"/>
+        </record>
+
+        <record id="airline_tk" model="freight.airline">
+            <field name="name">Turkish Airlines</field>
+            <field name="code">TK</field>
+            <field name="icao">THY</field>
+            <field name="country" ref="base.tr"/>
+        </record>
+
+        <record id="airline_ek" model="freight.airline">
+            <field name="name">Emirates</field>
+            <field name="code">EK</field>
+            <field name="icao">UAE</field>
+            <field name="country" ref="base.ae"/>
+        </record>
+
+        <record id="airline_at" model="freight.airline">
+            <field name="name">Royal Air Maroc</field>
+            <field name="code">AT</field>
+            <field name="icao">RAM</field>
+            <field name="country" ref="base.ma"/>
+        </record>
+
+        <record id="airline_et" model="freight.airline">
+            <field name="name">Ethiopian Airlines</field>
+            <field name="code">ET</field>
+            <field name="icao">ETH</field>
+            <field name="country" ref="base.et"/>
+        </record>
+
+        <record id="airline_qr" model="freight.airline">
+            <field name="name">Qatar Airways</field>
+            <field name="code">QR</field>
+            <field name="icao">QTR</field>
+            <field name="country" ref="base.qa"/>
+        </record>
+
+        <record id="airline_lh" model="freight.airline">
+            <field name="name">Lufthansa</field>
+            <field name="code">LH</field>
+            <field name="icao">DLH</field>
+            <field name="country" ref="base.de"/>
+        </record>
+
+        <record id="airline_kl" model="freight.airline">
+            <field name="name">KLM Royal Dutch Airlines</field>
+            <field name="code">KL</field>
+            <field name="icao">KLM</field>
+            <field name="country" ref="base.nl"/>
+        </record>
+
+        <record id="airline_cv" model="freight.airline">
+            <field name="name">Cargolux</field>
+            <field name="code">CV</field>
+            <field name="icao">CLX</field>
+            <field name="country" ref="base.lu"/>
+        </record>
+
+        <record id="airline_kp" model="freight.airline">
+            <field name="name">ASKY Airlines</field>
+            <field name="code">KP</field>
+            <field name="icao">SKK</field>
+            <field name="country" ref="base.tg"/>
+        </record>
+
+        <record id="airline_hf" model="freight.airline">
+            <field name="name">Air Côte d'Ivoire</field>
+            <field name="code">HF</field>
+            <field name="icao">VRE</field>
+            <field name="country" ref="base.ci"/>
+        </record>
+
+    </data>
+</odoo>

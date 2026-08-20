@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        La visibilité par état, en règle **globale** conditionnelle.
+
+        ## Le chemin écarté, et pourquoi
+
+        Une première version ajoutait une seconde règle sur le groupe portail.
+        Mesuré : le client A voyait l'expédition du client B. Les règles d'un
+        **même groupe** se combinent en OU — « mes dossiers » OU « états
+        publiables » — si bien qu'ajouter une restriction produisait une union.
+
+        La seconde version écrasait le domaine de la règle de `dally_portal`.
+        Correct, mais fragile : un `-u dally_portal` seul rechargeait sa version
+        et retirait la condition, sans bruit.
+
+        ## Pourquoi une globale marche
+
+        Dans la source d'Odoo 19 (`ir_rule.py`) : `global = not rule.groups`, et
+        « les règles locales sont liées par OU, tandis que les globales sont
+        liées par ET ». Une globale s'**intersecte** donc avec la règle portail
+        au lieu de s'y ajouter : le cloisonnement par client reste entier, et la
+        condition d'état s'y superpose.
+
+        `domain_force` est évalué par `safe_eval` avec `user` dans le contexte
+        (`_eval_context`). Une expression conditionnelle est donc licite, et
+        c'est elle qui distingue les deux publics : un utilisateur partagé — un
+        client portail — se voit imposer la condition d'état ; un salarié reçoit
+        un domaine vide, donc aucune restriction supplémentaire. Il continue de
+        voir les brouillons, ce qui est le but.
+
+        `user.share` plutôt que l'appartenance au groupe portail : c'est le
+        critère qu'Odoo emploie lui-même pour « externe », et il couvre aussi
+        les utilisateurs publics.
+
+        ## Ce qu'on y gagne
+
+        Aucun enregistrement d'un autre module n'est écrasé. Un `-u dally_portal`
+        seul ne peut plus défaire cette politique — il n'y a plus rien à défaire.
+    -->
+    <record id="dally_shipment_state_visibility_rule" model="ir.rule">
+        <field name="name">Freight — états publiables pour les externes</field>
+        <field name="model_id" ref="dally_freight.model_dally_shipment"/>
+        <!-- Aucun groupe : c'est ce qui la rend globale, donc liée par ET. -->
+        <field name="groups" eval="[(5, 0, 0)]"/>
+        <field name="domain_force">
+            [('dally_portal_visible', '=', True)] if user.share else []
+        </field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+</odoo>

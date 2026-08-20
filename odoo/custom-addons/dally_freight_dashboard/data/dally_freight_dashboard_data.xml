@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Une ligne par carte. Le `code` est la clé : c'est lui qui porte le
+        domaine, dans `CARTES`. L'intitulé n'est qu'un libellé — le traduire ou
+        le corriger ne change jamais ce qui est compté.
+
+        Ces enregistrements sont engendrés depuis `CARTES` : un code ne peut
+        donc pas exister d'un côté sans l'autre. Le test le revérifie, parce
+        qu'un fichier engendré une fois peut diverger ensuite.
+
+        `noupdate="1"` : l'ordre d'affichage et les intitulés appartiennent à
+        l'exploitation dès la première installation. Quelqu'un qui remonte
+        « Douane » au-dessus de « Arrivées » ne doit pas voir son choix effacé
+        à la mise à jour suivante.
+    -->
+    <data noupdate="1">
+
+        <record id="card_quote_requests" model="dally.freight.dashboard">
+            <field name="code">quote_requests</field>
+            <field name="name">Demandes Freight</field>
+            <field name="group">pipeline</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <record id="card_to_qualify" model="dally.freight.dashboard">
+            <field name="code">to_qualify</field>
+            <field name="name">À qualifier</field>
+            <field name="group">pipeline</field>
+            <field name="sequence">20</field>
+        </record>
+
+        <record id="card_quotations" model="dally.freight.dashboard">
+            <field name="code">quotations</field>
+            <field name="name">Cotations</field>
+            <field name="group">pipeline</field>
+            <field name="sequence">30</field>
+        </record>
+
+        <record id="card_bookings" model="dally.freight.dashboard">
+            <field name="code">bookings</field>
+            <field name="name">Réservations</field>
+            <field name="group">pipeline</field>
+            <field name="sequence">40</field>
+        </record>
+
+        <record id="card_shipments" model="dally.freight.dashboard">
+            <field name="code">shipments</field>
+            <field name="name">Expéditions</field>
+            <field name="group">execution</field>
+            <field name="sequence">50</field>
+        </record>
+
+        <record id="card_sea" model="dally.freight.dashboard">
+            <field name="code">sea</field>
+            <field name="name">Maritime</field>
+            <field name="group">mode</field>
+            <field name="sequence">60</field>
+        </record>
+
+        <record id="card_air" model="dally.freight.dashboard">
+            <field name="code">air</field>
+            <field name="name">Aérien</field>
+            <field name="group">mode</field>
+            <field name="sequence">70</field>
+        </record>
+
+        <record id="card_road" model="dally.freight.dashboard">
+            <field name="code">road</field>
+            <field name="name">Routier</field>
+            <field name="group">mode</field>
+            <field name="sequence">80</field>
+        </record>
+
+        <record id="card_groupage" model="dally.freight.dashboard">
+            <field name="code">groupage</field>
+            <field name="name">Groupage</field>
+            <field name="group">mode</field>
+            <field name="sequence">90</field>
+        </record>
+
+        <record id="card_vehicle" model="dally.freight.dashboard">
+            <field name="code">vehicle</field>
+            <field name="name">Véhicules</field>
+            <field name="group">mode</field>
+            <field name="sequence">100</field>
+        </record>
+
+        <record id="card_in_transit" model="dally.freight.dashboard">
+            <field name="code">in_transit</field>
+            <field name="name">En transit</field>
+            <field name="group">etape</field>
+            <field name="sequence">110</field>
+        </record>
+
+        <record id="card_arrived" model="dally.freight.dashboard">
+            <field name="code">arrived</field>
+            <field name="name">Arrivées</field>
+            <field name="group">etape</field>
+            <field name="sequence">120</field>
+        </record>
+
+        <record id="card_customs" model="dally.freight.dashboard">
+            <field name="code">customs</field>
+            <field name="name">Douane</field>
+            <field name="group">etape</field>
+            <field name="sequence">130</field>
+        </record>
+
+        <record id="card_available" model="dally.freight.dashboard">
+            <field name="code">available</field>
+            <field name="name">Disponibles</field>
+            <field name="group">etape</field>
+            <field name="sequence">140</field>
+        </record>
+
+        <record id="card_out_for_delivery" model="dally.freight.dashboard">
+            <field name="code">out_for_delivery</field>
+            <field name="name">En livraison</field>
+            <field name="group">etape</field>
+            <field name="sequence">150</field>
+        </record>
+
+        <record id="card_delivered" model="dally.freight.dashboard">
+            <field name="code">delivered</field>
+            <field name="name">Livrés</field>
+            <field name="group">etape</field>
+            <field name="sequence">160</field>
+        </record>
+
+        <record id="card_cancelled" model="dally.freight.dashboard">
+            <field name="code">cancelled</field>
+            <field name="name">Annulés</field>
+            <field name="group">etape</field>
+            <field name="sequence">170</field>
+        </record>
+
+    </data>
+</odoo>

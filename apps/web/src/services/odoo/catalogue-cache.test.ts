@@ -41,6 +41,7 @@ function fakeGateway(
   };
   return {
     listServiceTypes,
+    listReferences: notUsed as unknown as OdooGateway['listReferences'],
     createLead: notUsed as unknown as OdooGateway['createLead'],
     createQuoteRequest: notUsed as unknown as OdooGateway['createQuoteRequest'],
     createSourcingRequest:

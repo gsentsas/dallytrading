@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="policy_draft" model="dally.freight.state.policy">
+            <field name="state">draft</field><field name="customer_label">Brouillon</field><field name="sequence">10</field>
+            <field name="visible_in_portal" eval="False"/><field name="visible_in_tracking" eval="False"/><field name="notify_customer" eval="False"/>
+        </record>
+        <record id="policy_request_received" model="dally.freight.state.policy">
+            <field name="state">request_received</field><field name="customer_label">Demande reçue</field><field name="sequence">20</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="True"/>
+            <field name="email_template_id" ref="dally_freight_notifications.mail_template_prise_en_charge"/>
+        </record>
+        <record id="policy_awaiting_goods" model="dally.freight.state.policy">
+            <field name="state">awaiting_goods</field><field name="customer_label">En attente de la marchandise</field><field name="sequence">30</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="True"/>
+            <field name="email_template_id" ref="dally_freight_notifications.mail_template_prise_en_charge"/>
+        </record>
+        <record id="policy_goods_received" model="dally.freight.state.policy">
+            <field name="state">goods_received</field><field name="customer_label">Marchandise reçue</field><field name="sequence">40</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="True"/>
+            <field name="email_template_id" ref="dally_freight_notifications.mail_template_prise_en_charge"/>
+        </record>
+        <record id="policy_preparing" model="dally.freight.state.policy">
+            <field name="state">preparing</field><field name="customer_label">En préparation</field><field name="sequence">50</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="False"/>
+        </record>
+        <record id="policy_ready" model="dally.freight.state.policy">
+            <field name="state">ready</field><field name="customer_label">Prête à partir</field><field name="sequence">60</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="True"/>
+            <field name="email_template_id" ref="dally_freight_notifications.mail_template_prise_en_charge"/>
+        </record>
+        <record id="policy_departed" model="dally.freight.state.policy">
+            <field name="state">departed</field><field name="customer_label">Partie</field><field name="sequence">70</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="True"/>
+            <field name="email_template_id" ref="dally_freight_notifications.mail_template_depart"/>
+        </record>
+        <record id="policy_in_transit" model="dally.freight.state.policy">
+            <field name="state">in_transit</field><field name="customer_label">En transit</field><field name="sequence">80</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="True"/>
+            <field name="email_template_id" ref="dally_freight_notifications.mail_template_depart"/>
+        </record>
+        <record id="policy_arrived" model="dally.freight.state.policy">
+            <field name="state">arrived</field><field name="customer_label">Arrivée à destination</field><field name="sequence">90</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="True"/>
+            <field name="email_template_id" ref="dally_freight_notifications.mail_template_arrivee"/>
+        </record>
+        <record id="policy_customs" model="dally.freight.state.policy">
+            <field name="state">customs</field><field name="customer_label">En dédouanement</field><field name="sequence">100</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="True"/>
+            <field name="email_template_id" ref="dally_freight_notifications.mail_template_arrivee"/>
+        </record>
+        <record id="policy_available" model="dally.freight.state.policy">
+            <field name="state">available</field><field name="customer_label">Disponible pour enlèvement</field><field name="sequence">110</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="True"/>
+            <field name="email_template_id" ref="dally_freight_notifications.mail_template_livraison"/>
+        </record>
+        <record id="policy_out_for_delivery" model="dally.freight.state.policy">
+            <field name="state">out_for_delivery</field><field name="customer_label">En cours de livraison</field><field name="sequence">120</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="True"/>
+            <field name="email_template_id" ref="dally_freight_notifications.mail_template_livraison"/>
+        </record>
+        <record id="policy_delivered" model="dally.freight.state.policy">
+            <field name="state">delivered</field><field name="customer_label">Livrée</field><field name="sequence">130</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="True"/>
+            <field name="email_template_id" ref="dally_freight_notifications.mail_template_livraison"/>
+        </record>
+        <record id="policy_cancelled" model="dally.freight.state.policy">
+            <field name="state">cancelled</field><field name="customer_label">Annulée</field><field name="sequence">140</field>
+            <field name="visible_in_portal" eval="True"/><field name="visible_in_tracking" eval="True"/><field name="notify_customer" eval="True"/>
+            <field name="email_template_id" ref="dally_freight_notifications.mail_template_annulation"/>
+        </record>
+    </data>
+</odoo>

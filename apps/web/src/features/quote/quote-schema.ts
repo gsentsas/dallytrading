@@ -124,6 +124,33 @@ const countryCode = z
   .transform((value) => value.toUpperCase())
   .optional();
 
+/**
+ * Un code de référentiel : subdivision, lieu, incoterm.
+ *
+ * Le formulaire n'envoie jamais d'identifiant de base. Un identifiant est
+ * toujours plausible — rien dans « 7 » ne dit s'il désigne le port qu'on croit
+ * — alors qu'un code se résout dans un référentiel, et la résolution échoue
+ * quand il n'existe pas. Odoo refait cette résolution : cette validation-ci ne
+ * sert qu'à écarter tout de suite ce qui ne peut pas être un code.
+ */
+const referenceCode = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .regex(/^[A-Za-z0-9-]*$/, 'Code invalide')
+    .transform((value) => (value === '' ? undefined : value.toUpperCase()))
+    .optional();
+
+/** Une date au format ISO, sans heure : le client déclare un jour. */
+const isoDate = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide')
+  .refine((value) => !Number.isNaN(Date.parse(value)), 'Date invalide')
+  .transform((value) => (value === '' ? undefined : value))
+  .optional();
+
 export const quoteRequestSchema = z
   .object({
     requestUuid: z
@@ -156,6 +183,25 @@ export const quoteRequestSchema = z
     originCity: optionalText(100),
     destinationCountryCode: countryCode,
     destinationCity: optionalText(100),
+
+    // ── Acheminement structuré ──
+    //
+    // Facultatifs, tous : un visiteur qui ne connaît pas son port de départ
+    // doit pouvoir demander un devis. La ville en texte libre reste le minimum
+    // exigé par le service, et ces codes la précisent quand le client les
+    // connaît.
+    originStateCode: referenceCode(10),
+    destinationStateCode: referenceCode(10),
+    originPortCode: referenceCode(20),
+    destinationPortCode: referenceCode(20),
+    incotermCode: referenceCode(10),
+
+    // ── Ce que le client demande en plus ──
+    pickupRequested: z.boolean().optional(),
+    pickupAddress: optionalText(500),
+    deliveryRequested: z.boolean().optional(),
+    deliveryAddress: optionalText(500),
+    desiredDate: isoDate,
 
     goodsDescription: optionalText(5000),
     quantity: optionalText(100),
@@ -286,6 +332,16 @@ export function toQuoteInput(data: QuoteRequestData): QuoteInput {
     ...(data.destinationCity !== undefined && {
       destinationCity: data.destinationCity,
     }),
+    ...(data.originStateCode !== undefined && { originStateCode: data.originStateCode }),
+    ...(data.destinationStateCode !== undefined && { destinationStateCode: data.destinationStateCode }),
+    ...(data.originPortCode !== undefined && { originPortCode: data.originPortCode }),
+    ...(data.destinationPortCode !== undefined && { destinationPortCode: data.destinationPortCode }),
+    ...(data.incotermCode !== undefined && { incotermCode: data.incotermCode }),
+    ...(data.pickupRequested !== undefined && { pickupRequested: data.pickupRequested }),
+    ...(data.pickupAddress !== undefined && { pickupAddress: data.pickupAddress }),
+    ...(data.deliveryRequested !== undefined && { deliveryRequested: data.deliveryRequested }),
+    ...(data.deliveryAddress !== undefined && { deliveryAddress: data.deliveryAddress }),
+    ...(data.desiredDate !== undefined && { desiredDate: data.desiredDate }),
     ...(data.goodsDescription !== undefined && {
       goodsDescription: data.goodsDescription,
     }),

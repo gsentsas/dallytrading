@@ -11,10 +11,12 @@
                 <field name="date_order"/>
                 <field name="partner_id"/>
                 <field name="dally_shop_guest" optional="show"/>
-                <field name="dally_shop_delivery_mode"/>
+                <field name="dally_shop_delivery_method_id" string="Remise"/>
                 <field name="dally_shop_workflow_state" string="État boutique"/>
+                <field name="dally_shop_delivery_fee_state" string="Frais" optional="show"/>
+                <field name="dally_shop_fulfillment_state" string="Préparation / remise" optional="show"/>
                 <field name="currency_id" column_invisible="1"/>
-                <field name="amount_total" sum="Total"/>
+                <field name="amount_total" sum="Total articles"/>
             </list>
         </field>
     </record>
@@ -41,17 +43,55 @@
                             string="Annuler"
                             type="object"
                             groups="dally_shop.group_dally_shop_operations,dally_core.group_dally_manager"
-                            invisible="dally_shop_workflow_state != 'validated'"/>
+                            invisible="dally_shop_workflow_state != 'validated' or dally_shop_fulfillment_authorized"/>
+
+                    <button name="action_dally_shop_open_delivery_fee"
+                            string="Confirmer les frais"
+                            type="object"
+                            groups="dally_shop.group_dally_shop_operations,dally_core.group_dally_manager"
+                            invisible="dally_shop_delivery_fee_state != 'pending_quote' or dally_shop_workflow_state not in ['received', 'validated']"/>
+                    <button name="action_dally_shop_authorize_fulfillment"
+                            string="Autoriser la préparation"
+                            type="object"
+                            class="btn-primary"
+                            groups="dally_shop.group_dally_shop_operations,dally_core.group_dally_manager"
+                            invisible="dally_shop_workflow_state != 'validated' or dally_shop_fulfillment_authorized or dally_shop_delivery_fee_state == 'pending_quote'"/>
+                    <button name="action_dally_shop_mark_ready"
+                            string="Marquer prête"
+                            type="object"
+                            groups="dally_shop.group_dally_shop_operations,dally_core.group_dally_manager"
+                            invisible="dally_shop_fulfillment_state != 'preparing'"/>
+                    <button name="action_dally_shop_dispatch"
+                            string="Mettre en livraison"
+                            type="object"
+                            groups="dally_shop.group_dally_shop_operations,dally_core.group_dally_manager"
+                            invisible="dally_shop_fulfillment_state != 'ready' or dally_shop_delivery_kind != 'delivery'"/>
+                    <button name="action_dally_shop_complete_fulfillment"
+                            string="Marquer retirée"
+                            type="object"
+                            groups="dally_shop.group_dally_shop_operations,dally_core.group_dally_manager"
+                            invisible="dally_shop_fulfillment_state != 'ready' or dally_shop_delivery_kind != 'pickup'"/>
+                    <button name="action_dally_shop_complete_fulfillment"
+                            string="Marquer livrée"
+                            type="object"
+                            groups="dally_shop.group_dally_shop_operations,dally_core.group_dally_manager"
+                            invisible="dally_shop_fulfillment_state != 'out_for_delivery' or dally_shop_delivery_kind != 'delivery'"/>
+
                     <field name="dally_shop_workflow_state"
                            widget="statusbar"
                            statusbar_visible="received,validated,rejected,cancelled"
                            readonly="1"/>
                 </header>
                 <sheet>
+                    <field name="dally_shop_delivery_kind" invisible="1"/>
+                    <field name="dally_shop_delivery_requires_address" invisible="1"/>
+                    <field name="dally_shop_fulfillment_authorized" invisible="1"/>
+
                     <div class="oe_title">
                         <label for="name" string="Commande"/>
                         <h1><field name="name" readonly="1"/></h1>
                     </div>
+
                     <group>
                         <group string="Client">
                             <field name="partner_id" readonly="1"/>
@@ -59,23 +99,49 @@
                             <field name="dally_shop_guest" readonly="1"/>
                         </group>
                         <group string="Remise">
-                            <field name="dally_shop_delivery_mode" readonly="1"/>
+                            <field name="dally_shop_delivery_method_id" readonly="1"/>
+                            <field name="dally_shop_delivery_fee_state" readonly="1"/>
+                            <field name="dally_shop_delivery_fee" readonly="1"
+                                   invisible="dally_shop_delivery_fee_state == 'pending_quote'"/>
+                            <field name="dally_shop_fulfillment_state" readonly="1"/>
+                            <field name="dally_shop_fulfillment_authorized_at" readonly="1"
+                                   invisible="not dally_shop_fulfillment_authorized"/>
+                            <field name="dally_shop_fulfillment_authorized_by_id" readonly="1"
+                                   invisible="not dally_shop_fulfillment_authorized"/>
                             <field name="dally_shop_customer_reason"
                                    readonly="1"
                                    invisible="dally_shop_workflow_state not in ['rejected', 'cancelled']"/>
                         </group>
                     </group>
+
+                    <group string="Adresse de livraison"
+                           invisible="not dally_shop_delivery_requires_address">
+                        <group>
+                            <field name="dally_shop_shipping_name" readonly="1"/>
+                            <field name="dally_shop_shipping_phone" readonly="1"/>
+                            <field name="dally_shop_shipping_street" readonly="1"/>
+                            <field name="dally_shop_shipping_street2" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="dally_shop_shipping_city" readonly="1"/>
+                            <field name="dally_shop_shipping_zip" readonly="1"/>
+                            <field name="dally_shop_shipping_country_code" readonly="1"/>
+                        </group>
+                    </group>
+
                     <group string="Montants">
                         <group>
                             <field name="currency_id" invisible="1"/>
                             <field name="amount_untaxed" readonly="1"/>
                             <field name="amount_tax" readonly="1"/>
-                            <field name="amount_total" readonly="1"/>
+                            <field name="amount_total" readonly="1" string="Total articles"/>
+                            <field name="dally_shop_delivery_fee" readonly="1" string="Frais de remise"
+                                   invisible="dally_shop_delivery_fee_state == 'pending_quote'"/>
                         </group>
                     </group>
 
                     <notebook>
-                        <page string="Historique" name="shop_workflow_history">
+                        <page string="Historique commercial" name="shop_workflow_history">
                             <field name="dally_shop_transition_ids" readonly="1">
                                 <list create="0" edit="0" delete="0">
                                     <field name="changed_at"/>
@@ -87,12 +153,29 @@
                                 </list>
                             </field>
                         </page>
+                        <page string="Historique de remise" name="shop_fulfillment_history">
+                            <field name="dally_shop_fulfillment_event_ids" readonly="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="changed_at"/>
+                                    <field name="from_state"/>
+                                    <field name="to_state"/>
+                                    <field name="changed_by_id"/>
+                                </list>
+                            </field>
+                        </page>
                     </notebook>
 
-                    <div class="alert alert-info" role="status">
-                        La validation E-commerce Pro est un engagement commercial
-                        explicite. Elle ne confirme pas encore la vente Odoo et ne
-                        crée ni transfert de stock, ni facture, ni paiement.
+                    <div class="alert alert-info" role="status"
+                         invisible="dally_shop_fulfillment_authorized">
+                        La validation commerciale ne confirme pas la vente Odoo.
+                        La confirmation native et la préparation ne deviennent
+                        possibles qu'avec « Autoriser la préparation », après
+                        validation de la commande et des frais de remise.
+                    </div>
+                    <div class="alert alert-success" role="status"
+                         invisible="not dally_shop_fulfillment_authorized">
+                        La préparation a été explicitement autorisée. La vente Odoo
+                        est confirmée et le suivi de remise devient opérationnel.
                     </div>
                 </sheet>
             </form>
@@ -107,14 +190,32 @@
                 <group>
                     <field name="order_id" readonly="1"/>
                     <field name="target_state" readonly="1"/>
-                    <field name="reason"
-                           placeholder="Motif clair et approprié à communiquer au client."/>
+                    <field name="reason" placeholder="Motif clair et approprié à communiquer au client."/>
                 </group>
                 <footer>
-                    <button name="action_apply"
-                            string="Confirmer"
-                            type="object"
-                            class="btn-primary"/>
+                    <button name="action_apply" string="Confirmer" type="object" class="btn-primary"/>
+                    <button string="Fermer" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_dally_shop_delivery_fee_wizard" model="ir.ui.view">
+        <field name="name">dally.shop.delivery.fee.wizard.form</field>
+        <field name="model">dally.shop.delivery.fee.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Confirmer les frais de remise">
+                <group>
+                    <field name="order_id" readonly="1"/>
+                    <field name="currency_id" invisible="1"/>
+                    <field name="amount"/>
+                </group>
+                <div class="alert alert-info" role="status">
+                    Ce montant est celui communiqué au client. Une fois confirmé,
+                    il ne peut pas être remplacé silencieusement.
+                </div>
+                <footer>
+                    <button name="action_apply" string="Confirmer les frais" type="object" class="btn-primary"/>
                     <button string="Fermer" special="cancel" class="btn-secondary"/>
                 </footer>
             </form>
@@ -129,29 +230,27 @@
             <search string="Commandes boutique">
                 <field name="name"/>
                 <field name="partner_id"/>
-                <filter name="shop_waiting"
-                        string="À valider"
+                <filter name="shop_waiting" string="À valider"
                         domain="[('dally_shop_workflow_state', '=', 'received')]"/>
-                <filter name="shop_validated"
-                        string="Validées"
+                <filter name="shop_validated" string="Validées"
                         domain="[('dally_shop_workflow_state', '=', 'validated')]"/>
-                <filter name="shop_rejected"
-                        string="Refusées"
+                <filter name="shop_fee_pending" string="Frais à confirmer"
+                        domain="[('dally_shop_delivery_fee_state', '=', 'pending_quote')]"/>
+                <filter name="shop_preparing" string="En préparation"
+                        domain="[('dally_shop_fulfillment_state', 'in', ['preparing', 'ready', 'out_for_delivery'])]"/>
+                <filter name="shop_rejected" string="Refusées"
                         domain="[('dally_shop_workflow_state', '=', 'rejected')]"/>
-                <filter name="shop_cancelled"
-                        string="Annulées"
+                <filter name="shop_cancelled" string="Annulées"
                         domain="[('dally_shop_workflow_state', '=', 'cancelled')]"/>
                 <separator/>
-                <filter name="shop_guest"
-                        string="Invités"
-                        domain="[('dally_shop_guest', '=', True)]"/>
+                <filter name="shop_guest" string="Invités" domain="[('dally_shop_guest', '=', True)]"/>
                 <group>
-                    <filter name="group_shop_state"
-                            string="État boutique"
+                    <filter name="group_shop_state" string="État boutique"
                             context="{'group_by': 'dally_shop_workflow_state'}"/>
-                    <filter name="group_delivery_mode"
-                            string="Mode de remise"
-                            context="{'group_by': 'dally_shop_delivery_mode'}"/>
+                    <filter name="group_delivery_method" string="Méthode de remise"
+                            context="{'group_by': 'dally_shop_delivery_method_id'}"/>
+                    <filter name="group_fulfillment" string="État de remise"
+                            context="{'group_by': 'dally_shop_fulfillment_state'}"/>
                 </group>
             </search>
         </field>

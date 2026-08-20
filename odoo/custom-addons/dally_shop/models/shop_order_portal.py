@@ -2,13 +2,13 @@
 """Projections portail des commandes boutique.
 
 Le portail ne publie jamais ``sale.order.state`` comme vérité métier. E-commerce
-Pro possède désormais un état boutique distinct : une validation commerciale ne
-confirme pas encore la vente native et ne déclenche donc ni picking, ni facture,
-ni autre effet réservé aux lots suivants.
+Pro possède un état boutique distinct : une validation commerciale ne confirme
+pas encore la vente native et ne déclenche donc ni picking, ni facture, ni autre
+effet réservé aux lots suivants.
 
-Les projections restent des listes blanches explicites. Le motif publié est le
-champ client-safe du workflow ; les notes internes, coûts, marges et identités du
-personnel n'ont aucun chemin vers le portail.
+Le contrat JSON reste stable : le motif client d'un refus ou d'une annulation est
+intégré au libellé d'état au lieu d'ajouter silencieusement une nouvelle clé que
+le BFF strict pourrait refuser.
 """
 
 from odoo import api, models
@@ -16,9 +16,6 @@ from odoo import api, models
 from .shop_order import MODES_REMISE
 from .shop_order_workflow import SHOP_WORKFLOW_CLIENT_LABELS
 
-# Compatibilité de repli pour une ancienne commande qui n'aurait pas encore été
-# initialisée par la migration du Lot B. Cette table couvre toujours les états
-# natifs actuels, mais elle n'est plus la source principale du statut client.
 ETATS_CLIENT = {
     "draft": "Commande reçue — en attente de validation",
     "sent": "Commande reçue — en attente de validation",
@@ -60,11 +57,9 @@ class SaleOrderPortal(models.Model):
         return {
             "reference": self.name,
             "date": self.date_order.isoformat() if self.date_order else None,
-            # La clé historique `state` est conservée pour le contrat BFF, mais sa
-            # valeur devient l'état métier client-safe, jamais `sale.order.state`.
+            # Clé conservée pour le contrat existant ; valeur désormais métier.
             "state": self.dally_shop_workflow_state or "received",
             "stateLabel": self._dally_shop_state_label(),
-            "stateReason": self._dally_shop_customer_reason(),
             "deliveryMode": self.dally_shop_delivery_mode,
             "deliveryModeLabel": dict(MODES_REMISE).get(
                 self.dally_shop_delivery_mode, ""
@@ -87,12 +82,6 @@ class SaleOrderPortal(models.Model):
 
     @staticmethod
     def _dally_shop_line_label(ligne):
-        """Nom du produit autorisé après autorisation de la commande.
-
-        Le portail n'a pas d'ACL produit. Le ``sudo()`` est donc limité au seul
-        ``display_name`` du produit déjà désigné par une ligne d'une commande que
-        la record rule native Sale a autorisée pour le client.
-        """
         return ligne.sudo().product_id.product_tmpl_id.display_name
 
     def _dally_shop_portal_address(self):
@@ -106,17 +95,23 @@ class SaleOrderPortal(models.Model):
             "country": partenaire.country_id.name or None,
         }
 
-    def _dally_shop_customer_reason(self):
-        self.ensure_one()
-        if self.dally_shop_workflow_state not in {"rejected", "cancelled"}:
-            return None
-        return self.dally_shop_customer_reason or None
-
     def _dally_shop_state_label(self):
-        """Libellé client du workflow, avec repli pour les anciennes données."""
+        """Libellé client du workflow, sans jamais exposer une note interne."""
         self.ensure_one()
-        if self.dally_shop_workflow_state:
-            return SHOP_WORKFLOW_CLIENT_LABELS.get(
-                self.dally_shop_workflow_state, ETAT_INCONNU
-            )
+
+        # Si un module tiers introduit un état sale.order que nous ne connaissons
+        # pas, on préfère un libellé générique plutôt que de prétendre comprendre
+        # la situation native sous-jacente.
+        if self.state and self.state not in ETATS_CLIENT:
+            return ETAT_INCONNU
+
+        workflow_state = self.dally_shop_workflow_state
+        if workflow_state:
+            label = SHOP_WORKFLOW_CLIENT_LABELS.get(workflow_state, ETAT_INCONNU)
+            if workflow_state in {"rejected", "cancelled"}:
+                reason = (self.dally_shop_customer_reason or "").strip()
+                if reason:
+                    return f"{label} — {reason}"
+            return label
+
         return ETATS_CLIENT.get(self.state, ETAT_INCONNU)

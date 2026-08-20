@@ -17,7 +17,8 @@ class TestFreightNotificationOps(TransactionCase):
             "email": "ops@example.invalid",
             "lang": "fr_FR",
         })
-        self.manager = self.env["res.users"].create({
+        Users = self.env["res.users"].with_context(no_reset_password=True)
+        self.manager = Users.create({
             "name": "Manager notifications",
             "login": "notif.manager@dallytrading.invalid",
             "group_ids": [(6, 0, [
@@ -25,7 +26,7 @@ class TestFreightNotificationOps(TransactionCase):
                 self.env.ref("dally_core.group_dally_manager").id,
             ])],
         })
-        self.reader = self.env["res.users"].create({
+        self.reader = Users.create({
             "name": "Lecteur notifications",
             "login": "notif.reader@dallytrading.invalid",
             "group_ids": [(6, 0, [
@@ -126,7 +127,9 @@ class TestFreightNotificationOps(TransactionCase):
             notification.with_user(self.manager).action_retry_delivery()
 
     def test_compteurs_internes_ne_sont_pas_exposes_au_portail(self):
-        portal_user = self.env["res.users"].create({
+        portal_user = self.env["res.users"].with_context(
+            no_reset_password=True
+        ).create({
             "name": "Client portail compteur",
             "login": "notif.counter.portal@dallytrading.invalid",
             "partner_id": self.partner.id,

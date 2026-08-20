@@ -15,6 +15,14 @@ const LIGNE = {
   subtotal: 300000,
 };
 
+const ETAT_REMISE = {
+  deliveryFeeStatus: 'free' as const,
+  deliveryFee: 0,
+  grandTotal: 300000,
+  fulfillmentState: 'pending' as const,
+  fulfillmentLabel: 'En attente de préparation',
+};
+
 const ELEMENT = {
   reference: 'S00042',
   date: '2026-08-17T09:15:00',
@@ -23,8 +31,9 @@ const ELEMENT = {
   amountUntaxed: 300000,
   amountTax: 0,
   amountTotal: 300000,
-  deliveryMode: 'pickup' as const,
+  deliveryMode: 'pickup',
   deliveryModeLabel: 'Retrait sur place',
+  ...ETAT_REMISE,
   itemCount: 2,
 };
 
@@ -33,20 +42,15 @@ const DETAIL = {
   date: '2026-08-17T09:15:00',
   state: 'received' as const,
   stateLabel: 'Commande reçue — en attente de validation',
-  deliveryMode: 'pickup' as const,
+  deliveryMode: 'pickup',
   deliveryModeLabel: 'Retrait sur place',
   currency: 'XOF',
   amountUntaxed: 300000,
   amountTax: 0,
   amountTotal: 300000,
+  ...ETAT_REMISE,
   lines: [LIGNE],
-  deliveryAddress: {
-    name: 'Client Portail A',
-    street: '1 rue de Test',
-    city: 'Dakar',
-    zip: '11000',
-    country: 'Sénégal',
-  },
+  deliveryAddress: null,
 };
 
 describe('ligne de commande', () => {
@@ -76,16 +80,35 @@ describe('ligne de commande', () => {
 });
 
 describe('élément de liste', () => {
-  it('accepte la forme mesurée', () => {
+  it('accepte la forme Lot C', () => {
     expect(shopOrderListItemSchema.parse(ELEMENT)).toEqual(ELEMENT);
   });
 
-  it('accepte une date et un mode de remise nuls', () => {
+  it('accepte une méthode configurable', () => {
+    expect(shopOrderListItemSchema.parse({
+      ...ELEMENT,
+      deliveryMode: 'dakar-express',
+      deliveryModeLabel: 'Dakar express',
+    }).deliveryMode).toBe('dakar-express');
+  });
+
+  it('accepte une date et un mode de remise nuls pendant migration', () => {
     const analyse = shopOrderListItemSchema.parse({
       ...ELEMENT, date: null, deliveryMode: null,
     });
     expect(analyse.date).toBeNull();
     expect(analyse.deliveryMode).toBeNull();
+  });
+
+  it('représente une livraison à coter sans inventer un total', () => {
+    const analyse = shopOrderListItemSchema.parse({
+      ...ELEMENT,
+      deliveryFeeStatus: 'pending_quote',
+      deliveryFee: null,
+      grandTotal: null,
+    });
+    expect(analyse.deliveryFee).toBeNull();
+    expect(analyse.grandTotal).toBeNull();
   });
 
   it('exige un libellé d’état non vide', () => {
@@ -119,8 +142,27 @@ describe('élément de liste', () => {
 });
 
 describe('détail de commande', () => {
-  it('accepte la forme mesurée', () => {
+  it('accepte la forme Lot C', () => {
     expect(shopOrderDetailSchema.parse(DETAIL)).toEqual(DETAIL);
+  });
+
+  it('accepte une adresse de livraison quand la méthode la requiert', () => {
+    const analyse = shopOrderDetailSchema.parse({
+      ...DETAIL,
+      deliveryMode: 'delivery_to_confirm',
+      deliveryModeLabel: 'Livraison',
+      deliveryFeeStatus: 'pending_quote',
+      deliveryFee: null,
+      grandTotal: null,
+      deliveryAddress: {
+        name: 'Client Portail A',
+        street: '1 rue de Test',
+        city: 'Dakar',
+        zip: '11000',
+        country: 'Sénégal',
+      },
+    });
+    expect(analyse.deliveryAddress?.city).toBe('Dakar');
   });
 
   it('accepte exactement les quatre états du workflow boutique', () => {
@@ -132,6 +174,15 @@ describe('détail de commande', () => {
   it('refuse les états natifs de sale.order et les états inconnus', () => {
     for (const state of ['draft', 'sent', 'sale', 'cancel', 'done']) {
       expect(() => shopOrderDetailSchema.parse({ ...DETAIL, state })).toThrow();
+    }
+  });
+
+  it('accepte les états de remise publics bornés', () => {
+    for (const fulfillmentState of [
+      'pending', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'picked_up',
+    ] as const) {
+      expect(shopOrderDetailSchema.parse({ ...DETAIL, fulfillmentState }).fulfillmentState)
+        .toBe(fulfillmentState);
     }
   });
 
@@ -152,30 +203,24 @@ describe('détail de commande', () => {
   });
 
   it('refuse une adresse portant une clé de trop', () => {
-    expect(() =>
-      shopOrderDetailSchema.parse({
-        ...DETAIL,
-        deliveryAddress: { ...DETAIL.deliveryAddress, partner_id: 3 },
-      }),
-    ).toThrow();
+    expect(() => shopOrderDetailSchema.parse({
+      ...DETAIL,
+      deliveryAddress: {
+        name: 'Client', street: 'Rue', city: 'Dakar', zip: null, country: null, partner_id: 3,
+      },
+    })).toThrow();
   });
 
   it('refuse une ligne portant une clé de trop, au travers du détail', () => {
-    expect(() =>
-      shopOrderDetailSchema.parse({
-        ...DETAIL,
-        lines: [{ ...LIGNE, purchase_price: 12000 }],
-      }),
-    ).toThrow();
+    expect(() => shopOrderDetailSchema.parse({
+      ...DETAIL,
+      lines: [{ ...LIGNE, purchase_price: 12000 }],
+    })).toThrow();
   });
 
   it('l’enveloppe n’accepte que la clé « order »', () => {
-    expect(shopOrderDetailEnvelopeSchema.parse({ order: DETAIL })).toEqual({
-      order: DETAIL,
-    });
-    expect(() =>
-      shopOrderDetailEnvelopeSchema.parse({ order: DETAIL, meta: {} }),
-    ).toThrow();
+    expect(shopOrderDetailEnvelopeSchema.parse({ order: DETAIL })).toEqual({ order: DETAIL });
+    expect(() => shopOrderDetailEnvelopeSchema.parse({ order: DETAIL, meta: {} })).toThrow();
   });
 });
 
@@ -197,15 +242,11 @@ describe('correspondance des états, vue du contrat', () => {
       stateLabel: 'Commande refusée — Référence momentanément indisponible',
     });
     expect(analyse.stateLabel).toContain('Référence momentanément indisponible');
-    expect(() =>
-      shopOrderDetailSchema.parse({ ...analyse, stateReason: 'clé non contractuelle' }),
-    ).toThrow();
+    expect(() => shopOrderDetailSchema.parse({ ...analyse, stateReason: 'clé non contractuelle' })).toThrow();
   });
 
   it('le libellé traverse tel quel, sans être recalculé ici', () => {
     const inattendu = 'Un libellé que le frontend ne connaît pas';
-    expect(
-      shopOrderDetailSchema.parse({ ...DETAIL, stateLabel: inattendu }).stateLabel,
-    ).toBe(inattendu);
+    expect(shopOrderDetailSchema.parse({ ...DETAIL, stateLabel: inattendu }).stateLabel).toBe(inattendu);
   });
 });

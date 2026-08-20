@@ -3,6 +3,7 @@ from . import shop_product_image
 from . import product_template
 from . import shop_order
 from . import shop_delivery
+from . import shop_delivery_currency
 from . import shop_delivery_fields
 from . import shop_order_workflow
 from . import shop_fulfillment

@@ -127,19 +127,6 @@ projection = env["dally.shipment"].sudo().search(
 )
 assert expedition and projection, "chaine fret incomplete pour le dossier enrichi"
 
-# Le lot Freight Pro installe ensuite une politique globale qui masque aux
-# utilisateurs externes les états non publiables. Une projection laissée en
-# `draft` serait donc correctement cachée, ce qui rendrait cette fixture de
-# détail illisible au portail malgré ses colis, événements et documents.
-#
-# On fait passer la fixture par l'action canonique vers un jalon réellement
-# client (`in_transit`) AVANT l'installation du module de politique. Au moment
-# où son champ stocké `dally_portal_visible` sera créé/recalculé, la fixture
-# sera donc visible pour la bonne raison métier — jamais par contournement de
-# règle d'accès.
-projection.action_set_state("in_transit")
-assert projection.state == "in_transit", "le dossier enrichi n'est pas passe en transit"
-
 # Canaris dans les champs internes du dossier opérationnel du fournisseur.
 valeurs_internes = {}
 for champ in ("notes", "dangerous_goods_notes"):
@@ -176,6 +163,19 @@ env["shipment.package.line"].sudo().create({
 # côté client. C'est l'ordre réel en exploitation — l'expédition naît d'abord,
 # les colis sont saisis ensuite.
 projection._dally_freight_sync_from_tk()
+
+# La resynchronisation ci-dessus recopie aussi l'étape du fournisseur. Sur une
+# expédition tk fraîchement créée, cette étape est encore « Draft » ; le pont la
+# traduit puis applique son garde-fou métier `request_received`. C'est donc
+# seulement APRÈS la dernière synchro tk → Dally qu'on place cette fixture de
+# lecture sur un jalon client stable. Le faire avant serait immédiatement
+# écrasé par la source opérationnelle, ce qu'a révélé le gate RC.
+#
+# `dally_freight_notifications` est installé plus tard. Son champ stocké
+# `dally_portal_visible` sera alors calculé depuis la politique de `in_transit`,
+# donc la fixture restera visible au portail pour une raison métier réelle.
+projection.action_set_state("in_transit")
+assert projection.state == "in_transit", "le dossier enrichi n'est pas passe en transit"
 
 # ── Événement de suivi, publié explicitement ─────────────────────────────
 #

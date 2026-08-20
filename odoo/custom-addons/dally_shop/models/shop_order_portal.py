@@ -1,20 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Projections portail des commandes boutique.
-
-Le portail ne publie jamais ``sale.order.state`` comme vérité métier. E-commerce
-Pro possède un état boutique distinct : une validation commerciale ne confirme
-pas encore la vente native et ne déclenche donc ni picking, ni facture, ni autre
-effet réservé aux lots suivants.
-
-Le contrat JSON reste stable : le motif client d'un refus ou d'une annulation est
-intégré au libellé d'état au lieu d'ajouter silencieusement une nouvelle clé que
-le BFF strict pourrait refuser.
-"""
+"""Projections portail des commandes boutique, incluant la remise Lot C."""
 
 from odoo import api, models
 
 from .shop_order import MODES_REMISE
 from .shop_order_workflow import SHOP_WORKFLOW_CLIENT_LABELS
+from .shop_delivery import FULFILLMENT_CLIENT_LABELS
 
 ETATS_CLIENT = {
     "draft": "Commande reçue — en attente de validation",
@@ -34,40 +25,56 @@ class SaleOrderPortal(models.Model):
         return [("dally_shop_order", "=", True)]
 
     def _dally_shop_portal_list(self):
-        return [
-            {
-                "reference": commande.name,
-                "date": commande.date_order.isoformat() if commande.date_order else None,
-                "stateLabel": commande._dally_shop_state_label(),
-                "currency": commande.currency_id.name,
-                "amountUntaxed": commande.amount_untaxed,
-                "amountTax": commande.amount_tax,
-                "amountTotal": commande.amount_total,
-                "deliveryMode": commande.dally_shop_delivery_mode,
-                "deliveryModeLabel": dict(MODES_REMISE).get(
-                    commande.dally_shop_delivery_mode, ""
-                ),
-                "itemCount": int(sum(commande.order_line.mapped("product_uom_qty"))),
-            }
-            for commande in self
-        ]
+        return [commande._dally_shop_portal_list_item() for commande in self]
 
-    def _dally_shop_portal_detail(self):
+    def _dally_shop_portal_list_item(self):
         self.ensure_one()
+        mode, label = self._dally_shop_public_delivery_method()
+        fee_status, fee_amount = self._dally_shop_public_fee()
         return {
             "reference": self.name,
             "date": self.date_order.isoformat() if self.date_order else None,
-            # Clé conservée pour le contrat existant ; valeur désormais métier.
-            "state": self.dally_shop_workflow_state or "received",
             "stateLabel": self._dally_shop_state_label(),
-            "deliveryMode": self.dally_shop_delivery_mode,
-            "deliveryModeLabel": dict(MODES_REMISE).get(
-                self.dally_shop_delivery_mode, ""
-            ),
             "currency": self.currency_id.name,
             "amountUntaxed": self.amount_untaxed,
             "amountTax": self.amount_tax,
             "amountTotal": self.amount_total,
+            "deliveryMode": mode,
+            "deliveryModeLabel": label,
+            "deliveryFeeStatus": fee_status,
+            "deliveryFee": fee_amount,
+            "grandTotal": self._dally_shop_delivery_grand_total()
+            if self.dally_shop_delivery_method_id else self.amount_total,
+            "fulfillmentState": self.dally_shop_fulfillment_state or "pending",
+            "fulfillmentLabel": FULFILLMENT_CLIENT_LABELS.get(
+                self.dally_shop_fulfillment_state or "pending", ""
+            ),
+            "itemCount": int(sum(self.order_line.mapped("product_uom_qty"))),
+        }
+
+    def _dally_shop_portal_detail(self):
+        self.ensure_one()
+        mode, label = self._dally_shop_public_delivery_method()
+        fee_status, fee_amount = self._dally_shop_public_fee()
+        return {
+            "reference": self.name,
+            "date": self.date_order.isoformat() if self.date_order else None,
+            "state": self.dally_shop_workflow_state or "received",
+            "stateLabel": self._dally_shop_state_label(),
+            "deliveryMode": mode,
+            "deliveryModeLabel": label,
+            "currency": self.currency_id.name,
+            "amountUntaxed": self.amount_untaxed,
+            "amountTax": self.amount_tax,
+            "amountTotal": self.amount_total,
+            "deliveryFeeStatus": fee_status,
+            "deliveryFee": fee_amount,
+            "grandTotal": self._dally_shop_delivery_grand_total()
+            if self.dally_shop_delivery_method_id else self.amount_total,
+            "fulfillmentState": self.dally_shop_fulfillment_state or "pending",
+            "fulfillmentLabel": FULFILLMENT_CLIENT_LABELS.get(
+                self.dally_shop_fulfillment_state or "pending", ""
+            ),
             "lines": [
                 {
                     "productName": self._dally_shop_line_label(ligne),
@@ -80,12 +87,49 @@ class SaleOrderPortal(models.Model):
             "deliveryAddress": self._dally_shop_portal_address(),
         }
 
+    def _dally_shop_public_delivery_method(self):
+        self.ensure_one()
+        method = self.dally_shop_delivery_method_id
+        if method:
+            return method.code, method.name
+        return (
+            self.dally_shop_delivery_mode or None,
+            dict(MODES_REMISE).get(self.dally_shop_delivery_mode, ""),
+        )
+
+    def _dally_shop_public_fee(self):
+        self.ensure_one()
+        if not self.dally_shop_delivery_method_id:
+            return None, None
+        state = self.dally_shop_delivery_fee_state or "pending_quote"
+        amount = None if state == "pending_quote" else self.dally_shop_delivery_fee
+        return state, amount
+
     @staticmethod
     def _dally_shop_line_label(ligne):
         return ligne.sudo().product_id.product_tmpl_id.display_name
 
     def _dally_shop_portal_address(self):
         self.ensure_one()
+        method = self.dally_shop_delivery_method_id
+        if method and not method.requires_address:
+            return None
+        if method and method.requires_address:
+            country = None
+            if self.dally_shop_shipping_country_code:
+                country_record = self.env["res.country"].sudo().search(
+                    [("code", "=", self.dally_shop_shipping_country_code)], limit=1
+                )
+                country = country_record.name or self.dally_shop_shipping_country_code
+            return {
+                "name": self.dally_shop_shipping_name or self.partner_id.name,
+                "street": self.dally_shop_shipping_street or None,
+                "city": self.dally_shop_shipping_city or None,
+                "zip": self.dally_shop_shipping_zip or None,
+                "country": country,
+            }
+
+        # Compatibilité pendant l'upgrade avant migration Lot C.
         partenaire = self.partner_id
         return {
             "name": partenaire.name,
@@ -96,12 +140,7 @@ class SaleOrderPortal(models.Model):
         }
 
     def _dally_shop_state_label(self):
-        """Libellé client du workflow, sans jamais exposer une note interne."""
         self.ensure_one()
-
-        # Si un module tiers introduit un état sale.order que nous ne connaissons
-        # pas, on préfère un libellé générique plutôt que de prétendre comprendre
-        # la situation native sous-jacente.
         if self.state and self.state not in ETATS_CLIENT:
             return ETAT_INCONNU
 

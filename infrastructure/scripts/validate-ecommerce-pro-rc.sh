@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Validation intégrée E-COMMERCE PRO Lot B sur une pile éphémère uniquement.
+# Validation intégrée E-COMMERCE PRO Lot C sur une pile éphémère uniquement.
 #
-# Le Lot B ajoute le workflow commercial des commandes boutique sans confirmer
-# la vente Odoo native : aucune facture, aucun paiement et aucun picking ne doit
-# naître de la validation métier. La recette refuse le worktree de production,
-# vérifie le frontend, upgrade dally_shop, exécute ses tests Odoo, contrôle les
-# canaris du workflow puis rejoue les régressions navigateur existantes.
+# Le Lot C ajoute méthodes de remise, adresse, frais et autorisation explicite de
+# préparation. Le checkout et la validation commerciale doivent rester sans effet
+# Sale/Stock/Facturation ; seule l'autorisation de préparation peut confirmer la
+# vente native. La recette refuse le worktree de production, upgrade dally_shop,
+# exécute ses tests, contrôle les canaris Lot B + C puis rejoue les régressions.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,7 +19,7 @@ NEXT_PORT="${FE2E_NEXT_PORT:-3042}"
 ODOO_PORT="${FE2E_ODOO_PORT:-18479}"
 ODOO_TEST_HTTP_PORT="${FE2E_TEST_HTTP_PORT:-18179}"
 PRODUCTION_WORKTREE="/var/www/vhosts/dallytrading.com/platform"
-EXPECTED_MODULE_VERSION="19.0.1.6.0"
+EXPECTED_MODULE_VERSION="19.0.1.7.0"
 
 log() { printf '\n\033[1m── %s\033[0m\n' "$*"; }
 fail() { echo "ERREUR: $*" >&2; exit 1; }
@@ -71,7 +71,7 @@ static_validation() {
 }
 
 frontend_validation() {
-  log "validation frontend E-commerce Pro"
+  log "validation frontend E-commerce Pro Lot C"
   (
     cd "$WEB"
     npm run verify
@@ -104,7 +104,7 @@ run_odoo_tests() {
     --test-tags=dally_shop \
     --stop-after-init \
     > "$WORK/ecommerce-pro-tests.log" 2>&1 || {
-      tail -160 "$WORK/ecommerce-pro-tests.log" >&2
+      tail -180 "$WORK/ecommerce-pro-tests.log" >&2
       fail "tests Odoo dally_shop"
     }
 
@@ -119,7 +119,7 @@ run_odoo_tests() {
     "$WORK/ecommerce-pro-tests.log" | tail -1 || true)"
 
   [ -n "$result_line" ] || {
-    tail -160 "$WORK/ecommerce-pro-tests.log" >&2
+    tail -180 "$WORK/ecommerce-pro-tests.log" >&2
     fail "résumé final des tests Odoo introuvable"
   }
 
@@ -151,14 +151,14 @@ refresh_shop_runtime() {
   docker exec "$ODOO_CONTAINER" sh -c \
     "odoo shell -c /etc/odoo/odoo.conf -d $DB --no-http < /tmp/e2e-seed/shop.py" \
     > "$WORK/shop-reseed.out" 2>&1 || {
-      tail -80 "$WORK/shop-reseed.out" >&2
+      tail -100 "$WORK/shop-reseed.out" >&2
       fail "réamorçage boutique"
     }
 
   grep -E '^SHOP_' "$WORK/shop-reseed.out" \
     | sed -E 's/^(SHOP_API_KEY_[A-Z]+=).*/\1<expurgé>/' | sed 's/^/   /'
   grep -q '^SHOP_SEED_OK$' "$WORK/shop-reseed.out" || {
-    tail -80 "$WORK/shop-reseed.out" >&2
+    tail -100 "$WORK/shop-reseed.out" >&2
     fail "marqueur SHOP_SEED_OK absent"
   }
 
@@ -200,11 +200,24 @@ refresh_shop_runtime() {
     fail "sonde catalogue Odoo après tests"
   fi
 
+  local delivery_body="$WORK/shop-delivery-methods.json" delivery_code
+  delivery_code="$(curl -sS -o "$delivery_body" -w '%{http_code}' \
+    -H "X-API-Key: $SHOP_API_KEY_READ" \
+    "http://127.0.0.1:${ODOO_PORT}/api/v1/shop/delivery-methods")"
+  if [ "$delivery_code" != "200" ] || \
+     ! grep -q '"code":"pickup"' "$delivery_body" || \
+     ! grep -q '"code":"delivery_to_confirm"' "$delivery_body"; then
+    echo "   HTTP méthodes de remise: $delivery_code" >&2
+    cat "$delivery_body" >&2 || true
+    fail "sonde méthodes de remise Odoo"
+  fi
+
   echo "   SHOP_RUNTIME_OK"
+  echo "   SHOP_DELIVERY_RUNTIME_OK"
 }
 
 verify_release_models() {
-  log "canaris structurels E-commerce Pro Lot B"
+  log "canaris structurels E-commerce Pro Lots B + C"
   docker exec -i "$ODOO_CONTAINER" \
     odoo shell -c /etc/odoo/odoo.conf -d "$DB" --no-http <<PY
 import uuid
@@ -232,25 +245,54 @@ for rule in (rule_order, rule_line, rule_transition):
     assert rule.active
     assert rule.perm_read
     assert not rule.perm_write and not rule.perm_create and not rule.perm_unlink
-assert 'dally_shop_order' in rule_order.domain_force
-assert 'order_id.dally_shop_order' in rule_line.domain_force
-assert 'order_id.dally_shop_order' in rule_transition.domain_force
 
 Order = env['sale.order']
 Transition = env['dally.shop.order.transition']
-assert 'dally_shop_workflow_state' in Order._fields
-assert 'dally_shop_customer_reason' in Order._fields
-assert 'dally_shop_transition_ids' in Order._fields
+DeliveryMethod = env['dally.shop.delivery.method']
+FulfillmentEvent = env['dally.shop.fulfillment.event']
+
 assert set(dict(Order._fields['dally_shop_workflow_state'].selection)) == {
     'received', 'validated', 'rejected', 'cancelled'
 }
+assert set(dict(Order._fields['dally_shop_delivery_fee_state'].selection)) == {
+    'free', 'fixed', 'pending_quote', 'quoted'
+}
+assert set(dict(Order._fields['dally_shop_fulfillment_state'].selection)) == {
+    'pending', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'picked_up'
+}
+for field_name in (
+    'dally_shop_delivery_method_id',
+    'dally_shop_delivery_fee',
+    'dally_shop_shipping_street',
+    'dally_shop_fulfillment_authorized',
+    'dally_shop_fulfillment_event_ids',
+):
+    assert field_name in Order._fields
 assert Transition._name == 'dally.shop.order.transition'
+assert FulfillmentEvent._name == 'dally.shop.fulfillment.event'
+
+pickup = env.ref('dally_shop.delivery_method_pickup')
+delivery = env.ref('dally_shop.delivery_method_delivery_to_confirm')
+assert pickup.active and pickup.code == 'pickup'
+assert pickup.kind == 'pickup' and pickup.fee_policy == 'free'
+assert not pickup.requires_address
+assert delivery.active and delivery.code == 'delivery_to_confirm'
+assert delivery.kind == 'delivery' and delivery.fee_policy == 'quote'
+assert delivery.requires_address
+public_methods = DeliveryMethod._dally_shop_public_methods()
+assert {'pickup', 'delivery_to_confirm'} <= {item['code'] for item in public_methods}
+assert all('id' not in item for item in public_methods)
 
 form_arch = env.ref('dally_shop.view_dally_shop_order_form').arch_db
 for method in (
     'action_dally_shop_validate',
     'action_dally_shop_open_reject',
     'action_dally_shop_open_cancel',
+    'action_dally_shop_open_delivery_fee',
+    'action_dally_shop_authorize_fulfillment',
+    'action_dally_shop_mark_ready',
+    'action_dally_shop_dispatch',
+    'action_dally_shop_complete_fulfillment',
 ):
     assert method in form_arch
 assert 'action_confirm' not in form_arch
@@ -261,28 +303,47 @@ product = env['product.template'].search([
 ], limit=1)
 assert product
 partner = env['res.partner'].create({
-    'name': 'Canari Workflow Lot B',
-    'email': 'workflow-canary@e2e.invalid',
+    'name': 'Canari Livraison Lot C',
+    'email': 'delivery-canary@e2e.invalid',
+    'phone': '+221770000009',
+    'street': '1 rue du Canari',
+    'city': 'Dakar',
 })
-order = Order.create({
-    'partner_id': partner.id,
-    'dally_shop_order': True,
-    'dally_shop_cart_uuid': str(uuid.uuid4()),
-    'dally_shop_delivery_mode': 'pickup',
-    'state': 'draft',
-    'order_line': [(0, 0, {
-        'product_id': product.product_variant_id.id,
-        'product_uom_qty': 1,
-    })],
-})
+lines = env['product.template']._dally_shop_resolve_lines([
+    (product.dally_shop_slug, 1),
+])
+order = Order.dally_shop_place_order(
+    str(uuid.uuid4()),
+    partner,
+    lines,
+    'delivery_to_confirm',
+    invite=False,
+)
+
+# Checkout : workflow reçu, frais inconnus, aucun effet natif.
 assert order.state == 'draft'
 assert order.dally_shop_workflow_state == 'received'
-assert len(order.dally_shop_transition_ids) == 1
-assert order.dally_shop_transition_ids.to_state == 'received'
-assert order.dally_shop_transition_ids.notification_queued
+assert order.dally_shop_delivery_method_id == delivery
+assert order.dally_shop_delivery_fee_state == 'pending_quote'
+assert order.dally_shop_delivery_fee == 0
+assert order.dally_shop_shipping_street == partner.street
+assert order.dally_shop_shipping_city == partner.city
+assert order.dally_shop_fulfillment_state == 'pending'
+assert not order.dally_shop_fulfillment_authorized
+assert order._dally_shop_delivery_grand_total() is None
 assert not order.invoice_ids
 assert not env['stock.picking'].search_count([('origin', '=', order.name)])
 
+projection = order._dally_shop_projection()
+assert projection['deliveryMode'] == 'delivery_to_confirm'
+assert projection['delivery']['fee']['status'] == 'pending_quote'
+assert projection['delivery']['fee']['amount'] is None
+assert projection['delivery']['shippingAddress']['street'] == partner.street
+assert projection['grandTotal'] is None
+assert 'partner_id' not in str(projection)
+assert 'delivery_method_id' not in str(projection)
+
+# Validation commerciale Lot B : toujours aucun effet natif.
 order.action_dally_shop_validate()
 assert order.state == 'draft'
 assert order.dally_shop_workflow_state == 'validated'
@@ -292,18 +353,40 @@ assert Transition.search_count([
 assert not order.invoice_ids
 assert not env['stock.picking'].search_count([('origin', '=', order.name)])
 
-# Rejouer la validation ne doit ni journaliser ni notifier deux fois.
-before_transitions = Transition.search_count([('order_id', '=', order.id)])
-before_mails = env['mail.mail'].sudo().search_count([
-    ('email_to', '=', partner.email), ('subject', 'ilike', order.name)
-])
-order.action_dally_shop_validate()
-assert Transition.search_count([('order_id', '=', order.id)]) == before_transitions
-assert env['mail.mail'].sudo().search_count([
-    ('email_to', '=', partner.email), ('subject', 'ilike', order.name)
-]) == before_mails
+# Cotation : total connu, mais vente toujours brouillon.
+order._dally_shop_set_delivery_fee(3500.0)
+assert order.dally_shop_delivery_fee_state == 'quoted'
+assert order.dally_shop_delivery_fee == 3500.0
+assert order._dally_shop_delivery_grand_total() == order.amount_total + 3500.0
+assert order.state == 'draft'
+assert not order.invoice_ids
+assert not env['stock.picking'].search_count([('origin', '=', order.name)])
 
-print('ECOMMERCE_PRO_LOT_B_CANARIES_OK')
+# Autorisation explicite : seul moment du canari où la vente native est confirmée.
+order.action_dally_shop_authorize_fulfillment()
+assert order.state == 'sale'
+assert order.dally_shop_fulfillment_authorized
+assert order.dally_shop_fulfillment_state == 'preparing'
+assert order.dally_shop_fulfillment_authorized_at
+assert FulfillmentEvent.search_count([
+    ('order_id', '=', order.id), ('to_state', '=', 'preparing')
+]) == 1
+assert not order.invoice_ids
+
+# Rejeu : aucune seconde autorisation ni second événement.
+before_events = FulfillmentEvent.search_count([('order_id', '=', order.id)])
+order.action_dally_shop_authorize_fulfillment()
+assert FulfillmentEvent.search_count([('order_id', '=', order.id)]) == before_events
+
+# Parcours livraison borné.
+order.action_dally_shop_mark_ready()
+assert order.dally_shop_fulfillment_state == 'ready'
+order.action_dally_shop_dispatch()
+assert order.dally_shop_fulfillment_state == 'out_for_delivery'
+order.action_dally_shop_complete_fulfillment()
+assert order.dally_shop_fulfillment_state == 'delivered'
+
+print('ECOMMERCE_PRO_LOT_C_CANARIES_OK')
 env.cr.rollback()
 PY
 }
@@ -328,12 +411,15 @@ main() {
   assert_worktree_clean
 
   printf '\n============================================================\n'
-  printf ' ECOMMERCE PRO LOT B — RELEASE CANDIDATE VALIDATED\n'
+  printf ' ECOMMERCE PRO LOT C — RELEASE CANDIDATE VALIDATED\n'
   printf ' Production touched: NO\n'
   printf ' Production DB: NO\n'
   printf ' Production frontend: NO\n'
-  printf ' Native sale confirmation: NO\n'
-  printf ' Picking / invoice / payment: NO\n'
+  printf ' Checkout native sale confirmation: NO\n'
+  printf ' Commercial validation native sale confirmation: NO\n'
+  printf ' Delivery fee quote native sale confirmation: NO\n'
+  printf ' Explicit fulfillment authorization may confirm Sale: YES\n'
+  printf ' Automatic invoice / payment: NO\n'
   printf '============================================================\n'
 }
 

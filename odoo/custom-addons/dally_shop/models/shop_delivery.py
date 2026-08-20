@@ -61,6 +61,16 @@ FULFILLMENT_CLIENT_LABELS = {
 }
 
 _CODE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+|_[a-z0-9]+)*$")
+_COUNTRY = re.compile(r"^[A-Z]{2}$")
+_SHIPPING_FIELDS = {
+    "name",
+    "phone",
+    "street",
+    "street2",
+    "city",
+    "zip",
+    "country_code",
+}
 
 
 class DallyShopDeliveryMethod(models.Model):
@@ -242,6 +252,117 @@ class SaleOrderShopDelivery(models.Model):
         ondelete="restrict",
     )
 
+    @api.model
+    def dally_shop_place_order(
+        self,
+        cart_uuid,
+        partner,
+        lignes,
+        mode_remise,
+        invite=False,
+        shipping=None,
+    ):
+        """Ajoute la décision de remise au checkout historique sans casser son idempotence.
+
+        ``mode_remise`` devient le code public de la méthode configurable. Le
+        champ historique ``dally_shop_delivery_mode`` reste alimenté avec l'un des
+        deux anciens codes afin de garder les commandes et extensions existantes
+        compatibles ; l'autorité du Lot C est ``dally_shop_delivery_method_id``.
+        """
+        existante = self._dally_shop_find_by_cart(cart_uuid)
+        if existante:
+            return existante
+
+        method = self.env["dally.shop.delivery.method"]._dally_shop_resolve(mode_remise)
+        if not method:
+            raise ValidationError(_("La méthode de remise demandée n'est pas disponible."))
+
+        delivery_values = self._dally_shop_delivery_values(method, partner, shipping)
+        legacy_mode = "pickup" if method.kind == "pickup" else "delivery_to_confirm"
+
+        order = super().dally_shop_place_order(
+            cart_uuid,
+            partner,
+            lignes,
+            legacy_mode,
+            invite=invite,
+        )
+        if not order.dally_shop_delivery_method_id:
+            order.sudo().write(delivery_values)
+        return order
+
+    @api.model
+    def _dally_shop_delivery_values(self, method, partner, shipping):
+        method.ensure_one()
+        fee_state, fee_amount = method._dally_shop_fee_snapshot()
+        values = {
+            "dally_shop_delivery_method_id": method.id,
+            "dally_shop_delivery_fee_state": fee_state,
+            "dally_shop_delivery_fee": fee_amount,
+            "dally_shop_fulfillment_state": "pending",
+        }
+
+        if not method.requires_address:
+            return values
+
+        snapshot = self._dally_shop_shipping_snapshot(partner, shipping)
+        values.update({
+            "dally_shop_shipping_name": snapshot["name"],
+            "dally_shop_shipping_phone": snapshot["phone"] or False,
+            "dally_shop_shipping_street": snapshot["street"],
+            "dally_shop_shipping_street2": snapshot["street2"] or False,
+            "dally_shop_shipping_city": snapshot["city"],
+            "dally_shop_shipping_zip": snapshot["zip"] or False,
+            "dally_shop_shipping_country_code": snapshot["country_code"] or False,
+        })
+        return values
+
+    @api.model
+    def _dally_shop_shipping_snapshot(self, partner, shipping):
+        if shipping is not None and not isinstance(shipping, dict):
+            raise ValidationError(_("L'adresse de livraison est invalide."))
+
+        if shipping:
+            unknown = set(shipping) - _SHIPPING_FIELDS
+            if unknown:
+                raise ValidationError(_("L'adresse de livraison contient des champs interdits."))
+
+        source = shipping or {}
+        values = {
+            "name": (source.get("name") or partner.name or "").strip(),
+            "phone": (source.get("phone") or partner.phone or "").strip(),
+            "street": (source.get("street") or partner.street or "").strip(),
+            "street2": (source.get("street2") or partner.street2 or "").strip(),
+            "city": (source.get("city") or partner.city or "").strip(),
+            "zip": (source.get("zip") or partner.zip or "").strip(),
+            "country_code": (
+                source.get("country_code")
+                or (partner.country_id.code if partner.country_id else "")
+                or ""
+            ).strip().upper(),
+        }
+
+        if not values["name"] or not values["street"] or not values["city"]:
+            raise ValidationError(
+                _("Un destinataire, une adresse et une ville sont requis pour la livraison.")
+            )
+        if values["country_code"] and not _COUNTRY.match(values["country_code"]):
+            raise ValidationError(_("Le code pays de livraison doit contenir deux lettres."))
+
+        limits = {
+            "name": 128,
+            "phone": 32,
+            "street": 200,
+            "street2": 200,
+            "city": 100,
+            "zip": 20,
+            "country_code": 2,
+        }
+        for field_name, limit in limits.items():
+            if len(values[field_name]) > limit:
+                raise ValidationError(_("Un champ de l'adresse de livraison est trop long."))
+        return values
+
     def _dally_shop_shipping_projection(self):
         self.ensure_one()
         method = self.dally_shop_delivery_method_id
@@ -289,3 +410,17 @@ class SaleOrderShopDelivery(models.Model):
         if self.dally_shop_delivery_fee_state == "pending_quote":
             return None
         return self.amount_total + self.dally_shop_delivery_fee
+
+    def _dally_shop_projection(self):
+        self.ensure_one()
+        projection = super()._dally_shop_projection()
+        method = self.dally_shop_delivery_method_id
+        if not method:
+            return projection
+        projection.update({
+            "deliveryMode": method.code,
+            "deliveryModeLabel": method.name,
+            "delivery": self._dally_shop_delivery_projection(),
+            "grandTotal": self._dally_shop_delivery_grand_total(),
+        })
+        return projection

@@ -25,8 +25,19 @@
         </record>
 
         <record id="rule_shop_operations_transitions" model="ir.rule">
-            <field name="name">Boutique — historique des commandes boutique uniquement</field>
+            <field name="name">Boutique — historique commercial boutique uniquement</field>
             <field name="model_id" ref="model_dally_shop_order_transition"/>
+            <field name="groups" eval="[(4, ref('dally_shop.group_dally_shop_operations')), (4, ref('dally_core.group_dally_manager'))]"/>
+            <field name="domain_force">[('order_id.dally_shop_order', '=', True)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="rule_shop_operations_fulfillment_events" model="ir.rule">
+            <field name="name">Boutique — historique de remise boutique uniquement</field>
+            <field name="model_id" ref="model_dally_shop_fulfillment_event"/>
             <field name="groups" eval="[(4, ref('dally_shop.group_dally_shop_operations')), (4, ref('dally_core.group_dally_manager'))]"/>
             <field name="domain_force">[('order_id.dally_shop_order', '=', True)]</field>
             <field name="perm_read" eval="True"/>

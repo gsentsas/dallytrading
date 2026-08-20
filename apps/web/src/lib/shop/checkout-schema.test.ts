@@ -17,15 +17,36 @@ const INVITE = {
   country_code: 'SN',
 };
 
+const DELIVERY = {
+  method: {
+    code: 'pickup',
+    name: 'Retrait sur place',
+    kind: 'pickup' as const,
+    requiresAddress: false,
+  },
+  fee: {
+    status: 'free' as const,
+    amount: 0,
+    currency: 'XOF',
+  },
+  shippingAddress: null,
+  fulfillment: {
+    state: 'pending' as const,
+    label: 'En attente de préparation',
+  },
+};
+
 const COMMANDE = {
   reference: 'S00042',
   status: 'received' as const,
-  deliveryMode: 'pickup' as const,
+  deliveryMode: 'pickup',
   deliveryModeLabel: 'Retrait sur place',
   currency: 'XOF',
   amountUntaxed: 300000,
   amountTax: 0,
   amountTotal: 300000,
+  delivery: DELIVERY,
+  grandTotal: 300000,
   lines: [
     {
       reference: 'filtre-a-huile',
@@ -47,10 +68,22 @@ describe('demande de commande', () => {
     expect(analyse.customer?.email).toBe('invite@essai.invalid');
   });
 
-  it('accepte une commande connectée sans bloc client', () => {
-    expect(checkoutRequestSchema.parse({ deliveryMode: 'delivery_to_confirm' })).toEqual({
+  it('accepte une méthode configurable bien formée', () => {
+    expect(checkoutRequestSchema.parse({ deliveryMode: 'dakar-express' }).deliveryMode)
+      .toBe('dakar-express');
+  });
+
+  it('accepte une adresse de livraison distincte strictement bornée', () => {
+    const analyse = checkoutRequestSchema.parse({
       deliveryMode: 'delivery_to_confirm',
+      shipping: {
+        name: 'Dépôt Dakar',
+        street: '10 avenue de la République',
+        city: 'Dakar',
+        country_code: 'sn',
+      },
     });
+    expect(analyse.shipping?.country_code).toBe('SN');
   });
 
   it.each([
@@ -65,6 +98,7 @@ describe('demande de commande', () => {
     ['state', { state: 'sale' }],
     ['order_id', { order_id: 7 }],
     ['amount_total', { amount_total: 1 }],
+    ['frais de livraison', { deliveryFee: 1 }],
     ['lignes fournies par le navigateur', { lines: [{ reference: 'x', quantity: 1 }] }],
     ['identifiant de panier', { cartId: '00000000-0000-4000-8000-000000000000' }],
   ])('refuse une demande portant %s', (_nom, extra) => {
@@ -73,14 +107,20 @@ describe('demande de commande', () => {
     ).toThrow();
   });
 
-  it('refuse un mode de remise inventé', () => {
-    expect(() =>
-      checkoutRequestSchema.parse({ deliveryMode: 'free_shipping', customer: INVITE }),
-    ).toThrow();
-  });
+  it.each(['Libre Livraison', 'UPPERCASE', '../pickup', 'a/b', '', 'méthode'])
+    ('refuse un code de méthode mal formé : %s', (deliveryMode) => {
+      expect(() => checkoutRequestSchema.parse({ deliveryMode })).toThrow();
+    });
 
   it('refuse un mode de remise absent', () => {
     expect(() => checkoutRequestSchema.parse({ customer: INVITE })).toThrow();
+  });
+
+  it('refuse un prix glissé dans adresse de livraison', () => {
+    expect(() => checkoutRequestSchema.parse({
+      deliveryMode: 'delivery_to_confirm',
+      shipping: { street: 'X', city: 'Dakar', fee: 1 },
+    })).toThrow();
   });
 });
 
@@ -95,7 +135,7 @@ describe('identité invité', () => {
     expect(analyse.email).toBe('invite@essai.invalid');
   });
 
-  it('transforme un champ facultatif vide en absence, jamais en chaîne vide', () => {
+  it('transforme un champ facultatif vide en absence', () => {
     const analyse = guestCustomerSchema.parse({
       name: 'X', email: 'x@essai.invalid', phone: '   ', city: '',
     });
@@ -104,9 +144,7 @@ describe('identité invité', () => {
   });
 
   it('exige un nom non vide', () => {
-    expect(() =>
-      guestCustomerSchema.parse({ name: '   ', email: 'x@essai.invalid' }),
-    ).toThrow();
+    expect(() => guestCustomerSchema.parse({ name: '   ', email: 'x@essai.invalid' })).toThrow();
   });
 
   it.each([
@@ -132,37 +170,24 @@ describe('identité invité', () => {
   });
 
   it('refuse un champ client inconnu', () => {
-    expect(() =>
-      guestCustomerSchema.parse({ ...INVITE, vip: true }),
-    ).toThrow();
+    expect(() => guestCustomerSchema.parse({ ...INVITE, vip: true })).toThrow();
   });
 
   it('borne les longueurs comme le contrôleur Odoo', () => {
-    expect(() =>
-      guestCustomerSchema.parse({ ...INVITE, name: 'a'.repeat(129) }),
-    ).toThrow();
-    expect(
-      guestCustomerSchema.parse({ ...INVITE, name: 'a'.repeat(128) }).name,
-    ).toHaveLength(128);
-    expect(() =>
-      guestCustomerSchema.parse({ ...INVITE, street: 'a'.repeat(201) }),
-    ).toThrow();
+    expect(() => guestCustomerSchema.parse({ ...INVITE, name: 'a'.repeat(129) })).toThrow();
+    expect(guestCustomerSchema.parse({ ...INVITE, name: 'a'.repeat(128) }).name).toHaveLength(128);
+    expect(() => guestCustomerSchema.parse({ ...INVITE, street: 'a'.repeat(201) })).toThrow();
   });
 
   it('met le code pays en majuscules et refuse les autres formes', () => {
-    expect(guestCustomerSchema.parse({ ...INVITE, country_code: 'sn' }).country_code)
-      .toBe('SN');
-    expect(() =>
-      guestCustomerSchema.parse({ ...INVITE, country_code: 'SEN' }),
-    ).toThrow();
-    expect(
-      guestCustomerSchema.parse({ ...INVITE, country_code: '' }).country_code,
-    ).toBeUndefined();
+    expect(guestCustomerSchema.parse({ ...INVITE, country_code: 'sn' }).country_code).toBe('SN');
+    expect(() => guestCustomerSchema.parse({ ...INVITE, country_code: 'SEN' })).toThrow();
+    expect(guestCustomerSchema.parse({ ...INVITE, country_code: '' }).country_code).toBeUndefined();
   });
 });
 
 describe('commande rendue', () => {
-  it('accepte la projection mesurée au checkout', () => {
+  it('accepte la projection Lot C mesurée au checkout', () => {
     expect(shopOrderSchema.parse(COMMANDE)).toEqual(COMMANDE);
   });
 
@@ -177,7 +202,7 @@ describe('commande rendue', () => {
     expect(() => shopOrderSchema.parse({ ...COMMANDE, ...extra })).toThrow();
   });
 
-  it('refuse un état inconnu', () => {
+  it('refuse un état commercial inconnu', () => {
     expect(() => shopOrderSchema.parse({ ...COMMANDE, status: 'done' })).toThrow();
   });
 
@@ -194,13 +219,42 @@ describe('commande rendue', () => {
     }
   });
 
+  it('une livraison cotée peut rendre un total global inconnu', () => {
+    const commande = shopOrderSchema.parse({
+      ...COMMANDE,
+      deliveryMode: 'delivery_to_confirm',
+      deliveryModeLabel: 'Livraison',
+      delivery: {
+        method: {
+          code: 'delivery_to_confirm', name: 'Livraison', kind: 'delivery', requiresAddress: true,
+        },
+        fee: { status: 'pending_quote', amount: null, currency: 'XOF' },
+        shippingAddress: {
+          name: 'Client', phone: '', street: 'Rue 1', street2: '', city: 'Dakar', zip: '', countryCode: 'SN',
+        },
+        fulfillment: { state: 'pending', label: 'En attente de préparation' },
+      },
+      grandTotal: null,
+    });
+    expect(commande.delivery.fee.amount).toBeNull();
+    expect(commande.grandTotal).toBeNull();
+  });
+
+  it('refuse un coût ou identifiant technique dans la projection livraison', () => {
+    expect(() => shopOrderSchema.parse({
+      ...COMMANDE,
+      delivery: {
+        ...DELIVERY,
+        method: { ...DELIVERY.method, id: 9 },
+      },
+    })).toThrow();
+  });
+
   it('refuse une ligne portant une clé de trop', () => {
-    expect(() =>
-      shopOrderSchema.parse({
-        ...COMMANDE,
-        lines: [{ ...COMMANDE.lines[0], price_unit: 1 }],
-      }),
-    ).toThrow();
+    expect(() => shopOrderSchema.parse({
+      ...COMMANDE,
+      lines: [{ ...COMMANDE.lines[0], price_unit: 1 }],
+    })).toThrow();
   });
 
   it('exige le drapeau de rejeu', () => {

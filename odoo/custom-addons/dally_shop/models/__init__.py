@@ -6,6 +6,7 @@ from . import shop_delivery
 from . import shop_delivery_fields
 from . import shop_order_workflow
 from . import shop_fulfillment
+from . import shop_confirmation_guard
 from . import shop_order_workflow_projection
 from . import shop_order_portal
 from . import res_config_settings

@@ -6,9 +6,14 @@ une adresse exploitable, et un client peut aussi demander une correction après 
 checkout. L'adresse figée reste donc modifiable par une action métier dédiée tant
 que la préparation n'a pas été autorisée. Elle n'est jamais rendue génériquement
 éditable sur ``sale.order``.
+
+Si des frais avaient déjà été cotés pour une méthode ``quote``, modifier l'adresse
+invalide cette cotation : l'état repasse à ``pending_quote`` et le client est
+informé qu'un nouveau montant doit être confirmé. Conserver l'ancien prix après
+un changement de destination donnerait une cohérence apparente mais fausse.
 """
 
-from odoo import _, api, fields, models
+from odoo import _, fields, models
 from odoo.exceptions import ValidationError
 
 
@@ -73,7 +78,11 @@ class SaleOrderShopShippingManagement(models.Model):
         self.ensure_one()
         self._dally_shop_shipping_edit_preconditions()
         snapshot = self._dally_shop_shipping_snapshot(self.partner_id, values)
-        self.sudo().write({
+        quote_invalidated = (
+            self.dally_shop_delivery_method_id.fee_policy == "quote"
+            and self.dally_shop_delivery_fee_state == "quoted"
+        )
+        update_values = {
             "dally_shop_shipping_name": snapshot["name"],
             "dally_shop_shipping_phone": snapshot["phone"] or False,
             "dally_shop_shipping_street": snapshot["street"],
@@ -83,7 +92,24 @@ class SaleOrderShopShippingManagement(models.Model):
             "dally_shop_shipping_country_code": snapshot["country_code"] or False,
             "dally_shop_shipping_updated_at": fields.Datetime.now(),
             "dally_shop_shipping_updated_by_id": self.env.user.id,
-        })
+        }
+        if quote_invalidated:
+            update_values.update({
+                "dally_shop_delivery_fee_state": "pending_quote",
+                "dally_shop_delivery_fee": 0.0,
+            })
+
+        self.sudo().write(update_values)
+
+        if quote_invalidated:
+            self._dally_shop_queue_delivery_notification(
+                _("Adresse de livraison mise à jour"),
+                _(
+                    "L'adresse de livraison de la commande %(reference)s a été "
+                    "mise à jour. Les frais de remise doivent être confirmés à nouveau.",
+                    reference=self.name,
+                ),
+            )
         return True
 
 

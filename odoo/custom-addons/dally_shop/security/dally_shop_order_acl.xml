@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            ACL de lecture sur les modèles natifs de Vente.
+
+            Elles vivent en XML plutôt que dans ir.model.access.csv car le
+            validateur statique du dépôt connaît strictement les modèles définis
+            par nos addons. `sale.order` et `sale.order.line` sont natifs : leur
+            présence est donc vérifiée au chargement réel du registre Odoo.
+
+            La frontière métier n'est pas l'ACL seule. Les record rules du fichier
+            dally_shop_order_rules.xml restreignent ensuite ces lectures aux seules
+            commandes portant dally_shop_order=True et à leurs lignes.
+        -->
+        <record id="access_shop_order_operations" model="ir.model.access">
+            <field name="name">sale.order boutique operations</field>
+            <field name="model_id" ref="sale.model_sale_order"/>
+            <field name="group_id" ref="dally_shop.group_dally_shop_operations"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="access_shop_order_line_operations" model="ir.model.access">
+            <field name="name">sale.order.line boutique operations</field>
+            <field name="model_id" ref="sale.model_sale_order_line"/>
+            <field name="group_id" ref="dally_shop.group_dally_shop_operations"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="access_shop_order_manager" model="ir.model.access">
+            <field name="name">sale.order boutique manager</field>
+            <field name="model_id" ref="sale.model_sale_order"/>
+            <field name="group_id" ref="dally_core.group_dally_manager"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="access_shop_order_line_manager" model="ir.model.access">
+            <field name="name">sale.order.line boutique manager</field>
+            <field name="model_id" ref="sale.model_sale_order_line"/>
+            <field name="group_id" ref="dally_core.group_dally_manager"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

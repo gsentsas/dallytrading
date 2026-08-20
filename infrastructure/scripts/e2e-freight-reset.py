@@ -118,6 +118,22 @@ else:
     if not projection_detail:
         problemes.append("dossier enrichi : projection absente")
     else:
+        # Le dossier stable doit représenter un état réellement publiable. Depuis
+        # Freight Pro, une règle globale masque aux externes les projections dont
+        # la politique d'état n'autorise pas le portail. Tester seulement colis /
+        # événements / documents laisserait donc passer une fixture complète mais
+        # volontairement invisible — exactement le faux positif rencontré ici.
+        if projection_detail.state != "in_transit":
+            problemes.append(
+                f"dossier enrichi : state={projection_detail.state}, attendu in_transit"
+            )
+        if "dally_portal_visible" in Projection._fields and not projection_detail.dally_portal_visible:
+            problemes.append("dossier enrichi : politique portail non visible")
+        if (
+            projection_detail.partner_id.commercial_partner_id
+            != detail.partner_id.commercial_partner_id
+        ):
+            problemes.append("dossier enrichi : proprietaire portail incoherent")
         if not env["dally.shipment.package"].sudo().search_count(
             [("shipment_id", "=", projection_detail.id)]
         ):

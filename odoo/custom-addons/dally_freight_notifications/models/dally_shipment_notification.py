@@ -52,9 +52,9 @@ class DallyShipmentNotification(models.Model):
     )
     email = fields.Char(
         string="Adresse",
-        help="Adresse qui sera utilisée pour l'envoi. Elle est initialisée lors "
-             "de la mise en file et rafraîchie avec l'adresse courante du "
-             "partenaire juste avant l'envoi.",
+        help="Adresse utilisée pour l'envoi. Initialisée lors de la mise en file "
+             "et rafraîchie avec l'adresse courante du partenaire juste avant "
+             "la livraison.",
     )
     language_code = fields.Char(
         string="Langue", readonly=True,
@@ -110,13 +110,13 @@ class DallyShipmentNotification(models.Model):
         for vals in vals_list:
             if vals.get("language_code"):
                 continue
-            partner = Partner.browse(vals.get("partner_id")).exists()
-            shipment = Shipment.browse(vals.get("shipment_id")).exists()
+            partner = Partner.browse(vals.get("partner_id") or []).exists()
+            shipment = Shipment.browse(vals.get("shipment_id") or []).exists()
             company = shipment.company_id if shipment else self.env.company
             vals["language_code"] = (
                 (partner.lang if partner else False)
                 or company.partner_id.lang
-                or self.env.lang
+                or self.env.context.get("lang")
                 or "fr_FR"
             )
         return super().create(vals_list)
@@ -135,7 +135,10 @@ class DallyShipmentNotification(models.Model):
             or not policy.notify_customer
         ):
             return MOTIF_POLITIQUE
-        if not policy.email_template_id:
+        if (
+            not policy.email_template_id
+            or policy.email_template_id.model != self._name
+        ):
             return MOTIF_SANS_GABARIT
         if not self.partner_id:
             return MOTIF_SANS_DESTINATAIRE
@@ -204,30 +207,48 @@ class DallyShipmentNotification(models.Model):
                 })
             return True
         except Exception as exc:  # SMTP/provider errors must not escape the cron.
-            values = {
+            self.sudo().write({
                 "attempts": attempt_no,
                 "last_error": self._dally_sanitize_delivery_error(exc),
                 "status": "failed" if attempt_no >= MAX_ATTEMPTS else "pending",
-            }
-            self.sudo().write(values)
+            })
             return False
 
     @api.model
     def _cron_process_pending_notifications(self):
-        """Claim and deliver at most one batch, safely across concurrent workers."""
-        self.env.cr.execute(
-            """
-            SELECT id
-              FROM dally_shipment_notification
-             WHERE status = 'pending'
-               AND attempts < %s
-             ORDER BY created_at, id
-             FOR UPDATE SKIP LOCKED
-             LIMIT %s
-            """,
-            (MAX_ATTEMPTS, CRON_BATCH_SIZE),
-        )
-        ids = [row[0] for row in self.env.cr.fetchall()]
-        for notification in self.browse(ids):
-            notification._dally_deliver_one()
-        return len(ids)
+        """Deliver at most one bounded batch, committing each claimed row.
+
+        A row is claimed with ``FOR UPDATE SKIP LOCKED``. Only one row is locked
+        at a time; after delivery, Odoo 19's cron progress API commits that row
+        before the next claim. This means a worker crash can at worst reopen the
+        SMTP ambiguity window for the single message being processed, not the
+        whole batch.
+        """
+        processed = 0
+        Cron = self.env["ir.cron"]
+
+        while processed < CRON_BATCH_SIZE:
+            self.env.cr.execute(
+                """
+                SELECT id
+                  FROM dally_shipment_notification
+                 WHERE status = 'pending'
+                   AND attempts < %s
+                 ORDER BY created_at, id
+                 FOR UPDATE SKIP LOCKED
+                 LIMIT 1
+                """,
+                (MAX_ATTEMPTS,),
+            )
+            row = self.env.cr.fetchone()
+            if not row:
+                break
+
+            self.browse(row[0])._dally_deliver_one()
+            processed += 1
+
+            # In a real ir.cron run this records progress and commits. When
+            # called manually, Odoo 19 documents that it simply commits.
+            Cron._commit_progress(processed=1)
+
+        return processed

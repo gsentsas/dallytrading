@@ -110,13 +110,30 @@ run_odoo_tests() {
       fail "tests Odoo"
     }
 
-  if grep -Eq ' (ERROR|CRITICAL) |Traceback|Failed to load registry|FAILED' "$WORK/freight-pro-tests.log"; then
-    grep -E ' (ERROR|CRITICAL) |Traceback|Failed to load registry|FAILED' \
-      "$WORK/freight-pro-tests.log" | tail -60 >&2
-    fail "journal de tests Odoo non propre"
+  # Plusieurs tests de sécurité/concurrence provoquent volontairement des
+  # erreurs SQL/HTTP puis vérifient qu'elles sont correctement traitées. Les
+  # mots ERROR et Traceback ne sont donc pas, à eux seuls, un verdict de suite.
+  # Le résultat autoritatif est le résumé Odoo, complété par les erreurs de
+  # registre/CRITICAL qui restent toujours bloquantes.
+  if grep -Eq 'Failed to load registry| CRITICAL ' "$WORK/freight-pro-tests.log"; then
+    grep -E 'Failed to load registry| CRITICAL ' \
+      "$WORK/freight-pro-tests.log" | tail -40 >&2
+    fail "registre Odoo ou erreur critique pendant les tests"
   fi
 
-  grep -E '[0-9]+ tests|0 failed|0 error' "$WORK/freight-pro-tests.log" | tail -10 || true
+  local result_line
+  result_line="$(grep -E 'odoo\.tests\.result: [0-9]+ failed, [0-9]+ error\(s\) of [0-9]+ tests' \
+    "$WORK/freight-pro-tests.log" | tail -1 || true)"
+
+  if [ -z "$result_line" ]; then
+    tail -120 "$WORK/freight-pro-tests.log" >&2
+    fail "résumé final des tests Odoo introuvable"
+  fi
+
+  printf '   %s\n' "$result_line"
+  printf '%s\n' "$result_line" \
+    | grep -Eq 'odoo\.tests\.result: 0 failed, 0 error\(s\) of [1-9][0-9]* tests' \
+    || fail "suite Odoo non verte"
 }
 
 verify_release_models() {

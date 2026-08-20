@@ -307,7 +307,8 @@ class TestPortailCommandes(TransactionCase):
             set(projection),
             {"reference", "date", "stateLabel", "currency", "amountUntaxed",
              "amountTax", "amountTotal", "deliveryMode", "deliveryModeLabel",
-             "itemCount"},
+             "deliveryFeeStatus", "deliveryFee", "grandTotal",
+             "fulfillmentState", "fulfillmentLabel", "itemCount"},
         )
 
     def test_projection_de_detail_exactement_ses_cles(self):
@@ -316,16 +317,14 @@ class TestPortailCommandes(TransactionCase):
             set(projection),
             {"reference", "date", "state", "stateLabel", "deliveryMode",
              "deliveryModeLabel", "currency", "amountUntaxed", "amountTax",
-             "amountTotal", "lines", "deliveryAddress"},
+             "amountTotal", "deliveryFeeStatus", "deliveryFee", "grandTotal",
+             "fulfillmentState", "fulfillmentLabel", "lines", "deliveryAddress"},
         )
         self.assertEqual(
             set(projection["lines"][0]),
             {"productName", "quantity", "unitPrice", "subtotal"},
         )
-        self.assertEqual(
-            set(projection["deliveryAddress"]),
-            {"name", "street", "city", "zip", "country"},
-        )
+        self.assertIsNone(projection["deliveryAddress"])
 
     def test_les_montants_et_les_lignes_sont_exacts(self):
         projection = self.commande_a._dally_shop_portal_detail()
@@ -339,6 +338,11 @@ class TestPortailCommandes(TransactionCase):
             projection["amountTotal"],
             projection["amountUntaxed"] + projection["amountTax"],
         )
+        self.assertEqual(projection["deliveryFeeStatus"], "free")
+        self.assertEqual(projection["deliveryFee"], 0.0)
+        self.assertEqual(projection["grandTotal"], projection["amountTotal"])
+        self.assertEqual(projection["fulfillmentState"], "pending")
+        self.assertTrue(projection["fulfillmentLabel"])
 
     def test_le_compte_darticles_est_celui_du_panier(self):
         """`itemCount` compte les articles, pas les lignes.
@@ -400,19 +404,25 @@ class TestPortailCommandes(TransactionCase):
             self.assertNotIn(f'"{clef}"', corpus)
 
     def test_la_projection_marche_sous_lutilisateur_du_client(self):
-        """Le vrai test d'intégration : projeter sans `sudo()`.
+        """Le recordset commande reste sous l'identité réelle du client.
 
-        Si la projection lisait un champ que le portail n'a pas le droit de lire,
-        elle lèverait `AccessError` ici — et le contrôleur, lui, tomberait en 500
-        en production. Ce test est le seul qui l'attrape.
+        La méthode de remise n'a volontairement aucune ACL portail générique : la
+        projection peut élever uniquement ce petit record de configuration pour
+        lire les champs explicitement publics. La commande, ses règles et son
+        cloisonnement ne doivent jamais passer en sudo.
         """
         self.env.invalidate_all()
+        Method = self.env["dally.shop.delivery.method"].with_user(self.user_a)
+        with self.assertRaises(AccessError):
+            Method.check_access("read")
+
         commande = self.commande_a.with_user(self.user_a)
         liste = commande._dally_shop_portal_list()
         detail = commande._dally_shop_portal_detail()
         self.assertEqual(liste[0]["reference"], self.commande_a.name)
+        self.assertEqual(liste[0]["deliveryMode"], "pickup")
         self.assertEqual(detail["lines"][0]["unitPrice"], PRIX_TARIF)
-        self.assertEqual(detail["deliveryAddress"]["name"], self.client_a.name)
+        self.assertIsNone(detail["deliveryAddress"])
 
 
 @tagged("post_install", "-at_install", "dally_shop")

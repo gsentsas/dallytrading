@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Vues volontairement distinctes de celles de l'application Vente.
+
+        Le premier lot E-commerce Pro est une console de lecture : voir ce que la
+        boutique a reçu sans accorder les droits généraux de Sales et sans laisser
+        croire qu'une commande publique peut déjà être confirmée, facturée ou
+        expédiée depuis ce nouvel écran.
+    -->
+    <record id="view_dally_shop_order_list" model="ir.ui.view">
+        <field name="name">sale.order.list.dally.shop</field>
+        <field name="model">sale.order</field>
+        <field name="priority" eval="99"/>
+        <field name="arch" type="xml">
+            <list string="Commandes boutique" create="0" edit="0" delete="0">
+                <field name="name" string="Commande"/>
+                <field name="date_order"/>
+                <field name="partner_id"/>
+                <field name="dally_shop_guest" optional="show"/>
+                <field name="dally_shop_delivery_mode"/>
+                <field name="state"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="amount_total" sum="Total"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_dally_shop_order_form" model="ir.ui.view">
+        <field name="name">sale.order.form.dally.shop</field>
+        <field name="model">sale.order</field>
+        <field name="priority" eval="99"/>
+        <field name="arch" type="xml">
+            <form string="Commande boutique" create="0" edit="0" delete="0">
+                <header>
+                    <field name="state" widget="statusbar" readonly="1"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" string="Commande"/>
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Client">
+                            <field name="partner_id" readonly="1"/>
+                            <field name="date_order" readonly="1"/>
+                            <field name="dally_shop_guest" readonly="1"/>
+                        </group>
+                        <group string="Remise">
+                            <field name="dally_shop_delivery_mode" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Montants">
+                        <group>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="amount_untaxed" readonly="1"/>
+                            <field name="amount_tax" readonly="1"/>
+                            <field name="amount_total" readonly="1"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="status">
+                        Ce premier écran E-commerce Pro est en lecture seule. La
+                        validation commerciale, le paiement, la facturation et la
+                        préparation seront ajoutés dans des lots séparés avec leurs
+                        propres garde-fous.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_dally_shop_order_search" model="ir.ui.view">
+        <field name="name">sale.order.search.dally.shop</field>
+        <field name="model">sale.order</field>
+        <field name="priority" eval="99"/>
+        <field name="arch" type="xml">
+            <search string="Commandes boutique">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <filter name="shop_waiting"
+                        string="À valider"
+                        domain="[('state', 'in', ['draft', 'sent'])]"/>
+                <filter name="shop_confirmed"
+                        string="Validées"
+                        domain="[('state', '=', 'sale')]"/>
+                <filter name="shop_cancelled"
+                        string="Annulées"
+                        domain="[('state', '=', 'cancel')]"/>
+                <separator/>
+                <filter name="shop_guest"
+                        string="Invités"
+                        domain="[('dally_shop_guest', '=', True)]"/>
+                <group>
+                    <filter name="group_state"
+                            string="État"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_delivery_mode"
+                            string="Mode de remise"
+                            context="{'group_by': 'dally_shop_delivery_mode'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="dally_shop_order_action" model="ir.actions.act_window">
+        <field name="name">Commandes boutique</field>
+        <field name="res_model">sale.order</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('dally_shop_order', '=', True)]</field>
+        <field name="context">{'search_default_shop_waiting': 1}</field>
+        <field name="search_view_id" ref="view_dally_shop_order_search"/>
+    </record>
+
+    <record id="dally_shop_order_action_list" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_dally_shop_order_list"/>
+        <field name="act_window_id" ref="dally_shop_order_action"/>
+    </record>
+
+    <record id="dally_shop_order_action_form" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_dally_shop_order_form"/>
+        <field name="act_window_id" ref="dally_shop_order_action"/>
+    </record>
+
+</odoo>

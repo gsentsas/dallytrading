@@ -164,8 +164,12 @@ dally_menu = env.ref('dally_freight_dashboard.menu_dally_freight_dashboard')
 assert not vendor_menu.active
 assert dally_menu.active
 
-assert env['dally.trade.opportunity']
-assert env['dally.sourcing.request']
+# Un recordset vide est faux en booléen : env['model'] ne vérifie donc pas la
+# présence d'un modèle quand la table ne contient encore aucun enregistrement.
+# Les canaris voisins portent sur l'installation des modules, pas sur leurs
+# données métier ; on vérifie directement le registre Odoo.
+assert 'dally.trade.opportunity' in env.registry
+assert 'dally.sourcing.request' in env.registry
 
 print('FREIGHT_PRO_CANARIES_OK')
 env.cr.rollback()

@@ -7,3 +7,4 @@ from . import test_product_image
 from . import test_product_gallery
 from . import test_gallery_backoffice
 from . import test_order_backoffice
+from . import test_order_workflow

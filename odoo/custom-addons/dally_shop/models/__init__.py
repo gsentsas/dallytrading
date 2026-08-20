@@ -4,6 +4,7 @@ from . import product_template
 from . import shop_order
 from . import shop_delivery
 from . import shop_delivery_currency
+from . import shop_delivery_contract
 from . import shop_delivery_immutability
 from . import shop_delivery_fields
 from . import shop_delivery_atomic

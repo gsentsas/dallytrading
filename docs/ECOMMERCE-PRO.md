@@ -27,10 +27,11 @@ Le socle `dally_shop` fournit :
 - neutralisation du portail natif Sale.
 
 Le checkout ne confirme jamais la vente Odoo. La validation commerciale Lot B ne
-la confirme pas non plus. Au Lot C, `action_confirm()` n'est autorisé que par une
-action métier explicite d'autorisation de préparation, après validation
-commerciale et après résolution des frais de remise. Le Lot C ne suppose aucun
-paiement : le Lot D décidera si et quand un paiement devient une précondition.
+la confirme pas non plus. Au Lot C, `action_confirm()` est verrouillé au niveau du
+modèle pour les commandes boutique et n'est ouvert que par l'action métier
+explicite d'autorisation de préparation, après validation commerciale, frais
+résolus et adresse complète. Le Lot C ne suppose aucun paiement : le Lot D
+décidera si et quand un paiement devient une précondition.
 
 ## 2. Principes
 
@@ -43,8 +44,11 @@ paiement : le Lot D décidera si et quand un paiement devient une précondition.
 7. **Projection client par liste blanche.** Aucun nouveau champ Odoo ne traverse automatiquement.
 8. **Notifications asynchrones.** Les actions métier mettent des messages dans `mail.mail`, sans SMTP synchrone.
 9. **Méthode de remise résolue côté Odoo.** Le navigateur transmet uniquement un code public actif, jamais un identifiant ORM ni un montant.
-10. **Snapshot logistique.** La méthode, les frais et l'adresse applicables sont figés sur la commande ; modifier le catalogue de livraison ne réécrit pas l'historique.
-11. **Confirmation native explicitement gardée.** Seule l'autorisation de préparation Lot C peut appeler `sale.order.action_confirm()`.
+10. **Historique logistique stable.** Méthode, frais et adresse sont figés sur la commande ; une méthode déjà utilisée ne peut plus changer de définition et doit être remplacée par une nouvelle version.
+11. **Devise cohérente.** Un frais fixe configuré dans une autre devise est converti vers la devise du tarif boutique avant d'être figé sur la commande.
+12. **Adresse corrigeable avant engagement seulement.** L'opérateur peut corriger le snapshot avant préparation ; une adresse modifiée après cotation invalide le montant `quote` et impose une nouvelle cotation.
+13. **Confirmation native explicitement gardée.** Seule l'autorisation de préparation Lot C peut appeler `sale.order.action_confirm()` sur une commande boutique.
+14. **Atomicité du checkout.** Création de la commande, transition initiale et snapshot de remise sont englobés dans une même portée transactionnelle.
 
 ## 3. Lots
 
@@ -84,11 +88,17 @@ Le Lot C ajoute :
 - types `pickup` et `delivery` ;
 - politiques de frais `free`, `fixed`, `quote` ;
 - méthodes par défaut `pickup` et `delivery_to_confirm` ;
+- bornes Odoo alignées sur le contrat public Next ;
+- définition d'une méthode rendue immuable dès sa première utilisation ;
 - adresse de livraison distincte si nécessaire ;
+- correction backoffice gardée de l'adresse avant préparation ;
 - snapshot de l'adresse, de la méthode et des frais sur `sale.order` ;
+- conversion des frais fixes dans la devise réelle de la commande ;
 - total global seulement lorsque les frais sont connus ;
 - cotation manuelle des frais à confirmer ;
-- autorisation explicite de préparation ;
+- invalidation et nouvelle cotation obligatoires quand une destination change après devis de livraison ;
+- verrou global de `sale.order.action_confirm()` pour les commandes boutique ;
+- autorisation explicite de préparation comme unique ouverture de ce verrou ;
 - suivi `pending → preparing → ready`, puis `picked_up` pour un retrait ou
   `out_for_delivery → delivered` pour une livraison ;
 - journal immuable `dally.shop.fulfillment.event` ;
@@ -102,6 +112,11 @@ commerciale et cotation des frais. L'action « Autoriser la préparation » est 
 seul point Lot C pouvant confirmer la vente native. Une commande déjà engagée en
 préparation ne peut plus être annulée par le simple workflow Lot B : une future
 annulation logistique devra traiter les effets Stock avant de fermer la commande.
+
+Les commandes historiques de livraison qui n'avaient pas d'adresse exploitable ne
+sont pas bloquées définitivement : l'opérateur peut compléter leur snapshot par
+l'action dédiée avant l'autorisation de préparation, sans ouvrir l'écriture libre
+de `sale.order`.
 
 ### Lot D — Paiement
 

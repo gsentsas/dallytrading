@@ -21,7 +21,10 @@ ODOO_PORT="${FE2E_ODOO_PORT:-18379}"
 BASE_URL="http://127.0.0.1:${NEXT_PORT}"
 PLAYWRIGHT_IMAGE="${FE2E_PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.62.1-noble}"
 
-NEW_MODULES="dally_freight_data,dally_freight_routing,dally_freight_dashboard,dally_freight_notifications"
+# Le harnais historique installe déjà le noyau Freight/Portal/Shop. On ajoute
+# ici le reste du lot et les deux modules voisins dont la non-régression est
+# explicitement exigée par le chantier.
+NEW_MODULES="dally_sourcing,dally_trade,dally_freight_data,dally_freight_routing,dally_freight_dashboard,dally_freight_notifications"
 TEST_MODULES="dally_core,dally_crm,dally_api,dally_freight,dally_tracking,dally_portal,dally_freight_bridge,dally_shop,dally_sourcing,dally_trade,dally_freight_data,dally_freight_routing,dally_freight_dashboard,dally_freight_notifications"
 
 log() { printf '\n\033[1m── %s\033[0m\n' "$*"; }
@@ -107,6 +110,9 @@ dally_menu = env.ref('dally_freight_dashboard.menu_dally_freight_dashboard')
 assert not vendor_menu.active
 assert dally_menu.active
 
+assert env['dally.trade.opportunity']
+assert env['dally.sourcing.request']
+
 print('FREIGHT_PRO_CANARIES_OK')
 env.cr.rollback()
 PY
@@ -126,18 +132,42 @@ run_browser_suite() {
     npx playwright test --output=/tmp/pw-out e2e/17-devis-routing.spec.ts
 }
 
-assert_main_untouched() {
+verify_public_routing_submission() {
+  log "vérification en base du devis public structuré"
+  docker exec -i "$ODOO_CONTAINER" \
+    odoo shell -c /etc/odoo/odoo.conf -d "$DB" --no-http <<'PY'
+Quote = env['dally.quote.request']
+quotes = Quote.search([
+    ('origin_port_id.code', '=', 'FRLEH'),
+    ('destination_port_id.code', '=', 'SNDKR'),
+], order='id desc', limit=5)
+assert quotes, 'aucun devis public Le Havre -> Dakar trouvé'
+quote = quotes[0]
+assert quote.origin_port_id.code == 'FRLEH'
+assert quote.destination_port_id.code == 'SNDKR'
+if quote.incoterm_id:
+    assert quote.incoterm_id.code == 'FOB'
+print('FREIGHT_PUBLIC_ROUTING_DB_OK', quote.reference)
+env.cr.rollback()
+PY
+}
+
+assert_worktree_clean() {
   log "garde-fou Git"
-  local branch
+  local branch dirty
   branch="$(git -C "$ROOT" branch --show-current)"
   printf '   branche: %s\n' "$branch"
   git -C "$ROOT" diff --check
-  git -C "$ROOT" status --porcelain
+  dirty="$(git -C "$ROOT" status --porcelain)"
+  if [ -n "$dirty" ]; then
+    printf '%s\n' "$dirty" >&2
+    fail "worktree non propre avant validation"
+  fi
 }
 
 main() {
   assert_isolated
-  assert_main_untouched
+  assert_worktree_clean
 
   log "montage de la pile jetable"
   "$HARNESS" up
@@ -146,6 +176,7 @@ main() {
   run_odoo_tests
   verify_release_models
   run_browser_suite
+  verify_public_routing_submission
 
   log "FREIGHT PRO — RELEASE CANDIDATE VALIDATED"
   echo "   Production touched: NO"

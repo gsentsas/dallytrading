@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="dally_shipment_notification_view_search" model="ir.ui.view">
+        <field name="name">dally.shipment.notification.search</field>
+        <field name="model">dally.shipment.notification</field>
+        <field name="arch" type="xml">
+            <search string="Notifications client">
+                <field name="shipment_reference"/>
+                <field name="partner_id"/>
+                <field name="email"/>
+                <field name="state"/>
+                <separator/>
+                <filter name="filter_pending" string="En attente"
+                        domain="[('status', '=', 'pending')]"/>
+                <filter name="filter_failed" string="En échec"
+                        domain="[('status', '=', 'failed')]"/>
+                <filter name="filter_sent" string="Envoyées"
+                        domain="[('status', '=', 'sent')]"/>
+                <filter name="filter_skipped" string="Ignorées"
+                        domain="[('status', '=', 'skipped')]"/>
+                <separator/>
+                <filter name="group_status" string="Statut"
+                        context="{'group_by': 'status'}"/>
+                <filter name="group_state" string="Étape Freight"
+                        context="{'group_by': 'state'}"/>
+                <filter name="group_shipment" string="Expédition"
+                        context="{'group_by': 'shipment_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="dally_shipment_notification_action" model="ir.actions.act_window">
+        <field name="search_view_id" ref="dally_shipment_notification_view_search"/>
+    </record>
+
+    <record id="dally_shipment_notification_view_form_ops" model="ir.ui.view">
+        <field name="name">dally.shipment.notification.form.ops</field>
+        <field name="model">dally.shipment.notification</field>
+        <field name="inherit_id" ref="dally_shipment_notification_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <header>
+                    <button name="action_retry_delivery"
+                            type="object"
+                            string="Remettre en file"
+                            class="btn-primary"
+                            groups="dally_core.group_dally_manager"
+                            invisible="status != 'failed'"
+                            confirm="Remettre cette notification en file ? L'envoi sera effectué par le cron, pas immédiatement."/>
+                </header>
+            </xpath>
+            <xpath expr="//field[@name='attempts']" position="after">
+                <field name="manual_retry_count"/>
+                <field name="last_retry_at"/>
+            </xpath>
+            <xpath expr="//field[@name='tracking_url']" position="after">
+                <field name="language_code"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="dally_shipment_notification_view_list_ops" model="ir.ui.view">
+        <field name="name">dally.shipment.notification.list.ops</field>
+        <field name="model">dally.shipment.notification</field>
+        <field name="inherit_id" ref="dally_shipment_notification_view_list"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='attempts']" position="after">
+                <field name="manual_retry_count" optional="hide"/>
+                <field name="last_retry_at" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="dally_shipment_view_form_notification_ops" model="ir.ui.view">
+        <field name="name">dally.shipment.form.notification.ops</field>
+        <field name="model">dally.shipment</field>
+        <field name="inherit_id" ref="dally_freight.dally_shipment_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet/div[@class='oe_title']" position="after">
+                <div class="oe_button_box" name="button_box">
+                    <button name="action_view_notifications"
+                            type="object"
+                            class="oe_stat_button"
+                            icon="fa-envelope"
+                            groups="dally_core.group_dally_readonly">
+                        <field name="notification_count" widget="statinfo"
+                               string="Notifications"/>
+                    </button>
+                    <button name="action_view_failed_notifications"
+                            type="object"
+                            class="oe_stat_button"
+                            icon="fa-exclamation-triangle"
+                            groups="dally_core.group_dally_readonly"
+                            invisible="notification_failed_count == 0">
+                        <field name="notification_failed_count" widget="statinfo"
+                               string="Échecs"/>
+                    </button>
+                    <button name="action_view_pending_notifications"
+                            type="object"
+                            class="oe_stat_button"
+                            icon="fa-clock-o"
+                            groups="dally_core.group_dally_readonly"
+                            invisible="notification_pending_count == 0">
+                        <field name="notification_pending_count" widget="statinfo"
+                               string="En attente"/>
+                    </button>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

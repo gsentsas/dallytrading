@@ -16,8 +16,13 @@ La protection contre les doublons est garantie pour la concurrence base de
 données et les rejeux normaux du cron. SMTP ne fournit pas de clé
 d'idempotence externe : un crash après acceptation SMTP mais avant commit peut
 théoriquement produire un second envoi lors d'un retry.
+
+Le back-office expose enfin la santé de la file depuis le dossier Freight :
+compteurs en attente/échec, filtres opérationnels et relance manuelle réservée
+au Manager. La relance remet uniquement en file ; elle n'envoie jamais depuis
+l'interface et repasse par toutes les validations du cron.
 """,
-    "version": "19.0.1.1.0",
+    "version": "19.0.1.2.0",
     "category": "Inventory/Delivery",
     "author": "DallyTrading",
     "website": "https://dallytrading.com",
@@ -30,6 +35,7 @@ théoriquement produire un second envoi lors d'un retry.
         "data/dally_freight_state_policy_data.xml",
         "data/ir_cron_data.xml",
         "views/dally_freight_notifications_views.xml",
+        "views/notification_ops_views.xml",
     ],
     "installable": True,
     "application": False,

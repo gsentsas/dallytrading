@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <record id="delivery_method_pickup" model="dally.shop.delivery.method">
+            <field name="name">Retrait sur place</field>
+            <field name="code">pickup</field>
+            <field name="sequence">10</field>
+            <field name="kind">pickup</field>
+            <field name="fee_policy">free</field>
+            <field name="fixed_fee">0</field>
+            <field name="client_help">Vous venez chercher votre commande dans nos locaux. Aucun frais de remise.</field>
+        </record>
+
+        <record id="delivery_method_delivery_to_confirm" model="dally.shop.delivery.method">
+            <field name="name">Livraison</field>
+            <field name="code">delivery_to_confirm</field>
+            <field name="sequence">20</field>
+            <field name="kind">delivery</field>
+            <field name="fee_policy">quote</field>
+            <field name="fixed_fee">0</field>
+            <field name="client_help">Le coût de la livraison est confirmé par DallyTrading selon la destination avant préparation.</field>
+        </record>
+
+    </data>
+</odoo>

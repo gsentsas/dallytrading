@@ -94,6 +94,31 @@ class TestShippingManagement(TransactionCase):
         with self.assertRaises(AccessError):
             readonly._dally_shop_set_shipping_address(self._address())
 
+    def test_changement_adresse_invalide_une_cotation_existante(self):
+        order = self._order()
+        operated = self.env["sale.order"].with_user(self.operator).browse(order.id)
+        operated._dally_shop_set_shipping_address(self._address())
+        operated._dally_shop_set_delivery_fee(1500.0)
+        order.invalidate_recordset()
+        self.assertEqual(order.dally_shop_delivery_fee_state, "quoted")
+
+        operated._dally_shop_set_shipping_address({
+            **self._address(),
+            "street": "20 avenue du Nouveau Dépôt",
+        })
+        order.invalidate_recordset()
+
+        self.assertEqual(order.dally_shop_shipping_street, "20 avenue du Nouveau Dépôt")
+        self.assertEqual(order.dally_shop_delivery_fee_state, "pending_quote")
+        self.assertEqual(order.dally_shop_delivery_fee, 0.0)
+        self.assertEqual(order.state, "draft")
+
+        # La nouvelle destination peut ensuite recevoir une nouvelle cotation.
+        operated._dally_shop_set_delivery_fee(2000.0)
+        order.invalidate_recordset()
+        self.assertEqual(order.dally_shop_delivery_fee_state, "quoted")
+        self.assertEqual(order.dally_shop_delivery_fee, 2000.0)
+
     def test_adresse_est_gelee_apres_autorisation_preparation(self):
         order = self._order()
         operated = self.env["sale.order"].with_user(self.operator).browse(order.id)

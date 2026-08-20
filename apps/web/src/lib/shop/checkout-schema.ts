@@ -1,15 +1,21 @@
 /**
- * Le contrat du formulaire de commande, et la commande rendue.
+ * Contrats stricts du checkout E-commerce Pro.
  *
- * Le navigateur n'envoie ni prix, ni identifiant de panier, ni identifiant de
- * client, ni lignes. Les lignes et l'identifiant vivent dans le cookie scellé et
- * le BFF les lit côté serveur. Tous les schémas restent stricts : une clé inconnue
- * est une erreur, jamais une donnée silencieusement ignorée.
+ * Le navigateur ne fournit ni prix, ni identifiant de panier, ni lignes : le BFF
+ * les reconstruit depuis le cookie scellé. Au Lot C, il choisit seulement le code
+ * public d'une méthode de remise et, si cette méthode livre, une adresse. Les
+ * frais reviennent d'Odoo dans la projection de commande ; aucun montant n'est
+ * accepté dans la requête.
  */
 
 import { z } from 'zod';
 
-export const deliveryModeSchema = z.enum(['pickup', 'delivery_to_confirm']);
+import {
+  deliveryMethodCodeSchema,
+  shippingAddressSchema,
+} from './delivery';
+
+export const deliveryModeSchema = deliveryMethodCodeSchema;
 export type DeliveryMode = z.infer<typeof deliveryModeSchema>;
 
 const texte = (max: number) =>
@@ -60,6 +66,7 @@ export const checkoutRequestSchema = z
   .object({
     deliveryMode: deliveryModeSchema,
     customer: guestCustomerSchema.optional(),
+    shipping: shippingAddressSchema.optional(),
   })
   .strict();
 export type CheckoutRequest = z.infer<typeof checkoutRequestSchema>;
@@ -74,13 +81,7 @@ export const orderLineSchema = z
   })
   .strict();
 
-/**
- * État public du workflow boutique.
- *
- * Il est séparé de `sale.order.state`. Une commande peut être `validated` ici
- * tout en restant `draft` dans Vente : le Lot B n'a pas le droit de déclencher
- * picking, facture ou paiement.
- */
+/** État public du workflow commercial, séparé de `sale.order.state`. */
 export const shopWorkflowStateSchema = z.enum([
   'received',
   'validated',
@@ -89,16 +90,75 @@ export const shopWorkflowStateSchema = z.enum([
 ]);
 export type ShopWorkflowState = z.infer<typeof shopWorkflowStateSchema>;
 
+export const deliveryFeeStateSchema = z.enum([
+  'free',
+  'fixed',
+  'pending_quote',
+  'quoted',
+]);
+
+export const fulfillmentStateSchema = z.enum([
+  'pending',
+  'preparing',
+  'ready',
+  'out_for_delivery',
+  'delivered',
+  'picked_up',
+]);
+
+const orderDeliveryMethodSchema = z
+  .object({
+    code: deliveryMethodCodeSchema,
+    name: z.string().min(1).max(128),
+    kind: z.enum(['pickup', 'delivery']),
+    requiresAddress: z.boolean(),
+  })
+  .strict();
+
+const publicShippingAddressSchema = z
+  .object({
+    name: z.string().max(128),
+    phone: z.string().max(32),
+    street: z.string().max(200),
+    street2: z.string().max(200),
+    city: z.string().max(100),
+    zip: z.string().max(20),
+    countryCode: z.string().regex(/^$|^[A-Z]{2}$/),
+  })
+  .strict();
+
+export const orderDeliverySchema = z
+  .object({
+    method: orderDeliveryMethodSchema,
+    fee: z
+      .object({
+        status: deliveryFeeStateSchema,
+        amount: z.number().nonnegative().nullable(),
+        currency: z.string().min(1).max(8),
+      })
+      .strict(),
+    shippingAddress: publicShippingAddressSchema.nullable(),
+    fulfillment: z
+      .object({
+        state: fulfillmentStateSchema,
+        label: z.string().min(1).max(128),
+      })
+      .strict(),
+  })
+  .strict();
+
 export const shopOrderSchema = z
   .object({
     reference: z.string().min(1),
     status: shopWorkflowStateSchema,
     deliveryMode: deliveryModeSchema,
-    deliveryModeLabel: z.string(),
+    deliveryModeLabel: z.string().min(1),
     currency: z.string().min(1),
     amountUntaxed: z.number().nonnegative(),
     amountTax: z.number().nonnegative(),
     amountTotal: z.number().nonnegative(),
+    delivery: orderDeliverySchema,
+    grandTotal: z.number().nonnegative().nullable(),
     lines: z.array(orderLineSchema),
     replayed: z.boolean(),
   })

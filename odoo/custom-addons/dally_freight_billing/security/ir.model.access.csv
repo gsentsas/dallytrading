@@ -5,3 +5,8 @@ access_dally_freight_tariff_family_manager,dally.freight.tariff.family manager,m
 access_dally_freight_tariff_rule_readonly,dally.freight.tariff.rule read-only,model_dally_freight_tariff_rule,dally_core.group_dally_readonly,1,0,0,0
 access_dally_freight_tariff_rule_finance,dally.freight.tariff.rule finance,model_dally_freight_tariff_rule,dally_core.group_dally_finance,1,1,1,0
 access_dally_freight_tariff_rule_manager,dally.freight.tariff.rule manager,model_dally_freight_tariff_rule,dally_core.group_dally_manager,1,1,1,1
+access_dally_freight_collection_readonly,dally.freight.collection read-only,model_dally_freight_collection,dally_core.group_dally_readonly,1,0,0,0
+access_dally_freight_collection_finance,dally.freight.collection finance,model_dally_freight_collection,dally_core.group_dally_finance,1,1,1,0
+access_dally_freight_collection_manager,dally.freight.collection manager,model_dally_freight_collection,dally_core.group_dally_manager,1,1,1,1
+access_dally_freight_payment_channel_finance,dally.freight.payment.channel finance,model_dally_freight_payment_channel,dally_core.group_dally_finance,1,1,1,0
+access_dally_freight_payment_channel_manager,dally.freight.payment.channel manager,model_dally_freight_payment_channel,dally_core.group_dally_manager,1,1,1,1

@@ -7,6 +7,7 @@ from odoo.addons.dally_api.controllers.main import DallyApiController, DallyApiE
 
 
 ALLOWED_FIELDS = frozenset({"request_uuid", "external_reference", "shipment_id"})
+BILLING_GROUP = "dally_freight_billing.group_dally_freight_billing_api"
 
 
 class DallyFreightInvoiceController(DallyApiController):
@@ -28,6 +29,13 @@ class DallyFreightInvoiceController(DallyApiController):
         )
 
     def _prepare_invoice(self, env, payload, api_key):
+        if not env.user.has_group(BILLING_GROUP):
+            raise DallyApiError(
+                403,
+                "forbidden",
+                _("This API user is not allowed to prepare freight invoices."),
+            )
+
         unknown = sorted(set(payload) - ALLOWED_FIELDS)
         if unknown:
             raise DallyApiError(

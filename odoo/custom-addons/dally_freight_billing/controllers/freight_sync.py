@@ -48,6 +48,7 @@ LINE_FIELDS = frozenset({
 })
 
 MAX_LINES_PER_REQUEST = 200
+SYNC_GROUP = "dally_freight_billing.group_dally_freight_sync_api"
 
 
 class DallyFreightSyncController(DallyApiController):
@@ -69,6 +70,17 @@ class DallyFreightSyncController(DallyApiController):
         )
 
     def _sync_freight(self, env, payload, api_key):
+        # A scope is a capability label on the key, not a substitute for the
+        # Odoo rights envelope.  Only the dedicated spreadsheet integration
+        # identity may execute this endpoint, even if another API user is given
+        # the same scope by mistake.
+        if not env.user.has_group(SYNC_GROUP):
+            raise DallyApiError(
+                403,
+                "forbidden",
+                _("This API user is not allowed to synchronise freight files."),
+            )
+
         clean = self._clean_payload(payload)
         self._require(clean, "external_reference", "transport_mode", "direction")
 

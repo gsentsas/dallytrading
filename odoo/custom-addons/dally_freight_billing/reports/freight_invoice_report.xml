@@ -1,0 +1,822 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record
+        id="paperformat_dally_freight_invoice"
+        model="report.paperformat"
+    >
+        <field name="name">
+            DallyTrading Freight Invoice A4
+        </field>
+        <field name="default" eval="False"/>
+        <field name="format">A4</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">8</field>
+        <field name="margin_bottom">10</field>
+        <field name="margin_left">10</field>
+        <field name="margin_right">10</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <record
+        id="action_report_dally_freight_invoice"
+        model="ir.actions.report"
+    >
+        <field name="name">
+            Facture DallyTrading Fret
+        </field>
+        <field name="model">account.move</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">dally_freight_billing.report_freight_invoice</field>
+        <field name="report_file">dally_freight_billing.report_freight_invoice</field>
+        <field
+            name="paperformat_id"
+            ref="paperformat_dally_freight_invoice"
+        />
+        <field
+            name="binding_model_id"
+            ref="account.model_account_move"
+        />
+        <field name="binding_type">report</field>
+        <field name="print_report_name">
+            'Facture_DallyTrading_%s' % (
+                object.dally_freight_shipment_id.external_reference
+                or object.name
+                or object.id
+            )
+        </field>
+    </record>
+
+    <template id="report_freight_invoice">
+        <t t-call="web.html_container">
+
+            <t t-foreach="docs" t-as="o">
+
+                <t
+                    t-if="o.dally_freight_shipment_id"
+                    t-set="ctx"
+                    t-value="o.dally_freight_report_context()"
+                />
+
+                <div
+                    t-if="o.dally_freight_shipment_id"
+                    class="page"
+                    style="
+                        font-family: Arial, Helvetica, sans-serif;
+                        color: #17324d;
+                        font-size: 10pt;
+                    "
+                >
+
+                    <!-- HEADER -->
+                    <table
+                        style="
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-bottom: 20px;
+                        "
+                    >
+                        <tr>
+                            <td
+                                style="
+                                    width: 48%;
+                                    vertical-align: top;
+                                "
+                            >
+                                <img
+                                    t-if="o.company_id.logo"
+                                    t-att-src="image_data_uri(o.company_id.logo)"
+                                    style="
+                                        max-width: 180px;
+                                        max-height: 90px;
+                                        object-fit: contain;
+                                        margin-bottom: 8px;
+                                    "
+                                />
+
+                                <div
+                                    style="
+                                        font-size: 18pt;
+                                        font-weight: 700;
+                                        color: #0f3557;
+                                        margin-top: 4px;
+                                    "
+                                    t-out="o.company_id.name"
+                                />
+
+                                <div
+                                    style="
+                                        color: #557086;
+                                        margin-top: 5px;
+                                        line-height: 1.45;
+                                    "
+                                >
+                                    <div
+                                        t-if="o.company_id.partner_id.country_id"
+                                        t-out="o.company_id.partner_id.country_id.name"
+                                    />
+
+                                    <div t-if="o.company_id.vat">
+                                        <strong>NINEA :</strong>
+                                        <span t-out="o.company_id.vat"/>
+                                    </div>
+
+                                    <div
+                                        t-if="o.company_id.company_registry"
+                                    >
+                                        <strong>RCCM :</strong>
+                                        <span
+                                            t-out="o.company_id.company_registry"
+                                        />
+                                    </div>
+
+                                    <div t-if="o.company_id.email">
+                                        <span
+                                            t-out="o.company_id.email"
+                                        />
+                                    </div>
+
+                                    <div t-if="o.company_id.website">
+                                        <span
+                                            t-out="o.company_id.website"
+                                        />
+                                    </div>
+                                </div>
+                            </td>
+
+                            <td
+                                style="
+                                    width: 52%;
+                                    vertical-align: top;
+                                    text-align: right;
+                                "
+                            >
+                                <div
+                                    style="
+                                        font-size: 24pt;
+                                        font-weight: 800;
+                                        color: #0f3557;
+                                        letter-spacing: 0.3px;
+                                    "
+                                    t-out="ctx['document_title']"
+                                />
+
+                                <div
+                                    style="
+                                        margin-top: 6px;
+                                        font-size: 15pt;
+                                        color: #16a085;
+                                        font-weight: 700;
+                                    "
+                                    t-out="o.name or 'Brouillon'"
+                                />
+
+                                <table
+                                    style="
+                                        margin-left: auto;
+                                        margin-top: 15px;
+                                        border-collapse: collapse;
+                                        min-width: 300px;
+                                    "
+                                >
+                                    <tr>
+                                        <td
+                                            style="
+                                                padding: 4px 10px;
+                                                color: #6b7f90;
+                                            "
+                                        >
+                                            Référence dossier
+                                        </td>
+                                        <td
+                                            style="
+                                                padding: 4px 0;
+                                                font-weight: 700;
+                                            "
+                                            t-out="ctx['dossier_reference']"
+                                        />
+                                    </tr>
+
+                                    <tr>
+                                        <td
+                                            style="
+                                                padding: 4px 10px;
+                                                color: #6b7f90;
+                                            "
+                                        >
+                                            Commande liée
+                                        </td>
+                                        <td
+                                            style="
+                                                padding: 4px 0;
+                                                font-weight: 700;
+                                            "
+                                            t-out="ctx['sale_order']"
+                                        />
+                                    </tr>
+
+                                    <tr>
+                                        <td
+                                            style="
+                                                padding: 4px 10px;
+                                                color: #6b7f90;
+                                            "
+                                        >
+                                            Mode de transport
+                                        </td>
+                                        <td
+                                            style="
+                                                padding: 4px 0;
+                                                font-weight: 700;
+                                            "
+                                            t-out="ctx['mode_label']"
+                                        />
+                                    </tr>
+
+                                    <tr>
+                                        <td
+                                            style="
+                                                padding: 4px 10px;
+                                                color: #6b7f90;
+                                            "
+                                        >
+                                            Date de facturation
+                                        </td>
+                                        <td
+                                            style="
+                                                padding: 4px 0;
+                                                font-weight: 700;
+                                            "
+                                        >
+                                            <span
+                                                t-if="o.invoice_date"
+                                                t-out="o.invoice_date.strftime('%d/%m/%Y')"
+                                            />
+                                        </td>
+                                    </tr>
+
+                                    <tr t-if="o.invoice_date_due">
+                                        <td
+                                            style="
+                                                padding: 4px 10px;
+                                                color: #6b7f90;
+                                            "
+                                        >
+                                            Échéance
+                                        </td>
+                                        <td
+                                            style="
+                                                padding: 4px 0;
+                                                font-weight: 700;
+                                            "
+                                            t-out="o.invoice_date_due.strftime('%d/%m/%Y')"
+                                        />
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <!-- CUSTOMER -->
+                    <div
+                        style="
+                            border-left: 4px solid #16a085;
+                            background: #f4f8fa;
+                            padding: 12px 15px;
+                            margin-bottom: 22px;
+                        "
+                    >
+                        <div
+                            style="
+                                color: #16a085;
+                                font-size: 9pt;
+                                font-weight: 700;
+                                text-transform: uppercase;
+                                margin-bottom: 5px;
+                            "
+                        >
+                            Facturé à
+                        </div>
+
+                        <div
+                            style="
+                                font-size: 13pt;
+                                font-weight: 700;
+                                color: #17324d;
+                            "
+                            t-out="o.partner_id.name"
+                        />
+
+                        <div
+                            style="
+                                line-height: 1.45;
+                                margin-top: 3px;
+                                color: #526878;
+                            "
+                        >
+                            <div
+                                t-if="o.partner_id.street"
+                                t-out="o.partner_id.street"
+                            />
+
+                            <div
+                                t-if="o.partner_id.street2"
+                                t-out="o.partner_id.street2"
+                            />
+
+                            <div>
+                                <span
+                                    t-if="o.partner_id.zip"
+                                    t-out="o.partner_id.zip"
+                                />
+                                <span
+                                    t-if="o.partner_id.city"
+                                    t-out="' ' + o.partner_id.city"
+                                />
+                            </div>
+
+                            <div
+                                t-if="o.partner_id.country_id"
+                                t-out="o.partner_id.country_id.name"
+                            />
+
+                            <div
+                                t-if="o.partner_id.email"
+                                t-out="o.partner_id.email"
+                            />
+
+                            <div
+                                t-if="o.partner_id.phone"
+                                t-out="o.partner_id.phone"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- FREIGHT LINES -->
+                    <table
+                        style="
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-bottom: 18px;
+                        "
+                    >
+                        <thead>
+                            <tr
+                                style="
+                                    background: #0f3557;
+                                    color: white;
+                                "
+                            >
+                                <th
+                                    style="
+                                        width: 48%;
+                                        padding: 9px 10px;
+                                        text-align: left;
+                                    "
+                                >
+                                    Désignation
+                                </th>
+
+                                <th
+                                    style="
+                                        width: 16%;
+                                        padding: 9px 8px;
+                                        text-align: center;
+                                    "
+                                >
+                                    Poids / Qté
+                                </th>
+
+                                <th
+                                    style="
+                                        width: 18%;
+                                        padding: 9px 8px;
+                                        text-align: right;
+                                    "
+                                >
+                                    Prix unitaire
+                                </th>
+
+                                <th
+                                    style="
+                                        width: 18%;
+                                        padding: 9px 10px;
+                                        text-align: right;
+                                    "
+                                >
+                                    Montant
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            <tr
+                                t-foreach="ctx['freight_lines']"
+                                t-as="line"
+                                style="
+                                    border-bottom: 1px solid #dbe4e9;
+                                "
+                            >
+                                <td
+                                    style="
+                                        padding: 10px;
+                                        vertical-align: middle;
+                                    "
+                                    t-out="line['designation']"
+                                />
+
+                                <td
+                                    style="
+                                        padding: 10px 8px;
+                                        text-align: center;
+                                        vertical-align: middle;
+                                    "
+                                >
+                                    <span
+                                        t-out="o.dally_freight_format_quantity(
+                                            line['quantity']
+                                        )"
+                                    />
+                                    <span
+                                        t-if="line['unit_label']"
+                                        t-out="' ' + line['unit_label']"
+                                    />
+                                </td>
+
+                                <td
+                                    style="
+                                        padding: 10px 8px;
+                                        text-align: right;
+                                        vertical-align: middle;
+                                    "
+                                    t-out="o.dally_freight_format_amount(
+                                        line['unit_price'],
+                                        o.currency_id
+                                    )"
+                                />
+
+                                <td
+                                    style="
+                                        padding: 10px;
+                                        text-align: right;
+                                        vertical-align: middle;
+                                        font-weight: 700;
+                                    "
+                                    t-out="o.dally_freight_format_amount(
+                                        line['subtotal'],
+                                        o.currency_id
+                                    )"
+                                />
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- TOTALS -->
+                    <table
+                        style="
+                            width: 43%;
+                            margin-left: auto;
+                            border-collapse: collapse;
+                            margin-bottom: 22px;
+                        "
+                    >
+                        <tr>
+                            <td
+                                style="
+                                    padding: 5px 8px;
+                                    color: #667c8c;
+                                "
+                            >
+                                Montant HT
+                            </td>
+                            <td
+                                style="
+                                    padding: 5px 8px;
+                                    text-align: right;
+                                    font-weight: 700;
+                                "
+                                t-out="o.dally_freight_format_amount(
+                                    o.amount_untaxed
+                                )"
+                            />
+                        </tr>
+
+                        <tr>
+                            <td
+                                style="
+                                    padding: 5px 8px;
+                                    color: #667c8c;
+                                "
+                            >
+                                TVA
+                            </td>
+                            <td
+                                style="
+                                    padding: 5px 8px;
+                                    text-align: right;
+                                "
+                                t-out="o.dally_freight_format_amount(
+                                    o.amount_tax
+                                )"
+                            />
+                        </tr>
+
+                        <tr
+                            style="
+                                background: #0f3557;
+                                color: white;
+                            "
+                        >
+                            <td
+                                style="
+                                    padding: 10px 8px;
+                                    font-size: 12pt;
+                                    font-weight: 700;
+                                "
+                            >
+                                Total TTC
+                            </td>
+                            <td
+                                style="
+                                    padding: 10px 8px;
+                                    text-align: right;
+                                    font-size: 13pt;
+                                    font-weight: 800;
+                                "
+                                t-out="o.dally_freight_format_amount(
+                                    o.amount_total
+                                )"
+                            />
+                        </tr>
+                    </table>
+
+                    <!-- COLLECTIONS -->
+                    <div
+                        t-if="ctx['collections']"
+                        style="
+                            margin-top: 18px;
+                            page-break-inside: avoid;
+                        "
+                    >
+                        <div
+                            style="
+                                font-size: 13pt;
+                                color: #0f3557;
+                                font-weight: 700;
+                                margin-bottom: 8px;
+                            "
+                        >
+                            Encaissements enregistrés
+                        </div>
+
+                        <table
+                            style="
+                                width: 100%;
+                                border-collapse: collapse;
+                                font-size: 9pt;
+                            "
+                        >
+                            <thead>
+                                <tr
+                                    style="
+                                        background: #eaf2f5;
+                                        color: #17324d;
+                                    "
+                                >
+                                    <th
+                                        style="
+                                            padding: 7px;
+                                            text-align: left;
+                                        "
+                                    >
+                                        Date
+                                    </th>
+
+                                    <th
+                                        style="
+                                            padding: 7px;
+                                            text-align: left;
+                                        "
+                                    >
+                                        Mode
+                                    </th>
+
+                                    <th
+                                        style="
+                                            padding: 7px;
+                                            text-align: right;
+                                        "
+                                    >
+                                        Montant reçu
+                                    </th>
+
+                                    <th
+                                        style="
+                                            padding: 7px;
+                                            text-align: right;
+                                        "
+                                    >
+                                        Équivalent facture
+                                    </th>
+
+                                    <th
+                                        style="
+                                            padding: 7px;
+                                            text-align: left;
+                                        "
+                                    >
+                                        Statut
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                <tr
+                                    t-foreach="ctx['collections']"
+                                    t-as="payment"
+                                    style="
+                                        border-bottom: 1px solid #dbe4e9;
+                                    "
+                                >
+                                    <td
+                                        style="padding: 7px;"
+                                        t-out="payment['date'].strftime(
+                                            '%d/%m/%Y'
+                                        )"
+                                    />
+
+                                    <td
+                                        style="padding: 7px;"
+                                        t-out="payment['method_label']"
+                                    />
+
+                                    <td
+                                        style="
+                                            padding: 7px;
+                                            text-align: right;
+                                            font-weight: 700;
+                                        "
+                                        t-out="o.dally_freight_format_amount(
+                                            payment['amount'],
+                                            payment['currency']
+                                        )"
+                                    />
+
+                                    <td
+                                        style="
+                                            padding: 7px;
+                                            text-align: right;
+                                        "
+                                        t-out="o.dally_freight_format_amount(
+                                            payment['equivalent'],
+                                            o.currency_id
+                                        )"
+                                    />
+
+                                    <td
+                                        style="padding: 7px;"
+                                        t-out="payment['state_label']"
+                                    />
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <table
+                            style="
+                                width: 43%;
+                                margin-left: auto;
+                                margin-top: 10px;
+                                border-collapse: collapse;
+                            "
+                        >
+                            <tr>
+                                <td
+                                    style="
+                                        padding: 5px 8px;
+                                        color: #667c8c;
+                                    "
+                                >
+                                    Encaissements équivalents
+                                </td>
+
+                                <td
+                                    style="
+                                        padding: 5px 8px;
+                                        text-align: right;
+                                        font-weight: 700;
+                                    "
+                                    t-out="o.dally_freight_format_amount(
+                                        ctx['received_equivalent'],
+                                        o.currency_id
+                                    )"
+                                />
+                            </tr>
+
+                            <tr
+                                style="
+                                    background: #16a085;
+                                    color: white;
+                                "
+                            >
+                                <td
+                                    style="
+                                        padding: 9px 8px;
+                                        font-weight: 700;
+                                    "
+                                    t-out="ctx['balance_label']"
+                                />
+
+                                <td
+                                    style="
+                                        padding: 9px 8px;
+                                        text-align: right;
+                                        font-weight: 800;
+                                    "
+                                    t-out="o.dally_freight_format_amount(
+                                        ctx['balance_due'],
+                                        o.currency_id
+                                    )"
+                                />
+                            </tr>
+                        </table>
+
+                        <div
+                            t-if="o.state == 'draft'"
+                            style="
+                                background: #fff8e6;
+                                border-left: 4px solid #d4a72c;
+                                color: #755d18;
+                                padding: 9px 12px;
+                                margin-top: 10px;
+                                font-size: 8.5pt;
+                                line-height: 1.4;
+                            "
+                        >
+                            Facture encore en brouillon :
+                            les encaissements ci-dessus proviennent
+                            du suivi opérationnel DallyTrading et
+                            ne sont pas encore rapprochés en
+                            comptabilité. Le solde affiché est
+                            indicatif jusqu'à comptabilisation.
+                        </div>
+                    </div>
+
+                    <!-- FOOTER -->
+                    <div
+                        style="
+                            margin-top: 28px;
+                            padding-top: 10px;
+                            border-top: 1px solid #cfd9df;
+                            color: #708391;
+                            font-size: 8.5pt;
+                            line-height: 1.5;
+                            text-align: center;
+                        "
+                    >
+                        <div>
+                            DALLYTRADING |
+                            IMPORT - EXPORT - LOGISTICS - SOLUTIONS
+                        </div>
+
+                        <div>
+                            <span
+                                t-if="o.company_id.email"
+                                t-out="o.company_id.email"
+                            />
+
+                            <t
+                                t-if="
+                                    o.company_id.email
+                                    and o.company_id.website
+                                "
+                            >
+                                |
+                            </t>
+
+                            <span
+                                t-if="o.company_id.website"
+                                t-out="o.company_id.website"
+                            />
+                        </div>
+                    </div>
+
+                </div>
+
+                <div
+                    t-if="not o.dally_freight_shipment_id"
+                    class="page"
+                >
+                    <h2>
+                        Rapport réservé aux factures Freight
+                        DallyTrading.
+                    </h2>
+                </div>
+
+            </t>
+
+        </t>
+    </template>
+
+</odoo>

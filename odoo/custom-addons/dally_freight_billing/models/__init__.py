@@ -13,3 +13,4 @@ from . import payment_sync
 from . import payment_collection
 from . import payment_collection_guard
 from . import cash_operations
+from . import freight_invoice_report

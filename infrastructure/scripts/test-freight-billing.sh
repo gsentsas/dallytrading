@@ -6,19 +6,13 @@
 # connects to the production database/containers and never touches SEN
 # CONTAINERS. It creates its own PostgreSQL volume, filestore, database, port and
 # Odoo configuration, then destroys only that labelled compose project.
-#
-# Usage:
-#   bash infrastructure/scripts/test-freight-billing.sh
-#
-# Optional:
-#   FBT_KEEP=1 bash infrastructure/scripts/test-freight-billing.sh
-#   FBT_PORT=18469 bash infrastructure/scripts/test-freight-billing.sh
 # =============================================================================
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 COMPOSE="$ROOT/infrastructure/docker-compose.freight-dev.yml"
+EXPECTED_MODULE_VERSION="19.0.1.6.0"
 
 PROJECT="${FBT_PROJECT:-dallytrading-freight-billing-test}"
 DB="${FBT_DB:-dallytrading_freight_billing_test}"
@@ -36,48 +30,53 @@ EMPTY_VENDOR="$WORK/vendor-addons"
 log() { printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 fail() { printf '\nERROR: %s\n' "$*" >&2; exit 1; }
 
+show_test_diagnostics() {
+    python3 - "$TEST_LOG" <<'PY' || true
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+if not path.exists():
+    raise SystemExit
+lines = path.read_text(errors="replace").splitlines()
+markers = [i for i, line in enumerate(lines) if " FAIL: " in line or " ERROR: " in line]
+if not markers:
+    raise SystemExit
+print("\n== detailed failing test diagnostics ==")
+for start in markers[-12:]:
+    begin = max(0, start - 3)
+    end = min(len(lines), start + 70)
+    for j in range(start + 1, end):
+        if j > start + 3 and ("Starting " in lines[j] or "filestore gc" in lines[j]):
+            end = j
+            break
+    print("-" * 100)
+    print("\n".join(lines[begin:end]))
+PY
+}
+
 assert_isolated() {
     case "$DB" in
-        dallytrading|odoo_crm|sen_containers_crm)
-            fail "refusing production/foreign database name: $DB"
-            ;;
+        dallytrading|odoo_crm|sen_containers_crm) fail "refusing production/foreign database name: $DB" ;;
     esac
-
     case "$PORT" in
-        80|443|18069|18072|18169|18172|3010)
-            fail "refusing protected production/SEN port: $PORT"
-            ;;
+        80|443|18069|18072|18169|18172|3010) fail "refusing protected production/SEN port: $PORT" ;;
     esac
-
     case "$PROJECT" in
-        dallytrading|dallytrading-e2e|sen-containers|sen_containers)
-            fail "refusing protected compose project: $PROJECT"
-            ;;
+        dallytrading|dallytrading-e2e|sen-containers|sen_containers) fail "refusing protected compose project: $PROJECT" ;;
     esac
-
     case "$ODOO_CONTAINER" in
-        dallytrading-odoo|odoo_crm|sen-containers*|sen_containers*)
-            fail "refusing protected Odoo container: $ODOO_CONTAINER"
-            ;;
+        dallytrading-odoo|odoo_crm|sen-containers*|sen_containers*) fail "refusing protected Odoo container: $ODOO_CONTAINER" ;;
     esac
-
     case "$PG_CONTAINER" in
-        dallytrading-postgres|sen-containers*|sen_containers*)
-            fail "refusing protected PostgreSQL container: $PG_CONTAINER"
-            ;;
+        dallytrading-postgres|sen-containers*|sen_containers*) fail "refusing protected PostgreSQL container: $PG_CONTAINER" ;;
     esac
-
     [ -f "$COMPOSE" ] || fail "missing compose file: $COMPOSE"
-    [ -f "$ROOT/odoo/custom-addons/dally_freight_billing/__manifest__.py" ] || \
-        fail "dally_freight_billing is missing from this worktree"
+    [ -f "$ROOT/odoo/custom-addons/dally_freight_billing/__manifest__.py" ] || fail "dally_freight_billing is missing from this worktree"
 }
 
 compose() {
-    docker compose \
-        -p "$PROJECT" \
-        --env-file "$ENV_FILE" \
-        -f "$COMPOSE" \
-        "$@"
+    docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE" "$@"
 }
 
 cleanup() {
@@ -100,18 +99,13 @@ HEAD="$(git -C "$ROOT" rev-parse HEAD)"
 BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)"
 STATUS="$(git -C "$ROOT" status --porcelain)"
 printf 'BRANCH=%s\nHEAD=%s\n' "$BRANCH" "$HEAD"
-[ "$BRANCH" = "feature/freight-billing-sync" ] || \
-    fail "run this gate from feature/freight-billing-sync"
+[ "$BRANCH" = "feature/freight-billing-sync" ] || fail "run this gate from feature/freight-billing-sync"
 [ -z "$STATUS" ] || fail "worktree must be clean before RC tests"
 
 log "ephemeral configuration"
 umask 0077
 rm -rf "$WORK"
-mkdir -p "$WORK" "$EMPTY_VENDOR"
-# Odoo accepts an addons path when it contains at least one valid addon
-# directory. A tiny inert placeholder avoids a noisy warning while preserving
-# the exact same mount shape as the Freight dev stack.
-mkdir -p "$EMPTY_VENDOR/fbt_empty_addon"
+mkdir -p "$WORK" "$EMPTY_VENDOR/fbt_empty_addon"
 printf '%s\n' '# RC placeholder package' > "$EMPTY_VENDOR/fbt_empty_addon/__init__.py"
 cat > "$EMPTY_VENDOR/fbt_empty_addon/__manifest__.py" <<'PY'
 {
@@ -124,7 +118,6 @@ PY
 
 DB_PASSWORD="$(openssl rand -hex 32)"
 ADMIN_PASSWORD="$(openssl rand -hex 32)"
-
 cat > "$ODOO_CONF" <<CONF
 [options]
 admin_passwd = ${ADMIN_PASSWORD}
@@ -173,13 +166,7 @@ chmod 600 "$ENV_FILE"
 log "isolated PostgreSQL and Odoo 19"
 compose up -d
 
-# The named filestore volume is initially root-owned while Odoo deliberately
-# runs as the invoking unprivileged uid/gid.
-docker run --rm \
-    -v "${PROJECT}_filestore:/data" \
-    alpine:3 \
-    chown -R "$(id -u):$(id -g)" /data >/dev/null
-
+docker run --rm -v "${PROJECT}_filestore:/data" alpine:3 chown -R "$(id -u):$(id -g)" /data >/dev/null
 docker restart "$ODOO_CONTAINER" >/dev/null
 
 PG_HEALTH=""
@@ -189,19 +176,10 @@ for _ in $(seq 1 60); do
     sleep 1
 done
 [ "$PG_HEALTH" = "healthy" ] || fail "isolated PostgreSQL did not become healthy"
-
 echo "POSTGRES=HEALTHY"
 
-# `compose up` also starts the long-running Odoo service, which already owns
-# port 8069 inside that container. Starting a second `odoo` process with
-# `docker exec` would therefore fail before a single test runs. Stop only the RC
-# Odoo service, keep PostgreSQL alive, then use a one-off Compose container for
-# the test process. `docker compose run` does not publish the service ports by
-# default, so HttpCase still gets a real HTTP server on 8069 in its own network
-# namespace without any host/production port collision.
 log "prepare one-off Odoo test process"
 compose stop odoo >/dev/null
-
 ODOO_SERVICE_RUNNING="$(docker inspect -f '{{.State.Running}}' "$ODOO_CONTAINER" 2>/dev/null || echo unknown)"
 echo "RC_SERVICE_ODOO_RUNNING=$ODOO_SERVICE_RUNNING"
 [ "$ODOO_SERVICE_RUNNING" = "false" ] || fail "RC Odoo service did not stop cleanly"
@@ -219,21 +197,19 @@ compose run --rm --no-deps odoo \
 TEST_RC=$?
 set -e
 
-# Surface useful diagnostics without printing ephemeral secrets.
 grep -E '(^| )(ERROR|CRITICAL) |FAIL:|ERROR:|failed,|error\(s\)' "$TEST_LOG" | tail -80 || true
 
 if [ "$TEST_RC" -ne 0 ]; then
     echo "ODOO_TEST_RC=$TEST_RC"
     echo "TEST_LOG=$TEST_LOG"
-    tail -120 "$TEST_LOG" || true
+    show_test_diagnostics
+    tail -100 "$TEST_LOG" || true
     fail "Odoo Freight Billing test command failed"
 fi
 
-# Odoo can occasionally exit zero after individual test diagnostics depending on
-# the runner path. Treat explicit failure/error summaries as a hard gate too.
 if grep -Eq '([1-9][0-9]* failed|[1-9][0-9]* error\(s\)|FAIL:|^ERROR:)' "$TEST_LOG"; then
     echo "TEST_LOG=$TEST_LOG"
-    tail -120 "$TEST_LOG" || true
+    show_test_diagnostics
     fail "test log contains failures/errors"
 fi
 
@@ -246,21 +222,14 @@ echo "ODOO_TEST_RC=0"
 echo "DALLY_FREIGHT_BILLING_TESTS=PASS"
 
 log "database module state"
-MODULE_STATE="$(
-    docker exec "$PG_CONTAINER" \
-        psql -U fbt_odoo -d "$DB" -Atc \
-        "SELECT state || '|' || COALESCE(latest_version,'') FROM ir_module_module WHERE name='dally_freight_billing';" \
-        2>/dev/null || true
-)"
+MODULE_STATE="$(docker exec "$PG_CONTAINER" psql -U fbt_odoo -d "$DB" -Atc "SELECT state || '|' || COALESCE(latest_version,'') FROM ir_module_module WHERE name='dally_freight_billing';" 2>/dev/null || true)"
 echo "DALLY_FREIGHT_BILLING=$MODULE_STATE"
 case "$MODULE_STATE" in
-    installed\|19.0.1.5.0*) ;;
+    installed\|${EXPECTED_MODULE_VERSION}*) ;;
     *) fail "unexpected installed module state/version: $MODULE_STATE" ;;
 esac
 
 log "isolation proof"
-# Check names/state only. Never inspect production configuration, files, DBs or
-# logs from this RC script.
 PROD_ODOO_RUNNING="$(docker inspect -f '{{.State.Running}}' dallytrading-odoo 2>/dev/null || echo unknown)"
 PROD_PG_RUNNING="$(docker inspect -f '{{.State.Running}}' dallytrading-postgres 2>/dev/null || echo unknown)"
 echo "PRODUCTION_ODOO_RUNNING=$PROD_ODOO_RUNNING"
@@ -273,7 +242,7 @@ echo
 echo "============================================================"
 echo " DALLY FREIGHT BILLING - RC TEST GATE PASSED"
 echo " HEAD=$HEAD"
-echo " MODULE=19.0.1.5.0"
+echo " MODULE=$EXPECTED_MODULE_VERSION"
 echo " TESTS=PASS"
 echo " PRODUCTION_TOUCHED=NO"
 echo " SEN_CONTAINERS_TOUCHED=NO"

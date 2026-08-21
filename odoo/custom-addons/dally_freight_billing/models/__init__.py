@@ -7,3 +7,4 @@ from . import billing_lock
 from . import freight_sync
 from . import freight_sync_billing
 from . import payment_sync
+from . import payment_collection

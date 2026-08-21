@@ -9,10 +9,6 @@ from odoo import api, fields, models, _
 from odoo.exceptions import ValidationError
 
 
-VALID_SOURCES = frozenset({"legacy_xlsx", "google_sheets", "backoffice"})
-VALID_STATES = frozenset({"review", "validated", "cancelled"})
-
-
 class DallyCashExpense(models.Model):
     _name = "dally.cash.expense"
     _description = "DallyTrading Internal Cash Expense"
@@ -96,7 +92,7 @@ class DallyCashExpense(models.Model):
             rec.write(values)
         else:
             rec = self.create(values)
-        # Replace the operational allocation snapshot atomically.  This model is
+        # Replace the operational allocation snapshot atomically. This model is
         # not a posted accounting journal, so corrected Sheet rows may update it.
         rec.allocation_ids.unlink()
         if allocations:
@@ -113,6 +109,9 @@ class DallyCashExpenseAllocation(models.Model):
 
     expense_id = fields.Many2one(
         "dally.cash.expense", required=True, ondelete="cascade", index=True,
+    )
+    company_id = fields.Many2one(
+        related="expense_id.company_id", store=True, readonly=True, index=True,
     )
     actor_name = fields.Char(required=True)
     amount = fields.Monetary(currency_field="currency_id", required=True)

@@ -34,6 +34,17 @@
         <record id="pricelist_freight_eur" model="product.pricelist">
             <field name="name">DallyTrading Freight EUR</field>
             <field name="currency_id" ref="base.EUR"/>
+            <!--
+                This pricelist is an engine-level billing resource, not a
+                company-owned commercial catalogue. product.pricelist defaults
+                company_id to env.company, which makes a module-data pricelist
+                unusable from another allowed company and triggers Odoo's
+                _check_company() when the freight sales order is created.
+                Keeping company_id empty makes the EUR freight pricelist safely
+                reusable by every DallyTrading company while the generated
+                sale.order/account.move still belong to shipment.company_id.
+            -->
+            <field name="company_id" eval="False"/>
             <field name="active" eval="True"/>
         </record>
     </data>

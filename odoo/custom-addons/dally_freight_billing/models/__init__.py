@@ -6,6 +6,7 @@ from . import commercial_documents
 from . import commercial_actions
 from . import billing_lock
 from . import freight_sync
+from . import freight_partner_match
 from . import freight_sync_lock
 from . import freight_sync_billing
 from . import payment_sync

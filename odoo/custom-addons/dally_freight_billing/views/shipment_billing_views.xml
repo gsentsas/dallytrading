@@ -43,6 +43,30 @@
                         help="Apply the current automatic tariff, or snapshot the manual price."/>
             </xpath>
 
+            <xpath expr="//page[@name='commercial']/group" position="inside">
+                <group string="Freight Billing"
+                       groups="dally_core.group_dally_finance">
+                    <field name="billing_currency_id" invisible="1"/>
+                    <field name="freight_amount_eur" readonly="1"/>
+                    <field name="dossier_fee_eur" readonly="billing_locked"/>
+                    <field name="other_fees_eur" readonly="billing_locked"/>
+                    <field name="billing_total_eur" readonly="1"/>
+                    <field name="billing_locked" readonly="1"/>
+                    <button name="action_prepare_native_freight_invoice_ui"
+                            type="object"
+                            string="Prepare Draft Invoice"
+                            class="oe_highlight"
+                            icon="fa-file-text-o"
+                            invisible="invoice_id"/>
+                    <button name="action_reset_draft_freight_billing"
+                            type="object"
+                            string="Reset Draft Billing"
+                            icon="fa-undo"
+                            confirm="This deletes the generated draft invoice and cancelled generated sales order so freight data can be corrected. Continue?"
+                            invisible="not billing_locked"/>
+                </group>
+            </xpath>
+
             <xpath expr="//page[@name='commercial']/group" position="after">
                 <group string="Spreadsheet Synchronisation"
                        groups="dally_core.group_dally_readonly">
@@ -65,6 +89,9 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='reference']" position="after">
                 <field name="external_reference" optional="show"/>
+            </xpath>
+            <xpath expr="//field[@name='weight_kg']" position="after">
+                <field name="billing_total_eur" optional="hide"/>
             </xpath>
         </field>
     </record>

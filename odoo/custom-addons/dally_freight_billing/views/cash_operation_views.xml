@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="dally_cash_expense_view_list" model="ir.ui.view">
+        <field name="name">dally.cash.expense.list</field>
+        <field name="model">dally.cash.expense</field>
+        <field name="arch" type="xml">
+            <list string="Internal Freight Expenses"
+                  decoration-success="state == 'validated'"
+                  decoration-warning="state == 'review'"
+                  decoration-muted="state == 'cancelled'">
+                <field name="expense_date"/>
+                <field name="external_expense_key"/>
+                <field name="category"/>
+                <field name="description"/>
+                <field name="beneficiary" optional="show"/>
+                <field name="total_amount"/>
+                <field name="currency_id"/>
+                <field name="total_eur_snapshot" optional="show"/>
+                <field name="total_xof_snapshot" optional="show"/>
+                <field name="payment_method" optional="show"/>
+                <field name="state"/>
+                <field name="source" optional="hide"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="dally_cash_expense_view_form" model="ir.ui.view">
+        <field name="name">dally.cash.expense.form</field>
+        <field name="model">dally.cash.expense</field>
+        <field name="arch" type="xml">
+            <form string="Internal Freight Expense">
+                <sheet>
+                    <group>
+                        <group string="Expense">
+                            <field name="external_expense_key"/>
+                            <field name="expense_date"/>
+                            <field name="category"/>
+                            <field name="description"/>
+                            <field name="beneficiary"/>
+                            <field name="state"/>
+                        </group>
+                        <group string="Amounts">
+                            <field name="currency_id"/>
+                            <field name="total_amount" readonly="1"/>
+                            <field name="total_eur_snapshot"/>
+                            <field name="total_xof_snapshot"/>
+                            <field name="payment_method"/>
+                            <field name="reference"/>
+                        </group>
+                    </group>
+                    <group string="Paid by">
+                        <field name="allocation_ids" nolabel="1">
+                            <list editable="bottom">
+                                <field name="actor_name"/>
+                                <field name="amount"/>
+                                <field name="currency_id" readonly="1"/>
+                            </list>
+                        </field>
+                    </group>
+                    <group>
+                        <field name="source"/>
+                        <field name="last_sync_at" readonly="1"/>
+                        <field name="comment"/>
+                        <field name="company_id" groups="base.group_multi_company"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="dally_cash_expense_view_search" model="ir.ui.view">
+        <field name="name">dally.cash.expense.search</field>
+        <field name="model">dally.cash.expense</field>
+        <field name="arch" type="xml">
+            <search string="Internal Freight Expenses">
+                <field name="external_expense_key"/>
+                <field name="description"/>
+                <field name="beneficiary"/>
+                <filter name="review" string="To review" domain="[('state','=','review')]"/>
+                <filter name="validated" string="Validated" domain="[('state','=','validated')]"/>
+                <filter name="group_category" string="Category" context="{'group_by':'category'}"/>
+                <filter name="group_state" string="State" context="{'group_by':'state'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="dally_cash_expense_action" model="ir.actions.act_window">
+        <field name="name">Internal Expenses</field>
+        <field name="res_model">dally.cash.expense</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="dally_cash_expense_view_search"/>
+    </record>
+
+    <record id="dally_cash_transfer_view_list" model="ir.ui.view">
+        <field name="name">dally.cash.transfer.list</field>
+        <field name="model">dally.cash.transfer</field>
+        <field name="arch" type="xml">
+            <list string="Internal Cash Transfers"
+                  decoration-success="state == 'validated'"
+                  decoration-warning="state == 'review'"
+                  decoration-muted="state == 'cancelled'">
+                <field name="transfer_date"/>
+                <field name="external_transfer_key"/>
+                <field name="from_actor"/>
+                <field name="to_actor"/>
+                <field name="amount"/>
+                <field name="currency_id"/>
+                <field name="total_eur_snapshot" optional="show"/>
+                <field name="total_xof_snapshot" optional="show"/>
+                <field name="reason" optional="show"/>
+                <field name="payment_method" optional="show"/>
+                <field name="state"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="dally_cash_transfer_view_form" model="ir.ui.view">
+        <field name="name">dally.cash.transfer.form</field>
+        <field name="model">dally.cash.transfer</field>
+        <field name="arch" type="xml">
+            <form string="Internal Cash Transfer">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="external_transfer_key"/>
+                            <field name="transfer_date"/>
+                            <field name="from_actor"/>
+                            <field name="to_actor"/>
+                            <field name="reason"/>
+                            <field name="state"/>
+                        </group>
+                        <group>
+                            <field name="amount"/>
+                            <field name="currency_id"/>
+                            <field name="total_eur_snapshot"/>
+                            <field name="total_xof_snapshot"/>
+                            <field name="payment_method"/>
+                            <field name="source"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="comment"/>
+                        <field name="last_sync_at" readonly="1"/>
+                        <field name="company_id" groups="base.group_multi_company"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="dally_cash_transfer_action" model="ir.actions.act_window">
+        <field name="name">Cash Transfers</field>
+        <field name="res_model">dally.cash.transfer</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_dally_cash_expenses"
+              name="Internal Expenses"
+              parent="dally_core.menu_dally_operations"
+              action="dally_cash_expense_action"
+              sequence="46"
+              groups="dally_core.group_dally_readonly"/>
+
+    <menuitem id="menu_dally_cash_transfers"
+              name="Cash Transfers"
+              parent="dally_core.menu_dally_operations"
+              action="dally_cash_transfer_action"
+              sequence="47"
+              groups="dally_core.group_dally_readonly"/>
+</odoo>

@@ -12,14 +12,14 @@ class TestFreightInvoiceEndpoint(HttpCase):
 
     def setUp(self):
         super().setUp()
-        # The endpoint itself never sudoes. Use an explicit privileged acting
-        # user in the HTTP test so native Sales/Accounting ACLs are exercised by
-        # Odoo rather than bypassed by the controller.
+        self.billing_user = self.env.ref(
+            "dally_freight_billing.user_dally_freight_billing_integration"
+        )
         self.key = self.env["dally.api.key"].create({
             "name": "Freight Invoice Test Key",
             "scopes": "freight:invoice",
             "allowed_ips": "",
-            "user_id": self.env.ref("base.user_admin").id,
+            "user_id": self.billing_user.id,
         })
         self.raw_key = self.key.key_to_display
 
@@ -69,13 +69,18 @@ class TestFreightInvoiceEndpoint(HttpCase):
         payload.update(overrides)
         return payload
 
+    def test_uses_dedicated_billing_user(self):
+        self.assertEqual(self.key.user_id, self.billing_user)
+        self.assertTrue(self.billing_user.has_group("account.group_account_invoice"))
+        self.assertTrue(self.billing_user.has_group("sales_team.group_sale_salesman"))
+
     def test_requires_invoice_scope(self):
         shipment = self._shipment("HTTP-INV-SCOPE")
         limited = self.env["dally.api.key"].create({
             "name": "Sync Only",
             "scopes": "freight:write",
             "allowed_ips": "",
-            "user_id": self.env.ref("base.user_admin").id,
+            "user_id": self.billing_user.id,
         })
         response = self._post(
             self._payload(shipment.external_reference),
@@ -83,6 +88,22 @@ class TestFreightInvoiceEndpoint(HttpCase):
         )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["error"]["code"], "insufficient_scope")
+
+    def test_scope_does_not_grant_native_accounting_rights(self):
+        shipment = self._shipment("HTTP-INV-ACL")
+        generic_user = self.env.ref("dally_api.user_dally_api_integration")
+        wrong_user_key = self.env["dally.api.key"].create({
+            "name": "Invoice Scope Generic User",
+            "scopes": "freight:invoice",
+            "allowed_ips": "",
+            "user_id": generic_user.id,
+        })
+        response = self._post(
+            self._payload(shipment.external_reference),
+            api_key=wrong_user_key.key_to_display,
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "forbidden")
 
     def test_creates_draft_invoice(self):
         shipment = self._shipment("HTTP-INV-CREATE")

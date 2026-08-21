@@ -75,10 +75,6 @@ class DallyShipment(models.Model):
             raise UserError(_("A customer is required before invoicing."))
         if not self.package_ids:
             raise UserError(_("At least one freight article is required before invoicing."))
-        if self.invoice_id:
-            raise UserError(
-                _("This freight file is already linked to invoice %s.", self.invoice_id.display_name)
-            )
         if self.sale_order_id and self.sale_order_id.dally_freight_shipment_id != self:
             raise UserError(
                 _(
@@ -97,16 +93,25 @@ class DallyShipment(models.Model):
             )
         )
         if incomplete:
-            keys = ", ".join(
-                incomplete.mapped("external_line_key") or incomplete.mapped("description")
-            )
+            labels = [
+                value
+                for value in (
+                    line.external_line_key or line.description or str(line.id)
+                    for line in incomplete
+                )
+                if value
+            ]
             raise UserError(
-                _("Some freight lines are not ready for invoicing: %s", keys or "-")
+                _("Some freight lines are not ready for invoicing: %s", ", ".join(labels) or "-")
             )
         return True
 
     def action_prepare_native_freight_invoice(self):
-        """Create one confirmed native SO then one *draft* customer invoice.
+        """Create at most one native SO and one *draft* customer invoice.
+
+        Business idempotence is anchored on ``dally.shipment`` itself, not only
+        on the HTTP request UUID.  A second Apps Script call with a fresh UUID
+        returns the already-linked invoice instead of creating a duplicate.
 
         Confirmation is required by Odoo's standard ``_create_invoices`` flow.
         Products are services, therefore this confirmation creates no stock
@@ -114,17 +119,19 @@ class DallyShipment(models.Model):
         remains a Finance decision.
         """
         self.ensure_one()
-        self._check_ready_for_native_invoice()
 
-        # Serialize callers from a button, API retry or concurrent Apps Script
-        # execution.  The record is re-read after the lock before creating docs.
+        # Lock before checking document links. Two concurrent fresh request UUIDs
+        # must serialize on the same freight business record.
         self.env.cr.execute(
             'SELECT id FROM dally_shipment WHERE id = %s FOR UPDATE',
             [self.id],
         )
         self.invalidate_recordset(["sale_order_id", "invoice_id", "billing_locked"])
+
         if self.invoice_id:
             return self.invoice_id
+
+        self._check_ready_for_native_invoice()
 
         order = self.sale_order_id
         if not order:
@@ -138,15 +145,27 @@ class DallyShipment(models.Model):
                 _("Freight sales order %s is not in a confirmable state.", order.display_name)
             )
 
-        invoices = order._create_invoices()
+        # A transaction may have created the SO and failed after confirmation but
+        # before the shipment link was written. Reuse any existing invoice from
+        # this very order before asking Odoo to create another one.
+        existing = order.invoice_ids.filtered(
+            lambda move: move.move_type == "out_invoice" and move.state != "cancel"
+        )[:1]
+        invoices = existing or order._create_invoices()
         invoice = invoices.filtered(lambda move: move.move_type == "out_invoice")[:1]
         if not invoice:
             raise UserError(_("Odoo did not create a customer invoice for this freight order."))
         if invoice.state != "draft":
             raise UserError(
-                _("The generated freight invoice must remain a draft until Finance validates it.")
+                _(
+                    "Invoice %(invoice)s already exists in state %(state)s. "
+                    "Freight automation will not rewrite it."
+                )
+                % {"invoice": invoice.display_name, "state": invoice.state}
             )
 
+        if invoice.dally_freight_shipment_id and invoice.dally_freight_shipment_id != self:
+            raise UserError(_("The generated invoice is already linked to another freight file."))
         invoice.dally_freight_shipment_id = self.id
         self.write({
             "invoice_id": invoice.id,
@@ -187,7 +206,11 @@ class DallyShipment(models.Model):
                 "product_uom_id": self.env.ref("uom.product_uom_kgm").id,
                 "product_uom_qty": package.billable_weight_kg,
                 "price_unit": package.applied_unit_price_eur,
-                "name": _("%(mode)s — %(description)s", mode=mode_label, description=description),
+                "name": _(
+                    "%(mode)s — %(description)s",
+                    mode=mode_label,
+                    description=description,
+                ),
                 "dally_freight_package_id": package.id,
             })
             sequence += 10
@@ -213,7 +236,7 @@ class DallyShipment(models.Model):
     def action_reset_draft_freight_billing(self):
         """Remove generated draft documents so corrected Sheet data can sync.
 
-        Only documents still fully reversible are accepted.  A posted invoice is
+        Only documents still fully reversible are accepted. A posted invoice is
         accounting history and is never deleted or rewritten by this module.
         """
         for shipment in self:
@@ -224,9 +247,7 @@ class DallyShipment(models.Model):
                 raise UserError(
                     _("Posted invoice %s cannot be reset by Freight sync.", invoice.display_name)
                 )
-            if invoice and invoice.state == "draft":
-                invoice.unlink()
-            elif invoice and invoice.state == "cancel":
+            if invoice:
                 invoice.unlink()
 
             if order:

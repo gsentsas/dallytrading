@@ -26,10 +26,15 @@ portal_group = env.ref("base.group_portal")
 internal_group = env.ref("base.group_user")
 
 def make_company(label, city):
+    profile = {
+        "Alpha": {"street": "1 rue Alpha"},
+        "Beta": {"street": "2 rue Beta"},
+    }[label]
     return env["res.partner"].create({
         "name": f"E2E {label} SARL (synthetique)",
         "is_company": True,
         "email": f"contact@e2e-{label.lower()}.invalid",
+        "street": profile["street"],
         "city": city,
         "country_id": env.ref("base.sn").id,
     })
@@ -61,6 +66,26 @@ company_a = make_company("Alpha", "Dakar")
 company_b = make_company("Beta", "Thies")
 user_a = make_portal_user("A", company_a)
 user_b = make_portal_user("B", company_b)
+
+# Précondition critique pour le checkout connecté :
+# le profil réellement porté par user.partner_id doit être livrable.
+# Tester uniquement les valeurs passées à create() serait insuffisant :
+# Odoo synchronise certains champs d'adresse entre société et contacts.
+for user, expected_street, expected_city in (
+    (user_a, "1 rue Alpha", "Dakar"),
+    (user_b, "2 rue Beta", "Thies"),
+):
+    partner = user.partner_id
+    assert partner.name, "profil portail sans nom"
+    assert partner.street == expected_street, (
+        f"profil portail {user.login} sans rue exploitable: {partner.street!r}"
+    )
+    assert partner.city == expected_city, (
+        f"profil portail {user.login} sans ville exploitable: {partner.city!r}"
+    )
+    assert partner.country_id.code == "SN", (
+        f"profil portail {user.login} sans pays exploitable"
+    )
 
 staff_partner = env["res.partner"].create({
     "name": "E2E Staff Interne (synthetique)",

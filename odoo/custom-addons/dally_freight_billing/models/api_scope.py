@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Extend the Dally API scope vocabulary for the trusted Sheet connector."""
+"""Extend the Dally API scope vocabulary for trusted Freight connectors."""
 
 from odoo import api, models, _
 from odoo.exceptions import ValidationError
@@ -8,7 +8,13 @@ from odoo.addons.dally_api.models.dally_api_key import AVAILABLE_SCOPES
 
 
 FREIGHT_WRITE_SCOPE = "freight:write"
-EXTENDED_SCOPES = frozenset(AVAILABLE_SCOPES) | {FREIGHT_WRITE_SCOPE}
+FREIGHT_INVOICE_SCOPE = "freight:invoice"
+FREIGHT_PAYMENT_SCOPE = "freight:payment"
+EXTENDED_SCOPES = frozenset(AVAILABLE_SCOPES) | {
+    FREIGHT_WRITE_SCOPE,
+    FREIGHT_INVOICE_SCOPE,
+    FREIGHT_PAYMENT_SCOPE,
+}
 
 
 class DallyApiKey(models.Model):
@@ -16,12 +22,11 @@ class DallyApiKey(models.Model):
 
     @api.constrains("scopes")
     def _check_scopes(self):
-        """Accept the base API scopes plus the freight Sheet write scope.
+        """Accept the base API scopes plus the optional Freight scopes.
 
-        The parent model stores scopes as a comma-separated Char, so there is no
-        ``selection_add`` hook.  Overriding the constraint keeps the extension
-        local to this optional module and avoids granting freight write to any
-        existing key automatically.
+        Data synchronisation, invoice creation and payment registration are
+        intentionally distinct privileges.  A leaked key used only to update
+        weights must not also be able to create accounting documents.
         """
         for record in self:
             for scope in record._scope_list():

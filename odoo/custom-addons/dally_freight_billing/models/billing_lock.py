@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Freeze the commercial inputs once native invoice documents exist."""
+"""Freeze commercial inputs once native invoice documents exist."""
 
 from odoo import api, models, _
 from odoo.exceptions import UserError
@@ -35,22 +35,52 @@ LOCKED_PACKAGE_FIELDS = frozenset({
 })
 
 
+def _normalised_current_value(record, field_name):
+    value = record[field_name]
+    if hasattr(value, "id"):
+        return value.id or False
+    return value
+
+
+def _same_value(record, field_name, new_value):
+    current = _normalised_current_value(record, field_name)
+    if current in (None, ""):
+        current = False
+    if new_value in (None, ""):
+        new_value = False
+    return current == new_value
+
+
+def _actual_changes(record, vals, protected):
+    return {
+        field_name
+        for field_name in protected
+        if not _same_value(record, field_name, vals[field_name])
+    }
+
+
 class DallyShipment(models.Model):
     _inherit = "dally.shipment"
 
     def write(self, vals):
         protected = LOCKED_SHIPMENT_FIELDS.intersection(vals)
         if protected:
-            locked = self.filtered("billing_locked")
-            if locked:
+            offenders = []
+            changed_fields = set()
+            for shipment in self.filtered("billing_locked"):
+                changes = _actual_changes(shipment, vals, protected)
+                if changes:
+                    offenders.append(shipment.display_name)
+                    changed_fields.update(changes)
+            if offenders:
                 raise UserError(
                     _(
                         "Freight billing is locked for %(references)s. Reset the "
                         "draft billing documents before changing: %(fields)s."
                     )
                     % {
-                        "references": ", ".join(locked.mapped("display_name")),
-                        "fields": ", ".join(sorted(protected)),
+                        "references": ", ".join(offenders),
+                        "fields": ", ".join(sorted(changed_fields)),
                     }
                 )
         return super().write(vals)
@@ -77,14 +107,14 @@ class DallyShipmentPackage(models.Model):
     def write(self, vals):
         protected = LOCKED_PACKAGE_FIELDS.intersection(vals)
         if protected:
-            locked = self.filtered(lambda line: line.shipment_id.billing_locked)
-            if locked:
-                raise UserError(
-                    _(
-                        "Cannot change invoiced freight article data while billing "
-                        "is locked. Reset the draft billing first."
+            for line in self.filtered(lambda item: item.shipment_id.billing_locked):
+                if _actual_changes(line, vals, protected):
+                    raise UserError(
+                        _(
+                            "Cannot change invoiced freight article data while billing "
+                            "is locked. Reset the draft billing first."
+                        )
                     )
-                )
         return super().write(vals)
 
     def unlink(self):

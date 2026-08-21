@@ -14,10 +14,14 @@ class TestFreightSyncEndpoint(HttpCase):
 
     def setUp(self):
         super().setUp()
+        self.sync_user = self.env.ref(
+            "dally_freight_billing.user_dally_freight_sync_integration"
+        )
         self.key = self.env["dally.api.key"].create({
             "name": "Freight Sheet Test Key",
             "scopes": "freight:write",
             "allowed_ips": "",
+            "user_id": self.sync_user.id,
         })
         self.raw_key = self.key.key_to_display
 
@@ -65,6 +69,7 @@ class TestFreightSyncEndpoint(HttpCase):
     def test_freight_write_scope_is_valid_for_api_key(self):
         self.assertIn("freight:write", self.key._scope_list())
         self.assertTrue(self.key.has_scope("freight:write"))
+        self.assertEqual(self.key.user_id, self.sync_user)
 
     def test_rejects_missing_api_key(self):
         response = self._post(self._payload(), api_key=False)
@@ -76,10 +81,23 @@ class TestFreightSyncEndpoint(HttpCase):
             "name": "Freight Wrong Scope",
             "scopes": "tracking:read",
             "allowed_ips": "",
+            "user_id": self.sync_user.id,
         })
         response = self._post(self._payload(), api_key=limited.key_to_display)
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["error"]["code"], "insufficient_scope")
+
+    def test_scope_does_not_bypass_acting_user_acl(self):
+        generic_user = self.env.ref("dally_api.user_dally_api_integration")
+        wrong_user_key = self.env["dally.api.key"].create({
+            "name": "Freight Scope With Generic User",
+            "scopes": "freight:write",
+            "allowed_ips": "",
+            "user_id": generic_user.id,
+        })
+        response = self._post(self._payload(), api_key=wrong_user_key.key_to_display)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "forbidden")
 
     def test_creates_shipment_and_returns_sync_ids(self):
         payload = self._payload()

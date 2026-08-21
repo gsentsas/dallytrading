@@ -26,8 +26,10 @@ so there are three:
    emits. A field added to the shipment tomorrow cannot appear by accident, and
    the tests assert the payload's keys against the declared set.
 
-``sudo()`` is deliberately not used anywhere in the tracking path: it would
-bypass layers 1 and 2 and leave only the third.
+``sudo()`` is deliberately not used in the public tracking lookup/payload
+path: it would bypass layers 1 and 2 and leave only the third. The only elevated
+operation is assignment of the server-generated tracking token after a shipment
+has already passed its normal create ACLs; callers can never provide that token.
 
 ``visible_to_customer`` defaults to **False**, so a forgotten checkbox fails
 closed instead of publishing an internal note.
@@ -35,7 +37,7 @@ closed instead of publishing an internal note.
     "author": "DallyTrading",
     "website": "https://dallytrading.com",
     "category": "Services/DallyTrading",
-    "version": "19.0.1.0.0",
+    "version": "19.0.1.0.1",
     "license": "LGPL-3",
     "depends": [
         "dally_freight",

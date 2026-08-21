@@ -2,11 +2,12 @@
 {
     "name": "DallyTrading — Freight Billing Sync",
     "summary": "Tarification, facturation et synchronisation du cahier fret.",
-    "version": "19.0.1.6.0",
+    "version": "19.0.1.6.1",
     "license": "LGPL-3",
     "depends": [
         "dally_api",
         "dally_freight",
+        "dally_tracking",
         "dally_crm",
         "sale",
         "account",

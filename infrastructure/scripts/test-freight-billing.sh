@@ -12,7 +12,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 COMPOSE="$ROOT/infrastructure/docker-compose.freight-dev.yml"
-EXPECTED_MODULE_VERSION="19.0.1.6.0"
+EXPECTED_MODULE_VERSION="19.0.1.6.1"
 
 PROJECT="${FBT_PROJECT:-dallytrading-freight-billing-test}"
 DB="${FBT_DB:-dallytrading_freight_billing_test}"
@@ -99,7 +99,8 @@ HEAD="$(git -C "$ROOT" rev-parse HEAD)"
 BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)"
 STATUS="$(git -C "$ROOT" status --porcelain)"
 printf 'BRANCH=%s\nHEAD=%s\n' "$BRANCH" "$HEAD"
-[ "$BRANCH" = "feature/freight-billing-sync" ] || fail "run this gate from feature/freight-billing-sync"
+EXPECTED_BRANCH="${FBT_EXPECTED_BRANCH:-feature/freight-billing-sync}"
+[ "$BRANCH" = "$EXPECTED_BRANCH" ] || fail "run this gate from $EXPECTED_BRANCH"
 [ -z "$STATUS" ] || fail "worktree must be clean before RC tests"
 
 log "ephemeral configuration"

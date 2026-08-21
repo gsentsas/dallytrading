@@ -161,11 +161,34 @@ class DallyShipment(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        """Create shipments without exposing the tracking capability field.
+
+        ``public_tracking_token`` is restricted by field groups. Injecting it in
+        ``vals`` before ``super().create()`` makes an otherwise authorised
+        operational user look as if it were trying to write that protected field.
+
+        The caller therefore passes the normal shipment ACL/record-rule checks
+        first. Only after successful creation do we assign the server-owned token
+        with a narrowly scoped sudo write.
+
+        A caller-supplied token is deliberately discarded: external integrations
+        must never be able to choose their own public tracking capability.
+        """
+        clean_vals_list = []
+        tokens = []
+
         for vals in vals_list:
-            # Every shipment gets a token at creation. Generating it lazily would
-            # mean a shipment could be notified to a customer before it had one.
-            vals.setdefault("public_tracking_token", self._dally_new_tracking_token())
-        return super().create(vals_list)
+            clean_vals = dict(vals)
+            clean_vals.pop("public_tracking_token", None)
+            clean_vals_list.append(clean_vals)
+            tokens.append(self._dally_new_tracking_token())
+
+        shipments = super().create(clean_vals_list)
+
+        for shipment, token in zip(shipments, tokens):
+            shipment.sudo().write({"public_tracking_token": token})
+
+        return shipments
 
     def action_rotate_tracking_token(self):
         """Issue a new token, invalidating every link already sent.

@@ -179,10 +179,23 @@ done
 
 echo "POSTGRES=HEALTHY"
 
+# `compose up` also starts the long-running Odoo service, which already owns
+# port 8069 inside that container. Starting a second `odoo` process with
+# `docker exec` would therefore fail before a single test runs. Stop only the RC
+# Odoo service, keep PostgreSQL alive, then use a one-off Compose container for
+# the test process. `docker compose run` does not publish the service ports by
+# default, so HttpCase still gets a real HTTP server on 8069 in its own network
+# namespace without any host/production port collision.
+log "prepare one-off Odoo test process"
+compose stop odoo >/dev/null
+
+ODOO_SERVICE_RUNNING="$(docker inspect -f '{{.State.Running}}' "$ODOO_CONTAINER" 2>/dev/null || echo unknown)"
+echo "RC_SERVICE_ODOO_RUNNING=$ODOO_SERVICE_RUNNING"
+[ "$ODOO_SERVICE_RUNNING" = "false" ] || fail "RC Odoo service did not stop cleanly"
+
 log "install module and execute Odoo tests"
 set +e
-docker exec "$ODOO_CONTAINER" \
-    odoo \
+compose run --rm --no-deps odoo \
     -c /etc/odoo/odoo.conf \
     -d "$DB" \
     -i dally_freight_billing \

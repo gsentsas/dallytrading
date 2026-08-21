@@ -10,8 +10,20 @@ class TestFreightPaymentCollection(AccountTestInvoicingCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        # AccountTestInvoicingCommon deliberately runs with its own accounting
+        # test user.  That user has accounting fixture rights but none of the
+        # DallyTrading Freight ACLs, so creating the shipment used by these
+        # business-behaviour tests fails before the payment code is reached.
+        #
+        # Grant only the roles required by this model-level scenario.  These
+        # additions live inside the transactional test fixture; they do not
+        # alter module ACLs, integration users or production permissions.
+        cls.env.user.group_ids += cls.env.ref("dally_core.group_dally_manager")
+        cls.env.user.group_ids += cls.env.ref("sales_team.group_sale_salesman")
+        cls.env.user.group_ids += cls.env.ref("account.group_account_invoice")
+
         # Use Odoo's accounting-test helper instead of toggling currencies by
-        # hand in every test.  It activates multi-currency consistently and
+        # hand in every test. It activates multi-currency consistently and
         # creates deterministic rates for the payment register wizard.
         cls.eur = cls.setup_other_currency("EUR")
         cls.xof = cls.setup_other_currency("XOF")

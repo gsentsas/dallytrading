@@ -16,6 +16,8 @@ TOP_LEVEL_FIELDS = frozenset({
     "goods_received_on",
     "customer_segment",
     "state",
+    "dossier_fee_eur",
+    "other_fees_eur",
     "client",
     "origin",
     "destination",
@@ -95,6 +97,8 @@ class DallyFreightSyncController(DallyApiController):
             "goods_received_on",
             "customer_segment",
             "state",
+            "dossier_fee_eur",
+            "other_fees_eur",
         ):
             if name in payload:
                 clean[name] = cls._scalar(payload.get(name), name)
@@ -137,10 +141,10 @@ class DallyFreightSyncController(DallyApiController):
                     "too_many_lines",
                     _("A freight sync request can contain at most %s lines.", MAX_LINES_PER_REQUEST),
                 )
-            clean_lines = []
-            for index, line in enumerate(lines, start=1):
-                clean_lines.append(cls._clean_line(line, index))
-            clean["lines"] = clean_lines
+            clean["lines"] = [
+                cls._clean_line(line, index)
+                for index, line in enumerate(lines, start=1)
+            ]
 
         return clean
 

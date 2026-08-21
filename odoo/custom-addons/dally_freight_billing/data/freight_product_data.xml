@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Native Odoo service products are used so sale.order confirmation and
+            _create_invoices() resolve accounting through the standard engine.
+            No tax is imposed here: the workbook contains no tax rule. Finance
+            may configure the product taxes before enabling automatic invoices.
+        -->
+        <record id="product_freight_transport_template" model="product.template">
+            <field name="name">Fret DallyTrading</field>
+            <field name="default_code">DALLY-FREIGHT</field>
+            <field name="type">service</field>
+            <field name="sale_ok" eval="True"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="invoice_policy">order</field>
+            <field name="service_tracking">no</field>
+            <field name="uom_id" ref="uom.product_uom_kgm"/>
+            <field name="taxes_id" eval="[(5, 0, 0)]"/>
+        </record>
+
+        <record id="product_freight_fee_template" model="product.template">
+            <field name="name">Frais dossier fret</field>
+            <field name="default_code">DALLY-FREIGHT-FEE</field>
+            <field name="type">service</field>
+            <field name="sale_ok" eval="True"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="invoice_policy">order</field>
+            <field name="service_tracking">no</field>
+            <field name="uom_id" ref="uom.product_uom_unit"/>
+            <field name="taxes_id" eval="[(5, 0, 0)]"/>
+        </record>
+
+        <record id="pricelist_freight_eur" model="product.pricelist">
+            <field name="name">DallyTrading Freight EUR</field>
+            <field name="currency_id" ref="base.EUR"/>
+            <field name="active" eval="True"/>
+        </record>
+    </data>
+</odoo>

@@ -372,7 +372,17 @@ test.describe('portail commandes', () => {
     expect(detail).toContain('Commande reçue');
     expect(detail).toContain('Retrait sur place');
     expect(detail).toContain('300 000');
-    expect(detail).toContain('Hors frais de livraison');
+
+    // En retrait, Odoo fige les frais de remise à zéro. On vérifie la ligne
+    // métier elle-même plutôt qu'un ancien libellé « Hors frais de livraison ».
+    const fraisRemise = page
+      .getByText('Frais de remise', { exact: true })
+      .locator('..');
+    await expect(fraisRemise).toContainText('0 $US');
+
+    // Un retrait gratuit n'est pas une cotation en attente.
+    expect(detail).not.toContain('À confirmer');
+
     // Rien qui promette un paiement ou une expédition.
     for (const promesse of ['payée', 'réglée', 'expédiée', 'livrée']) {
       expect(detail.toLowerCase()).not.toContain(promesse);

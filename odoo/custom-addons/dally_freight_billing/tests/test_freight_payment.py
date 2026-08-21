@@ -7,13 +7,15 @@ from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 @tagged("post_install", "-at_install", "dally")
 class TestFreightPaymentCollection(AccountTestInvoicingCommon):
 
-    def setUp(self):
-        super().setUp()
-        self.eur = self.env.ref("base.EUR")
-        self.xof = self.env.ref("base.XOF")
-        self.eur.active = True
-        self.xof.active = True
-        self.food = self.env.ref("dally_freight_billing.tariff_family_food")
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Use Odoo's accounting-test helper instead of toggling currencies by
+        # hand in every test.  It activates multi-currency consistently and
+        # creates deterministic rates for the payment register wizard.
+        cls.eur = cls.setup_other_currency("EUR")
+        cls.xof = cls.setup_other_currency("XOF")
+        cls.food = cls.env.ref("dally_freight_billing.tariff_family_food")
 
     def _ready_shipment(self, reference):
         shipment = self.env["dally.shipment"].create({

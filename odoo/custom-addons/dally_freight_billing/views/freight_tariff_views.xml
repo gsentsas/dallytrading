@@ -99,11 +99,10 @@
                 <filter name="sea" string="Sea" domain="[('transport_mode', '=', 'sea')]"/>
                 <separator/>
                 <filter name="inactive" string="Archived" domain="[('active', '=', False)]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_mode" string="Mode" context="{'group_by': 'transport_mode'}"/>
-                    <filter name="group_family" string="Family" context="{'group_by': 'family_id'}"/>
-                    <filter name="group_segment" string="Customer Segment" context="{'group_by': 'customer_segment'}"/>
-                </group>
+                <separator/>
+                <filter name="group_mode" string="Mode" context="{'group_by': 'transport_mode'}"/>
+                <filter name="group_family" string="Family" context="{'group_by': 'family_id'}"/>
+                <filter name="group_segment" string="Customer Segment" context="{'group_by': 'customer_segment'}"/>
             </search>
         </field>
     </record>
@@ -112,6 +111,7 @@
         <field name="name">Freight Tariffs</field>
         <field name="res_model">dally.freight.tariff.rule</field>
         <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="dally_freight_tariff_rule_view_search"/>
     </record>
 
     <menuitem id="menu_dally_freight_tariff_rule"

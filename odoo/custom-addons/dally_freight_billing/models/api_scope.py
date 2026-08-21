@@ -10,10 +10,12 @@ from odoo.addons.dally_api.models.dally_api_key import AVAILABLE_SCOPES
 FREIGHT_WRITE_SCOPE = "freight:write"
 FREIGHT_INVOICE_SCOPE = "freight:invoice"
 FREIGHT_PAYMENT_SCOPE = "freight:payment"
+FREIGHT_CASH_SCOPE = "freight:cash"
 EXTENDED_SCOPES = frozenset(AVAILABLE_SCOPES) | {
     FREIGHT_WRITE_SCOPE,
     FREIGHT_INVOICE_SCOPE,
     FREIGHT_PAYMENT_SCOPE,
+    FREIGHT_CASH_SCOPE,
 }
 
 
@@ -24,9 +26,9 @@ class DallyApiKey(models.Model):
     def _check_scopes(self):
         """Accept the base API scopes plus the optional Freight scopes.
 
-        Data synchronisation, invoice creation and payment registration are
-        intentionally distinct privileges.  A leaked key used only to update
-        weights must not also be able to create accounting documents.
+        Data synchronisation, invoice creation, customer payments and internal
+        cash operations are intentionally distinct privileges. A leaked key used
+        only to update weights must not also be able to create financial records.
         """
         for record in self:
             for scope in record._scope_list():

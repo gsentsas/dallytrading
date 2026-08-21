@@ -42,6 +42,54 @@ class TestFreightSyncService(TransactionCase):
         payload.update(overrides)
         return payload
 
+    def test_tk_guard_uses_internal_elevated_read_only(self):
+        """The sync user must never need direct access to tk_shipment_id."""
+
+        class RestrictedShipment:
+            _fields = {"tk_shipment_id": object()}
+
+            def __bool__(self):
+                return True
+
+            @property
+            def tk_shipment_id(self):
+                raise AssertionError(
+                    "tk_shipment_id must not be read with the caller permissions"
+                )
+
+            def sudo(self):
+                class ElevatedShipment:
+                    tk_shipment_id = False
+
+                return ElevatedShipment()
+
+        self.assertFalse(
+            self.Sync._is_tk_managed(RestrictedShipment())
+        )
+
+    def test_tk_guard_blocks_operational_projection(self):
+        class RestrictedShipment:
+            _fields = {"tk_shipment_id": object()}
+
+            def __bool__(self):
+                return True
+
+            @property
+            def tk_shipment_id(self):
+                raise AssertionError(
+                    "tk_shipment_id must not be read with the caller permissions"
+                )
+
+            def sudo(self):
+                class ElevatedShipment:
+                    tk_shipment_id = object()
+
+                return ElevatedShipment()
+
+        self.assertTrue(
+            self.Sync._is_tk_managed(RestrictedShipment())
+        )
+
     def test_creates_customer_shipment_and_priced_line(self):
         data, shipment = self.Sync.upsert(self._payload())
 

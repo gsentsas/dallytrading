@@ -12,7 +12,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 COMPOSE="$ROOT/infrastructure/docker-compose.freight-dev.yml"
-EXPECTED_MODULE_VERSION="19.0.1.6.1"
+EXPECTED_MODULE_VERSION="19.0.1.6.2"
 
 PROJECT="${FBT_PROJECT:-dallytrading-freight-billing-test}"
 DB="${FBT_DB:-dallytrading_freight_billing_test}"

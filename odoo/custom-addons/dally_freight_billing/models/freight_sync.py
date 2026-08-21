@@ -76,7 +76,7 @@ class DallyFreightSyncService(models.AbstractModel):
         ], limit=1)
         shipment_created = not bool(shipment)
 
-        if shipment and "tk_shipment_id" in shipment._fields and shipment.tk_shipment_id:
+        if self._is_tk_managed(shipment):
             raise UserError(
                 _(
                     "Shipment %(reference)s is linked to the operational freight "
@@ -157,6 +157,24 @@ class DallyFreightSyncService(models.AbstractModel):
             "state": shipment.state,
             "lines": line_results,
         }, shipment
+
+    @api.model
+    def _is_tk_managed(self, shipment):
+        """Return whether the shipment belongs to the operational tk engine.
+
+        ``tk_shipment_id`` is intentionally restricted to DallyTrading internal
+        readers by field groups. The Google Sheets integration must not receive
+        access to that field.
+
+        This method therefore performs only the binary ownership check through a
+        narrowly scoped sudo record. No tk record or identifier is returned to
+        the caller.
+        """
+        return bool(
+            shipment
+            and "tk_shipment_id" in shipment._fields
+            and shipment.sudo().tk_shipment_id
+        )
 
     # ------------------------------------------------------------------
     # Customer

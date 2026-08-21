@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="dally_freight_collection_view_list" model="ir.ui.view">
+        <field name="name">dally.freight.collection.list</field>
+        <field name="model">dally.freight.collection</field>
+        <field name="arch" type="xml">
+            <list string="Freight Collections"
+                  decoration-success="state == 'registered'"
+                  decoration-warning="state == 'pending'"
+                  decoration-danger="state == 'error'">
+                <field name="payment_date"/>
+                <field name="external_payment_key" optional="show"/>
+                <field name="shipment_id"/>
+                <field name="partner_id"/>
+                <field name="amount"/>
+                <field name="currency_id"/>
+                <field name="source_method"/>
+                <field name="collected_by_id" optional="show"/>
+                <field name="collected_by_name" optional="hide"/>
+                <field name="state"/>
+                <field name="payment_id" optional="show"/>
+                <field name="error_message" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="dally_freight_collection_view_form" model="ir.ui.view">
+        <field name="name">dally.freight.collection.form</field>
+        <field name="model">dally.freight.collection</field>
+        <field name="arch" type="xml">
+            <form string="Freight Collection">
+                <sheet>
+                    <group>
+                        <group string="Collection">
+                            <field name="external_payment_key" readonly="state == 'registered'"/>
+                            <field name="shipment_id" readonly="state == 'registered'"/>
+                            <field name="partner_id" readonly="1"/>
+                            <field name="invoice_id" readonly="1"/>
+                            <field name="payment_date" readonly="state == 'registered'"/>
+                            <field name="amount" readonly="state == 'registered'"/>
+                            <field name="currency_id" readonly="state == 'registered'"/>
+                        </group>
+                        <group string="Origin">
+                            <field name="source_method" readonly="state == 'registered'"/>
+                            <field name="source" readonly="state == 'registered'"/>
+                            <field name="collected_by_id" readonly="state == 'registered'"/>
+                            <field name="collected_by_name" readonly="state == 'registered'"/>
+                        </group>
+                    </group>
+                    <group string="Accounting">
+                        <field name="state" readonly="1"/>
+                        <field name="payment_id" readonly="1"/>
+                        <field name="last_attempt_at" readonly="1"/>
+                        <field name="error_message" readonly="1"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="dally_freight_collection_view_search" model="ir.ui.view">
+        <field name="name">dally.freight.collection.search</field>
+        <field name="model">dally.freight.collection</field>
+        <field name="arch" type="xml">
+            <search string="Freight Collections">
+                <field name="external_payment_key"/>
+                <field name="shipment_id"/>
+                <field name="partner_id"/>
+                <filter name="pending" string="Pending" domain="[('state', '=', 'pending')]"/>
+                <filter name="registered" string="Registered" domain="[('state', '=', 'registered')]"/>
+                <filter name="error" string="Errors" domain="[('state', '=', 'error')]"/>
+                <separator/>
+                <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
+                <filter name="group_currency" string="Currency" context="{'group_by': 'currency_id'}"/>
+                <filter name="group_collector" string="Collector" context="{'group_by': 'collected_by_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="dally_freight_collection_action" model="ir.actions.act_window">
+        <field name="name">Freight Collections</field>
+        <field name="res_model">dally.freight.collection</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="dally_freight_collection_view_search"/>
+    </record>
+
+    <record id="dally_freight_payment_channel_view_list" model="ir.ui.view">
+        <field name="name">dally.freight.payment.channel.list</field>
+        <field name="model">dally.freight.payment.channel</field>
+        <field name="arch" type="xml">
+            <list string="Freight Payment Channels" decoration-muted="not active">
+                <field name="name"/>
+                <field name="code"/>
+                <field name="currency_id"/>
+                <field name="journal_id"/>
+                <field name="payment_method_line_id"/>
+                <field name="active" optional="hide"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="dally_freight_payment_channel_view_form" model="ir.ui.view">
+        <field name="name">dally.freight.payment.channel.form</field>
+        <field name="model">dally.freight.payment.channel</field>
+        <field name="arch" type="xml">
+            <form string="Freight Payment Channel">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="code"/>
+                        <field name="company_id" groups="base.group_multi_company"/>
+                        <field name="currency_id"/>
+                        <field name="journal_id"/>
+                        <field name="payment_method_line_id"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="dally_freight_payment_channel_action" model="ir.actions.act_window">
+        <field name="name">Freight Payment Channels</field>
+        <field name="res_model">dally.freight.payment.channel</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_dally_freight_collections"
+              name="Freight Collections"
+              parent="dally_core.menu_dally_operations"
+              action="dally_freight_collection_action"
+              sequence="45"
+              groups="dally_core.group_dally_readonly"/>
+
+    <menuitem id="menu_dally_freight_payment_channels"
+              name="Freight Payment Channels"
+              parent="dally_core.menu_dally_configuration"
+              action="dally_freight_payment_channel_action"
+              sequence="32"
+              groups="dally_core.group_dally_manager"/>
+</odoo>

@@ -19,6 +19,7 @@ ALLOWED_FIELDS = frozenset({
     "source",
 })
 VALID_SOURCES = frozenset({"legacy_xlsx", "google_sheets", "backoffice"})
+BILLING_GROUP = "dally_freight_billing.group_dally_freight_billing_api"
 
 
 class DallyFreightPaymentController(DallyApiController):
@@ -40,6 +41,13 @@ class DallyFreightPaymentController(DallyApiController):
         )
 
     def _sync_payment(self, env, payload, api_key):
+        if not env.user.has_group(BILLING_GROUP):
+            raise DallyApiError(
+                403,
+                "forbidden",
+                _("This API user is not allowed to synchronise freight payments."),
+            )
+
         unknown = sorted(set(payload) - ALLOWED_FIELDS)
         if unknown:
             raise DallyApiError(

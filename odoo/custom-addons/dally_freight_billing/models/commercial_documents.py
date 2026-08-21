@@ -48,19 +48,47 @@ class DallyShipment(models.Model):
     )
 
     @api.depends(
-        "package_ids.transport_amount_eur",
+        "package_ids.billable_weight_kg",
+        "package_ids.applied_unit_price_eur",
         "dossier_fee_eur",
         "other_fees_eur",
+        "billing_currency_id",
     )
     def _compute_billing_totals(self):
+        """Mirror native Odoo invoice rounding at shipment level.
+
+        ``transport_amount_eur`` is Monetary and is therefore rounded to the
+        currency precision on every package line. Summing those rounded line
+        snapshots can introduce a one-cent drift compared with the native
+        sale/invoice engine, which calculates quantity * price_unit from the
+        underlying values.
+
+        Compute the shipment freight from the raw billing operands and round
+        only the resulting monetary total.
+        """
         for shipment in self:
-            shipment.freight_amount_eur = sum(
-                shipment.package_ids.mapped("transport_amount_eur")
+            currency = shipment.billing_currency_id
+            freight_raw = sum(
+                (line.billable_weight_kg or 0.0)
+                * (line.applied_unit_price_eur or 0.0)
+                for line in shipment.package_ids
+                if line.billing_method != "quote"
             )
-            shipment.billing_total_eur = (
-                shipment.freight_amount_eur
+            total_raw = (
+                freight_raw
                 + (shipment.dossier_fee_eur or 0.0)
                 + (shipment.other_fees_eur or 0.0)
+            )
+
+            shipment.freight_amount_eur = (
+                currency.round(freight_raw)
+                if currency
+                else freight_raw
+            )
+            shipment.billing_total_eur = (
+                currency.round(total_raw)
+                if currency
+                else total_raw
             )
 
     @api.constrains("dossier_fee_eur", "other_fees_eur")

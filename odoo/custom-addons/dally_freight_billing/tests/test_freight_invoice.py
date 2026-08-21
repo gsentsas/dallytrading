@@ -70,6 +70,68 @@ class TestFreightNativeInvoice(TransactionCase):
                 "Freight billing products are services and must not create stock pickings",
             )
 
+    def test_shipment_total_avoids_per_line_rounding_drift(self):
+        shipment = self.env["dally.shipment"].create({
+            "partner_id": self.partner.id,
+            "external_reference": "INV-ROUNDING",
+            "transport_mode": "sea",
+            "direction": "export",
+            "customer_segment_snapshot": "individual",
+            "goods_received_on": "2026-08-21",
+        })
+
+        lines = self.env["dally.shipment.package"]
+        for index, weight in enumerate((20.35, 1.65), start=1):
+            line = self.env["dally.shipment.package"].create({
+                "shipment_id": shipment.id,
+                "external_line_key": "INV-ROUNDING|A|%s" % index,
+                "package_type": "parcel",
+                "description": "Rounding test %s" % index,
+                "quantity": 1,
+                "unit_weight_kg": weight,
+                "billing_method": "real",
+                "manual_unit_price_eur": 2.5,
+                "pricing_reason": "Historical rounding regression test",
+            })
+            line.action_apply_freight_tariff()
+            lines |= line
+
+        # Individually rounded snapshots reproduce the historical drift:
+        # 20.35 * 2.5 = 50.875 -> 50.88
+        #  1.65 * 2.5 =  4.125 ->  4.13
+        self.assertAlmostEqual(
+            sum(lines.mapped("transport_amount_eur")),
+            55.01,
+            places=2,
+        )
+
+        # Shipment and native invoice must round only the raw aggregate:
+        # 50.875 + 4.125 = 55.00.
+        self.assertAlmostEqual(
+            shipment.freight_amount_eur,
+            55.00,
+            places=2,
+        )
+        self.assertAlmostEqual(
+            shipment.billing_total_eur,
+            55.00,
+            places=2,
+        )
+
+        invoice = shipment.action_prepare_native_freight_invoice()
+
+        self.assertEqual(invoice.state, "draft")
+        self.assertAlmostEqual(
+            invoice.amount_total,
+            55.00,
+            places=2,
+        )
+        self.assertAlmostEqual(
+            shipment.billing_total_eur,
+            invoice.amount_total,
+            places=2,
+        )
+
     def test_business_retry_returns_same_invoice(self):
         shipment, _line = self._ready_shipment("INV-SYNC-RETRY")
         first = shipment.action_prepare_native_freight_invoice()

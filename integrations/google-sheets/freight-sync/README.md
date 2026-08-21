@@ -6,15 +6,32 @@ Bound Apps Script connector for `FActuration COntainer 2`.
 
 Synchronise the operational Google Sheet with the validated Odoo Freight billing API without making the spreadsheet the accounting source of truth.
 
-The connector groups all rows of one dossier and performs, in order:
+The connector covers all transactional source tabs:
 
-1. `POST /api/v1/freight/sync` — customer, shipment and freight article upsert;
-2. optional `POST /api/v1/freight/invoice` — native Odoo sale order + **draft invoice only**;
-3. `POST /api/v1/freight/payment` — customer collections, idempotent with the workbook `BF` key.
+1. `Saisie maritime` / `Saisie aérien` → customer, shipment and freight articles;
+2. invoice creation → native Odoo sale order + **draft invoice only**;
+3. customer payments → Freight collection then native `account.payment` when accounting prerequisites exist;
+4. `Dépenses` → internal expense with actor allocations;
+5. `Transferts caisse` → internal cash transfer.
+
+Dashboard, synthesis, invoice-print and customs-print tabs remain derived/reporting views and are not pushed as independent records.
+
+## Freight API flow
+
+For one dossier the connector performs, in order:
+
+1. `POST /api/v1/freight/sync`;
+2. optional `POST /api/v1/freight/invoice`;
+3. one `POST /api/v1/freight/payment` per row carrying a `BF` payment key.
+
+Internal cash uses:
+
+- `POST /api/v1/freight/expense`
+- `POST /api/v1/freight/cash-transfer`
 
 ## Spreadsheet output columns
 
-The existing unused sync columns `AF:AM` are used as CRM outputs:
+The existing unused sync columns `AF:AM` are used as CRM outputs on the Freight entry tabs:
 
 | Column | Meaning |
 | --- | --- |
@@ -27,37 +44,52 @@ The existing unused sync columns `AF:AM` are used as CRM outputs:
 | AL | Odoo invoice number / draft marker |
 | AM | Sync / pricing / payment message |
 
+Cash output columns are:
+
+- `Dépenses` `Q:T`: sync status, Odoo Expense ID, last sync, message
+- `Transferts caisse` `M:P`: sync status, Odoo Transfer ID, last sync, message
+
 The workbook business idempotency keys are preserved:
 
 - `BD`: freight article key (`<dossier>|A|<n>`)
 - `BF`: payment key (`<dossier>|P|<n>`)
+- `Dépenses!A`: expense key (`DEP-...`)
+- `Transferts caisse!A`: transfer key (`TRF-...`)
 
 A row with a payment key but no article key (for example a complementary payment row) is **not** sent as a freight article.
 
 ## Security
 
-Never write API keys in cells, source-controlled files or the Apps Script source.
+Never write API keys in cells, source-controlled files or Apps Script source.
 
 Create these **Script Properties** in the bound Apps Script project:
 
 - `DALLY_FREIGHT_SYNC_API_KEY`
 - `DALLY_FREIGHT_BILLING_API_KEY`
 
-The first key must use the dedicated Freight Sync integration identity and carry `freight:write`.
-The second key must use the dedicated Freight Billing integration identity and carry `freight:invoice` + `freight:payment`.
+The first key must use the dedicated Freight Sync integration identity and carry:
 
-Requests use the `X-API-Key` header and a fresh UUID. Odoo also enforces object-level idempotency using dossier, article and payment business keys.
+- `freight:write`
+
+The second key must use the dedicated Freight Billing integration identity and carry:
+
+- `freight:invoice`
+- `freight:payment`
+- `freight:cash`
+
+Requests use `X-API-Key` and a fresh UUID. Odoo additionally enforces object-level idempotency using dossier, article, payment, expense and transfer business keys.
 
 ## Installation
 
 1. Upload `FActuration COntainer 2 - CRM SYNC.xlsx` to Google Drive and open it as Google Sheets.
 2. Open **Extensions → Apps Script**.
-3. Copy `Code.gs` into the bound project.
+3. Copy `Code.gs` and `Cash.gs` into the bound project.
 4. Enable the manifest file in Apps Script project settings and use `appsscript.json` from this directory.
 5. Add the two Script Properties above.
 6. Execute `dallySetup()` once and approve the requested scopes.
-7. Reload the spreadsheet. A **Dally CRM** menu appears.
-8. Run **Dally CRM → Diagnostic configuration** before any write operation.
+7. Execute `dallyCashSetup()` once to install the independent expense/transfer triggers.
+8. Reload the spreadsheet. Menus **Dally CRM** and **Dally Caisse** appear.
+9. Run **Dally CRM → Diagnostic configuration** before any write operation.
 
 ## Migration mode
 
@@ -68,23 +100,25 @@ The `Synchronisation CRM` sheet starts with:
 - payment sync: `OUI`
 - initial migration mode: `OUI`
 
-While migration mode is `OUI`, API payloads use source `legacy_xlsx`.
-After the historical dossiers have been compared against Odoo, switch it to `NON`; new edits then use source `google_sheets`.
+While migration mode is `OUI`, all API payloads use source `legacy_xlsx`.
+After the historical data has been compared against Odoo, switch it to `NON`; new edits then use source `google_sheets`.
 
-Keep automatic draft invoice set to `NON` during the first historical import. Enable it only after the totals have been reconciled.
+Keep automatic draft invoice set to `NON` during the first historical import. Enable it only after dossier totals have been reconciled.
 
 ## Triggers
 
-`dallySetup()` installs two project triggers:
+`dallySetup()` installs:
 
-- installable `onEdit`: only marks an edited dossier `À synchroniser`;
-- one-minute time trigger: groups dirty rows by dossier and sends a batch-like sequence of dossier requests.
+- installable `onEdit` that only marks an edited dossier `À synchroniser`;
+- one-minute time trigger that groups dirty rows by dossier and sends dossier requests.
 
-The edit trigger never performs HTTP calls. This prevents one API request per edited cell and avoids partial-dossier writes while the operator is typing.
+`dallyCashSetup()` installs independent triggers for `Dépenses` and `Transferts caisse`.
 
-The maximum number of dossiers processed per minute is configured in `Synchronisation CRM` (default: 10), staying comfortably below the API backstop rate limit.
+No edit trigger performs HTTP calls. This prevents one API request per edited cell and avoids sending a half-completed row while the operator is typing.
 
-## Workbook mapping highlights
+The maximum number of operations processed per minute uses the `Dossiers max par cycle` setting (default: 10), staying below the API backstop rate limit.
+
+## Freight mapping highlights
 
 - `A`: goods/deposit date → `goods_received_on`
 - `B`: dossier → `external_reference`
@@ -100,6 +134,25 @@ The maximum number of dossiers processed per minute is configured in `Synchronis
 - `AQ`: declared customs value in XOF
 - `AW/AX`: payment amount EUR/XOF
 - `BB/BC`: payment method and collector
+
+## Internal expense mapping
+
+`Dépenses` preserves the workbook structure:
+
+- `A`: external expense key
+- `B:E`: date/category/description/beneficiary
+- `F:H`: allocations paid by Gilles, Alain and Dalanda
+- `J`: source currency (`EUR` or `FCFA` → API `XOF`)
+- `K:L`: historical workbook EUR/XOF snapshots
+- `M:P`: payment method, reference, status, comment
+
+The expense is operational cash tracking; it is **not** converted into an accounting vendor bill by this connector.
+
+## Cash transfer mapping
+
+`Transferts caisse` maps the sender, recipient, amount/currency, EUR/XOF snapshots, reason, handover method, status and comment into `dally.cash.transfer`.
+
+A transfer never affects customer invoices or customer payments.
 
 ## Route configuration
 

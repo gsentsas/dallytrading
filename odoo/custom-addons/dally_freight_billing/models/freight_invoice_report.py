@@ -15,6 +15,9 @@ class AccountMove(models.Model):
         text = f"{amount or 0.0:,.{digits}f}"
         text = text.replace(",", " ").replace(".", ",")
 
+        if currency.name == "XOF":
+            return f"{text} FCFA"
+
         symbol = currency.symbol or currency.name
 
         if currency.position == "before":
@@ -109,9 +112,9 @@ class AccountMove(models.Model):
         }
 
         state_labels = {
-            "pending": "En attente de comptabilisation",
+            "pending": "Enregistré",
             "registered": "Comptabilisé",
-            "error": "Erreur de comptabilisation",
+            "error": "À vérifier",
         }
 
         collection_rows = []
@@ -168,8 +171,17 @@ class AccountMove(models.Model):
                 ),
             )
             balance_label = (
-                "Solde indicatif après encaissements"
+                "Reste à payer (indicatif)"
             )
+
+        if not collections:
+            payment_summary_label = "Non réglée"
+        elif self.currency_id.is_zero(balance_due):
+            payment_summary_label = (
+                "Règlement complet enregistré"
+            )
+        else:
+            payment_summary_label = "Acompte enregistré"
 
         if self.state == "draft":
             document_title = "FACTURE - BROUILLON"
@@ -197,4 +209,5 @@ class AccountMove(models.Model):
             "received_equivalent": received_equivalent,
             "balance_due": balance_due,
             "balance_label": balance_label,
+            "payment_summary_label": payment_summary_label,
         }

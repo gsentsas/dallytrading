@@ -94,9 +94,9 @@
                                     t-if="o.company_id.logo"
                                     t-att-src="image_data_uri(o.company_id.logo)"
                                     style="
-                                        width: 150px;
-                                        max-width: 150px;
-                                        max-height: 95px;
+                                        width: 185px;
+                                        max-width: 185px;
+                                        max-height: 110px;
                                         object-fit: contain;
                                         margin-bottom: 8px;
                                     "
@@ -561,7 +561,6 @@
 
                     <!-- COLLECTIONS -->
                     <div
-                        t-if="ctx['collections']"
                         style="
                             margin-top: 18px;
                             page-break-inside: avoid;
@@ -575,7 +574,7 @@
                                 margin-bottom: 8px;
                             "
                         >
-                            Encaissements enregistrés
+                            Règlements enregistrés
                         </div>
 
                         <table
@@ -640,6 +639,26 @@
                             </thead>
 
                             <tbody>
+
+                                <tr
+                                    t-if="not ctx['collections']"
+                                    style="
+                                        border-bottom: 1px solid #dbe4e9;
+                                    "
+                                >
+                                    <td
+                                        colspan="5"
+                                        style="
+                                            padding: 10px 7px;
+                                            color: #667c8c;
+                                            font-style: italic;
+                                            text-align: center;
+                                        "
+                                    >
+                                        Aucun règlement enregistré
+                                    </td>
+                                </tr>
+
                                 <tr
                                     t-foreach="ctx['collections']"
                                     t-as="payment"
@@ -698,6 +717,31 @@
                                 border-collapse: collapse;
                             "
                         >
+                            <tr
+                                style="
+                                    background: #f4f8fa;
+                                "
+                            >
+                                <td
+                                    style="
+                                        padding: 7px 8px;
+                                        color: #667c8c;
+                                    "
+                                >
+                                    État du règlement
+                                </td>
+
+                                <td
+                                    style="
+                                        padding: 7px 8px;
+                                        text-align: right;
+                                        font-weight: 700;
+                                        color: #0f3557;
+                                    "
+                                    t-out="ctx['payment_summary_label']"
+                                />
+                            </tr>
+
                             <tr>
                                 <td
                                     style="
@@ -705,7 +749,7 @@
                                         color: #667c8c;
                                     "
                                 >
-                                    Encaissements équivalents
+                                    Total des règlements enregistrés
                                 </td>
 
                                 <td
@@ -761,12 +805,11 @@
                                 line-height: 1.4;
                             "
                         >
-                            Facture encore en brouillon :
-                            les encaissements ci-dessus proviennent
-                            du suivi opérationnel DallyTrading et
-                            ne sont pas encore rapprochés en
-                            comptabilité. Le solde affiché est
-                            indicatif jusqu'à comptabilisation.
+                            Document en brouillon.
+                            Les règlements indiqués ci-dessus sont
+                            enregistrés dans le suivi DALLYTRADING.
+                            Le reste à payer affiché est provisoire
+                            jusqu'à validation comptable de la facture.
                         </div>
                     </div>
 

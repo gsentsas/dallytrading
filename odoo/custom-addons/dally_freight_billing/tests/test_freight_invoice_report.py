@@ -105,7 +105,17 @@ class TestFreightInvoiceReport(TransactionCase):
 
         self.assertEqual(
             context["collections"][0]["state_label"],
-            "En attente de comptabilisation",
+            "Enregistré",
+        )
+
+        self.assertEqual(
+            context["payment_summary_label"],
+            "Acompte enregistré",
+        )
+
+        self.assertEqual(
+            context["balance_label"],
+            "Reste à payer (indicatif)",
         )
 
         self.assertAlmostEqual(
@@ -118,6 +128,20 @@ class TestFreightInvoiceReport(TransactionCase):
             context["balance_due"],
             13.0,
             places=2,
+        )
+
+        xof = self.env["res.currency"].search([
+            ("name", "=", "XOF"),
+        ], limit=1)
+
+        self.assertTrue(xof)
+
+        self.assertEqual(
+            self.invoice.dally_freight_format_amount(
+                15088,
+                xof,
+            ),
+            "15 088 FCFA",
         )
 
     def test_report_action_is_available_for_account_moves(self):
@@ -140,4 +164,25 @@ class TestFreightInvoiceReport(TransactionCase):
             report.report_name,
             "dally_freight_billing."
             "report_freight_invoice",
+        )
+
+
+    def test_report_context_without_payment_is_unpaid(self):
+        self.env["dally.freight.collection"].search([
+            ("shipment_id", "=", self.shipment.id),
+        ]).unlink()
+
+        context = self.invoice.dally_freight_report_context()
+
+        self.assertFalse(context["collections"])
+
+        self.assertEqual(
+            context["payment_summary_label"],
+            "Non réglée",
+        )
+
+        self.assertAlmostEqual(
+            context["balance_due"],
+            self.invoice.amount_total,
+            places=2,
         )

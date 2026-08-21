@@ -8,11 +8,11 @@
 # Odoo configuration, then destroys only that labelled compose project.
 #
 # Usage:
-#   ./infrastructure/scripts/test-freight-billing.sh
+#   bash infrastructure/scripts/test-freight-billing.sh
 #
 # Optional:
-#   FBT_KEEP=1 ./infrastructure/scripts/test-freight-billing.sh
-#   FBT_PORT=18469 ./infrastructure/scripts/test-freight-billing.sh
+#   FBT_KEEP=1 bash infrastructure/scripts/test-freight-billing.sh
+#   FBT_PORT=18469 bash infrastructure/scripts/test-freight-billing.sh
 # =============================================================================
 set -euo pipefail
 
@@ -100,6 +100,8 @@ HEAD="$(git -C "$ROOT" rev-parse HEAD)"
 BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)"
 STATUS="$(git -C "$ROOT" status --porcelain)"
 printf 'BRANCH=%s\nHEAD=%s\n' "$BRANCH" "$HEAD"
+[ "$BRANCH" = "feature/freight-billing-sync" ] || \
+    fail "run this gate from feature/freight-billing-sync"
 [ -z "$STATUS" ] || fail "worktree must be clean before RC tests"
 
 log "ephemeral configuration"
@@ -129,7 +131,7 @@ http_interface = 0.0.0.0
 http_port = 8069
 gevent_port = 8072
 workers = 0
-max_cron_threads = 0
+max_cron_threads = 1
 log_level = test
 log_handler = :INFO,odoo.tests:INFO
 without_demo = True
@@ -167,12 +169,13 @@ docker run --rm \
 
 docker restart "$ODOO_CONTAINER" >/dev/null
 
+PG_HEALTH=""
 for _ in $(seq 1 60); do
     PG_HEALTH="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$PG_CONTAINER" 2>/dev/null || true)"
     [ "$PG_HEALTH" = "healthy" ] && break
     sleep 1
 done
-[ "${PG_HEALTH:-}" = "healthy" ] || fail "isolated PostgreSQL did not become healthy"
+[ "$PG_HEALTH" = "healthy" ] || fail "isolated PostgreSQL did not become healthy"
 
 echo "POSTGRES=HEALTHY"
 
@@ -190,7 +193,7 @@ docker exec "$ODOO_CONTAINER" \
 TEST_RC=$?
 set -e
 
-# Surface useful diagnostics without leaking environment secrets.
+# Surface useful diagnostics without printing ephemeral secrets.
 grep -E '(^| )(ERROR|CRITICAL) |FAIL:|ERROR:|failed,|error\(s\)' "$TEST_LOG" | tail -80 || true
 
 if [ "$TEST_RC" -ne 0 ]; then
@@ -217,8 +220,12 @@ echo "ODOO_TEST_RC=0"
 echo "DALLY_FREIGHT_BILLING_TESTS=PASS"
 
 log "database module state"
-MODULE_STATE="$((docker exec "$PG_CONTAINER" psql -U fbt_odoo -d "$DB" -Atc \
-    "SELECT state || '|' || COALESCE(latest_version,'') FROM ir_module_module WHERE name='dally_freight_billing';") 2>/dev/null || true)"
+MODULE_STATE="$(
+    docker exec "$PG_CONTAINER" \
+        psql -U fbt_odoo -d "$DB" -Atc \
+        "SELECT state || '|' || COALESCE(latest_version,'') FROM ir_module_module WHERE name='dally_freight_billing';" \
+        2>/dev/null || true
+)"
 echo "DALLY_FREIGHT_BILLING=$MODULE_STATE"
 case "$MODULE_STATE" in
     installed\|19.0.1.5.0*) ;;
@@ -226,8 +233,8 @@ case "$MODULE_STATE" in
 esac
 
 log "isolation proof"
-# Assert the known production containers still exist by name only; never inspect
-# their configuration, files, databases or logs.
+# Check names/state only. Never inspect production configuration, files, DBs or
+# logs from this RC script.
 PROD_ODOO_RUNNING="$(docker inspect -f '{{.State.Running}}' dallytrading-odoo 2>/dev/null || echo unknown)"
 PROD_PG_RUNNING="$(docker inspect -f '{{.State.Running}}' dallytrading-postgres 2>/dev/null || echo unknown)"
 echo "PRODUCTION_ODOO_RUNNING=$PROD_ODOO_RUNNING"

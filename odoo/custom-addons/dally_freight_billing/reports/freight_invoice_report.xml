@@ -24,9 +24,7 @@
         id="action_report_dally_freight_invoice"
         model="ir.actions.report"
     >
-        <field name="name">
-            Facture DallyTrading Fret
-        </field>
+        <field name="name">Facture DallyTrading Fret</field>
         <field name="model">account.move</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">dally_freight_billing.report_freight_invoice</field>
@@ -61,6 +59,13 @@
                 />
 
                 <div
+                    class="article"
+                    t-att-data-oe-model="o._name"
+                    t-att-data-oe-id="o.id"
+                    t-att-data-oe-lang="o.env.context.get('lang')"
+                >
+
+                <div
                     t-if="o.dally_freight_shipment_id"
                     class="page"
                     style="
@@ -89,8 +94,9 @@
                                     t-if="o.company_id.logo"
                                     t-att-src="image_data_uri(o.company_id.logo)"
                                     style="
-                                        max-width: 180px;
-                                        max-height: 90px;
+                                        width: 150px;
+                                        max-width: 150px;
+                                        max-height: 95px;
                                         object-fit: contain;
                                         margin-bottom: 8px;
                                     "
@@ -164,13 +170,14 @@
                                 />
 
                                 <div
+                                    t-if="o.name and o.name != '/'"
                                     style="
                                         margin-top: 6px;
                                         font-size: 15pt;
                                         color: #16a085;
                                         font-weight: 700;
                                     "
-                                    t-out="o.name or 'Brouillon'"
+                                    t-out="o.name"
                                 />
 
                                 <table
@@ -251,8 +258,8 @@
                                             "
                                         >
                                             <span
-                                                t-if="o.invoice_date"
-                                                t-out="o.invoice_date.strftime('%d/%m/%Y')"
+                                                t-if="o.invoice_date or o.date"
+                                                t-out="(o.invoice_date or o.date).strftime('%d/%m/%Y')"
                                             />
                                         </td>
                                     </tr>
@@ -812,6 +819,8 @@
                         Rapport réservé aux factures Freight
                         DallyTrading.
                     </h2>
+                </div>
+
                 </div>
 
             </t>

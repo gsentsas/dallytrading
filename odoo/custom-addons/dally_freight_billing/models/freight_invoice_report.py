@@ -161,11 +161,11 @@ class AccountMove(models.Model):
             balance_label = "Solde comptable"
         else:
             balance_due = max(
+                0.0,
                 self.currency_id.round(
                     self.amount_total
                     - received_equivalent_raw
                 ),
-                0.0,
             )
             balance_label = (
                 "Solde indicatif après encaissements"

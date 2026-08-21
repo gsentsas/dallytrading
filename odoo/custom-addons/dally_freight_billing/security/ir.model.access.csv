@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_dally_freight_tariff_family_readonly,dally.freight.tariff.family read-only,model_dally_freight_tariff_family,dally_core.group_dally_readonly,1,0,0,0
+access_dally_freight_tariff_family_finance,dally.freight.tariff.family finance,model_dally_freight_tariff_family,dally_core.group_dally_finance,1,1,1,0
+access_dally_freight_tariff_family_manager,dally.freight.tariff.family manager,model_dally_freight_tariff_family,dally_core.group_dally_manager,1,1,1,1
+access_dally_freight_tariff_rule_readonly,dally.freight.tariff.rule read-only,model_dally_freight_tariff_rule,dally_core.group_dally_readonly,1,0,0,0
+access_dally_freight_tariff_rule_finance,dally.freight.tariff.rule finance,model_dally_freight_tariff_rule,dally_core.group_dally_finance,1,1,1,0
+access_dally_freight_tariff_rule_manager,dally.freight.tariff.rule manager,model_dally_freight_tariff_rule,dally_core.group_dally_manager,1,1,1,1

@@ -207,10 +207,24 @@ test.describe('boutique — client connecté', () => {
     await page.getByRole('button', { name: /Valider ma commande/i }).click();
 
     await expect(page.getByTestId('order-reference')).toBeVisible();
+
+    // La confirmation Lot C projette séparément le mode choisi et l'état
+    // du frais décidé par Odoo. Ne pas reconstruire ici un ancien libellé UI.
+    await expect(
+      page.getByText('Livraison', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('À confirmer', { exact: true }),
+    ).toBeVisible();
+
     const confirmation = normaliser(await page.locator('body').innerText());
-    expect(confirmation).toContain('Livraison — tarif à confirmer');
-    // Aucun tarif de livraison inventé.
-    expect(confirmation).not.toMatch(/frais de livraison\s*:\s*\d/i);
+
+    // Aucun montant de remise/livraison n'est inventé par le navigateur
+    // tant qu'Odoo n'a pas coté la livraison.
+    expect(confirmation).toContain('Frais de remise');
+    expect(confirmation).not.toMatch(
+      /frais de remise\s+(?:[:\-–—]\s*)?\d/i,
+    );
   });
 });
 

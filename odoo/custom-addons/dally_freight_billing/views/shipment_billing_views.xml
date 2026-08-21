@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="dally_shipment_view_form_freight_billing" model="ir.ui.view">
+        <field name="name">dally.shipment.form.freight.billing</field>
+        <field name="model">dally.shipment</field>
+        <field name="inherit_id" ref="dally_freight.dally_shipment_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="external_reference"/>
+                <field name="customer_segment_snapshot"/>
+            </xpath>
+
+            <xpath expr="//field[@name='request_date']" position="after">
+                <field name="goods_received_on"/>
+            </xpath>
+
+            <xpath expr="//field[@name='package_ids']/list/field[@name='description']" position="after">
+                <field name="goods_category" optional="hide"/>
+                <field name="external_line_key" optional="hide"/>
+            </xpath>
+
+            <xpath expr="//field[@name='package_ids']/list/field[@name='total_volume_cbm']" position="after">
+                <field name="announced_weight_kg" optional="hide"/>
+                <field name="tariff_family_id" optional="show"/>
+                <field name="billing_method" optional="show"/>
+                <field name="volumetric_ratio_kg_cbm" optional="hide"/>
+                <field name="billable_weight_kg" optional="show" readonly="1"/>
+                <field name="manual_unit_price_eur" optional="hide"/>
+                <field name="applied_unit_price_eur" optional="show" readonly="1"/>
+                <field name="transport_amount_eur" optional="show" readonly="1" sum="Transport"/>
+                <field name="pricing_type_snapshot" optional="hide"/>
+                <field name="pricing_reason" optional="hide"/>
+                <field name="customs_value_xof" optional="hide"/>
+                <field name="tariff_rule_id" optional="hide" readonly="1"/>
+                <field name="tariff_applied_on" optional="hide" readonly="1"/>
+                <field name="billing_currency_id" column_invisible="True"/>
+                <field name="customs_currency_id" column_invisible="True"/>
+                <button name="action_apply_freight_tariff"
+                        type="object"
+                        string="Price"
+                        icon="fa-calculator"
+                        class="btn-link"
+                        help="Apply the current automatic tariff, or snapshot the manual price."/>
+            </xpath>
+
+            <xpath expr="//page[@name='commercial']/group" position="after">
+                <group string="Spreadsheet Synchronisation"
+                       groups="dally_core.group_dally_readonly">
+                    <group>
+                        <field name="sync_source"/>
+                        <field name="last_sync_at" readonly="1"/>
+                    </group>
+                    <group>
+                        <field name="sync_message" readonly="1"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="dally_shipment_view_list_freight_billing" model="ir.ui.view">
+        <field name="name">dally.shipment.list.freight.billing</field>
+        <field name="model">dally.shipment</field>
+        <field name="inherit_id" ref="dally_freight.dally_shipment_view_list"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='reference']" position="after">
+                <field name="external_reference" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="dally_shipment_view_search_freight_billing" model="ir.ui.view">
+        <field name="name">dally.shipment.search.freight.billing</field>
+        <field name="model">dally.shipment</field>
+        <field name="inherit_id" ref="dally_freight.dally_shipment_view_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='reference']" position="after">
+                <field name="external_reference"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

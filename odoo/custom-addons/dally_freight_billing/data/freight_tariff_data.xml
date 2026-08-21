@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Seed the tariff grid that is explicitly configured in
+        "FActuration COntainer 2".  noupdate=1 is deliberate: once production
+        operators change a rate, a module upgrade must not silently restore the
+        original spreadsheet value.
+
+        Commercial volumetric ratios are snapshotted separately from the core
+        operational chargeable-weight ratio.  Air follows the existing Freight
+        core ratio (167 kg/CBM); sea keeps the workbook's current commercial
+        parameter (300 kg/CBM).  Both remain editable before production rollout.
+    -->
+    <data noupdate="1">
+        <record id="tariff_family_food" model="dally.freight.tariff.family">
+            <field name="name">Alimentaire standard</field>
+            <field name="code">food</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="tariff_family_seafood" model="dally.freight.tariff.family">
+            <field name="name">Halieutiques</field>
+            <field name="code">seafood</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="tariff_family_honey" model="dally.freight.tariff.family">
+            <field name="name">Miel</field>
+            <field name="code">honey</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="tariff_family_clothing" model="dally.freight.tariff.family">
+            <field name="name">Habits / Vêtements</field>
+            <field name="code">clothing</field>
+            <field name="sequence">40</field>
+        </record>
+        <record id="tariff_family_non_food" model="dally.freight.tariff.family">
+            <field name="name">Non alimentaire</field>
+            <field name="code">non_food</field>
+            <field name="sequence">50</field>
+        </record>
+
+        <!-- Air: food, seafood and honey = 3.50 EUR/kg. -->
+        <record id="tariff_air_food" model="dally.freight.tariff.rule">
+            <field name="name">Aérien — alimentaire</field>
+            <field name="transport_mode">air</field>
+            <field name="family_id" ref="tariff_family_food"/>
+            <field name="customer_segment">all</field>
+            <field name="price_per_kg_eur">3.5</field>
+            <field name="volumetric_ratio_kg_cbm">167</field>
+            <field name="currency_id" ref="base.EUR"/>
+        </record>
+        <record id="tariff_air_seafood" model="dally.freight.tariff.rule">
+            <field name="name">Aérien — halieutiques</field>
+            <field name="transport_mode">air</field>
+            <field name="family_id" ref="tariff_family_seafood"/>
+            <field name="customer_segment">all</field>
+            <field name="price_per_kg_eur">3.5</field>
+            <field name="volumetric_ratio_kg_cbm">167</field>
+            <field name="currency_id" ref="base.EUR"/>
+        </record>
+        <record id="tariff_air_honey" model="dally.freight.tariff.rule">
+            <field name="name">Aérien — miel</field>
+            <field name="transport_mode">air</field>
+            <field name="family_id" ref="tariff_family_honey"/>
+            <field name="customer_segment">all</field>
+            <field name="price_per_kg_eur">3.5</field>
+            <field name="volumetric_ratio_kg_cbm">167</field>
+            <field name="currency_id" ref="base.EUR"/>
+        </record>
+
+        <!-- Air: clothing and other non-food = 5.00 EUR/kg. -->
+        <record id="tariff_air_clothing" model="dally.freight.tariff.rule">
+            <field name="name">Aérien — habits / vêtements</field>
+            <field name="transport_mode">air</field>
+            <field name="family_id" ref="tariff_family_clothing"/>
+            <field name="customer_segment">all</field>
+            <field name="price_per_kg_eur">5.0</field>
+            <field name="volumetric_ratio_kg_cbm">167</field>
+            <field name="currency_id" ref="base.EUR"/>
+        </record>
+        <record id="tariff_air_non_food" model="dally.freight.tariff.rule">
+            <field name="name">Aérien — non alimentaire</field>
+            <field name="transport_mode">air</field>
+            <field name="family_id" ref="tariff_family_non_food"/>
+            <field name="customer_segment">all</field>
+            <field name="price_per_kg_eur">5.0</field>
+            <field name="volumetric_ratio_kg_cbm">167</field>
+            <field name="currency_id" ref="base.EUR"/>
+        </record>
+
+        <!-- Maritime standard grid from workbook Parametres B22:B24. -->
+        <record id="tariff_sea_food" model="dally.freight.tariff.rule">
+            <field name="name">Maritime — alimentaire standard</field>
+            <field name="transport_mode">sea</field>
+            <field name="family_id" ref="tariff_family_food"/>
+            <field name="customer_segment">all</field>
+            <field name="price_per_kg_eur">2.5</field>
+            <field name="volumetric_ratio_kg_cbm">300</field>
+            <field name="currency_id" ref="base.EUR"/>
+        </record>
+        <record id="tariff_sea_seafood" model="dally.freight.tariff.rule">
+            <field name="name">Maritime — halieutiques</field>
+            <field name="transport_mode">sea</field>
+            <field name="family_id" ref="tariff_family_seafood"/>
+            <field name="customer_segment">all</field>
+            <field name="price_per_kg_eur">5.0</field>
+            <field name="volumetric_ratio_kg_cbm">300</field>
+            <field name="currency_id" ref="base.EUR"/>
+        </record>
+        <record id="tariff_sea_honey" model="dally.freight.tariff.rule">
+            <field name="name">Maritime — miel</field>
+            <field name="transport_mode">sea</field>
+            <field name="family_id" ref="tariff_family_honey"/>
+            <field name="customer_segment">all</field>
+            <field name="price_per_kg_eur">5.0</field>
+            <field name="volumetric_ratio_kg_cbm">300</field>
+            <field name="currency_id" ref="base.EUR"/>
+        </record>
+        <record id="tariff_sea_clothing" model="dally.freight.tariff.rule">
+            <field name="name">Maritime — habits / vêtements</field>
+            <field name="transport_mode">sea</field>
+            <field name="family_id" ref="tariff_family_clothing"/>
+            <field name="customer_segment">all</field>
+            <field name="price_per_kg_eur">4.0</field>
+            <field name="volumetric_ratio_kg_cbm">300</field>
+            <field name="currency_id" ref="base.EUR"/>
+        </record>
+
+        <!-- No maritime/non-food automatic rule on purpose.  The workbook says
+             "Tarif non fourni : saisir le prix ... manuel EUR". -->
+    </data>
+</odoo>

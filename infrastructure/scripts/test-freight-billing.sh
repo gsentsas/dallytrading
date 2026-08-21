@@ -108,6 +108,19 @@ log "ephemeral configuration"
 umask 0077
 rm -rf "$WORK"
 mkdir -p "$WORK" "$EMPTY_VENDOR"
+# Odoo accepts an addons path when it contains at least one valid addon
+# directory. A tiny inert placeholder avoids a noisy warning while preserving
+# the exact same mount shape as the Freight dev stack.
+mkdir -p "$EMPTY_VENDOR/fbt_empty_addon"
+printf '%s\n' '# RC placeholder package' > "$EMPTY_VENDOR/fbt_empty_addon/__init__.py"
+cat > "$EMPTY_VENDOR/fbt_empty_addon/__manifest__.py" <<'PY'
+{
+    "name": "RC placeholder",
+    "version": "19.0.1.0.0",
+    "license": "LGPL-3",
+    "installable": False,
+}
+PY
 
 DB_PASSWORD="$(openssl rand -hex 32)"
 ADMIN_PASSWORD="$(openssl rand -hex 32)"

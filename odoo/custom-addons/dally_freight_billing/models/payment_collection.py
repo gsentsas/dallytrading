@@ -13,6 +13,7 @@ COLLECTION_STATES = [
     ("pending", "Pending invoice/configuration"),
     ("registered", "Registered in accounting"),
     ("error", "Registration error"),
+    ("cancelled", "Cancelled from source"),
 ]
 
 
@@ -156,7 +157,12 @@ class DallyFreightCollection(models.Model):
 
     @api.model
     def upsert_from_sync(self, values):
-        """Business-idempotent collection upsert from the trusted Sheet."""
+        """Business-idempotent collection upsert from the trusted Sheet.
+
+        A cancelled, non-accounted collection can be reactivated by sending the
+        same business key again. Once a native ``account.payment`` exists, the
+        collection remains immutable and must be corrected through accounting.
+        """
         key = str(values.get("external_payment_key") or "").strip()
         if not key:
             raise ValidationError(_("external_payment_key is required."))
@@ -185,6 +191,9 @@ class DallyFreightCollection(models.Model):
                     )
             return existing, False
 
+        values = dict(values)
+        values.update({"state": "pending", "error_message": False})
+
         if existing:
             if values.get("shipment_id") and existing.shipment_id.id != values["shipment_id"]:
                 raise ValidationError(_("The payment key already belongs to another freight shipment."))
@@ -198,6 +207,25 @@ class DallyFreightCollection(models.Model):
         collection._try_register_native_payment()
         return collection, created
 
+    def action_cancel_from_sync(self, reason=None):
+        """Cancel a Sheet-managed collection that has not reached accounting."""
+        now = fields.Datetime.now()
+        for collection in self:
+            if collection.payment_id:
+                raise UserError(
+                    _(
+                        "Registered payment %s cannot be cancelled from Google Sheets; "
+                        "create an accounting correction instead.",
+                        collection.external_payment_key,
+                    )
+                )
+            collection.write({
+                "state": "cancelled",
+                "error_message": reason or _("Cancelled by source reconciliation."),
+                "last_attempt_at": now,
+            })
+        return True
+
     def _try_register_native_payment(self):
         """Register/reconcile when the invoice is posted and mapping is ready.
 
@@ -206,6 +234,8 @@ class DallyFreightCollection(models.Model):
         accounting configuration is incomplete.
         """
         for collection in self:
+            if collection.state == "cancelled":
+                continue
             if collection.payment_id:
                 collection.write({"state": "registered", "error_message": False})
                 continue
@@ -271,7 +301,7 @@ class DallyFreightCollection(models.Model):
                     "error_message": str(exc)[:500],
                     "last_attempt_at": fields.Datetime.now(),
                 })
-            except Exception as exc:  # accounting extension failure must not lose cash intake
+            except Exception:  # accounting extension failure must not lose cash intake
                 _logger.exception(
                     "Unexpected error registering freight collection %s",
                     collection.external_payment_key,
@@ -296,6 +326,7 @@ class AccountMove(models.Model):
             collections = self.env["dally.freight.collection"].search([
                 ("invoice_id", "in", freight_invoices.ids),
                 ("payment_id", "=", False),
+                ("state", "!=", "cancelled"),
             ])
             collections._try_register_native_payment()
         return result

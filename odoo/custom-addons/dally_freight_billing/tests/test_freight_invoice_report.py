@@ -130,9 +130,7 @@ class TestFreightInvoiceReport(TransactionCase):
             places=2,
         )
 
-        xof = self.env["res.currency"].search([
-            ("name", "=", "XOF"),
-        ], limit=1)
+        xof = self.env.ref("base.XOF")
 
         self.assertTrue(xof)
 

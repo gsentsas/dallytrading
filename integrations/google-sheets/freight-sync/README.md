@@ -12,7 +12,8 @@ The connector covers all transactional source tabs:
 2. invoice creation → native Odoo sale order + **draft invoice only**;
 3. customer payments → Freight collection then native `account.payment` when accounting prerequisites exist;
 4. `Dépenses` → internal expense with actor allocations;
-5. `Transferts caisse` → internal cash transfer.
+5. `Transferts caisse` → internal cash transfer;
+6. `Facture impression` → professional PDF export through the integrated `Pdf.gs` script.
 
 Dashboard, synthesis, invoice-print and customs-print tabs remain derived/reporting views and are not pushed as independent records.
 
@@ -22,7 +23,10 @@ For one dossier the connector performs, in order:
 
 1. `POST /api/v1/freight/sync`;
 2. optional `POST /api/v1/freight/invoice`;
-3. one `POST /api/v1/freight/payment` per row carrying a `BF` payment key.
+3. one `POST /api/v1/freight/payment` per active payment row;
+4. `POST /api/v1/freight/payment/reconcile` with the complete current payment-key set.
+
+The reconcile call is essential: a payment removed from the Sheet is cancelled in Odoo **only while it has not yet produced a native `account.payment`**. A payment already registered in accounting is never silently rewritten; the API returns it as blocked and requires an accounting correction.
 
 Internal cash uses:
 
@@ -56,7 +60,9 @@ The workbook business idempotency keys are preserved:
 - `Dépenses!A`: expense key (`DEP-...`)
 - `Transferts caisse!A`: transfer key (`TRF-...`)
 
-A row with a payment key but no article key (for example a complementary payment row) is **not** sent as a freight article.
+If an article row contains cargo facts but no `BD` key, the connector creates the deterministic dossier article key before sending it. This allows a genuine `Sur devis` cargo row to exist in CRM without being invoiced.
+
+A payment-only administrative row with no cargo measurements is **not** sent as a freight article.
 
 ## Security
 
@@ -81,42 +87,51 @@ Requests use `X-API-Key` and a fresh UUID. Odoo additionally enforces object-lev
 
 ## Installation
 
-1. Upload `FActuration COntainer 2 - CRM SYNC.xlsx` to Google Drive and open it as Google Sheets.
+1. Open the native Google Sheet `FActuration COntainer 2`.
 2. Open **Extensions → Apps Script**.
-3. Copy `Code.gs` and `Cash.gs` into the bound project.
+3. Keep a single bound project and copy **all three** files: `Code.gs`, `Cash.gs`, `Pdf.gs`.
 4. Enable the manifest file in Apps Script project settings and use `appsscript.json` from this directory.
 5. Add the two Script Properties above.
 6. Execute `dallySetup()` once and approve the requested scopes.
-7. Execute `dallyCashSetup()` once to install the independent expense/transfer triggers.
-8. Reload the spreadsheet. Menus **Dally CRM** and **Dally Caisse** appear.
+7. Execute `dallyCashSetup()` once to install the independent expense/transfer edit + timer triggers.
+8. Reload the spreadsheet. Menus **Dally CRM**, **Dally Caisse** and **Factures DallyTrading** appear.
 9. Run **Dally CRM → Diagnostic configuration** before any write operation.
+
+**Do not create a second `onOpen()` function.** `Code.gs` owns the only `onOpen()` and calls the cash/PDF menu builders. In particular, never delete the existing Apps Script project to install the PDF button.
+
+## Safe defaults
+
+If the configuration sheet ever has to be recreated, the connector now starts with conservative defaults:
+
+- automatic sync: `NON`
+- automatic draft invoice: `NON`
+- payment sync: `NON`
+- initial migration mode: `NON`
+
+This prevents a newly recreated configuration from unexpectedly writing accounting-related data.
 
 ## Migration mode
 
-The `Synchronisation CRM` sheet starts with:
+While migration mode is `OUI`, payloads use source `legacy_xlsx`.
+After historical reconciliation, switch it to `NON`; new edits then use source `google_sheets`.
 
-- automatic sync: `OUI`
-- automatic draft invoice: `NON`
-- payment sync: `OUI`
-- initial migration mode: `OUI`
-
-While migration mode is `OUI`, all API payloads use source `legacy_xlsx`.
-After the historical data has been compared against Odoo, switch it to `NON`; new edits then use source `google_sheets`.
-
-Keep automatic draft invoice set to `NON` during the first historical import. Enable it only after dossier totals have been reconciled.
+When current source is `google_sheets`, payment reconciliation is allowed to retire stale pending collections created by both `google_sheets` and the earlier `legacy_xlsx` migration. Back-office collections are never touched.
 
 ## Triggers
 
 `dallySetup()` installs:
 
 - installable `onEdit` that only marks an edited dossier `À synchroniser`;
-- one-minute time trigger that groups dirty rows by dossier and sends dossier requests.
+- one-minute time trigger that groups dirty rows by dossier and sends dossier requests when automatic sync is enabled.
 
-`dallyCashSetup()` installs independent triggers for `Dépenses` and `Transferts caisse`.
+`dallyCashSetup()` installs:
+
+- one installable cash `onEdit` trigger;
+- one one-minute cash timer.
+
+There is no independent cash `onOpen` trigger anymore; the unique `onOpen()` in `Code.gs` creates all menus.
 
 No edit trigger performs HTTP calls. This prevents one API request per edited cell and avoids sending a half-completed row while the operator is typing.
-
-The maximum number of operations processed per minute uses the `Dossiers max par cycle` setting (default: 10), staying below the API backstop rate limit.
 
 ## Freight mapping highlights
 
@@ -135,6 +150,24 @@ The maximum number of operations processed per minute uses the `Dossiers max par
 - `AW/AX`: payment amount EUR/XOF
 - `BB/BC`: payment method and collector
 
+## `Sur devis` protection
+
+A cargo row is recognised even when its invoice amount is still zero if it contains a description plus real cargo measurements (weight, dimensions or volume). A deterministic `BD` article key is generated and the cargo is synchronised to CRM.
+
+A `Sur devis` row is never invoice-ready. Even the manual **Créer la facture brouillon du dossier** command refuses to create its invoice until the billing method, billable weight and applied price are valid. This prevents a case such as A012 from creating a zero/incorrect invoice.
+
+## Payment correction rules
+
+The current Sheet payment rows are treated as the operational source set for Sheet-managed collections.
+
+- New payment → upsert by `BF` key.
+- Corrected pending payment → same key, values updated.
+- Removed pending payment → reconcile marks the Odoo collection `cancelled`.
+- Re-added cancelled payment → same key is reactivated and becomes `pending` again.
+- Already-accounted payment → never mutated/cancelled from the Sheet; Finance must create the accounting correction.
+
+Cancelled collections are excluded from the customer invoice PDF totals and are not promoted to native accounting when the invoice is later posted.
+
 ## Internal expense mapping
 
 `Dépenses` preserves the workbook structure:
@@ -146,13 +179,21 @@ The maximum number of operations processed per minute uses the `Dossiers max par
 - `K:L`: historical workbook EUR/XOF snapshots
 - `M:P`: payment method, reference, status, comment
 
+A valid expense requires a real date, category, description and at least one positive actor allocation. The Apps Script now rejects missing dates locally before making any HTTP call.
+
 The expense is operational cash tracking; it is **not** converted into an accounting vendor bill by this connector.
 
 ## Cash transfer mapping
 
 `Transferts caisse` maps the sender, recipient, amount/currency, EUR/XOF snapshots, reason, handover method, status and comment into `dally.cash.transfer`.
 
-A transfer never affects customer invoices or customer payments.
+A valid transfer requires a date, positive amount and two different actors. A transfer never affects customer invoices or customer payments.
+
+## PDF export
+
+`Pdf.gs` exports only `Facture impression!A1:H47` in A4 portrait mode and creates the resulting PDF in the current user's Google Drive.
+
+The manifest contains the Drive authorization required by `DriveApp.createFile`. There is no second `onOpen()` and therefore no menu collision with the CRM connector.
 
 ## Route configuration
 

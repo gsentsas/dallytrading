@@ -58,10 +58,13 @@ function onOpen() {
     .addItem('Synchroniser les dossiers en attente', 'dallySyncPending')
     .addItem('Synchroniser le dossier sélectionné', 'dallySyncSelectedDossier')
     .addItem('Créer la facture brouillon du dossier', 'dallyInvoiceSelectedDossier')
-    .addItem('Synchroniser les paiements du dossier', 'dallyPaymentsSelectedDossier')
+    .addItem('Synchroniser / corriger les paiements du dossier', 'dallyPaymentsSelectedDossier')
     .addSeparator()
     .addItem('Marquer tous les dossiers à synchroniser', 'dallyMarkAllForSync')
     .addToUi();
+
+  if (typeof dallyCashOnOpen_ === 'function') dallyCashOnOpen_();
+  if (typeof dallyPdfOnOpen_ === 'function') dallyPdfOnOpen_();
 }
 
 function dallySetup() {
@@ -74,15 +77,21 @@ function dallyDiagnostic() {
   const cfg = readConfig_();
   const props = PropertiesService.getScriptProperties();
   const errors = [];
+  const warnings = [];
   if (!/^https:\/\//i.test(cfg.baseUrl)) errors.push('URL CRM invalide');
   if (!props.getProperty('DALLY_FREIGHT_SYNC_API_KEY')) errors.push('DALLY_FREIGHT_SYNC_API_KEY manquante');
   if (!props.getProperty('DALLY_FREIGHT_BILLING_API_KEY')) errors.push('DALLY_FREIGHT_BILLING_API_KEY manquante');
   DALLY.dataSheets.forEach(name => {
-    if (!SpreadsheetApp.getActive().getSheetByName(name)) errors.push('Feuille manquante: ' + name);
+    const sh = SpreadsheetApp.getActive().getSheetByName(name);
+    if (!sh) errors.push('Feuille manquante: ' + name);
+    if (sh && sh.getMaxColumns() < DALLY.maxColumn) errors.push('Colonnes CRM incomplètes sur: ' + name);
     if (!cfg.routes[name] || !cfg.routes[name].active) errors.push('Routage inactif/manquant: ' + name);
   });
-  const message = errors.length ? errors.join('\n') : 'Configuration prête. Aucune écriture CRM effectuée.';
-  SpreadsheetApp.getUi().alert('Diagnostic Dally CRM', message, SpreadsheetApp.getUi().ButtonSet.OK);
+  if (!cfg.syncPayments) warnings.push('Synchronisation paiements = NON : utiliser le menu paiement pour appliquer les corrections.');
+  if (!cfg.autoSync) warnings.push('Synchronisation automatique = NON : fonctionnement manuel sécurisé.');
+  const lines = errors.length ? errors : ['Configuration prête. Aucune écriture CRM effectuée.'];
+  if (warnings.length) lines.push('', 'Avertissements:', ...warnings);
+  SpreadsheetApp.getUi().alert('Diagnostic Dally CRM', lines.join('\n'), SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 function installTriggers_() {
@@ -181,7 +190,7 @@ function syncPending_(cfg, manual) {
 }
 
 function syncDossier_(sheet, dossier, rows, cfg) {
-  const articleRows = rows.filter(isArticleRow_);
+  const articleRows = prepareArticleRows_(sheet, dossier, rows);
   if (!articleRows.length) throw new Error('Aucun article Freight détecté pour ' + dossier);
   const payload = buildFreightPayload_(sheet.getName(), dossier, rows, articleRows, cfg);
   const data = apiPost_('/api/v1/freight/sync', 'DALLY_FREIGHT_SYNC_API_KEY', payload, cfg);
@@ -189,7 +198,8 @@ function syncDossier_(sheet, dossier, rows, cfg) {
   (data.lines || []).forEach(line => lineByKey[String(line.external_line_key)] = line);
   const now = new Date();
   rows.forEach(row => {
-    const line = lineByKey[String(display_(row, DALLY.columns.articleKey) || '')];
+    const key = articleKey_(row);
+    const line = lineByKey[String(key || '')];
     setCell_(sheet, row.row, DALLY.columns.syncStatus, 'Synchronisé');
     setCell_(sheet, row.row, DALLY.columns.partnerId, data.partner_id || '');
     setCell_(sheet, row.row, DALLY.columns.shipmentId, data.shipment_id || '');
@@ -206,6 +216,8 @@ function syncDossier_(sheet, dossier, rows, cfg) {
   if (cfg.syncPayments) {
     try { syncPayments_(sheet, rows, cfg, false); }
     catch (err) { appendMessage_(sheet, rows, 'Paiement: ' + errorText_(err)); }
+  } else if (dossierHasPayments_(rows)) {
+    appendMessage_(sheet, rows, 'Paiements non synchronisés : option globale désactivée');
   }
   return {sync: data, invoice: invoiceData};
 }
@@ -244,7 +256,7 @@ function buildLine_(row) {
   const family = display_(row, DALLY.columns.tariffFamily);
   const pricingType = display_(row, DALLY.columns.pricingType);
   const out = {
-    external_line_key: display_(row, DALLY.columns.articleKey),
+    external_line_key: articleKey_(row),
     package_type: 'parcel',
     description: display_(row, DALLY.columns.description),
     goods_category: display_(row, DALLY.columns.goodsCategory),
@@ -271,7 +283,12 @@ function prepareInvoice_(sheet, rows, cfg, force) {
   const shipmentId = firstNumber_(rows, DALLY.columns.shipmentId);
   const dossier = firstText_(rows, DALLY.columns.dossier);
   if (!shipmentId && !dossier) throw new Error('Dossier non synchronisé');
-  if (!force && !invoiceReady_(rows.filter(isArticleRow_))) return null;
+  const articleRows = prepareArticleRows_(sheet, dossier, rows);
+  if (!invoiceReady_(articleRows)) {
+    const message = 'Facturation bloquée : tarif/poids incomplet ou dossier « Sur devis ».';
+    if (force) throw new Error(message);
+    return null;
+  }
   const payload = shipmentId ? {shipment_id: shipmentId, external_reference: dossier} : {external_reference: dossier};
   const data = apiPost_('/api/v1/freight/invoice', 'DALLY_FREIGHT_BILLING_API_KEY', payload, cfg);
   rows.forEach(row => {
@@ -290,15 +307,27 @@ function syncPayments_(sheet, rows, cfg, force) {
     if (force) throw new Error('Synchronisez le dossier avant ses paiements.');
     return [];
   }
+
+  const source = cfg.migrationMode ? 'legacy_xlsx' : 'google_sheets';
   const results = [];
+  const activeKeys = [];
+  let paymentOrdinal = 0;
+
   rows.forEach(row => {
-    const flag = Number(value_(row, DALLY.columns.paymentFlag) || 0);
-    const key = display_(row, DALLY.columns.paymentKey);
-    if (flag !== 1 || !key) return;
     const eur = Number(value_(row, DALLY.columns.paymentEur) || 0);
     const xof = Number(value_(row, DALLY.columns.paymentXof) || 0);
-    if (eur > 0 && xof > 0) throw new Error('Deux devises sur la même ligne de paiement ' + key);
+    if (eur > 0 && xof > 0) throw new Error('Deux devises sur la même ligne de paiement du dossier ' + dossier);
     if (eur <= 0 && xof <= 0) return;
+
+    paymentOrdinal++;
+    let key = display_(row, DALLY.columns.paymentKey);
+    if (!key) {
+      key = dossier + '|P|' + paymentOrdinal;
+      setCell_(sheet, row.row, DALLY.columns.paymentKey, key);
+    }
+    setCell_(sheet, row.row, DALLY.columns.paymentFlag, 1);
+    activeKeys.push(key);
+
     const methodLabel = display_(row, DALLY.columns.paymentMethod);
     const method = DALLY.paymentCodes[methodLabel];
     if (!method) throw new Error('Mode de paiement non mappé: ' + methodLabel);
@@ -311,7 +340,7 @@ function syncPayments_(sheet, rows, cfg, force) {
       payment_date: dateIso_(value_(row, DALLY.columns.depositDate)),
       payment_method: method,
       collected_by: display_(row, DALLY.columns.collectedBy),
-      source: cfg.migrationMode ? 'legacy_xlsx' : 'google_sheets',
+      source: source,
     };
     Object.keys(payload).forEach(k => { if (typeof payload[k] === 'undefined' || payload[k] === '') delete payload[k]; });
     const data = apiPost_('/api/v1/freight/payment', 'DALLY_FREIGHT_BILLING_API_KEY', payload, cfg);
@@ -322,7 +351,24 @@ function syncPayments_(sheet, rows, cfg, force) {
     }
     results.push(data);
   });
-  return results;
+
+  const reconcilePayload = {
+    external_reference: dossier,
+    shipment_id: shipmentId || undefined,
+    active_payment_keys: activeKeys,
+    source: source,
+  };
+  Object.keys(reconcilePayload).forEach(k => { if (typeof reconcilePayload[k] === 'undefined' || reconcilePayload[k] === '') delete reconcilePayload[k]; });
+  const reconciliation = apiPost_('/api/v1/freight/payment/reconcile', 'DALLY_FREIGHT_BILLING_API_KEY', reconcilePayload, cfg);
+  const cancelled = reconciliation.cancelled_payment_keys || [];
+  const blocked = reconciliation.blocked_registered_payment_keys || [];
+  appendMessage_(sheet, rows.slice(0, 1), 'Paiements alignés • ' + activeKeys.length + ' actif(s) • ' + cancelled.length + ' annulé(s)');
+  if (blocked.length) {
+    const message = 'Paiement(s) déjà comptabilisé(s), correction comptable requise : ' + blocked.join(', ');
+    appendMessage_(sheet, rows.slice(0, 1), message);
+    if (force) throw new Error(message);
+  }
+  return {payments: results, reconciliation: reconciliation};
 }
 
 function apiPost_(path, propertyName, payload, cfg) {
@@ -377,11 +423,11 @@ function ensureConfigSheet_() {
   sh.getRange('A1:H1').merge().setValue('DALLYTRADING — SYNCHRONISATION GOOGLE SHEETS ↔ CRM FREIGHT').setFontWeight('bold');
   sh.getRange('A4:B9').setValues([
     ['URL CRM', 'https://crm.dallytrading.com'],
-    ['Synchronisation automatique', 'OUI'],
+    ['Synchronisation automatique', 'NON'],
     ['Facture brouillon automatique', 'NON'],
-    ['Synchronisation paiements', 'OUI'],
+    ['Synchronisation paiements', 'NON'],
     ['Dossiers max par cycle', 10],
-    ['Mode initial migration', 'OUI'],
+    ['Mode initial migration', 'NON'],
   ]);
   sh.getRange('A15:H17').setValues([
     ['Feuille','Actif','Mode API','Direction','Pays départ','Ville départ','Pays arrivée','Ville arrivée'],
@@ -430,18 +476,50 @@ function selectedDossier_() {
   return {sheet, dossier};
 }
 
+function prepareArticleRows_(sheet, dossier, rows) {
+  const articleRows = rows.filter(isArticleRow_);
+  let ordinal = 0;
+  articleRows.forEach(row => {
+    ordinal++;
+    const existing = display_(row, DALLY.columns.articleKey);
+    row._syncArticleKey = existing || (dossier + '|A|' + ordinal);
+    if (!existing) setCell_(sheet, row.row, DALLY.columns.articleKey, row._syncArticleKey);
+  });
+  return articleRows;
+}
+
+function articleKey_(row) {
+  return String(row._syncArticleKey || display_(row, DALLY.columns.articleKey) || '').trim();
+}
+
 function isArticleRow_(row) {
-  return !!display_(row, DALLY.columns.articleKey) || Number(value_(row, DALLY.columns.totalEur) || 0) > 0;
+  if (display_(row, DALLY.columns.articleKey)) return true;
+  if (Number(value_(row, DALLY.columns.totalEur) || 0) > 0) return true;
+  if (!display_(row, DALLY.columns.description)) return false;
+  const measures = [
+    DALLY.columns.announcedWeight,
+    DALLY.columns.exactWeight,
+    DALLY.columns.length,
+    DALLY.columns.width,
+    DALLY.columns.height,
+    DALLY.columns.unitVolume,
+    DALLY.columns.totalVolume,
+  ];
+  return measures.some(col => Number(value_(row, col) || 0) > 0);
 }
 
 function invoiceReady_(articleRows) {
   if (!articleRows.length) return false;
   return articleRows.every(row => {
     const method = DALLY.billingCodes[display_(row, DALLY.columns.billingMethod)] || '';
-    return !!display_(row, DALLY.columns.articleKey) && method !== 'quote' &&
+    return !!articleKey_(row) && method !== 'quote' &&
       Number(value_(row, DALLY.columns.billableWeight) || 0) > 0 &&
       Number(value_(row, DALLY.columns.appliedPrice) || 0) > 0;
   });
+}
+
+function dossierHasPayments_(rows) {
+  return rows.some(row => Number(value_(row, DALLY.columns.paymentEur) || 0) > 0 || Number(value_(row, DALLY.columns.paymentXof) || 0) > 0);
 }
 
 function markDossierError_(sheet, dossier, err) {

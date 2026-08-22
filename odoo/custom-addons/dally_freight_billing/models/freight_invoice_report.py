@@ -41,8 +41,8 @@ class AccountMove(models.Model):
         """Return presentation-only information for the Freight invoice PDF.
 
         Collections remain operational cash entries until native accounting
-        registration occurs. For draft invoices, the displayed remaining
-        balance is therefore explicitly indicative.
+        registration occurs. Cancelled source entries are intentionally excluded
+        from both the displayed collection list and the indicative balance.
         """
         self.ensure_one()
 
@@ -103,6 +103,7 @@ class AccountMove(models.Model):
             "dally.freight.collection"
         ].sudo().search([
             ("shipment_id", "=", shipment.id),
+            ("state", "!=", "cancelled"),
         ], order="payment_date,id")
 
         method_labels = {

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""POST /api/v1/freight/payment — upsert a customer collection from the Sheet."""
+"""Freight payment endpoints used by the trusted Google Sheet connector."""
 
 from odoo import fields, _, http
 
@@ -16,6 +16,13 @@ ALLOWED_FIELDS = frozenset({
     "payment_date",
     "payment_method",
     "collected_by",
+    "source",
+})
+RECONCILE_FIELDS = frozenset({
+    "request_uuid",
+    "external_reference",
+    "shipment_id",
+    "active_payment_keys",
     "source",
 })
 VALID_SOURCES = frozenset({"legacy_xlsx", "google_sheets", "backoffice"})
@@ -40,13 +47,32 @@ class DallyFreightPaymentController(DallyApiController):
             handler=self._sync_payment,
         )
 
-    def _sync_payment(self, env, payload, api_key):
+    @http.route(
+        "/api/v1/freight/payment/reconcile",
+        type="http",
+        auth="none",
+        readonly=False,
+        methods=["POST"],
+        csrf=False,
+        save_session=False,
+    )
+    def reconcile_payments(self, **kwargs):
+        return self._handle(
+            endpoint="/api/v1/freight/payment/reconcile",
+            required_scope="freight:payment",
+            handler=self._reconcile_payments,
+        )
+
+    def _check_group(self, env):
         if not env.user.has_group(BILLING_GROUP):
             raise DallyApiError(
                 403,
                 "forbidden",
                 _("This API user is not allowed to synchronise freight payments."),
             )
+
+    def _sync_payment(self, env, payload, api_key):
+        self._check_group(env)
 
         unknown = sorted(set(payload) - ALLOWED_FIELDS)
         if unknown:
@@ -84,10 +110,7 @@ class DallyFreightPaymentController(DallyApiController):
         except (TypeError, ValueError) as exc:
             raise DallyApiError(422, "invalid_payment_date", _("Invalid payment_date.")) from exc
 
-        source = str(payload.get("source") or "google_sheets").strip()
-        if source not in VALID_SOURCES:
-            raise DallyApiError(422, "invalid_source", _("Invalid payment source."))
-
+        source = self._source(payload.get("source"))
         collector_name = str(payload.get("collected_by") or "").strip()
         collector = self._resolve_collector(env, collector_name)
         values = {
@@ -125,6 +148,89 @@ class DallyFreightPaymentController(DallyApiController):
             "_record": collection,
         }
         return data, 201 if created else 200
+
+    def _reconcile_payments(self, env, payload, api_key):
+        """Align Sheet-managed pending collections with the current Sheet set.
+
+        Missing legacy/google-sheet collections are cancelled only while they
+        have no native ``account.payment``. Back-office collections are never
+        touched. Registered accounting payments are returned as blocked so the
+        caller can request a proper accounting correction instead of silently
+        rewriting history.
+        """
+        self._check_group(env)
+        unknown = sorted(set(payload) - RECONCILE_FIELDS)
+        if unknown:
+            raise DallyApiError(
+                422,
+                "unknown_fields",
+                _("Unknown freight payment reconcile field(s): %s", ", ".join(unknown)),
+            )
+
+        shipment = self._resolve_shipment(env, payload)
+        active_keys = payload.get("active_payment_keys")
+        if not isinstance(active_keys, list):
+            raise DallyApiError(
+                422,
+                "invalid_active_payment_keys",
+                _("active_payment_keys must be an array."),
+            )
+        clean_keys = []
+        seen = set()
+        for item in active_keys:
+            key = str(item or "").strip()
+            if not key:
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            clean_keys.append(key)
+
+        source = self._source(payload.get("source"))
+        managed_sources = [source]
+        if source == "google_sheets":
+            managed_sources.append("legacy_xlsx")
+
+        collections = env["dally.freight.collection"].search([
+            ("shipment_id", "=", shipment.id),
+            ("source", "in", managed_sources),
+        ])
+        active_set = set(clean_keys)
+        cancelled = []
+        already_cancelled = []
+        blocked_registered = []
+
+        for collection in collections:
+            if collection.external_payment_key in active_set:
+                continue
+            if collection.payment_id:
+                blocked_registered.append(collection.external_payment_key)
+                continue
+            if collection.state == "cancelled":
+                already_cancelled.append(collection.external_payment_key)
+                continue
+            collection.action_cancel_from_sync(
+                _("Removed from the current Google Sheets payment set.")
+            )
+            cancelled.append(collection.external_payment_key)
+
+        data = {
+            "shipment_id": shipment.id,
+            "external_reference": shipment.external_reference,
+            "active_payment_keys": clean_keys,
+            "cancelled_payment_keys": cancelled,
+            "already_cancelled_payment_keys": already_cancelled,
+            "blocked_registered_payment_keys": blocked_registered,
+            "_record": shipment,
+        }
+        return data, 200
+
+    @staticmethod
+    def _source(value):
+        source = str(value or "google_sheets").strip()
+        if source not in VALID_SOURCES:
+            raise DallyApiError(422, "invalid_source", _("Invalid payment source."))
+        return source
 
     @staticmethod
     def _resolve_shipment(env, payload):

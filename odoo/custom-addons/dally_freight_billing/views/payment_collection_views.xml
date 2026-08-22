@@ -7,7 +7,8 @@
             <list string="Freight Collections"
                   decoration-success="state == 'registered'"
                   decoration-warning="state == 'pending'"
-                  decoration-danger="state == 'error'">
+                  decoration-danger="state == 'error'"
+                  decoration-muted="state == 'cancelled'">
                 <field name="payment_date"/>
                 <field name="external_payment_key" optional="show"/>
                 <field name="shipment_id"/>
@@ -32,19 +33,19 @@
                 <sheet>
                     <group>
                         <group string="Collection">
-                            <field name="external_payment_key" readonly="state == 'registered'"/>
-                            <field name="shipment_id" readonly="state == 'registered'"/>
+                            <field name="external_payment_key" readonly="state in ('registered', 'cancelled')"/>
+                            <field name="shipment_id" readonly="state in ('registered', 'cancelled')"/>
                             <field name="partner_id" readonly="1"/>
                             <field name="invoice_id" readonly="1"/>
-                            <field name="payment_date" readonly="state == 'registered'"/>
-                            <field name="amount" readonly="state == 'registered'"/>
-                            <field name="currency_id" readonly="state == 'registered'"/>
+                            <field name="payment_date" readonly="state in ('registered', 'cancelled')"/>
+                            <field name="amount" readonly="state in ('registered', 'cancelled')"/>
+                            <field name="currency_id" readonly="state in ('registered', 'cancelled')"/>
                         </group>
                         <group string="Origin">
-                            <field name="source_method" readonly="state == 'registered'"/>
-                            <field name="source" readonly="state == 'registered'"/>
-                            <field name="collected_by_id" readonly="state == 'registered'"/>
-                            <field name="collected_by_name" readonly="state == 'registered'"/>
+                            <field name="source_method" readonly="state in ('registered', 'cancelled')"/>
+                            <field name="source" readonly="state in ('registered', 'cancelled')"/>
+                            <field name="collected_by_id" readonly="state in ('registered', 'cancelled')"/>
+                            <field name="collected_by_name" readonly="state in ('registered', 'cancelled')"/>
                         </group>
                     </group>
                     <group string="Accounting">
@@ -70,6 +71,7 @@
                 <filter name="pending" string="Pending" domain="[('state', '=', 'pending')]"/>
                 <filter name="registered" string="Registered" domain="[('state', '=', 'registered')]"/>
                 <filter name="error" string="Errors" domain="[('state', '=', 'error')]"/>
+                <filter name="cancelled" string="Cancelled" domain="[('state', '=', 'cancelled')]"/>
                 <separator/>
                 <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
                 <filter name="group_currency" string="Currency" context="{'group_by': 'currency_id'}"/>

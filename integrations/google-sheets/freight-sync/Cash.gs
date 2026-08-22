@@ -48,7 +48,6 @@ function installCashTriggers_() {
     if (handlers.has(t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('dallyMarkCashEdited_').forSpreadsheet(ss).onEdit().create();
-  ScriptApp.newTrigger('dallyCashOnOpen_').forSpreadsheet(ss).onOpen().create();
   ScriptApp.newTrigger('dallyScheduledCashSync_').timeBased().everyMinutes(1).create();
 }
 
@@ -156,6 +155,10 @@ function syncExpenseRow_(sh, row, cfg) {
   const text = col => String(display[col - 1] || '').trim();
   const key = text(c.key);
   if (!key) throw new Error('ID dépense manquant');
+  const expenseDate = dateIso_(get(c.date));
+  if (!expenseDate) throw new Error('Date dépense manquante ou invalide');
+  if (!text(c.category)) throw new Error('Catégorie dépense manquante');
+  if (!text(c.description)) throw new Error('Description dépense manquante');
   const allocations = [];
   [[c.gilles, 'Gilles'], [c.alain, 'Alain'], [c.dalanda, 'Dalanda']].forEach(([col, actor]) => {
     const amount = Number(get(col) || 0);
@@ -164,7 +167,7 @@ function syncExpenseRow_(sh, row, cfg) {
   if (!allocations.length) throw new Error('Aucun montant saisi pour Gilles, Alain ou Dalanda');
   const payload = {
     external_expense_key: key,
-    expense_date: dateIso_(get(c.date)),
+    expense_date: expenseDate,
     category: text(c.category),
     description: text(c.description),
     beneficiary: text(c.beneficiary),
@@ -194,12 +197,18 @@ function syncTransferRow_(sh, row, cfg) {
   const text = col => String(display[col - 1] || '').trim();
   const key = text(c.key);
   if (!key) throw new Error('ID transfert manquant');
+  const transferDate = dateIso_(get(c.date));
+  if (!transferDate) throw new Error('Date transfert manquante ou invalide');
+  if (!text(c.fromActor) || !text(c.toActor)) throw new Error('Expéditeur ou destinataire du transfert manquant');
+  if (text(c.fromActor).toLowerCase() === text(c.toActor).toLowerCase()) throw new Error('Un transfert doit avoir deux personnes différentes');
+  const amount = Number(get(c.amount) || 0);
+  if (!(amount > 0)) throw new Error('Montant transfert invalide');
   const payload = {
     external_transfer_key: key,
-    transfer_date: dateIso_(get(c.date)),
+    transfer_date: transferDate,
     from_actor: text(c.fromActor),
     to_actor: text(c.toActor),
-    amount: Number(get(c.amount) || 0),
+    amount: amount,
     currency_code: cashCurrency_(text(c.currency)),
     total_eur_snapshot: numberOrNull_(get(c.totalEur)),
     total_xof_snapshot: numberOrNull_(get(c.totalXof)),

@@ -22,7 +22,7 @@ compteurs en attente/échec, filtres opérationnels et relance manuelle réserv�
 au Manager. La relance remet uniquement en file ; elle n'envoie jamais depuis
 l'interface et repasse par toutes les validations du cron.
 """,
-    "version": "19.0.1.2.1",
+    "version": "19.0.1.2.2",
     "category": "Inventory/Delivery",
     "author": "DallyTrading",
     "website": "https://dallytrading.com",

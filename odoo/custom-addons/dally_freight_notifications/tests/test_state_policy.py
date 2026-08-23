@@ -61,6 +61,17 @@ class TestStatePolicy(TransactionCase):
             "body_html": "<p>{{ object.customer_message }}</p>",
         })
 
+    def _require_freight_bridge(self):
+        """Ignore les tests cross-module quand le pont Freight n'est pas installé."""
+        bridge = self.env["ir.module.module"].sudo().search([
+            ("name", "=", "dally_freight_bridge"),
+            ("state", "=", "installed"),
+        ], limit=1)
+        if not bridge:
+            self.skipTest(
+                "Test d'intégration : dally_freight_bridge doit être installé."
+            )
+
     def test_les_quatorze_etats_ont_une_politique(self):
         etats_modele = {
             code for code, _libelle
@@ -318,6 +329,7 @@ class TestStatePolicy(TransactionCase):
         self.assertTrue(expedition.event_ids.visible_to_customer)
 
     def test_le_provisionnement_sort_du_brouillon(self):
+        self._require_freight_bridge()
         import uuid as _uuid
         devis = self.env["dally.quote.request"].create({
             "service_type_id": self.service.id,
@@ -338,6 +350,7 @@ class TestStatePolicy(TransactionCase):
         self.assertEqual(len(self.Notif.search([("event_id", "in", evenements.ids)])), 1)
 
     def test_le_client_voit_immediatement_son_dossier_provisionne(self):
+        self._require_freight_bridge()
         import uuid as _uuid
         portail = self.env["res.users"].create({
             "name": "Client provisionné", "login": "notif.prov@dallytrading.invalid",

@@ -231,5 +231,9 @@ class DallyShipmentEvent(models.Model):
                     expedition.destination_location, expedition.destination_city,
                     expedition.destination_country_id) or False,
                 "event_date": evenement.event_date,
-                "tracking_url": expedition.public_tracking_url or False,
+                # Le lien contient le jeton de capacité et reste donc interdit
+                # aux identités d'intégration. La file, déjà créée en sudo(),
+                # prend une photographie serveur avec une élévation ciblée au
+                # lieu d'élargir les droits du connecteur Google Sheets.
+                "tracking_url": expedition.sudo().public_tracking_url or False,
             })

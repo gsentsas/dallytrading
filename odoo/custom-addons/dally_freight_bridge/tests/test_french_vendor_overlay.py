@@ -50,3 +50,9 @@ class TestFrenchVendorOverlay(TransactionCase):
             "tk_freight.freight_shipment_form_view"
         ).with_context(lang="en_US").arch_db
         self.assertIn("Customer", source_arch)
+
+        self.assertEqual(
+            self.env.ref("tk_freight.menu_freight_package_id")
+            .with_context(lang="fr_FR").name,
+            "Colis",
+        )

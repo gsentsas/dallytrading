@@ -45,6 +45,7 @@ const DALLY = Object.freeze({
     'Pese': 'preparing', 'Pesé': 'preparing', 'Charge': 'ready', 'Chargé': 'ready',
     'Expedie': 'in_transit', 'Expédié': 'in_transit', 'Arrive': 'arrived', 'Arrivé': 'arrived',
     'Retire': 'delivered', 'Retiré': 'delivered',
+    'Annule': 'cancelled', 'Annulé': 'cancelled',
   }),
   paymentCodes: Object.freeze({'Espèces': 'cash', 'Especes': 'cash', 'Wave': 'wave', 'Virement': 'bank_transfer'}),
 });
@@ -222,6 +223,20 @@ function syncDossier_(sheet, dossier, rows, cfg) {
   return {sync: data, invoice: invoiceData};
 }
 
+function sheetShipmentState_(row) {
+  const label = display_(row, DALLY.columns.parcelState);
+  if (!label) return 'request_received';
+
+  const code = DALLY.stateCodes[label];
+  if (!code) {
+    throw new Error(
+      'Statut colis non reconnu: "' + label +
+      '". Corrigez la colonne AD avant synchronisation.'
+    );
+  }
+  return code;
+}
+
 function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
   const first = articleRows[0];
   const route = cfg.routes[sheetName];
@@ -234,7 +249,7 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
     source: source,
     goods_received_on: dateIso_(value_(first, DALLY.columns.depositDate)),
     customer_segment: DALLY.segmentCodes[display_(first, DALLY.columns.clientType)] || 'individual',
-    state: DALLY.stateCodes[display_(first, DALLY.columns.parcelState)] || 'request_received',
+    state: sheetShipmentState_(first),
     dossier_fee_eur: firstNumber_(rows, DALLY.columns.dossierFee) || 0,
     other_fees_eur: sum_(articleRows, DALLY.columns.otherFees),
     client: {

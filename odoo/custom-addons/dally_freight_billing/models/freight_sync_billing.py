@@ -30,11 +30,13 @@ class DallyFreightSyncService(models.AbstractModel):
             "other_fees_eur": shipment.other_fees_eur,
             "billing_total_eur": shipment.billing_total_eur,
             "billing_locked": shipment.billing_locked,
-            "sale_order_id": shipment.sale_order_id.id or None,
-            "invoice_id": shipment.invoice_id.id or None,
-            "invoice_number": shipment.invoice_id.name if shipment.invoice_id else None,
-            "invoice_state": shipment.invoice_id.state if shipment.invoice_id else None,
         })
+
+        # Keep the Freight Sync identity deliberately outside Sales/Accounting.
+        # A dossier may already have sale_order_id / invoice_id, but dereferencing
+        # those records here would require commercial/accounting ACLs merely to
+        # synchronise cargo. Commercial document metadata belongs to the dedicated
+        # billing endpoint and is therefore intentionally absent from this response.
         return data, shipment
 
     @api.model

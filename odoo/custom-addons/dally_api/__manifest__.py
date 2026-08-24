@@ -47,11 +47,16 @@ a public read surface with no consumer is attack surface for nothing.
     "author": "DallyTrading",
     "website": "https://dallytrading.com",
     "category": "Services/DallyTrading",
-    "version": "19.0.1.1.1",
+    "version": "19.0.1.1.2",
     "license": "LGPL-3",
     "depends": [
         "dally_core",
         "dally_crm",
+        # The public sourcing endpoint and its dedicated least-privilege API
+        # identity are provided by dally_sourcing. Declaring the dependency is
+        # required so a clean dally_api install/test database loads those models,
+        # groups and XML IDs before the controller and HTTP tests use them.
+        "dally_sourcing",
         # Le point d'entrée public crée le véhicule décrit par une demande de
         # transport de véhicule, dans la même transaction que la demande.
         "dally_freight",

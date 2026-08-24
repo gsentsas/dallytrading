@@ -690,11 +690,33 @@ class TestPortalQuoteDecisionHttp(QuoteDecisionFixture, HttpCase):
         """
         from psycopg2 import errors
 
+        class SimulatedSerializationFailure(errors.SerializationFailure):
+            """A retryable PostgreSQL error with the real SQLSTATE attached.
+
+            Instantiating ``psycopg2.errors.SerializationFailure`` directly
+            leaves ``pgcode`` empty. Odoo 19's HTTP retry layer correctly
+            relies on SQLSTATE ``40001`` to decide that it can replay the
+            request; the bare synthetic exception therefore exercised a
+            KeyError in the framework instead of the intended code path.
+            """
+
+            @property
+            def pgcode(self):
+                return "40001"
+
         quote = self._make_quote("http-concurrency-propagation")
         self.authenticate(self.login_a, PORTAL_PASSWORD)
 
+        original_decide = type(
+            self.env["dally.quote.request"]
+        )._dally_portal_decide
+        attempts = {"count": 0}
+
         def raising(self, *args, **kwargs):
-            raise errors.SerializationFailure("could not serialize access")
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                raise SimulatedSerializationFailure("could not serialize access")
+            return original_decide(self, *args, **kwargs)
 
         with patch.object(
             type(self.env["dally.quote.request"]),
@@ -702,20 +724,12 @@ class TestPortalQuoteDecisionHttp(QuoteDecisionFixture, HttpCase):
         ):
             response = self._post(quote.reference, {"decision": "accept"})
 
-        # Odoo rejoue cinq fois puis abandonne : la requête n'aboutit pas à un
-        # 500 « métier » du contrôleur. Ce qui compte est que ce ne soit PAS la
-        # réponse contrôlée `unavailable` — signe que l'exception a été avalée.
-        self.assertNotEqual(
-            response.status_code, 200,
-            "une exception de concurrence ne doit pas produire un succès",
-        )
-        if response.status_code == 500:
-            body = response.text or ""
-            self.assertNotIn(
-                "Service indisponible", body,
-                "l'exception de concurrence a été convertie par le gestionnaire "
-                "générique au lieu de remonter jusqu'au retry d'Odoo",
-            )
+        # Le premier appel est rejeté par PostgreSQL, Odoo rejoue la requête,
+        # puis le second appel observe le flux métier normal. Si le contrôleur
+        # avalait l'exception, il retournerait une réponse ``unavailable`` et
+        # cette seconde exécution n'aurait jamais lieu.
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(attempts["count"], 2)
 
     def test_generic_exception_is_still_converted(self):
         """L'autre moitié : une panne inconnue reste traduite, pas propagée.

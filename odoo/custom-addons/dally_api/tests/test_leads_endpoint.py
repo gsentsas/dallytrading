@@ -61,6 +61,26 @@ class TestLeadsEndpoint(HttpCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["error"]["code"], "missing_api_key")
 
+    def test_checks_missing_api_key_before_body_validation(self):
+        """Unauthenticated calls must not reveal body-validation details."""
+        RequestLog = self.env["dally.api.request"].sudo()
+        before = RequestLog.search_count([
+            ("endpoint", "=", self.ENDPOINT),
+            ("request_uuid", "=", ""),
+        ])
+
+        response = self._post(None, api_key=False, raw_body=" ")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["error"]["code"], "missing_api_key")
+        self.assertEqual(
+            RequestLog.search_count([
+                ("endpoint", "=", self.ENDPOINT),
+                ("request_uuid", "=", ""),
+            ]),
+            before,
+        )
+
     def test_rejects_invalid_api_key(self):
         response = self._post(self._payload(), api_key="totally-wrong-key")
         self.assertEqual(response.status_code, 401)

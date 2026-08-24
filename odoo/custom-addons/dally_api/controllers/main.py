@@ -262,8 +262,8 @@ class DallyApiController(http.Controller):
         source_ip = cls._client_ip()
 
         try:
-            payload = cls._read_json_body()
             api_key, env = cls._authenticate(required_scope)
+            payload = cls._read_json_body()
             request_uuid = cls._validate_uuid(payload.get("request_uuid"))
 
             # Replay a previous successful identical call (§41).
@@ -363,6 +363,12 @@ class DallyApiController(http.Controller):
             request_uuid = ""
             if isinstance(payload, dict):
                 request_uuid = str(payload.get("request_uuid") or "")
+            # Invalid or unauthenticated requests may fail before a body — and
+            # therefore before a client idempotency key — is available. An empty
+            # request UUID is not a valid log identity and is unique per endpoint,
+            # so attempting to persist it repeatedly only creates database errors.
+            if not request_uuid:
+                return
             # Journaliser au nom d'un utilisateur réel. `request.env` est ici
             # l'environnement non authentifié (uid None) : y écrire produit un
             # create_uid NULL et fait échouer le flush de fin de requête.

@@ -156,6 +156,29 @@ class TestFreightSyncEndpoint(HttpCase):
         self.assertAlmostEqual(line.total_weight_kg, 10.0, places=3)
         self.assertAlmostEqual(line.transport_amount_eur, 35.0, places=2)
 
+    def test_invoiced_shipment_resync_does_not_require_accounting_acl(self):
+        payload = self._payload()
+        first = self._post(payload)
+        self.assertEqual(first.status_code, 201)
+
+        shipment = self.env["dally.shipment"].browse(
+            first.json()["data"]["shipment_id"]
+        )
+        invoice = shipment.action_prepare_native_freight_invoice()
+        self.assertEqual(invoice.state, "draft")
+        self.assertTrue(shipment.invoice_id)
+
+        payload["request_uuid"] = str(uuid.uuid4())
+        second = self._post(payload)
+        self.assertEqual(second.status_code, 200)
+        data = second.json()["data"]
+        self.assertEqual(data["shipment_id"], shipment.id)
+        self.assertEqual(data["lines"][0]["pricing_status"], "locked")
+        self.assertNotIn("sale_order_id", data)
+        self.assertNotIn("invoice_id", data)
+        self.assertNotIn("invoice_number", data)
+        self.assertNotIn("invoice_state", data)
+
     def test_unknown_top_level_field_is_rejected(self):
         payload = self._payload()
         payload["user_id"] = 1

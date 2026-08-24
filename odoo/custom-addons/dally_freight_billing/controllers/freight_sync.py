@@ -81,7 +81,7 @@ class DallyFreightSyncController(DallyApiController):
                 _("This API user is not allowed to synchronise freight files."),
             )
 
-        clean = self._clean_payload(payload)
+        clean = self._clean_freight_payload(payload)
         self._require(clean, "external_reference", "transport_mode", "direction")
 
         data, shipment = env["dally.freight.sync.service"].upsert(clean)
@@ -90,7 +90,14 @@ class DallyFreightSyncController(DallyApiController):
         return data, status
 
     @classmethod
-    def _clean_payload(cls, payload):
+    def _clean_freight_payload(cls, payload):
+        """Validate only Freight sync fields without polluting controller MRO.
+
+        Odoo composes HTTP controller classes at registry load time. Generic
+        private helper names can therefore collide across otherwise unrelated
+        controllers. Keep this helper endpoint-specific so `/api/v1/quotes`
+        cannot resolve Freight validation through ``self._clean_payload``.
+        """
         unknown = sorted(set(payload) - TOP_LEVEL_FIELDS)
         if unknown:
             raise DallyApiError(

@@ -47,7 +47,7 @@ a public read surface with no consumer is attack surface for nothing.
     "author": "DallyTrading",
     "website": "https://dallytrading.com",
     "category": "Services/DallyTrading",
-    "version": "19.0.1.1.2",
+    "version": "19.0.1.1.3",
     "license": "LGPL-3",
     "depends": [
         "dally_core",

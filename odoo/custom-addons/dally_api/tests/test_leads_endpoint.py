@@ -61,6 +61,13 @@ class TestLeadsEndpoint(HttpCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["error"]["code"], "missing_api_key")
 
+    def test_human_api_message_uses_french_by_default(self):
+        response = self._post(self._payload(), api_key=False)
+        self.assertEqual(
+            response.json()["error"]["message"],
+            "L’en-tête X-API-Key est requis.",
+        )
+
     def test_checks_missing_api_key_before_body_validation(self):
         """Unauthenticated calls must not reveal body-validation details."""
         RequestLog = self.env["dally.api.request"].sudo()

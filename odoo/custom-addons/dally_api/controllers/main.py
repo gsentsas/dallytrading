@@ -116,6 +116,20 @@ class DallyApiController(http.Controller):
 
     # ─── Authentication ──────────────────────────────────────────────
 
+    @staticmethod
+    def _set_response_language():
+        """Set the language used by human API messages.
+
+        ``auth='none'`` requests have no user or session language. Without an
+        explicit context, gettext falls back to the English msgid even when the
+        caller asked for French. Error *codes* remain the stable integration
+        contract; only their human diagnostic is localised.
+        """
+        accept_language = request.httprequest.headers.get("Accept-Language", "")
+        primary = accept_language.split(",", 1)[0].split(";", 1)[0].strip().lower()
+        language = "en_US" if primary.startswith("en") else "fr_FR"
+        request.update_context(lang=language)
+
     @classmethod
     def _authenticate(cls, required_scope):
         """Authenticate the caller and check its scope.
@@ -123,6 +137,7 @@ class DallyApiController(http.Controller):
         Returns ``(api_key, env)`` where ``env`` acts as the key's integration
         user — not as superuser.
         """
+        cls._set_response_language()
         raw_key = request.httprequest.headers.get("X-API-Key")
         if not raw_key:
             raise DallyApiError(401, "missing_api_key",

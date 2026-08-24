@@ -1,0 +1,810 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* dally_api
+# 	* dally_portal
+# 	* dally_freight_bridge
+# 	* dally_freight_routing
+# 	* dally_tracking
+# 	* dally_freight_billing
+# 	* dally_freight
+# 	* dally_freight_data
+# 	* dally_freight_dashboard
+# 	* dally_freight_notifications
+# 	* dally_crm
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 19.0-20260810\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-24 09:50+0000\n"
+"PO-Revision-Date: 2026-08-24 09:50+0000\n"
+"Last-Translator: \n"
+"Language: fr_FR\n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_form
+msgid ""
+"<strong>Internal only.</strong> This event does not appear on\n"
+"                        the public tracking page."
+msgstr ""
+"<strong>Interne uniquement.</strong> Cet événement n’apparaît pas sur\n"
+"                        la page publique de suivi."
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_form
+msgid ""
+"<strong>Published.</strong> The description and the location\n"
+"                        above appear on the public tracking page, exactly as written.\n"
+"                        Attached documents are never published."
+msgstr ""
+"<strong>Publié.</strong> La désignation et le lieu\n"
+"                        ci-dessus apparaissent tels quels sur la page publique de suivi.\n"
+"                        Les documents joints ne sont jamais publiés."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment_event.py:0
+msgid ""
+"A customer-visible event needs a meaningful description. It is published "
+"exactly as written."
+msgstr "Un événement visible par le client doit avoir une désignation explicite. Il est publié tel quel."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/controllers/tracking.py:0
+msgid ""
+"A reference and a tracking code are required: /api/v1/tracking/DT-SHP-YYYY-"
+"NNNNNN?token=..."
+msgstr "Une référence et un code de suivi sont requis : /api/v1/tracking/DT-SHP-YYYY-NNNNNN?token=..."
+
+#. module: dally_tracking
+#: model:ir.model.constraint,message:dally_tracking.constraint_dally_shipment_event_dally_event_description_not_empty
+msgid "An event must have a description."
+msgstr "Un événement doit avoir une désignation."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/controllers/tracking.py:0
+msgid "An internal error occurred."
+msgstr "Une erreur interne est survenue."
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__arrived
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__arrived
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__arrived
+msgid "Arrived"
+msgstr "Arrivé"
+
+#. module: dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__is_automatic
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_search
+msgid "Automatic"
+msgstr "Automatique"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__available
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__available
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__available
+msgid "Available for Pickup"
+msgstr "Disponible au retrait"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__awaiting_goods
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__awaiting_goods
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__awaiting_goods
+msgid "Awaiting Goods"
+msgstr "En attente des marchandises"
+
+#. module: dally_tracking
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment_event__attachment_ids
+msgid ""
+"Bill of lading, photos, delivery note. Attachments are NEVER returned by the"
+" public tracking API, even on a visible event: publishing a document is a "
+"separate decision from publishing an event, and the API has no way to make "
+"it."
+msgstr "Connaissement, photos, bon de livraison. Les pièces jointes ne sont JAMAIS renvoyées par l’API publique de suivi, même pour un événement visible : publier un document est une décision distincte de la publication d’un événement."
+
+#. modules: dally_freight, dally_freight_billing, dally_freight_notifications,
+#. dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__cancelled
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_expense__state__cancelled
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_transfer__state__cancelled
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__cancelled
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__cancelled
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_search
+msgid "Cancelled"
+msgstr "Annulé"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__company_id
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__company_id
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__company_id
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__company_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__company_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__company_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__company_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__company_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__company_id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__company_id
+msgid "Company"
+msgstr "Société"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__create_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__create_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__create_uid
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__create_uid
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__create_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__create_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__create_uid
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__create_uid
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__create_uid
+msgid "Created by"
+msgstr "Créé par"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__create_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__create_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__create_date
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__create_date
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__create_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__create_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__create_date
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__create_date
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__create_date
+msgid "Created on"
+msgstr "Créé le"
+
+#. modules: dally_freight, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__partner_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__partner_id
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_form
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_search
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_list
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_view_form_tracking
+msgid "Customer"
+msgstr "Client"
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_view_form_tracking
+msgid "Customer Link"
+msgstr "Lien client"
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_form
+msgid "Customer-Facing Description"
+msgstr "Désignation visible par le client"
+
+#. module: dally_tracking
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment_event__description
+msgid ""
+"Customer-facing wording. Write it as the customer should read it: it is "
+"published verbatim when the event is visible."
+msgstr "Texte visible par le client. Rédigez-le tel que le client doit le lire : il est publié tel quel lorsque l’événement est visible."
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__customs
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__customs
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__customs
+msgid "Customs Clearance"
+msgstr "Dédouanement"
+
+#. module: dally_tracking
+#: model:ir.model,name:dally_tracking.model_dally_shipment
+msgid "DallyTrading Shipment"
+msgstr "Expédition DallyTrading"
+
+#. module: dally_tracking
+#: model:ir.model,name:dally_tracking.model_dally_shipment_event
+msgid "DallyTrading Shipment Event"
+msgstr "Événement d’expédition DallyTrading"
+
+#. modules: dally_api, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__event_date
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_search
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_search
+msgid "Date"
+msgstr "Date"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__delivered
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__delivered
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__delivered
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_search
+msgid "Delivered"
+msgstr "Livré"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__departed
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__departed
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__departed
+msgid "Departed"
+msgstr "Départ effectué"
+
+#. modules: dally_freight, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__description
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__description
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__description
+msgid "Description"
+msgstr "Désignation"
+
+#. modules: dally_api, dally_crm, dally_freight_billing, dally_freight_bridge,
+#. dally_freight_dashboard, dally_freight_notifications,
+#. dally_freight_routing, dally_portal, dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__display_name
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__display_name
+#: model:ir.model.fields,field_description:dally_crm.field_crm_lead__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_move__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_api_key__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_sync_service__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order_line__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_dally_freight_lockdown_guard__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_freight_documents__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_mail_template__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_shipment_freight_booking__display_name
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__display_name
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__display_name
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_account_incoterms__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_dally_freight_routing_mixin__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_freight_port__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country_state__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_freight_vehicle_cargo__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_projection_mixin__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_shipment_package__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_offer__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_proposal__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_request__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_supplier__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_commission__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_cost__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_opportunity__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_res_partner__display_name
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__display_name
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__display_name
+msgid "Display Name"
+msgstr "Nom d'affichage"
+
+#. modules: dally_freight, dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__attachment_ids
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_form
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_form
+msgid "Documents"
+msgstr "Documents"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__draft
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__draft
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__draft
+msgid "Draft"
+msgstr "Brouillon"
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_search
+msgid "Entered by Hand"
+msgstr "Saisi manuellement"
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_form
+msgid "Event"
+msgstr "Événement"
+
+#. module: dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__event_count
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_view_form_tracking
+msgid "Events"
+msgstr "Événements"
+
+#. module: dally_tracking
+#: model_terms:ir.actions.act_window,help:dally_tracking.dally_shipment_event_action
+msgid ""
+"Events are created automatically when a shipment's status changes,\n"
+"                and can also be added by hand. Only events marked\n"
+"                <strong>visible to customer</strong> appear on the public tracking\n"
+"                page."
+msgstr ""
+"Les événements sont créés automatiquement lors du changement de statut\n"
+"                d’une expédition et peuvent aussi être ajoutés manuellement. Seuls les événements\n"
+"                <strong>visibles par le client</strong> apparaissent sur la page publique de suivi."
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_view_form_tracking
+msgid ""
+"Events are created automatically when the status changes.\n"
+"                        Only those marked <strong>Customer</strong> appear on\n"
+"                        <code>dallytrading.com/tracking</code>. Internal notes and\n"
+"                        attached documents are never published."
+msgstr ""
+"Les événements sont créés automatiquement lors du changement de statut.\n"
+"                        Seuls ceux marqués <strong>Client</strong> apparaissent sur\n"
+"                        <code>dallytrading.com/tracking</code>. Les notes internes et\n"
+"                        les documents joints ne sont jamais publiés."
+
+#. module: dally_tracking
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment_event__is_automatic
+msgid "Generated by a status change rather than entered by hand."
+msgstr "Généré par un changement de statut plutôt que saisi manuellement."
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__goods_received
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__goods_received
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__goods_received
+msgid "Goods Received"
+msgstr "Marchandise reçue"
+
+#. modules: dally_api, dally_crm, dally_freight_billing, dally_freight_bridge,
+#. dally_freight_dashboard, dally_freight_notifications,
+#. dally_freight_routing, dally_portal, dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__id
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__id
+#: model:ir.model.fields,field_description:dally_crm.field_crm_lead__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_move__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_api_key__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_sync_service__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order_line__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_dally_freight_lockdown_guard__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_freight_documents__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_mail_template__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_shipment_freight_booking__id
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__id
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__id
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_account_incoterms__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_dally_freight_routing_mixin__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_freight_port__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country_state__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_freight_vehicle_cargo__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_projection_mixin__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_shipment_package__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_offer__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_proposal__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_request__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_supplier__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_commission__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_cost__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_opportunity__id
+#: model:ir.model.fields,field_description:dally_portal.field_res_partner__id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__id
+msgid "ID"
+msgstr "IDENTIFIANT"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__in_transit
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__in_transit
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__in_transit
+msgid "In Transit"
+msgstr "En transit"
+
+#. module: dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__internal_note
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_form
+msgid "Internal Note"
+msgstr "Note interne"
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_search
+msgid "Internal Only"
+msgstr "Interne uniquement"
+
+#. module: dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__last_public_event_id
+msgid "Last Customer-Visible Event"
+msgstr "Dernier événement visible par le client"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__write_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__write_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__write_uid
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__write_uid
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__write_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__write_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__write_uid
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__write_uid
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__write_uid
+msgid "Last Updated by"
+msgstr "Dernière mise à jour par"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__write_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__write_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__write_date
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__write_date
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__write_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__write_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__write_date
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__write_date
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__write_date
+msgid "Last Updated on"
+msgstr "Dernière mise à jour le"
+
+#. module: dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__location
+msgid "Location"
+msgstr "Lieu"
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_form
+msgid "Never published, whatever the setting above."
+msgstr "Jamais publié, quel que soit le réglage ci-dessus."
+
+#. module: dally_tracking
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment_event__internal_note
+msgid ""
+"Never published, whatever the value of 'Visible to Customer'. Use it freely "
+"for agent instructions and commercial context."
+msgstr "Jamais publié, quelle que soit la valeur de « Visible par le client ». Utilisez-le librement pour les consignes aux agents et le contexte commercial."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/controllers/tracking.py:0
+msgid "No shipment matches this reference and tracking code."
+msgstr "Aucune expédition ne correspond à cette référence et à ce code de suivi."
+
+#. module: dally_tracking
+#: model_terms:ir.actions.act_window,help:dally_tracking.dally_shipment_event_action
+msgid "No tracking event yet"
+msgstr "Aucun événement de suivi pour le moment"
+
+#. module: dally_tracking
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment_event__visible_to_customer
+msgid ""
+"Off by default, on purpose: a forgotten checkbox must fail closed, not "
+"publish an internal event."
+msgstr "Désactivé par défaut volontairement : une case oubliée ne doit pas publier un événement interne."
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__out_for_delivery
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__out_for_delivery
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__out_for_delivery
+msgid "Out for Delivery"
+msgstr "En cours de livraison"
+
+#. modules: dally_freight, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__company_id
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment_package__company_id
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_freight_collection__company_id
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment_event__company_id
+msgid "Owning company. Drives the multi-company record rule."
+msgstr "Société propriétaire. Elle pilote la règle d’enregistrement multi-sociétés."
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__preparing
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__preparing
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__preparing
+msgid "Preparing"
+msgstr "En préparation"
+
+#. module: dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__public_tracking_token
+msgid "Public Tracking Token"
+msgstr "Jeton de suivi public"
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+msgid "Public tracking token rotated. Links sent previously no longer work."
+msgstr "Jeton de suivi public renouvelé. Les liens envoyés précédemment ne fonctionnent plus."
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_form
+msgid "Publication"
+msgstr "Publication"
+
+#. module: dally_tracking
+#: model:res.groups,comment:dally_tracking.group_dally_tracking_api
+msgid ""
+"Read shipments and customer-visible tracking events\n"
+"for the public tracking endpoint. Grants no access to costs, margins or internal\n"
+"notes: those fields are removed by the ORM for this group.\n"
+"\n"
+"Reserved for the API integration user. Never assign it to a person."
+msgstr ""
+"Lecture des expéditions et des événements de suivi visibles par le client\n"
+"pour le point de terminaison public de suivi. Ne donne aucun accès aux coûts, marges ou notes\n"
+"internes : ces champs sont retirés par l’ORM pour ce groupe.\n"
+"\n"
+"Réservé à l’utilisateur d’intégration API. Ne l’attribuez jamais à une personne."
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__ready
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__ready
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__ready
+msgid "Ready to Ship"
+msgstr "Prêt à expédier"
+
+#. module: dally_tracking
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment__public_tracking_url
+msgid ""
+"Ready-to-send link, reference and token included. This is what goes into a "
+"customer e-mail or WhatsApp message."
+msgstr "Lien prêt à envoyer, avec référence et jeton. C’est celui à intégrer dans un e-mail ou un message WhatsApp au client."
+
+#. module: dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__user_id
+msgid "Recorded By"
+msgstr "Enregistré par"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__request_received
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__request_received
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__request_received
+msgid "Request Received"
+msgstr "Demande reçue"
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_view_form_tracking
+msgid "Rotate Token"
+msgstr "Renouveler le jeton"
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_view_form_tracking
+msgid ""
+"Rotating the token invalidates every"
+"                                              tracking link already sent to "
+"this                                              customer, including the "
+"one in their                                              inbox. Continue?"
+msgstr "Le renouvellement du jeton invalide tous les liens de suivi déjà envoyés à ce client, y compris celui présent dans sa boîte de réception. Continuer ?"
+
+#. modules: dally_freight, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__shipment_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__shipment_id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__shipment_id
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_form
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_search
+msgid "Shipment"
+msgstr "Expédition"
+
+#. modules: dally_freight_notifications, dally_tracking
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_shipment_notification__state
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment_event__status
+msgid ""
+"Shipment status this event reports. Reuses the shipment's own status list so"
+" the timeline and the file can never tell different stories."
+msgstr "Statut d’expédition signalé par cet événement. Réutilise la propre liste de statuts de l’expédition afin que la frise et le dossier ne puissent jamais afficher des informations différentes."
+
+#. modules: dally_api, dally_crm, dally_freight, dally_tracking
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__state
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__state
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__status
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_search
+#: model_terms:ir.ui.view,arch_db:dally_crm.dally_quote_request_view_search
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_search
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_search
+msgid "Status"
+msgstr "Statut"
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+msgid "Status changed to: %s"
+msgstr "Statut modifié en : %s"
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_view_form_tracking
+msgid ""
+"The tracking link contains an unpredictable token. The\n"
+"                        reference alone is <strong>not</strong> enough to read this\n"
+"                        shipment through the API: references are sequential, and\n"
+"                        accepting them on their own would let the whole series be\n"
+"                        enumerated. Send the full link — never the reference alone —\n"
+"                        by e-mail or WhatsApp."
+msgstr ""
+"Le lien de suivi contient un jeton imprévisible. La\n"
+"                        référence seule ne suffit <strong>pas</strong> à lire cette\n"
+"                        expédition via l’API : les références sont séquentielles et\n"
+"                        les accepter seules permettrait d’énumérer toute la série.\n"
+"                        Envoyez le lien complet — jamais la référence seule —\n"
+"                        par e-mail ou WhatsApp."
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_view_form_tracking
+msgid "Tracking"
+msgstr "Suivi"
+
+#. module: dally_tracking
+#: model:res.groups,name:dally_tracking.group_dally_tracking_api
+msgid "Tracking API (read only)"
+msgstr "API de suivi (lecture seule)"
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_form
+msgid "Tracking Event"
+msgstr "Événement de suivi"
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+#: model:ir.actions.act_window,name:dally_tracking.dally_shipment_event_action
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__event_ids
+#: model:ir.ui.menu,name:dally_tracking.menu_dally_tracking_events
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_list
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_search
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_view_form_tracking_button
+msgid "Tracking Events"
+msgstr "Événements de suivi"
+
+#. module: dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__public_tracking_url
+msgid "Tracking Link"
+msgstr "Lien de suivi"
+
+#. module: dally_tracking
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment__public_tracking_token
+msgid ""
+"Unpredictable identifier required to read this shipment through the public "
+"tracking API. Include it in notification links. Rotating it invalidates "
+"every link already sent."
+msgstr "Identifiant imprévisible requis pour lire cette expédition via l’API publique de suivi. Incluez-le dans les liens de notification. Le renouveler invalide tous les liens déjà envoyés."
+
+#. module: dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__public_event_count
+msgid "Visible Events"
+msgstr "Événements visibles"
+
+#. module: dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__visible_to_customer
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_search
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_view_form_tracking
+msgid "Visible to Customer"
+msgstr "Visible par le client"
+
+#. module: dally_tracking
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment__last_public_event_id
+msgid "What the customer currently sees as the latest news."
+msgstr "Dernière information actuellement visible par le client."
+
+#. module: dally_tracking
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment_event__location
+msgid ""
+"Where it happened: port, airport, city or warehouse. Shown to the customer "
+"when the event is visible."
+msgstr "Lieu de l’événement : port, aéroport, ville ou entrepôt. Affiché au client lorsque l’événement est visible."
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_form
+msgid "Written as the customer should read it."
+msgstr "Rédigé tel que le client doit le lire."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+msgid "Your goods have been received at our warehouse."
+msgstr "Vos marchandises ont été reçues dans notre entrepôt."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+msgid "Your shipment has arrived at destination."
+msgstr "Votre expédition est arrivée à destination."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+msgid "Your shipment has been delivered."
+msgstr "Votre expédition a été livrée."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+msgid "Your shipment has departed."
+msgstr "Votre expédition est partie."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+msgid "Your shipment is available for pickup."
+msgstr "Votre expédition est disponible au retrait."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+msgid "Your shipment is in transit."
+msgstr "Votre expédition est en transit."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+msgid "Your shipment is out for delivery."
+msgstr "Votre expédition est en cours de livraison."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+msgid "Your shipment is ready to be dispatched."
+msgstr "Votre expédition est prête à être expédiée."
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+msgid "Your shipment is undergoing customs clearance."
+msgstr "Votre expédition est en cours de dédouanement."
+
+#. module: dally_tracking
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_form
+msgid "e.g. Port of Dakar"
+msgstr "par ex. Port de Dakar"
+
+#. module: dally_tracking
+#. odoo-python
+#: code:addons/dally_tracking/models/dally_shipment.py:0
+msgid "shipment_id"
+msgstr "shipment_id"

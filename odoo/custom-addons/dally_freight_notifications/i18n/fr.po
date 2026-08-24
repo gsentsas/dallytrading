@@ -1,0 +1,888 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* dally_api
+# 	* dally_portal
+# 	* dally_freight_bridge
+# 	* dally_freight_routing
+# 	* dally_tracking
+# 	* dally_freight_billing
+# 	* dally_freight
+# 	* dally_freight_data
+# 	* dally_freight_dashboard
+# 	* dally_freight_notifications
+# 	* dally_crm
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 19.0-20260810\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-24 09:50+0000\n"
+"PO-Revision-Date: 2026-08-24 09:50+0000\n"
+"Last-Translator: \n"
+"Language: fr_FR\n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: dally_freight_notifications
+#: model:mail.template,body_html:dally_freight_notifications.mail_template_prise_en_charge
+msgid ""
+"<div>\n"
+"                    <p>Bonjour,</p>\n"
+"                    <p>Nous vous informons de l'avancement de votre dossier Freight.</p>\n"
+"                    <p><strong>Référence :</strong> <t t-out=\"object.shipment_reference or ''\"/></p>\n"
+"                    <p><strong>Statut :</strong> <t t-out=\"object.customer_label or ''\"/></p>\n"
+"                    <p t-if=\"object.origin_label or object.destination_label\"><strong>Trajet :</strong> <t t-out=\"object.origin_label or '—'\"/> → <t t-out=\"object.destination_label or '—'\"/></p>\n"
+"                    <p t-if=\"object.customer_message\"><t t-out=\"object.customer_message\"/></p>\n"
+"                    <p t-if=\"object.tracking_url\"><a t-att-href=\"object.tracking_url\">Suivre mon expédition</a></p>\n"
+"                    <p>DallyTrading</p>\n"
+"                </div>\n"
+"            "
+msgstr "<div>\n                    <p>Bonjour,</p>\n                    <p>Nous vous informons de l'avancement de votre dossier de fret.</p>\n                    <p><strong>Référence :</strong> <t t-out=\"object.shipment_reference or ''\"/></p>\n                    <p><strong>Statut :</strong> <t t-out=\"object.customer_label or ''\"/></p>\n                    <p t-if=\"object.origin_label or object.destination_label\"><strong>Trajet :</strong> <t t-out=\"object.origin_label or '—'\"/> → <t t-out=\"object.destination_label or '—'\"/></p>\n                    <p t-if=\"object.customer_message\"><t t-out=\"object.customer_message\"/></p>\n                    <p t-if=\"object.tracking_url\"><a t-att-href=\"object.tracking_url\">Suivre mon expédition</a></p>\n                    <p>DallyTrading</p>\n                </div>\n            "
+
+#. module: dally_freight_notifications
+#: model:mail.template,body_html:dally_freight_notifications.mail_template_annulation
+msgid ""
+"<div>\n"
+"                    <p>Bonjour,</p>\n"
+"                    <p>Votre dossier Freight a été annulé.</p>\n"
+"                    <p><strong>Référence :</strong> <t t-out=\"object.shipment_reference or ''\"/></p>\n"
+"                    <p><strong>Statut :</strong> <t t-out=\"object.customer_label or ''\"/></p>\n"
+"                    <p t-if=\"object.customer_message\"><t t-out=\"object.customer_message\"/></p>\n"
+"                    <p t-if=\"object.tracking_url\"><a t-att-href=\"object.tracking_url\">Consulter le suivi</a></p>\n"
+"                    <p>DallyTrading</p>\n"
+"                </div>\n"
+"            "
+msgstr "<div>\n                    <p>Bonjour,</p>\n                    <p>Votre dossier de fret a été annulé.</p>\n                    <p><strong>Référence :</strong> <t t-out=\"object.shipment_reference or ''\"/></p>\n                    <p><strong>Statut :</strong> <t t-out=\"object.customer_label or ''\"/></p>\n                    <p t-if=\"object.customer_message\"><t t-out=\"object.customer_message\"/></p>\n                    <p t-if=\"object.tracking_url\"><a t-att-href=\"object.tracking_url\">Consulter le suivi</a></p>\n                    <p>DallyTrading</p>\n                </div>\n            "
+
+#. module: dally_freight_notifications
+#: model:mail.template,body_html:dally_freight_notifications.mail_template_depart
+msgid ""
+"<div>\n"
+"                    <p>Bonjour,</p>\n"
+"                    <p>Votre expédition a franchi une nouvelle étape.</p>\n"
+"                    <p><strong>Référence :</strong> <t t-out=\"object.shipment_reference or ''\"/></p>\n"
+"                    <p><strong>Statut :</strong> <t t-out=\"object.customer_label or ''\"/></p>\n"
+"                    <p t-if=\"object.origin_label or object.destination_label\"><strong>Trajet :</strong> <t t-out=\"object.origin_label or '—'\"/> → <t t-out=\"object.destination_label or '—'\"/></p>\n"
+"                    <p t-if=\"object.customer_message\"><t t-out=\"object.customer_message\"/></p>\n"
+"                    <p t-if=\"object.tracking_url\"><a t-att-href=\"object.tracking_url\">Suivre mon expédition</a></p>\n"
+"                    <p>DallyTrading</p>\n"
+"                </div>\n"
+"            "
+msgstr "<div>\n                    <p>Bonjour,</p>\n                    <p>Votre expédition a franchi une nouvelle étape.</p>\n                    <p><strong>Référence :</strong> <t t-out=\"object.shipment_reference or ''\"/></p>\n                    <p><strong>Statut :</strong> <t t-out=\"object.customer_label or ''\"/></p>\n                    <p t-if=\"object.origin_label or object.destination_label\"><strong>Trajet :</strong> <t t-out=\"object.origin_label or '—'\"/> → <t t-out=\"object.destination_label or '—'\"/></p>\n                    <p t-if=\"object.customer_message\"><t t-out=\"object.customer_message\"/></p>\n                    <p t-if=\"object.tracking_url\"><a t-att-href=\"object.tracking_url\">Suivre mon expédition</a></p>\n                    <p>DallyTrading</p>\n                </div>\n            "
+
+#. module: dally_freight_notifications
+#: model:mail.template,body_html:dally_freight_notifications.mail_template_arrivee
+msgid ""
+"<div>\n"
+"                    <p>Bonjour,</p>\n"
+"                    <p>Votre expédition est arrivée à une nouvelle étape de destination.</p>\n"
+"                    <p><strong>Référence :</strong> <t t-out=\"object.shipment_reference or ''\"/></p>\n"
+"                    <p><strong>Statut :</strong> <t t-out=\"object.customer_label or ''\"/></p>\n"
+"                    <p t-if=\"object.origin_label or object.destination_label\"><strong>Trajet :</strong> <t t-out=\"object.origin_label or '—'\"/> → <t t-out=\"object.destination_label or '—'\"/></p>\n"
+"                    <p t-if=\"object.customer_message\"><t t-out=\"object.customer_message\"/></p>\n"
+"                    <p t-if=\"object.tracking_url\"><a t-att-href=\"object.tracking_url\">Suivre mon expédition</a></p>\n"
+"                    <p>DallyTrading</p>\n"
+"                </div>\n"
+"            "
+msgstr "<div>\n                    <p>Bonjour,</p>\n                    <p>Votre expédition est arrivée à une nouvelle étape de destination.</p>\n                    <p><strong>Référence :</strong> <t t-out=\"object.shipment_reference or ''\"/></p>\n                    <p><strong>Statut :</strong> <t t-out=\"object.customer_label or ''\"/></p>\n                    <p t-if=\"object.origin_label or object.destination_label\"><strong>Trajet :</strong> <t t-out=\"object.origin_label or '—'\"/> → <t t-out=\"object.destination_label or '—'\"/></p>\n                    <p t-if=\"object.customer_message\"><t t-out=\"object.customer_message\"/></p>\n                    <p t-if=\"object.tracking_url\"><a t-att-href=\"object.tracking_url\">Suivre mon expédition</a></p>\n                    <p>DallyTrading</p>\n                </div>\n            "
+
+#. module: dally_freight_notifications
+#: model:mail.template,body_html:dally_freight_notifications.mail_template_livraison
+msgid ""
+"<div>\n"
+"                    <p>Bonjour,</p>\n"
+"                    <p>Votre expédition est disponible ou en cours de livraison.</p>\n"
+"                    <p><strong>Référence :</strong> <t t-out=\"object.shipment_reference or ''\"/></p>\n"
+"                    <p><strong>Statut :</strong> <t t-out=\"object.customer_label or ''\"/></p>\n"
+"                    <p t-if=\"object.origin_label or object.destination_label\"><strong>Trajet :</strong> <t t-out=\"object.origin_label or '—'\"/> → <t t-out=\"object.destination_label or '—'\"/></p>\n"
+"                    <p t-if=\"object.customer_message\"><t t-out=\"object.customer_message\"/></p>\n"
+"                    <p t-if=\"object.tracking_url\"><a t-att-href=\"object.tracking_url\">Suivre mon expédition</a></p>\n"
+"                    <p>DallyTrading</p>\n"
+"                </div>\n"
+"            "
+msgstr "<div>\n                    <p>Bonjour,</p>\n                    <p>Votre expédition est disponible ou en cours de livraison.</p>\n                    <p><strong>Référence :</strong> <t t-out=\"object.shipment_reference or ''\"/></p>\n                    <p><strong>Statut :</strong> <t t-out=\"object.customer_label or ''\"/></p>\n                    <p t-if=\"object.origin_label or object.destination_label\"><strong>Trajet :</strong> <t t-out=\"object.origin_label or '—'\"/> → <t t-out=\"object.destination_label or '—'\"/></p>\n                    <p t-if=\"object.customer_message\"><t t-out=\"object.customer_message\"/></p>\n                    <p t-if=\"object.tracking_url\"><a t-att-href=\"object.tracking_url\">Suivre mon expédition</a></p>\n                    <p>DallyTrading</p>\n                </div>\n            "
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__active
+msgid "Actif"
+msgstr "Actif"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__email
+msgid "Adresse"
+msgstr "Adresse"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_shipment_notification__email
+msgid ""
+"Adresse utilisée pour l'envoi. Initialisée lors de la mise en file et "
+"rafraîchie avec l'adresse courante du partenaire juste avant la livraison."
+msgstr "Adresse utilisée pour l'envoi. Initialisée lors de la mise en file et rafraîchie avec l'adresse courante du partenaire juste avant la livraison."
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_cancelled
+msgid "Annulée"
+msgstr "Annulée"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__arrived
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__arrived
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__arrived
+msgid "Arrived"
+msgstr "Arrivé"
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_arrived
+msgid "Arrivée à destination"
+msgstr "Arrivée à destination"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__available
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__available
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__available
+msgid "Available for Pickup"
+msgstr "Disponible au retrait"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__awaiting_goods
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__awaiting_goods
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__awaiting_goods
+msgid "Awaiting Goods"
+msgstr "En attente des marchandises"
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_draft
+msgid "Brouillon"
+msgstr "Brouillon"
+
+#. modules: dally_freight, dally_freight_billing, dally_freight_notifications,
+#. dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__cancelled
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_expense__state__cancelled
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_transfer__state__cancelled
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__cancelled
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__cancelled
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_search
+msgid "Cancelled"
+msgstr "Annulé"
+
+#. module: dally_freight_notifications
+#: model:ir.model.constraint,message:dally_freight_notifications.constraint_dally_freight_state_policy_state_uniq
+msgid "Cet état a déjà une politique."
+msgstr "Cet état a déjà une politique."
+
+#. module: dally_freight_notifications
+#: model:ir.model.constraint,message:dally_freight_notifications.constraint_dally_shipment_notification_event_uniq
+msgid "Cet événement a déjà sa notification."
+msgstr "Cet événement a déjà sa notification."
+
+#. module: dally_freight_notifications
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_form
+msgid "Contenu figé"
+msgstr "Contenu figé"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__mail_id
+msgid "Courriel"
+msgstr "Courriel"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__create_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__create_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__create_uid
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__create_uid
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__create_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__create_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__create_uid
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__create_uid
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__create_uid
+msgid "Created by"
+msgstr "Créé par"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__create_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__create_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__create_date
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__create_date
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__create_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__create_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__create_date
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__create_date
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__create_date
+msgid "Created on"
+msgstr "Créé le"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__created_at
+msgid "Créée le"
+msgstr "Créée le"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__customs
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__customs
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__customs
+msgid "Customs Clearance"
+msgstr "Dédouanement"
+
+#. module: dally_freight_notifications
+#: model:ir.actions.server,name:dally_freight_notifications.ir_cron_dally_freight_notification_delivery_ir_actions_server
+msgid "DallyTrading Freight — notifications client"
+msgstr "DallyTrading Fret — notifications client"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__event_date
+msgid "Date de l'événement"
+msgstr "Date de l'événement"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__delivered
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__delivered
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__delivered
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_search
+msgid "Delivered"
+msgstr "Livré"
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_request_received
+msgid "Demande reçue"
+msgstr "Demande reçue"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__departed
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__departed
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__departed
+msgid "Departed"
+msgstr "Départ effectué"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__last_error
+msgid "Dernier motif"
+msgstr "Dernier motif"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__last_retry_at
+msgid "Dernière relance manuelle"
+msgstr "Dernière relance manuelle"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__partner_id
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_form
+msgid "Destinataire"
+msgstr "Destinataire"
+
+#. modules: dally_freight, dally_freight_notifications, dally_freight_routing
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__destination_label
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_form
+#: model_terms:ir.ui.view,arch_db:dally_freight_routing.dally_quote_request_view_form_routing
+msgid "Destination"
+msgstr "Destination"
+
+#. modules: dally_api, dally_crm, dally_freight_billing, dally_freight_bridge,
+#. dally_freight_dashboard, dally_freight_notifications,
+#. dally_freight_routing, dally_portal, dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__display_name
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__display_name
+#: model:ir.model.fields,field_description:dally_crm.field_crm_lead__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_move__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_api_key__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_sync_service__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order_line__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_dally_freight_lockdown_guard__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_freight_documents__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_mail_template__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_shipment_freight_booking__display_name
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__display_name
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__display_name
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_account_incoterms__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_dally_freight_routing_mixin__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_freight_port__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country_state__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_freight_vehicle_cargo__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_projection_mixin__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_shipment_package__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_offer__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_proposal__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_request__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_supplier__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_commission__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_cost__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_opportunity__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_res_partner__display_name
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__display_name
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__display_name
+msgid "Display Name"
+msgstr "Nom d'affichage"
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_available
+msgid "Disponible pour enlèvement"
+msgstr "Disponible pour enlèvement"
+
+#. module: dally_freight_notifications
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_form
+msgid "Dossier"
+msgstr "Dossier"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__draft
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__draft
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__draft
+msgid "Draft"
+msgstr "Brouillon"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,help:dally_freight_notifications.field_res_partner__dally_freight_notify
+#: model:ir.model.fields,help:dally_freight_notifications.field_res_users__dally_freight_notify
+msgid ""
+"Décoché, ce partenaire ne reçoit plus les messages de suivi d'expédition. La"
+" file en garde trace : la notification est enregistrée comme ignorée, avec "
+"son motif, et non perdue."
+msgstr "Décoché, ce partenaire ne reçoit plus les messages de suivi d'expédition. La file en garde trace : la notification est enregistrée comme ignorée, avec son motif, et non perdue."
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_shipment__dally_portal_visible
+msgid ""
+"Dérivé de la politique de l'état courant. Stocké et indexé parce qu'une "
+"règle d'enregistrement doit pouvoir s'y appuyer : un champ calculé non "
+"stocké ne se cherche pas."
+msgstr "Dérivé de la politique de l'état courant. Stocké et indexé parce qu'une règle d'enregistrement doit pouvoir s'y appuyer : un champ calculé non stocké ne se cherche pas."
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_shipment_notification__status__pending
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_search
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_view_form_notification_ops
+msgid "En attente"
+msgstr "En attente"
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_awaiting_goods
+msgid "En attente de la marchandise"
+msgstr "En attente de la marchandise"
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_out_for_delivery
+msgid "En cours de livraison"
+msgstr "En cours de livraison"
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_customs
+msgid "En dédouanement"
+msgstr "En dédouanement"
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_preparing
+msgid "En préparation"
+msgstr "En préparation"
+
+#. modules: dally_freight_dashboard, dally_freight_notifications
+#: model:dally.freight.dashboard,name:dally_freight_dashboard.card_in_transit
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_in_transit
+msgid "En transit"
+msgstr "En transit"
+
+#. module: dally_freight_notifications
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_search
+msgid "En échec"
+msgstr "En échec"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_shipment_notification__status__sent
+msgid "Envoyée"
+msgstr "Envoyée"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__sent_at
+msgid "Envoyée le"
+msgstr "Envoyée le"
+
+#. module: dally_freight_notifications
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_search
+msgid "Envoyées"
+msgstr "Envoyées"
+
+#. modules: dally_freight, dally_freight_notifications, dally_portal
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__shipment_id
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__shipment_id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__shipment_id
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_search
+msgid "Expédition"
+msgstr "Expédition"
+
+#. module: dally_freight_notifications
+#: model:mail.template,name:dally_freight_notifications.mail_template_annulation
+msgid "Freight — annulation"
+msgstr "Fret — annulation"
+
+#. module: dally_freight_notifications
+#: model:mail.template,name:dally_freight_notifications.mail_template_arrivee
+msgid "Freight — arrivée / douane"
+msgstr "Fret — arrivée / douane"
+
+#. module: dally_freight_notifications
+#: model:mail.template,name:dally_freight_notifications.mail_template_livraison
+msgid "Freight — disponibilité / livraison"
+msgstr "Fret — disponibilité / livraison"
+
+#. module: dally_freight_notifications
+#: model:mail.template,name:dally_freight_notifications.mail_template_depart
+msgid "Freight — départ / transit"
+msgstr "Fret — départ / transit"
+
+#. module: dally_freight_notifications
+#: model:mail.template,name:dally_freight_notifications.mail_template_prise_en_charge
+msgid "Freight — prise en charge / préparation"
+msgstr "Fret — prise en charge / préparation"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__email_template_id
+msgid "Gabarit"
+msgstr "Gabarit"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__goods_received
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__goods_received
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__goods_received
+msgid "Goods Received"
+msgstr "Marchandise reçue"
+
+#. modules: dally_api, dally_crm, dally_freight_billing, dally_freight_bridge,
+#. dally_freight_dashboard, dally_freight_notifications,
+#. dally_freight_routing, dally_portal, dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__id
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__id
+#: model:ir.model.fields,field_description:dally_crm.field_crm_lead__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_move__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_api_key__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_sync_service__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order_line__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_dally_freight_lockdown_guard__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_freight_documents__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_mail_template__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_shipment_freight_booking__id
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__id
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__id
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_account_incoterms__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_dally_freight_routing_mixin__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_freight_port__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country_state__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_freight_vehicle_cargo__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_projection_mixin__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_shipment_package__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_offer__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_proposal__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_request__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_supplier__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_commission__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_cost__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_opportunity__id
+#: model:ir.model.fields,field_description:dally_portal.field_res_partner__id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__id
+msgid "ID"
+msgstr "IDENTIFIANT"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_shipment_notification__status__skipped
+msgid "Ignorée"
+msgstr "Ignorée"
+
+#. module: dally_freight_notifications
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_search
+msgid "Ignorées"
+msgstr "Ignorées"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__in_transit
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__in_transit
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__in_transit
+msgid "In Transit"
+msgstr "En transit"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_freight_state_policy__visible_in_portal
+msgid "L'espace client montre-t-il cet état et les événements qui le portent."
+msgstr "L'espace client montre-t-il cet état et les événements qui le portent."
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__language_code
+msgid "Langue"
+msgstr "Langue"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_shipment_notification__language_code
+msgid ""
+"Langue figée à la mise en file : langue du partenaire, puis de la société, "
+"puis fr_FR en dernier recours."
+msgstr "Langue figée à la mise en file : langue du partenaire, puis de la société, puis fr_FR en dernier recours."
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__write_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__write_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__write_uid
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__write_uid
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__write_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__write_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__write_uid
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__write_uid
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__write_uid
+msgid "Last Updated by"
+msgstr "Dernière mise à jour par"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__write_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__write_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__write_date
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__write_date
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__write_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__write_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__write_date
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__write_date
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__write_date
+msgid "Last Updated on"
+msgstr "Dernière mise à jour le"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_freight_state_policy__customer_label
+msgid ""
+"Le mot que le client lit — sur le badge de suivi comme dans la frise. Le "
+"code technique, lui, ne sort jamais."
+msgstr "Le mot que le client lit — sur le badge de suivi comme dans la frise. Le code technique, lui, ne sort jamais."
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_freight_state_policy__visible_in_tracking
+msgid ""
+"Le suivi par jeton publie-t-il l'événement engendré par cette transition."
+msgstr "Le suivi par jeton publie-t-il l'événement engendré par cette transition."
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__customer_label
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__customer_label
+msgid "Libellé client"
+msgstr "Libellé client"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__tracking_url
+msgid "Lien de suivi"
+msgstr "Lien de suivi"
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_delivered
+msgid "Livrée"
+msgstr "Livrée"
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_goods_received
+msgid "Marchandise reçue"
+msgstr "Marchandise reçue"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__customer_message
+msgid "Message client"
+msgstr "Message client"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_shipment_notification__last_error
+msgid ""
+"Motif d'abstention ou erreur de livraison nettoyée. Les URL et jetons de "
+"suivi n'y sont jamais conservés."
+msgstr "Motif d'abstention ou erreur de livraison nettoyée. Les URL et jetons de suivi n'y sont jamais conservés."
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_shipment_notification__manual_retry_count
+msgid "Nombre de fois où un Manager a remis cette notification en file."
+msgstr "Nombre de fois où un Manager a remis cette notification en file."
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_event__notification_id
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_form
+msgid "Notification"
+msgstr "Notification"
+
+#. module: dally_freight_notifications
+#: model:ir.model,name:dally_freight_notifications.model_dally_shipment_notification
+msgid "Notification client d'une expédition"
+msgstr "Notification client d'une expédition"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment__notification_count
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment__notification_ids
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_view_form_notification_ops
+msgid "Notifications"
+msgstr "Notifications"
+
+#. module: dally_freight_notifications
+#: model:ir.actions.act_window,name:dally_freight_notifications.dally_shipment_notification_action
+#: model:ir.ui.menu,name:dally_freight_notifications.menu_dally_shipment_notification
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_search
+msgid "Notifications client"
+msgstr "Notifications client"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_res_partner__dally_freight_notify
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_res_users__dally_freight_notify
+msgid "Notifications de suivi"
+msgstr "Notifications de suivi"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment__notification_pending_count
+msgid "Notifications en attente"
+msgstr "Notifications en attente"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment__notification_failed_count
+msgid "Notifications en échec"
+msgstr "Notifications en échec"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__notify_customer
+msgid "Notifier le client"
+msgstr "Notifier le client"
+
+#. modules: dally_freight_dashboard, dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__sequence
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__sequence
+msgid "Ordre"
+msgstr "Ordre"
+
+#. modules: dally_freight_notifications, dally_freight_routing
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__origin_label
+#: model_terms:ir.ui.view,arch_db:dally_freight_routing.dally_quote_request_view_form_routing
+msgid "Origine"
+msgstr "Origine"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__out_for_delivery
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__out_for_delivery
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__out_for_delivery
+msgid "Out for Delivery"
+msgstr "En cours de livraison"
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_departed
+msgid "Partie"
+msgstr "Partie"
+
+#. module: dally_freight_notifications
+#: model:ir.model,name:dally_freight_notifications.model_dally_freight_state_policy
+msgid "Politique de publication d'un état d'expédition"
+msgstr "Politique de publication d'un état d'expédition"
+
+#. module: dally_freight_notifications
+#: model:ir.actions.act_window,name:dally_freight_notifications.dally_freight_state_policy_action
+#: model:ir.ui.menu,name:dally_freight_notifications.menu_dally_freight_state_policy
+msgid "Politique des états Freight"
+msgstr "Politique des états de fret"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__preparing
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__preparing
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__preparing
+msgid "Preparing"
+msgstr "En préparation"
+
+#. module: dally_freight_notifications
+#: model:dally.freight.state.policy,customer_label:dally_freight_notifications.policy_ready
+msgid "Prête à partir"
+msgstr "Prête à partir"
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__ready
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__ready
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__ready
+msgid "Ready to Ship"
+msgstr "Prêt à expédier"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__manual_retry_count
+msgid "Relances manuelles"
+msgstr "Relances manuelles"
+
+#. module: dally_freight_notifications
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_form_ops
+msgid ""
+"Remettre cette notification en file ? L'envoi sera effectué par le cron, pas"
+" immédiatement."
+msgstr "Remettre cette notification en file ? L'envoi sera effectué par le cron, pas immédiatement."
+
+#. module: dally_freight_notifications
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_form_ops
+msgid "Remettre en file"
+msgstr "Remettre en file"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_freight_state_policy__state
+msgid ""
+"Reprend la sélection de `dally.shipment` plutôt qu'une liste recopiée : un "
+"état ajouté là-bas apparaît ici sans rien changer."
+msgstr "Reprend la sélection de `dally.shipment` plutôt qu'une liste recopiée : un état ajouté là-bas apparaît ici sans rien changer."
+
+#. modules: dally_freight, dally_freight_notifications, dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__request_received
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__request_received
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__request_received
+msgid "Request Received"
+msgstr "Demande reçue"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__shipment_reference
+msgid "Référence"
+msgstr "Référence"
+
+#. modules: dally_freight_notifications, dally_tracking
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_shipment_notification__state
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment_event__status
+msgid ""
+"Shipment status this event reports. Reuses the shipment's own status list so"
+" the timeline and the file can never tell different stories."
+msgstr "Statut d’expédition signalé par cet événement. Réutilise la propre liste de statuts de l’expédition afin que la frise et le dossier ne puissent jamais afficher des informations différentes."
+
+#. modules: dally_freight_billing, dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__status
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_search
+msgid "Statut"
+msgstr "Statut"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__attempts
+msgid "Tentatives"
+msgstr "Tentatives"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_freight_state_policy__notify_customer
+msgid ""
+"Une ligne de notification est-elle mise en file. L'envoi lui-même reste "
+"conditionné à l'existence d'un gabarit, à une adresse et au consentement du "
+"partenaire."
+msgstr "Une ligne de notification est-elle mise en file. L'envoi lui-même reste conditionné à l'existence d'un gabarit, à une adresse et au consentement du partenaire."
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,help:dally_freight_notifications.field_dally_freight_state_policy__email_template_id
+msgid ""
+"Vide : rien ne part, même si la notification est demandée. La file garde "
+"alors une trace « ignorée », avec son motif."
+msgstr "Vide : rien ne part, même si la notification est demandée. La file garde alors une trace « ignorée », avec son motif."
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__visible_in_portal
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment__dally_portal_visible
+msgid "Visible au portail"
+msgstr "Visible au portail"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__visible_in_tracking
+msgid "Visible au suivi public"
+msgstr "Visible au suivi public"
+
+#. module: dally_freight_notifications
+#: model:mail.template,subject:dally_freight_notifications.mail_template_annulation
+#: model:mail.template,subject:dally_freight_notifications.mail_template_arrivee
+#: model:mail.template,subject:dally_freight_notifications.mail_template_depart
+#: model:mail.template,subject:dally_freight_notifications.mail_template_livraison
+#: model:mail.template,subject:dally_freight_notifications.mail_template_prise_en_charge
+msgid "{{ object.shipment_reference }} — {{ object.customer_label }}"
+msgstr "{{ object.shipment_reference }} — {{ object.customer_label }}"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_shipment_notification__status__failed
+msgid "Échec"
+msgstr "Échec"
+
+#. module: dally_freight_notifications
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_view_form_notification_ops
+msgid "Échecs"
+msgstr "Échecs"
+
+#. module: dally_freight_notifications
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_search
+msgid "Étape Freight"
+msgstr "Étape de fret"
+
+#. modules: dally_freight, dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__condition
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__state
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__state
+msgid "État"
+msgstr "État"
+
+#. module: dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__event_id
+msgid "Événement"
+msgstr "Événement"

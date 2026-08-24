@@ -1,0 +1,2402 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* dally_api
+# 	* dally_portal
+# 	* dally_freight_bridge
+# 	* dally_freight_routing
+# 	* dally_tracking
+# 	* dally_freight_billing
+# 	* dally_freight
+# 	* dally_freight_data
+# 	* dally_freight_dashboard
+# 	* dally_freight_notifications
+# 	* dally_crm
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 19.0-20260810\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-24 09:50+0000\n"
+"PO-Revision-Date: 2026-08-24 09:50+0000\n"
+"Last-Translator: \n"
+"Language: fr_FR\n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: dally_freight_billing
+#: model:ir.actions.report,print_report_name:dally_freight_billing.action_report_dally_freight_invoice
+msgid ""
+"\n"
+"            'Facture_DallyTrading_%s' % (\n"
+"                object.dally_freight_shipment_id.external_reference\n"
+"                or object.name\n"
+"                or object.id\n"
+"            )\n"
+"        "
+msgstr "\n            'Facture_DallyTrading_%s' % (\n                object.dally_freight_shipment_id.external_reference\n                or object.name\n                or object.id\n            )\n        "
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid "%(mode)s — %(description)s"
+msgstr "%(mode)s — %(description)s"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+#: code:addons/dally_freight_billing/models/freight_sync_billing.py:0
+msgid "%s cannot be negative."
+msgstr "%s ne peut pas être négatif."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "%s must be a valid date."
+msgstr "%s doit être une date valide."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "%s must be an integer."
+msgstr "%s doit être un entier."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "%s must be an object."
+msgstr "%s doit être un objet."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "%s must be greater than zero."
+msgstr "%s doit être supérieur à zéro."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+#: code:addons/dally_freight_billing/models/freight_sync_billing.py:0
+msgid "%s must be numeric."
+msgstr "%s doit être numérique."
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "<strong>NINEA :</strong>"
+msgstr "<strong>NINEA :</strong>"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "<strong>RCCM :</strong>"
+msgstr "<strong>RCCM :</strong>"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection.py:0
+msgid "A currency-specific journal must use the same currency as the channel."
+msgstr "Un journal propre à une devise doit utiliser la même devise que le canal."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid "A customer is required before invoicing."
+msgstr "Un client est requis avant la facturation."
+
+#. module: dally_freight_billing
+#: model:ir.model.constraint,message:dally_freight_billing.constraint_sale_order_line_dally_freight_package_sale_line_unique
+msgid "A freight article can appear only once in the generated sales lines."
+msgstr "Un article de fret ne peut apparaître qu’une seule fois dans les lignes de vente générées."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection.py:0
+msgid "A freight collection amount must be greater than zero."
+msgstr "Le montant d’un encaissement client doit être supérieur à zéro."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection_guard.py:0
+msgid ""
+"A freight collection linked to an accounting payment cannot be deleted. "
+"Reverse/correct it through Accounting instead."
+msgstr "Un encaissement client lié à un paiement comptable ne peut pas être supprimé. Contre-passez-le ou corrigez-le dans la comptabilité."
+
+#. module: dally_freight_billing
+#: model:ir.model.constraint,message:dally_freight_billing.constraint_dally_freight_payment_channel_channel_unique
+msgid ""
+"A freight payment channel code can be configured only once per company and "
+"currency."
+msgstr "Un code de canal de paiement fret ne peut être configuré qu’une seule fois par société et par devise."
+
+#. module: dally_freight_billing
+#: model:ir.model.constraint,message:dally_freight_billing.constraint_account_move_dally_freight_shipment_invoice_unique
+msgid "A freight shipment can be linked to only one generated invoice."
+msgstr "Une expédition de fret ne peut être liée qu’à une seule facture générée."
+
+#. module: dally_freight_billing
+#: model:ir.model.constraint,message:dally_freight_billing.constraint_sale_order_dally_freight_shipment_order_unique
+msgid "A freight shipment can generate only one native sales order."
+msgstr "Une expédition de fret ne peut générer qu’une seule commande client native."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+msgid "A freight sync request can contain at most %s lines."
+msgstr "Une requête de synchronisation fret peut contenir au plus %s lignes."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/shipment_billing.py:0
+msgid "A manual freight price requires a reason."
+msgstr "Un prix de fret manuel requiert un motif."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection_guard.py:0
+msgid ""
+"A registered freight collection is accounting history and cannot be "
+"rewritten. Create a corrective collection instead."
+msgstr "Un encaissement client comptabilisé constitue un historique comptable et ne peut pas être réécrit. Créez plutôt un encaissement correctif."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "A synchronised text field exceeds %s characters."
+msgstr "Un champ texte synchronisé dépasse %s caractères."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/shipment_billing.py:0
+msgid "A tariff family is required before automatic pricing."
+msgstr "Une famille tarifaire est requise avant la tarification automatique."
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_form
+msgid "Accounting"
+msgstr "Comptabilité"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__message_needaction
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__message_needaction
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__message_needaction
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__message_needaction
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__message_needaction
+msgid "Action Needed"
+msgstr "Action requise"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_portal
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__active
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__active
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__active
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__active
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__active
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__active
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__active
+msgid "Active"
+msgstr "Actif"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__activity_ids
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__activity_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__activity_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__activity_ids
+msgid "Activities"
+msgstr "Activités"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__activity_exception_decoration
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__activity_exception_decoration
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__activity_exception_decoration
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__activity_exception_decoration
+msgid "Activity Exception Decoration"
+msgstr "Indicateur d’exception d’activité"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__activity_state
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__activity_state
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__activity_state
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__activity_state
+msgid "Activity State"
+msgstr "État de l’activité"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__activity_type_icon
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__activity_type_icon
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__activity_type_icon
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__activity_type_icon
+msgid "Activity Type Icon"
+msgstr "Icône du type d’activité"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__actor_name
+msgid "Actor Name"
+msgstr "Nom de l’acteur"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_shipment_package__billing_method__real
+msgid "Actual weight"
+msgstr "Poids réel"
+
+#. modules: dally_freight, dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_freight_tariff_rule__transport_mode__air
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_search
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_rule_view_search
+msgid "Air"
+msgstr "Aérien"
+
+#. module: dally_freight_billing
+#: model:dally.freight.tariff.family,name:dally_freight_billing.tariff_family_food
+msgid "Alimentaire standard"
+msgstr "Alimentaire standard"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_freight_tariff_rule__customer_segment__all
+msgid "All"
+msgstr "Tous"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+msgid "Allocation %s must be an object."
+msgstr "L’allocation %s doit être un objet."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__amount
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__amount
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__amount
+msgid "Amount"
+msgstr "Montant"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_cash_expense_view_form
+msgid "Amounts"
+msgstr "Montants"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__announced_weight_kg
+msgid "Announced Weight (kg)"
+msgstr "Poids annoncé (kg)"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_tariff.py:0
+msgid ""
+"Another active freight tariff overlaps this mode, family, customer segment "
+"and date range."
+msgstr "Un autre tarif de fret actif chevauche ce mode, cette famille, ce segment client et cette période."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__applied_unit_price_eur
+msgid "Applied Price / kg"
+msgstr "Prix appliqué / kg"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__tariff_rule_id
+msgid "Applied Tariff Rule"
+msgstr "Règle tarifaire appliquée"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_shipment_view_form_freight_billing
+msgid "Apply the current automatic tariff, or snapshot the manual price."
+msgstr "Appliquez le tarif automatique en vigueur ou figez le prix manuel."
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_crm.dally_quote_request_view_search
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_form
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_search
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_rule_view_search
+msgid "Archived"
+msgstr "Archivé"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid "At least one freight article is required before invoicing."
+msgstr "Au moins un article de fret est requis avant la facturation."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+msgid "At least one positive expense allocation is required."
+msgstr "Au moins une allocation de dépense positive est requise."
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__message_attachment_count
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__message_attachment_count
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__message_attachment_count
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__message_attachment_count
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__message_attachment_count
+msgid "Attachment Count"
+msgstr "Nombre de pièces jointes"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Aucun règlement enregistré"
+msgstr "Aucun règlement enregistré"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid "Autres frais"
+msgstr "Autres frais"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_freight_collection__source__backoffice
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_shipment__sync_source__backoffice
+msgid "Back Office"
+msgstr "Back-office"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_expense__source__backoffice
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_transfer__source__backoffice
+msgid "Back-office"
+msgstr "Back-office"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__beneficiary
+msgid "Beneficiary"
+msgstr "Bénéficiaire"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__billable_weight_kg
+msgid "Billable Weight (kg)"
+msgstr "Poids facturable (kg)"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment__billing_currency_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__billing_currency_id
+msgid "Billing Currency"
+msgstr "Devise de facturation"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment__billing_locked
+msgid "Billing Locked"
+msgstr "Facturation verrouillée"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__billing_method
+msgid "Billing Method"
+msgstr "Méthode de facturation"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment__billing_total_eur
+msgid "Billing Total"
+msgstr "Total de facturation"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__volumetric_ratio_kg_cbm
+msgid "Billing Volumetric Ratio (kg/CBM)"
+msgstr "Ratio volumétrique de facturation (kg/m³)"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_freight_tariff_rule__customer_segment__business
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_shipment__customer_segment_snapshot__business
+msgid "Business"
+msgstr "Professionnel"
+
+#. modules: dally_freight, dally_freight_billing, dally_freight_notifications,
+#. dally_tracking
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_shipment__state__cancelled
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_expense__state__cancelled
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_transfer__state__cancelled
+#: model:ir.model.fields.selection,name:dally_freight_notifications.selection__dally_freight_state_policy__state__cancelled
+#: model:ir.model.fields.selection,name:dally_tracking.selection__dally_shipment_event__status__cancelled
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_search
+msgid "Cancelled"
+msgstr "Annulé"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection.py:0
+msgid "Cancelled by source reconciliation."
+msgstr "Annulé par le rapprochement avec la source."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_freight_collection__state__cancelled
+msgid "Cancelled from source"
+msgstr "Annulé depuis la source"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/billing_lock.py:0
+msgid ""
+"Cannot add freight lines while billing is locked. Reset the draft billing "
+"first."
+msgstr "Impossible d’ajouter des lignes de fret tant que la facturation est verrouillée. Réinitialisez d’abord la facturation brouillon."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/billing_lock.py:0
+msgid ""
+"Cannot change invoiced freight article data while billing is locked. Reset "
+"the draft billing first."
+msgstr "Impossible de modifier les données d’un article de fret facturé tant que la facturation est verrouillée. Réinitialisez d’abord la facturation brouillon."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/billing_lock.py:0
+msgid ""
+"Cannot delete freight lines while billing is locked. Reset the draft billing"
+" first."
+msgstr "Impossible de supprimer des lignes de fret tant que la facturation est verrouillée. Réinitialisez d’abord la facturation brouillon."
+
+#. module: dally_freight_billing
+#: model:ir.actions.act_window,name:dally_freight_billing.dally_cash_transfer_action
+#: model:ir.ui.menu,name:dally_freight_billing.menu_dally_cash_transfers
+msgid "Cash Transfers"
+msgstr "Transferts de caisse"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/cash_operations.py:0
+msgid "Cash transfer amount must be greater than zero."
+msgstr "Le montant du transfert de caisse doit être supérieur à zéro."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__category
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_cash_expense_view_search
+msgid "Category"
+msgstr "Catégorie"
+
+#. modules: dally_freight_billing, dally_freight_dashboard
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__code
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__code
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__code
+msgid "Code"
+msgstr "Code"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__dally_collected_by_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__collected_by_id
+msgid "Collected By"
+msgstr "Encaissé par"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__collected_by_name
+msgid "Collected By Name"
+msgstr "Nom du collecteur"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_form
+msgid "Collection"
+msgstr "Encaissement"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_search
+msgid "Collector"
+msgstr "Collecteur"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Commande liée"
+msgstr "Commande liée"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__comment
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__comment
+msgid "Comment"
+msgstr "Comment"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_shipment_package__volumetric_ratio_kg_cbm
+msgid "Commercial ratio snapshotted when pricing is applied."
+msgstr "Ratio commercial figé lors de l’application de la tarification."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_freight_tariff_rule__volumetric_ratio_kg_cbm
+msgid ""
+"Commercial volumetric ratio snapshotted on a line when that line uses "
+"volumetric billing. It does not change the operational chargeable-weight "
+"calculation of dally.shipment."
+msgstr "Ratio volumétrique commercial figé sur une ligne lorsque celle-ci utilise la facturation volumétrique. Il ne modifie pas le calcul opérationnel du poids taxable de dally.shipment."
+
+#. modules: dally_crm, dally_freight, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__company_id
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__company_id
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__company_id
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__company_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__company_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__company_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__company_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__company_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__company_id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__company_id
+msgid "Company"
+msgstr "Société"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__create_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__create_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__create_uid
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__create_uid
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__create_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__create_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__create_uid
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__create_uid
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__create_uid
+msgid "Created by"
+msgstr "Créé par"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__create_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__create_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__create_date
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__create_date
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__create_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__create_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__create_date
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__create_date
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__create_date
+msgid "Created on"
+msgstr "Créé le"
+
+#. modules: dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__currency_id
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__currency_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__currency_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__currency_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__currency_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__currency_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__currency_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__currency_id
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_search
+msgid "Currency"
+msgstr "Devise"
+
+#. modules: dally_freight, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__partner_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__partner_id
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_form
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_search
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_list
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_view_form_tracking
+msgid "Customer"
+msgstr "Client"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__customer_segment
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment__customer_segment_snapshot
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_rule_view_search
+msgid "Customer Segment"
+msgstr "Segment client"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__customs_currency_id
+msgid "Customs Currency"
+msgstr "Devise douanière"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid ""
+"DALLYTRADING |\n"
+"                            IMPORT - EXPORT - LOGISTICS - SOLUTIONS"
+msgstr "DALLYTRADING |\n                            IMPORT - EXPORT - LOGISTICS - SOLUTIONS"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__dally_external_payment_key
+msgid "Dally External Payment Key"
+msgstr "Clé de paiement externe Dally"
+
+#. module: dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_dally_api_key
+msgid "DallyTrading API Key"
+msgstr "Clé API DallyTrading"
+
+#. module: dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_dally_cash_expense_allocation
+msgid "DallyTrading Cash Expense Allocation"
+msgstr "Répartition des dépenses de caisse DallyTrading"
+
+#. module: dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_dally_freight_collection
+msgid "DallyTrading Freight Customer Collection"
+msgstr "Encaissement client de fret DallyTrading"
+
+#. module: dally_freight_billing
+#: model:product.pricelist,name:dally_freight_billing.pricelist_freight_eur
+msgid "DallyTrading Freight EUR"
+msgstr "Fret DallyTrading EUR"
+
+#. module: dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_dally_freight_payment_channel
+msgid "DallyTrading Freight Payment Channel"
+msgstr "Canal de paiement de fret DallyTrading"
+
+#. module: dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_dally_freight_sync_service
+msgid "DallyTrading Freight Sheet Synchronisation Service"
+msgstr "Service de synchronisation du fichier de fret DallyTrading"
+
+#. module: dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_dally_freight_tariff_family
+msgid "DallyTrading Freight Tariff Family"
+msgstr "Famille tarifaire de fret DallyTrading"
+
+#. module: dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_dally_freight_tariff_rule
+msgid "DallyTrading Freight Tariff Rule"
+msgstr "Règle tarifaire de fret DallyTrading"
+
+#. module: dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_dally_cash_expense
+msgid "DallyTrading Internal Cash Expense"
+msgstr "Dépense interne de caisse DallyTrading"
+
+#. module: dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_dally_cash_transfer
+msgid "DallyTrading Internal Cash Transfer"
+msgstr "Transfert interne de caisse DallyTrading"
+
+#. modules: dally_api, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__event_date
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_search
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_search
+msgid "Date"
+msgstr "Date"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__date_from
+msgid "Date From"
+msgstr "Date de début"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__date_to
+msgid "Date To"
+msgstr "Date de fin"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Date de facturation"
+msgstr "Date de facturation"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__customs_value_xof
+msgid "Declared Customs Value"
+msgstr "Valeur en douane déclarée"
+
+#. modules: dally_freight, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__description
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__description
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__description
+msgid "Description"
+msgstr "Désignation"
+
+#. modules: dally_api, dally_crm, dally_freight_billing, dally_freight_bridge,
+#. dally_freight_dashboard, dally_freight_notifications,
+#. dally_freight_routing, dally_portal, dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__display_name
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__display_name
+#: model:ir.model.fields,field_description:dally_crm.field_crm_lead__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_move__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_api_key__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_sync_service__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order_line__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_dally_freight_lockdown_guard__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_freight_documents__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_mail_template__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_shipment_freight_booking__display_name
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__display_name
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__display_name
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_account_incoterms__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_dally_freight_routing_mixin__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_freight_port__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country_state__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_freight_vehicle_cargo__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_projection_mixin__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_shipment_package__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_offer__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_proposal__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_request__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_supplier__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_commission__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_cost__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_opportunity__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_res_partner__display_name
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__display_name
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__display_name
+msgid "Display Name"
+msgstr "Nom d'affichage"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid ""
+"Document en brouillon.\n"
+"                            Les règlements indiqués ci-dessus sont\n"
+"                            enregistrés dans le suivi DALLYTRADING.\n"
+"                            Le reste à payer affiché est provisoire\n"
+"                            jusqu'à validation comptable de la facture."
+msgstr "Document en brouillon.\n                            Les règlements indiqués ci-dessus sont\n                            enregistrés dans le suivi DALLYTRADING.\n                            Le reste à payer affiché est provisoire\n                            jusqu'à validation comptable de la facture."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment__dossier_fee_eur
+msgid "Dossier Fee"
+msgstr "Frais de dossier"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Désignation"
+msgstr "Désignation"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "Each freight line must be an object."
+msgstr "Chaque ligne de fret doit être un objet."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__error_message
+msgid "Error Message"
+msgstr "Message d’erreur"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_search
+msgid "Errors"
+msgstr "Erreurs"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__eur_currency_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__eur_currency_id
+msgid "Eur Currency"
+msgstr "Eur Currency"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "Every freight line requires external_line_key."
+msgstr "Chaque ligne de fret requiert external_line_key."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__expense_id
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_cash_expense_view_form
+msgid "Expense"
+msgstr "Dépense"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__expense_date
+msgid "Expense Date"
+msgstr "Date de dépense"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/cash_operations.py:0
+msgid "Expense allocation amount cannot be negative."
+msgstr "Le montant d’allocation de dépense ne peut pas être négatif."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/cash_operations.py:0
+msgid "Expense snapshot totals cannot be negative."
+msgstr "Les totaux figés de dépense ne peuvent pas être négatifs."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__external_expense_key
+msgid "External Expense Key"
+msgstr "Clé externe de dépense"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment__external_reference
+msgid "External Freight Reference"
+msgstr "Référence dossier fret"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__external_line_key
+msgid "External Line Key"
+msgstr "Clé externe de ligne"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__external_payment_key
+msgid "External Payment Key"
+msgstr "Clé externe de paiement"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__external_transfer_key
+msgid "External Transfer Key"
+msgstr "Clé externe de transfert"
+
+#. module: dally_freight_billing
+#: model:ir.actions.report,name:dally_freight_billing.action_report_dally_freight_invoice
+msgid "Facture DallyTrading Fret"
+msgstr "Facture DallyTrading Fret"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Facturé à"
+msgstr "Facturé à"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__family_id
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_rule_view_search
+msgid "Family"
+msgstr "Famille"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+msgid "Field '%s' is too long."
+msgstr "Le champ « %s » est trop long."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+msgid "Field '%s' must be scalar."
+msgstr "Le champ « %s » doit être scalaire."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+msgid "Field '%s' on a freight line must be scalar."
+msgstr "Le champ « %s » d’une ligne de fret doit être scalaire."
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__message_follower_ids
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__message_follower_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__message_follower_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__message_follower_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__message_follower_ids
+msgid "Followers"
+msgstr "Abonnés"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__message_partner_ids
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__message_partner_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__message_partner_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__message_partner_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__message_partner_ids
+msgid "Followers (Partners)"
+msgstr "Abonnés (partenaires)"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,help:dally_crm.field_dally_quote_request__activity_type_icon
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__activity_type_icon
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_expense__activity_type_icon
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_transfer__activity_type_icon
+msgid "Font awesome icon e.g. fa-tasks"
+msgstr "Icône Font Awesome, par exemple fa-tasks"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid "Frais de dossier"
+msgstr "Frais de dossier"
+
+#. module: dally_freight_billing
+#: model:product.template,name:dally_freight_billing.product_freight_fee_template
+msgid "Frais dossier fret"
+msgstr "Frais dossier fret"
+
+#. modules: dally_freight_billing, dally_freight_data
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+#: model:res.partner.category,name:dally_freight_data.partner_category_freight
+msgid "Freight"
+msgstr "Fret"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment__freight_amount_eur
+msgid "Freight Amount"
+msgstr "Montant du fret"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order_line__dally_freight_package_id
+msgid "Freight Article"
+msgstr "Article de fret"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_shipment_view_form_freight_billing
+msgid "Freight Billing"
+msgstr "Facturation du fret"
+
+#. module: dally_freight_billing
+#: model:res.groups,name:dally_freight_billing.group_dally_freight_billing_api
+msgid "Freight Billing API"
+msgstr "API de facturation fret"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_form
+msgid "Freight Collection"
+msgstr "Encaissement client"
+
+#. module: dally_freight_billing
+#: model:ir.actions.act_window,name:dally_freight_billing.dally_freight_collection_action
+#: model:ir.ui.menu,name:dally_freight_billing.menu_dally_freight_collections
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_list
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_search
+msgid "Freight Collections"
+msgstr "Encaissements clients"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_actions.py:0
+msgid "Freight Invoice"
+msgstr "Facture de fret"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_payment_channel_view_form
+msgid "Freight Payment Channel"
+msgstr "Canal de paiement fret"
+
+#. module: dally_freight_billing
+#: model:ir.actions.act_window,name:dally_freight_billing.dally_freight_payment_channel_action
+#: model:ir.ui.menu,name:dally_freight_billing.menu_dally_freight_payment_channels
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_payment_channel_view_list
+msgid "Freight Payment Channels"
+msgstr "Canaux de paiement fret"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_bank_statement_line__dally_freight_shipment_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_move__dally_freight_shipment_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__dally_freight_shipment_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order__dally_freight_shipment_id
+msgid "Freight Shipment"
+msgstr "Expédition de fret"
+
+#. module: dally_freight_billing
+#: model:res.groups,name:dally_freight_billing.group_dally_freight_sync_api
+msgid "Freight Sync API"
+msgstr "API de synchronisation fret"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_rule_view_form
+msgid "Freight Tariff"
+msgstr "Tarif fret"
+
+#. module: dally_freight_billing
+#: model:ir.actions.act_window,name:dally_freight_billing.dally_freight_tariff_family_action
+#: model:ir.ui.menu,name:dally_freight_billing.menu_dally_freight_tariff_family
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_family_view_list
+msgid "Freight Tariff Families"
+msgstr "Familles tarifaires fret"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_family_view_form
+msgid "Freight Tariff Family"
+msgstr "Famille tarifaire fret"
+
+#. module: dally_freight_billing
+#: model:ir.actions.act_window,name:dally_freight_billing.dally_freight_tariff_rule_action
+#: model:ir.ui.menu,name:dally_freight_billing.menu_dally_freight_tariff_rule
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_rule_view_list
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_rule_view_search
+msgid "Freight Tariffs"
+msgstr "Tarifs fret"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/billing_lock.py:0
+msgid ""
+"Freight billing is locked for %(references)s. Reset the draft billing "
+"documents before changing: %(fields)s."
+msgstr "La facturation fret est verrouillée pour %(references)s. Réinitialisez les documents de facturation brouillon avant de modifier : %(fields)s."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/shipment_billing.py:0
+msgid "Freight billing values cannot be negative."
+msgstr "Les valeurs de facturation fret ne peuvent pas être négatives."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid "Freight fees cannot be negative."
+msgstr "Les frais de fret ne peuvent pas être négatifs."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+msgid "Freight line %s must be an object."
+msgstr "La ligne de fret %s doit être un objet."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid "Freight sales order %s is not in a confirmable state."
+msgstr "La commande client de fret %s n’est pas dans un état confirmable."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_invoice.py:0
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "Freight shipment not found."
+msgstr "Expédition de fret introuvable."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_tariff.py:0
+msgid "Freight tariff amounts and ratios cannot be negative."
+msgstr "Les montants et ratios des tarifs fret ne peuvent pas être négatifs."
+
+#. module: dally_freight_billing
+#: model:product.template,name:dally_freight_billing.product_freight_transport_template
+msgid "Fret DallyTrading"
+msgstr "Fret DallyTrading"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__from_actor
+msgid "From Actor"
+msgstr "De l’acteur"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment__goods_received_on
+msgid "Goods Received On"
+msgstr "Date de réception des marchandises"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_expense__source__google_sheets
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_transfer__source__google_sheets
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_freight_collection__source__google_sheets
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_shipment__sync_source__google_sheets
+msgid "Google Sheets"
+msgstr "Google Sheets"
+
+#. module: dally_freight_billing
+#: model:dally.freight.tariff.family,name:dally_freight_billing.tariff_family_clothing
+msgid "Habits / Vêtements"
+msgstr "Habits / Vêtements"
+
+#. module: dally_freight_billing
+#: model:dally.freight.tariff.family,name:dally_freight_billing.tariff_family_seafood
+msgid "Halieutiques"
+msgstr "Halieutiques"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__has_message
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__has_message
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__has_message
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__has_message
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__has_message
+msgid "Has Message"
+msgstr "A un message"
+
+#. modules: dally_api, dally_crm, dally_freight_billing, dally_freight_bridge,
+#. dally_freight_dashboard, dally_freight_notifications,
+#. dally_freight_routing, dally_portal, dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__id
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__id
+#: model:ir.model.fields,field_description:dally_crm.field_crm_lead__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_move__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_api_key__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_sync_service__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order_line__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_dally_freight_lockdown_guard__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_freight_documents__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_mail_template__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_shipment_freight_booking__id
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__id
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__id
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_account_incoterms__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_dally_freight_routing_mixin__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_freight_port__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country_state__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_freight_vehicle_cargo__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_projection_mixin__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_shipment_package__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_offer__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_proposal__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_request__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_supplier__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_commission__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_cost__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_opportunity__id
+#: model:ir.model.fields,field_description:dally_portal.field_res_partner__id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__id
+msgid "ID"
+msgstr "IDENTIFIANT"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__activity_exception_icon
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__activity_exception_icon
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__activity_exception_icon
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__activity_exception_icon
+msgid "Icon"
+msgstr "Icône"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,help:dally_crm.field_dally_quote_request__activity_exception_icon
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__activity_exception_icon
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_expense__activity_exception_icon
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_transfer__activity_exception_icon
+msgid "Icon to indicate an exception activity."
+msgstr "Icône signalant une activité en exception."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_shipment_package__external_line_key
+msgid "Idempotency key of one billable article line from the Sheet."
+msgstr "Clé d’idempotence d’une ligne d’article facturable provenant du tableur."
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,help:dally_crm.field_dally_quote_request__message_needaction
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__message_needaction
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_expense__message_needaction
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_transfer__message_needaction
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_freight_collection__message_needaction
+msgid "If checked, new messages require your attention."
+msgstr "Si coché, de nouveaux messages requièrent votre attention."
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,help:dally_crm.field_dally_quote_request__message_has_error
+#: model:ir.model.fields,help:dally_crm.field_dally_quote_request__message_has_sms_error
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__message_has_error
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__message_has_sms_error
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_expense__message_has_error
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_expense__message_has_sms_error
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_transfer__message_has_error
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_transfer__message_has_sms_error
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_freight_collection__message_has_error
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_freight_collection__message_has_sms_error
+msgid "If checked, some messages have a delivery error."
+msgstr "Si coché, certains messages présentent une erreur de distribution."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__payment_method_line_id
+msgid "Inbound Payment Method"
+msgstr "Mode de paiement entrant"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_freight_tariff_rule__customer_segment__individual
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_shipment__customer_segment_snapshot__individual
+msgid "Individual"
+msgstr "Particulier"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_cash_transfer_view_form
+msgid "Internal Cash Transfer"
+msgstr "Transfert de caisse interne"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_cash_transfer_view_list
+msgid "Internal Cash Transfers"
+msgstr "Transferts de caisse internes"
+
+#. module: dally_freight_billing
+#: model:ir.actions.act_window,name:dally_freight_billing.dally_cash_expense_action
+#: model:ir.ui.menu,name:dally_freight_billing.menu_dally_cash_expenses
+msgid "Internal Expenses"
+msgstr "Dépenses internes"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_cash_expense_view_form
+msgid "Internal Freight Expense"
+msgstr "Dépense interne de fret"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_cash_expense_view_list
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_cash_expense_view_search
+msgid "Internal Freight Expenses"
+msgstr "Dépenses internes de fret"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+msgid "Invalid %s."
+msgstr "%s invalide."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+msgid "Invalid cash operation source."
+msgstr "Source d’opération de caisse invalide."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+msgid "Invalid cash operation state."
+msgstr "État d’opération de caisse invalide."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "Invalid payment source."
+msgstr "Source de paiement invalide."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "Invalid payment_date."
+msgstr "payment_date invalide."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "Invalid value '%(value)s' for %(field)s."
+msgstr "Valeur « %(value)s » invalide pour %(field)s."
+
+#. modules: dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__invoice_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__invoice_id
+msgid "Invoice"
+msgstr "Facture"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid ""
+"Invoice %(invoice)s already exists in state %(state)s. Freight automation "
+"will not rewrite it."
+msgstr "La facture %(invoice)s existe déjà dans l’état %(state)s. L’automatisation fret ne la réécrira pas."
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__message_is_follower
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__message_is_follower
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__message_is_follower
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__message_is_follower
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__message_is_follower
+msgid "Is Follower"
+msgstr "Est abonné"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__journal_id
+msgid "Journal"
+msgstr "Journal"
+
+#. module: dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_account_move
+msgid "Journal Entry"
+msgstr "Pièce comptable"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__last_attempt_at
+msgid "Last Attempt At"
+msgstr "Dernière tentative le"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__last_sync_at
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__last_sync_at
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment__last_sync_at
+msgid "Last Sync At"
+msgstr "Dernière synchronisation le"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__write_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__write_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__write_uid
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__write_uid
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__write_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__write_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__write_uid
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__write_uid
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__write_uid
+msgid "Last Updated by"
+msgstr "Dernière mise à jour par"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__write_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__write_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__write_date
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__write_date
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__write_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__write_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__write_date
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__write_date
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__write_date
+msgid "Last Updated on"
+msgstr "Dernière mise à jour le"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_freight_collection__source__legacy_xlsx
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_shipment__sync_source__legacy_xlsx
+msgid "Legacy Excel"
+msgstr "Excel historique"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_expense__source__legacy_xlsx
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_transfer__source__legacy_xlsx
+msgid "Legacy XLSX"
+msgstr "XLSX historique"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_shipment_package__pricing_reason
+msgid "Mandatory when a manual price is used."
+msgstr "Obligatoire lorsqu’un prix manuel est utilisé."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__manual_unit_price_eur
+msgid "Manual Price / kg"
+msgstr "Prix manuel / kg"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__message_has_error
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__message_has_error
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__message_has_error
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__message_has_error
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__message_has_error
+msgid "Message Delivery error"
+msgstr "Erreur de distribution du message"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__message_ids
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__message_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__message_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__message_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__message_ids
+msgid "Messages"
+msgstr "Messages"
+
+#. module: dally_freight_billing
+#: model:dally.freight.tariff.family,name:dally_freight_billing.tariff_family_honey
+msgid "Miel"
+msgstr "Miel"
+
+#. modules: dally_freight_billing, dally_freight_dashboard
+#: model:ir.model.fields.selection,name:dally_freight_dashboard.selection__dally_freight_dashboard__group__mode
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_rule_view_search
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Mode"
+msgstr "Mode"
+
+#. modules: dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__transport_mode
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Mode de transport"
+msgstr "Mode de transport"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Montant"
+msgstr "Montant"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Montant HT"
+msgstr "Montant HT"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Montant reçu"
+msgstr "Montant reçu"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__my_activity_date_deadline
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__my_activity_date_deadline
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__my_activity_date_deadline
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__my_activity_date_deadline
+msgid "My Activity Deadline"
+msgstr "Échéance de mon activité"
+
+#. modules: dally_api, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__name
+msgid "Name"
+msgstr "Nom"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__activity_calendar_event_id
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__activity_calendar_event_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__activity_calendar_event_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__activity_calendar_event_id
+msgid "Next Activity Calendar Event"
+msgstr "Événement calendrier de la prochaine activité"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__activity_date_deadline
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__activity_date_deadline
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__activity_date_deadline
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__activity_date_deadline
+msgid "Next Activity Deadline"
+msgstr "Échéance de la prochaine activité"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__activity_summary
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__activity_summary
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__activity_summary
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__activity_summary
+msgid "Next Activity Summary"
+msgstr "Résumé de la prochaine activité"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__activity_type_id
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__activity_type_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__activity_type_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__activity_type_id
+msgid "Next Activity Type"
+msgstr "Type de la prochaine activité"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/shipment_billing.py:0
+msgid ""
+"No automatic freight tariff exists for %(mode)s / %(family)s. Enter a manual"
+" price and its reason."
+msgstr "Aucun tarif de fret automatique n’existe pour %(mode)s / %(family)s. Saisissez un prix manuel et son motif."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection.py:0
+msgid "No payment channel is configured for %(method)s / %(currency)s."
+msgstr "Aucun canal de paiement n’est configuré pour %(method)s / %(currency)s."
+
+#. module: dally_freight_billing
+#: model:dally.freight.tariff.family,name:dally_freight_billing.tariff_family_non_food
+msgid "Non alimentaire"
+msgstr "Non alimentaire"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__message_needaction_counter
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__message_needaction_counter
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__message_needaction_counter
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__message_needaction_counter
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__message_needaction_counter
+msgid "Number of Actions"
+msgstr "Nombre d’actions"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__message_has_error_counter
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__message_has_error_counter
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__message_has_error_counter
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__message_has_error_counter
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__message_has_error_counter
+msgid "Number of errors"
+msgstr "Nombre d’erreurs"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,help:dally_crm.field_dally_quote_request__message_needaction_counter
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__message_needaction_counter
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_expense__message_needaction_counter
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_transfer__message_needaction_counter
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_freight_collection__message_needaction_counter
+msgid "Number of messages requiring action"
+msgstr "Nombre de messages nécessitant une action"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,help:dally_crm.field_dally_quote_request__message_has_error_counter
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__message_has_error_counter
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_expense__message_has_error_counter
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_transfer__message_has_error_counter
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_freight_collection__message_has_error_counter
+msgid "Number of messages with delivery error"
+msgstr "Nombre de messages en erreur de distribution"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid "Odoo did not create a customer invoice for this freight order."
+msgstr "Odoo n’a pas créé de facture client pour cette commande de fret."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection.py:0
+msgid "Odoo did not create a payment."
+msgstr "Odoo n’a pas créé de paiement."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_shipment_package__billing_method__quote
+msgid "On quotation"
+msgstr "Sur devis"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_shipment__external_reference
+msgid "Operational reference coming from the historical workbook/Sheet."
+msgstr "Référence opérationnelle provenant du classeur/tableur historique."
+
+#. modules: dally_freight, dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_form
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_form
+msgid "Origin"
+msgstr "Origine"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment__other_fees_eur
+msgid "Other Fees"
+msgstr "Autres frais"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_shipment_package__manual_unit_price_eur
+msgid ""
+"Overrides the tariff grid. Historical and promotional prices use this field."
+msgstr "Remplace la grille tarifaire. Les prix historiques et promotionnels utilisent ce champ."
+
+#. modules: dally_freight, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__company_id
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment_package__company_id
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_freight_collection__company_id
+#: model:ir.model.fields,help:dally_tracking.field_dally_shipment_event__company_id
+msgid "Owning company. Drives the multi-company record rule."
+msgstr "Société propriétaire. Elle pilote la règle d’enregistrement multi-sociétés."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__allocation_ids
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_cash_expense_view_form
+msgid "Paid by"
+msgstr "Payé par"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__payment_id
+msgid "Payment"
+msgstr "Paiement"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__payment_date
+msgid "Payment Date"
+msgstr "Date de paiement"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__payment_method
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__payment_method
+msgid "Payment Method"
+msgstr "Mode de paiement"
+
+#. module: dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_account_payment
+msgid "Payments"
+msgstr "Paiements"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_search
+msgid "Pending"
+msgstr "En attente"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_freight_collection__state__pending
+msgid "Pending invoice/configuration"
+msgstr "En attente de facturation/configuration"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_shipment__goods_received_on
+msgid "Physical drop-off date. Used as pricing date when available."
+msgstr "Date de dépôt physique. Utilisée comme date de tarification lorsqu’elle est disponible."
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Poids / Qté"
+msgstr "Poids / Qté"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid "Posted invoice %s cannot be reset by Freight sync."
+msgstr "La facture comptabilisée %s ne peut pas être réinitialisée par la synchronisation fret."
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_shipment_view_form_freight_billing
+msgid "Prepare Draft Invoice"
+msgstr "Préparer une facture brouillon"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_rule_view_form
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_shipment_view_form_freight_billing
+msgid "Price"
+msgstr "Prix"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__price_per_kg_eur
+msgid "Price Per Kg Eur"
+msgstr "Prix par kg en EUR"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__pricing_reason
+msgid "Pricing Reason"
+msgstr "Motif de tarification"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__pricing_type_snapshot
+msgid "Pricing Type"
+msgstr "Type de tarification"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Prix unitaire"
+msgstr "Prix unitaire"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_shipment_package__pricing_type_snapshot__promotion
+msgid "Promotion"
+msgstr "Promotion"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_invoice.py:0
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "Provide external_reference or shipment_id."
+msgstr "Indiquez external_reference ou shipment_id."
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid ""
+"Rapport réservé aux factures Freight\n"
+"                        DallyTrading."
+msgstr ""
+"Rapport réservé aux factures de fret\n"
+"                        DallyTrading."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__reason
+msgid "Reason"
+msgstr "Motif"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__reference
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__reference
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__reference
+msgid "Reference"
+msgstr "Référence"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_search
+msgid "Registered"
+msgstr "Comptabilisé"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_freight_collection__state__registered
+msgid "Registered in accounting"
+msgstr "Comptabilisé"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection.py:0
+msgid ""
+"Registered payment %s cannot be cancelled from Google Sheets; create an "
+"accounting correction instead."
+msgstr "Le paiement comptabilisé %s ne peut pas être annulé depuis Google Sheets ; créez plutôt une correction comptable."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection.py:0
+msgid ""
+"Registered payment %s is immutable; create a corrective payment instead."
+msgstr "Le paiement comptabilisé %s est immuable ; créez plutôt un paiement correctif."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_freight_collection__state__error
+msgid "Registration error"
+msgstr "Erreur de comptabilisation"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "Removed from the current Google Sheets payment set."
+msgstr "Retiré de l’ensemble de paiements Google Sheets actuel."
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_shipment_view_form_freight_billing
+msgid "Reset Draft Billing"
+msgstr "Réinitialiser la facturation brouillon"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__activity_user_id
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__activity_user_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__activity_user_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__activity_user_id
+msgid "Responsible User"
+msgstr "Utilisateur responsable"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Règlements enregistrés"
+msgstr "Règlements enregistrés"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Référence dossier"
+msgstr "Référence dossier"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__message_has_sms_error
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__message_has_sms_error
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__message_has_sms_error
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__message_has_sms_error
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__message_has_sms_error
+msgid "SMS Delivery error"
+msgstr "Erreur de distribution SMS"
+
+#. modules: dally_freight, dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_sale_order
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__sale_order_id
+msgid "Sales Order"
+msgstr "Commande client"
+
+#. module: dally_freight_billing
+#: model:ir.model,name:dally_freight_billing.model_sale_order_line
+msgid "Sales Order Line"
+msgstr "Ligne de commande"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid "Sales order %s cannot be safely reset."
+msgstr "La commande client %s ne peut pas être réinitialisée de façon sûre."
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_rule_view_form
+msgid "Scope"
+msgstr "Portée"
+
+#. modules: dally_freight, dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_freight_tariff_rule__transport_mode__sea
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_search
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_rule_view_search
+msgid "Sea"
+msgstr "Maritime"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__sequence
+msgid "Sequence"
+msgstr "Séquence"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_shipment__billing_locked
+msgid ""
+"Set when the native sales order and draft invoice are generated. Sheet cargo"
+" changes are then refused until Finance explicitly resets the draft "
+"documents."
+msgstr "Défini lorsque la commande client native et la facture brouillon sont générées. Les modifications de marchandise du tableur sont alors refusées jusqu’à ce que la finance réinitialise explicitement les documents brouillon."
+
+#. modules: dally_freight, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__shipment_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__shipment_id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__shipment_id
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_form
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_search
+msgid "Shipment"
+msgstr "Expédition"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid ""
+"Shipment %(reference)s is linked to the operational freight engine. Sheet "
+"synchronisation cannot rewrite its cargo; the tk → Dally bridge is one-way."
+msgstr "L’expédition %(reference)s est liée au moteur opérationnel de fret. La synchronisation du tableur ne peut pas réécrire sa marchandise ; le bridge tk → Dally est à sens unique."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_shipment__customer_segment_snapshot
+msgid "Snapshot used for pricing; later contact edits do not rewrite history."
+msgstr "Instantané utilisé pour la tarification ; les modifications ultérieures du contact ne réécrivent pas l’historique."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid "Some freight lines are not ready for invoicing: %s"
+msgstr "Certaines lignes de fret ne sont pas prêtes à être facturées : %s"
+
+#. modules: dally_crm, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__source
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__source
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__source
+#: model_terms:ir.ui.view,arch_db:dally_crm.dally_lead_view_search
+msgid "Source"
+msgstr "Source"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__source_method
+msgid "Source Method"
+msgstr "Méthode source"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__goods_category
+msgid "Source Product Category"
+msgstr "Catégorie de produit source"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_shipment_package__pricing_type_snapshot__special
+msgid "Special"
+msgstr "Spécial"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_shipment_view_form_freight_billing
+msgid "Spreadsheet Synchronisation"
+msgstr "Synchronisation avec le tableur"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_shipment_package__pricing_type_snapshot__standard
+msgid "Standard"
+msgstr "Standard"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__state
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__state
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__state
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_cash_expense_view_search
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_collection_view_search
+msgid "State"
+msgstr "État"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,help:dally_crm.field_dally_quote_request__activity_state
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__activity_state
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_expense__activity_state
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_transfer__activity_state
+msgid ""
+"Status based on activities\n"
+"Overdue: Due date is already passed\n"
+"Today: Activity date is today\n"
+"Planned: Future activities."
+msgstr ""
+"Statut fondé sur les activités\n"
+"En retard : l’échéance est dépassée\n"
+"Aujourd’hui : l’activité est prévue aujourd’hui\n"
+"Planifié : activités futures."
+
+#. modules: dally_freight_billing, dally_freight_notifications
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__status
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_search
+msgid "Statut"
+msgstr "Statut"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment__sync_message
+msgid "Sync Message"
+msgstr "Message de synchronisation"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment__sync_source
+msgid "Sync Source"
+msgstr "Source de synchronisation"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "TVA"
+msgstr "TVA"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__tariff_applied_on
+msgid "Tariff Applied On"
+msgstr "Tarif appliqué le"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__tariff_family_id
+msgid "Tariff Family"
+msgstr "Famille tarifaire"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_tariff.py:0
+msgid "Tariff end date cannot precede start date."
+msgstr "La date de fin du tarif ne peut pas précéder sa date de début."
+
+#. modules: dally_freight, dally_freight_billing
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__partner_id
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_freight_collection__partner_id
+msgid "The customer this file belongs to. A plain res.partner (§70)."
+msgstr "Client auquel appartient ce dossier. Un simple res.partner (§70)."
+
+#. module: dally_freight_billing
+#: model:ir.model.constraint,message:dally_freight_billing.constraint_dally_cash_expense_external_expense_key_unique
+msgid "The external expense key must be unique per company."
+msgstr "La clé externe de dépense doit être unique par société."
+
+#. module: dally_freight_billing
+#: model:ir.model.constraint,message:dally_freight_billing.constraint_dally_shipment_package_external_line_key_unique
+msgid "The external freight line key must be unique."
+msgstr "La clé externe de ligne de fret doit être unique."
+
+#. module: dally_freight_billing
+#: model:ir.model.constraint,message:dally_freight_billing.constraint_account_payment_dally_external_payment_key_unique
+#: model:ir.model.constraint,message:dally_freight_billing.constraint_dally_freight_collection_external_payment_key_unique
+msgid "The external freight payment key must be unique."
+msgstr "La clé externe de paiement fret doit être unique."
+
+#. module: dally_freight_billing
+#: model:ir.model.constraint,message:dally_freight_billing.constraint_dally_shipment_external_reference_unique
+msgid "The external freight reference must be unique per company."
+msgstr "La référence externe de fret doit être unique par société."
+
+#. module: dally_freight_billing
+#: model:ir.model.constraint,message:dally_freight_billing.constraint_dally_cash_transfer_external_transfer_key_unique
+msgid "The external transfer key must be unique per company."
+msgstr "La clé externe de transfert doit être unique par société."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/shipment_billing.py:0
+msgid "The freight line must belong to a shipment."
+msgstr "La ligne de fret doit appartenir à une expédition."
+
+#. module: dally_freight_billing
+#: model:ir.model.constraint,message:dally_freight_billing.constraint_dally_freight_tariff_family_code_unique
+msgid "The freight tariff family code must be unique."
+msgstr "Le code de famille tarifaire fret doit être unique."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid "The generated invoice is already linked to another freight file."
+msgstr "La facture générée est déjà liée à un autre dossier de fret."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection.py:0
+msgid "The payment key already belongs to another freight shipment."
+msgstr "La clé de paiement appartient déjà à une autre expédition de fret."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection.py:0
+msgid "The payment method must belong to the selected journal."
+msgstr "Le mode de paiement doit appartenir au journal sélectionné."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_invoice.py:0
+msgid "This API user is not allowed to prepare freight invoices."
+msgstr "Cet utilisateur API n’est pas autorisé à préparer les factures de fret."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+msgid "This API user is not allowed to synchronise freight files."
+msgstr "Cet utilisateur API n’est pas autorisé à synchroniser les dossiers de fret."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "This API user is not allowed to synchronise freight payments."
+msgstr "Cet utilisateur API n’est pas autorisé à synchroniser les paiements fret."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+msgid "This API user is not allowed to synchronise internal cash operations."
+msgstr "Cet utilisateur API n’est pas autorisé à synchroniser les opérations de caisse internes."
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_shipment_view_form_freight_billing
+msgid ""
+"This deletes the generated draft invoice and cancelled generated sales order"
+" so freight data can be corrected. Continue?"
+msgstr "Cette action supprime la facture brouillon générée et la commande client générée annulée afin de corriger les données de fret. Continuer ?"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+msgid ""
+"This shipment is already linked to sales order %(order)s, which was not "
+"generated by the Freight billing engine. Use that sales order's native "
+"invoicing workflow."
+msgstr "Cette expédition est déjà liée à la commande client %(order)s, qui n’a pas été générée par le moteur de facturation fret. Utilisez le processus de facturation natif de cette commande."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__to_actor
+msgid "To Actor"
+msgstr "Vers l’acteur"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_expense__state__review
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_transfer__state__review
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_cash_expense_view_search
+msgid "To review"
+msgstr "À vérifier"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__total_amount
+msgid "Total Amount"
+msgstr "Montant total"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Total TTC"
+msgstr "Total TTC"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Total des règlements enregistrés"
+msgstr "Total des règlements enregistrés"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__transfer_date
+msgid "Transfer Date"
+msgstr "Date de transfert"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+msgid "Transfer sender and recipient must differ."
+msgstr "L’émetteur et le bénéficiaire du transfert doivent être différents."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/cash_operations.py:0
+msgid "Transfer snapshot totals cannot be negative."
+msgstr "Les totaux figés du transfert ne peuvent pas être négatifs."
+
+#. modules: dally_freight_billing, dally_freight_routing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_shipment_view_form_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_routing.dally_quote_request_view_form_routing
+#: model_terms:ir.ui.view,arch_db:dally_freight_routing.dally_shipment_view_form_routing
+msgid "Transport"
+msgstr "Transport"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_shipment_package__transport_amount_eur
+msgid "Transport Amount"
+msgstr "Montant du transport"
+
+#. modules: dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__transport_mode
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__transport_mode
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_search
+msgid "Transport Mode"
+msgstr "Mode de transport"
+
+#. module: dally_freight_billing
+#: model:res.groups,comment:dally_freight_billing.group_dally_freight_billing_api
+msgid ""
+"Trusted freight billing connector: native sales, draft invoices, customer "
+"payments and internal cash operations."
+msgstr "Connecteur fiable de facturation fret : ventes natives, factures brouillon, paiements clients et opérations de caisse internes."
+
+#. module: dally_freight_billing
+#: model:res.groups,comment:dally_freight_billing.group_dally_freight_sync_api
+msgid ""
+"Trusted spreadsheet connector: customers, freight files and cargo only."
+msgstr "Connecteur fiable de tableur : clients, dossiers de fret et marchandises uniquement."
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,help:dally_crm.field_dally_quote_request__activity_exception_decoration
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__activity_exception_decoration
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_expense__activity_exception_decoration
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_transfer__activity_exception_decoration
+msgid "Type of the exception activity on record."
+msgstr "Type de l’activité en exception enregistrée."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection.py:0
+msgid "Unexpected accounting error; see server logs."
+msgstr "Erreur comptable inattendue ; consultez les journaux serveur."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+msgid "Unknown %(label)s field(s): %(fields)s"
+msgstr "Champ(s) %(label)s inconnu(s) : %(fields)s"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+msgid "Unknown %(object)s field(s): %(fields)s"
+msgstr "Champ(s) %(object)s inconnu(s) : %(fields)s"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+msgid "Unknown allocation field(s): %s"
+msgstr "Champ(s) d’allocation inconnu(s) : %s"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "Unknown country code '%s'."
+msgstr "Code pays « %s » inconnu."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+msgid "Unknown field(s) on freight line %(index)s: %(fields)s"
+msgstr "Champ(s) inconnu(s) sur la ligne de fret %(index)s : %(fields)s"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_invoice.py:0
+msgid "Unknown freight invoice field(s): %s"
+msgstr "Champ(s) de facture fret inconnu(s) : %s"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "Unknown freight payment field(s): %s"
+msgstr "Champ(s) de paiement fret inconnu(s) : %s"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "Unknown freight payment reconcile field(s): %s"
+msgstr "Champ(s) de rapprochement de paiement fret inconnu(s) : %s"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+msgid "Unknown freight sync field(s): %s"
+msgstr "Champ(s) de synchronisation fret inconnu(s) : %s"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "Unknown or inactive currency."
+msgstr "Devise inconnue ou inactive."
+
+#. modules: dally_api, dally_freight_billing
+#. odoo-python
+#: code:addons/dally_api/models/dally_api_key.py:0
+#: code:addons/dally_freight_billing/models/api_scope.py:0
+msgid "Unknown scope '%(scope)s'. Available scopes: %(available)s"
+msgstr "Portée « %(scope)s » inconnue. Portées disponibles : %(available)s"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "Unknown tariff_family_code '%s'."
+msgstr "tariff_family_code « %s » inconnu."
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_expense__state__validated
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_cash_transfer__state__validated
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_cash_expense_view_search
+msgid "Validated"
+msgstr "Validé"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.dally_freight_tariff_rule_view_form
+msgid "Validity"
+msgstr "Validité"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields.selection,name:dally_freight_billing.selection__dally_shipment_package__billing_method__volumetric
+msgid "Volumetric"
+msgstr "Volumétrique"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__volumetric_ratio_kg_cbm
+msgid "Volumetric Ratio Kg Cbm"
+msgstr "Ratio volumétrique kg/m³"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection.py:0
+msgid "Waiting for the customer invoice to be posted."
+msgstr "En attente de la comptabilisation de la facture client."
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__website_message_ids
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__website_message_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__website_message_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__website_message_ids
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__website_message_ids
+msgid "Website Messages"
+msgstr "Messages du site web"
+
+#. modules: dally_crm, dally_freight, dally_freight_billing
+#: model:ir.model.fields,help:dally_crm.field_dally_quote_request__website_message_ids
+#: model:ir.model.fields,help:dally_freight.field_dally_shipment__website_message_ids
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_expense__website_message_ids
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_cash_transfer__website_message_ids
+#: model:ir.model.fields,help:dally_freight_billing.field_dally_freight_collection__website_message_ids
+msgid "Website communication history"
+msgstr "Historique des échanges du site web"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__total_eur_snapshot
+msgid "Workbook EUR"
+msgstr "Classeur EUR"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__total_xof_snapshot
+msgid "Workbook XOF"
+msgstr "Classeur XOF"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__total_eur_snapshot
+msgid "Workbook total EUR"
+msgstr "Total classeur EUR"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__total_xof_snapshot
+msgid "Workbook total XOF"
+msgstr "Total classeur XOF"
+
+#. module: dally_freight_billing
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__xof_currency_id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__xof_currency_id
+msgid "Xof Currency"
+msgstr "Devise XOF"
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "active_payment_keys must be an array."
+msgstr "active_payment_keys doit être un tableau."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+msgid "allocations must be an array."
+msgstr "allocations doit être un tableau."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_cash.py:0
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "amount must be greater than zero."
+msgstr "amount doit être supérieur à zéro."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "amount must be numeric."
+msgstr "amount doit être numérique."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_partner_match.py:0
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "client.name is required for a new customer."
+msgstr "client.name est requis pour créer un nouveau client."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/cash_operations.py:0
+msgid "external_expense_key is required."
+msgstr "external_expense_key est requis."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "external_line_key '%s' already belongs to another shipment."
+msgstr "external_line_key « %s » appartient déjà à une autre expédition."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/payment_collection.py:0
+msgid "external_payment_key is required."
+msgstr "external_payment_key est requis."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "external_reference is required."
+msgstr "external_reference est requis."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/cash_operations.py:0
+msgid "external_transfer_key is required."
+msgstr "external_transfer_key est requis."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+msgid "lines must be an array."
+msgstr "lines doit être un tableau."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/models/freight_partner_match.py:0
+#: code:addons/dally_freight_billing/models/freight_sync.py:0
+msgid "partner_id does not identify an existing customer."
+msgstr "partner_id ne désigne pas un client existant."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+msgid "partner_id must be an integer."
+msgstr "partner_id doit être un entier."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_sync.py:0
+msgid "partner_id must be positive."
+msgstr "partner_id doit être positif."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_invoice.py:0
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid ""
+"shipment_id and external_reference do not identify the same freight file."
+msgstr "shipment_id et external_reference ne désignent pas le même dossier de fret."
+
+#. module: dally_freight_billing
+#. odoo-python
+#: code:addons/dally_freight_billing/controllers/freight_invoice.py:0
+#: code:addons/dally_freight_billing/controllers/freight_payment.py:0
+msgid "shipment_id must be an integer."
+msgstr "shipment_id doit être un entier."
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Échéance"
+msgstr "Échéance"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "Équivalent facture"
+msgstr "Équivalent facture"
+
+#. module: dally_freight_billing
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+msgid "État du règlement"
+msgstr "État du règlement"

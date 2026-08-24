@@ -1,0 +1,708 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* dally_api
+# 	* dally_portal
+# 	* dally_freight_bridge
+# 	* dally_freight_routing
+# 	* dally_tracking
+# 	* dally_freight_billing
+# 	* dally_freight
+# 	* dally_freight_data
+# 	* dally_freight_dashboard
+# 	* dally_freight_notifications
+# 	* dally_crm
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 19.0-20260810\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-24 09:50+0000\n"
+"PO-Revision-Date: 2026-08-24 09:50+0000\n"
+"Last-Translator: \n"
+"Language: fr_FR\n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_aejea
+msgid "AEJEA"
+msgstr "AEJEA"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_af
+msgid "AF"
+msgstr "AF"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_af
+msgid "AFR"
+msgstr "AFR"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.airport_ams
+msgid "AMS"
+msgstr "AMS"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_kp
+msgid "ASKY Airlines"
+msgstr "ASKY Airlines"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_at
+msgid "AT"
+msgstr "AT"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_ciabj
+msgid "Abidjan"
+msgstr "Abidjan"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_hf
+msgid "Air Côte d'Ivoire"
+msgstr "Air Côte d'Ivoire"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_af
+msgid "Air France"
+msgstr "Air France"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_hc
+msgid "Air Sénégal"
+msgstr "Air Sénégal"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.airport_ams
+msgid "Amsterdam-Schiphol"
+msgstr "Amsterdam-Schiphol"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_beanr
+msgid "Anvers"
+msgstr "Anvers"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.airport_dss
+msgid "Aéroport international Blaise Diagne"
+msgstr "Aéroport international Blaise Diagne"
+
+#. module: dally_freight_data
+#: model:freight.frequent.route,name:dally_freight_data.route_dss_cdg
+msgid "Aéroport international Blaise Diagne - Paris-Charles de Gaulle"
+msgstr "Aéroport international Blaise Diagne - Paris-Charles de Gaulle"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_beanr
+msgid "BEANR"
+msgstr "BEANR"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_sn
+msgid "BEL"
+msgstr "BEL"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_bjcoo
+msgid "BJCOO"
+msgstr "BJCOO"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.airport_bru
+msgid "BRU"
+msgstr "BRU"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_sn
+msgid "Brussels Airlines"
+msgstr "Brussels Airlines"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.airport_bru
+msgid "Bruxelles-Zaventem"
+msgstr "Bruxelles-Zaventem"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.airport_cdg
+msgid "CDG"
+msgstr "CDG"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_ciabj
+msgid "CIABJ"
+msgstr "CIABJ"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_cv
+msgid "CLX"
+msgstr "CLX"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.airport_cmn
+msgid "CMN"
+msgstr "CMN"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_cnngb
+msgid "CNNGB"
+msgstr "CNNGB"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_cnsha
+msgid "CNSHA"
+msgstr "CNSHA"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_cnszx
+msgid "CNSZX"
+msgstr "CNSZX"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_cntao
+msgid "CNTAO"
+msgstr "CNTAO"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_cv
+msgid "CV"
+msgstr "CV"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_cv
+msgid "Cargolux"
+msgstr "Cargolux"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_macas
+msgid "Casablanca"
+msgstr "Casablanca"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.airport_cmn
+msgid "Casablanca Mohammed V"
+msgstr "Casablanca Mohammed V"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_gncky
+msgid "Conakry"
+msgstr "Conakry"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_bjcoo
+msgid "Cotonou"
+msgstr "Cotonou"
+
+#. module: dally_freight_data
+#: model:res.partner.category,name:dally_freight_data.partner_category_customs_broker
+msgid "Customs Broker"
+msgstr "Commissionnaire en douane"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_deham
+msgid "DEHAM"
+msgstr "DEHAM"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_lh
+msgid "DLH"
+msgstr "DLH"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.airport_dss
+msgid "DSS"
+msgstr "DSS"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.airport_dxb
+msgid "DXB"
+msgstr "DXB"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_sndkr
+msgid "Dakar"
+msgstr "Dakar"
+
+#. modules: dally_crm, dally_freight_data
+#: model:res.partner.category,name:dally_freight_data.partner_category_dally
+#: model_terms:ir.ui.view,arch_db:dally_crm.crm_lead_view_form_dally
+msgid "DallyTrading"
+msgstr "DallyTrading"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.airport_dss
+msgid "Diass"
+msgstr "Diass"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.airport_dxb
+#: model:freight.port,city:dally_freight_data.port_aejea
+msgid "Dubaï"
+msgstr "Dubaï"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.airport_dxb
+msgid "Dubaï International"
+msgstr "Dubaï International"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_ek
+msgid "EK"
+msgstr "EK"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_et
+msgid "ET"
+msgstr "ET"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_et
+msgid "ETH"
+msgstr "ETH"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_ek
+msgid "Emirates"
+msgstr "Emirates"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_et
+msgid "Ethiopian Airlines"
+msgstr "Ethiopian Airlines"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.airport_fra
+msgid "FRA"
+msgstr "FRA"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_frfos
+msgid "FRFOS"
+msgstr "FRFOS"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_frleh
+msgid "FRLEH"
+msgstr "FRLEH"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_frfos
+msgid "Fos-sur-Mer"
+msgstr "Fos-sur-Mer"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.airport_fra
+#: model:freight.port,name:dally_freight_data.airport_fra
+msgid "Francfort-sur-le-Main"
+msgstr "Francfort-sur-le-Main"
+
+#. modules: dally_freight_billing, dally_freight_data
+#. odoo-python
+#: code:addons/dally_freight_billing/models/commercial_documents.py:0
+#: model:res.partner.category,name:dally_freight_data.partner_category_freight
+msgid "Freight"
+msgstr "Fret"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_ghtem
+msgid "GHTEM"
+msgstr "GHTEM"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_gncky
+msgid "GNCKY"
+msgstr "GNCKY"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_hc
+msgid "HC"
+msgstr "HC"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_hf
+msgid "HF"
+msgstr "HF"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.airport_ams
+msgid "Haarlemmermeer"
+msgstr "Haarlemmermeer"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_deham
+msgid "Hambourg"
+msgstr "Hambourg"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.airport_ist
+msgid "IST"
+msgstr "IST"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.airport_ist
+#: model:freight.port,name:dally_freight_data.airport_ist
+msgid "Istanbul"
+msgstr "Istanbul"
+
+#. module: dally_freight_data
+#: model:freight.frequent.route,name:dally_freight_data.route_ist_dss
+msgid "Istanbul - Aéroport international Blaise Diagne"
+msgstr "Istanbul - Aéroport international Blaise Diagne"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_aejea
+msgid "Jebel Ali"
+msgstr "Jebel Ali"
+
+#. module: dally_freight_data
+#: model:freight.frequent.route,name:dally_freight_data.route_aejea_sndkr
+msgid "Jebel Ali - Port autonome de Dakar"
+msgstr "Jebel Ali - Port autonome de Dakar"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_kl
+msgid "KL"
+msgstr "KL"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_kl
+msgid "KLM"
+msgstr "KLM"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_kl
+msgid "KLM Royal Dutch Airlines"
+msgstr "KLM Royal Dutch Airlines"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_kp
+msgid "KP"
+msgstr "KP"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_maptm
+msgid "Ksar el-Majaz"
+msgstr "Ksar el-Majaz"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_lh
+msgid "LH"
+msgstr "LH"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_frleh
+msgid "Le Havre"
+msgstr "Le Havre"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_tglfw
+msgid "Lomé"
+msgstr "Lomé"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_lh
+msgid "Lufthansa"
+msgstr "Lufthansa"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_macas
+msgid "MACAS"
+msgstr "MACAS"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_maptm
+msgid "MAPTM"
+msgstr "MAPTM"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_mrnkc
+msgid "MRNKC"
+msgstr "MRNKC"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_frfos
+msgid "Marseille-Fos"
+msgstr "Marseille-Fos"
+
+#. module: dally_freight_data
+#: model:freight.frequent.route,name:dally_freight_data.route_frfos_sndkr
+msgid "Marseille-Fos - Port autonome de Dakar"
+msgstr "Marseille-Fos - Port autonome de Dakar"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_nlrtm
+msgid "NLRTM"
+msgstr "NLRTM"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_cnngb
+msgid "Ningbo"
+msgstr "Ningbo"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_cnngb
+msgid "Ningbo-Zhoushan"
+msgstr "Ningbo-Zhoushan"
+
+#. module: dally_freight_data
+#: model:freight.frequent.route,name:dally_freight_data.route_cnngb_sndkr
+msgid "Ningbo-Zhoushan - Port autonome de Dakar"
+msgstr "Ningbo-Zhoushan - Port autonome de Dakar"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.airport_cmn
+msgid "Nouaceur"
+msgstr "Nouaceur"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_mrnkc
+msgid "Nouakchott"
+msgstr "Nouakchott"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.airport_ory
+msgid "ORY"
+msgstr "ORY"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.airport_ory
+msgid "Orly"
+msgstr "Orly"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.airport_cdg
+msgid "Paris-Charles de Gaulle"
+msgstr "Paris-Charles de Gaulle"
+
+#. module: dally_freight_data
+#: model:freight.frequent.route,name:dally_freight_data.route_cdg_dss
+msgid "Paris-Charles de Gaulle - Aéroport international Blaise Diagne"
+msgstr "Paris-Charles de Gaulle - Aéroport international Blaise Diagne"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.airport_ory
+msgid "Paris-Orly"
+msgstr "Paris-Orly"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_ciabj
+msgid "Port autonome d'Abidjan"
+msgstr "Port autonome d'Abidjan"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_gncky
+msgid "Port autonome de Conakry"
+msgstr "Port autonome de Conakry"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_bjcoo
+msgid "Port autonome de Cotonou"
+msgstr "Port autonome de Cotonou"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_sndkr
+msgid "Port autonome de Dakar"
+msgstr "Port autonome de Dakar"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_tglfw
+msgid "Port autonome de Lomé"
+msgstr "Port autonome de Lomé"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_beanr
+msgid "Port d'Anvers-Bruges"
+msgstr "Port d'Anvers-Bruges"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_macas
+msgid "Port de Casablanca"
+msgstr "Port de Casablanca"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_deham
+msgid "Port de Hambourg"
+msgstr "Port de Hambourg"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_mrnkc
+msgid "Port de Nouakchott"
+msgstr "Port de Nouakchott"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_cntao
+msgid "Port de Qingdao"
+msgstr "Port de Qingdao"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_nlrtm
+msgid "Port de Rotterdam"
+msgstr "Port de Rotterdam"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_cnsha
+msgid "Port de Shanghai"
+msgstr "Port de Shanghai"
+
+#. module: dally_freight_data
+#: model:freight.frequent.route,name:dally_freight_data.route_cnsha_sndkr
+msgid "Port de Shanghai - Port autonome de Dakar"
+msgstr "Port de Shanghai - Port autonome de Dakar"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_cnszx
+msgid "Port de Shenzhen"
+msgstr "Port de Shenzhen"
+
+#. module: dally_freight_data
+#: model:freight.frequent.route,name:dally_freight_data.route_cnszx_sndkr
+msgid "Port de Shenzhen - Port autonome de Dakar"
+msgstr "Port de Shenzhen - Port autonome de Dakar"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_ghtem
+msgid "Port de Tema"
+msgstr "Port de Tema"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_frleh
+msgid "Port du Havre"
+msgstr "Port du Havre"
+
+#. module: dally_freight_data
+#: model:freight.frequent.route,name:dally_freight_data.route_frleh_sndkr
+msgid "Port du Havre - Port autonome de Dakar"
+msgstr "Port du Havre - Port autonome de Dakar"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_qr
+msgid "QR"
+msgstr "QR"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_qr
+msgid "QTR"
+msgstr "QTR"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_qr
+msgid "Qatar Airways"
+msgstr "Qatar Airways"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_cntao
+msgid "Qingdao"
+msgstr "Qingdao"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_at
+msgid "RAM"
+msgstr "RAM"
+
+#. module: dally_freight_data
+#: model:res.partner.category,name:dally_freight_data.partner_category_road_carrier
+msgid "Road Carrier"
+msgstr "Transporteur routier"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.airport_cdg
+msgid "Roissy-en-France"
+msgstr "Roissy-en-France"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_nlrtm
+msgid "Rotterdam"
+msgstr "Rotterdam"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_at
+msgid "Royal Air Maroc"
+msgstr "Royal Air Maroc"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_kp
+msgid "SKK"
+msgstr "SKK"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_sn
+msgid "SN"
+msgstr "SN"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_sndkr
+msgid "SNDKR"
+msgstr "SNDKR"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_hc
+msgid "SZN"
+msgstr "SZN"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_cnsha
+msgid "Shanghai"
+msgstr "Shanghai"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_cnszx
+msgid "Shenzhen"
+msgstr "Shenzhen"
+
+#. module: dally_freight_data
+#: model:res.partner.category,name:dally_freight_data.partner_category_shipping_line
+msgid "Shipping Line"
+msgstr "Compagnie maritime"
+
+#. module: dally_freight_data
+#: model:freight.port,code:dally_freight_data.port_tglfw
+msgid "TGLFW"
+msgstr "TGLFW"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_tk
+msgid "THY"
+msgstr "THY"
+
+#. module: dally_freight_data
+#: model:freight.airline,code:dally_freight_data.airline_tk
+msgid "TK"
+msgstr "TK"
+
+#. module: dally_freight_data
+#: model:freight.port,name:dally_freight_data.port_maptm
+msgid "Tanger Med"
+msgstr "Tanger Med"
+
+#. module: dally_freight_data
+#: model:freight.frequent.route,name:dally_freight_data.route_maptm_sndkr
+msgid "Tanger Med - Port autonome de Dakar"
+msgstr "Tanger Med - Port autonome de Dakar"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.port_ghtem
+msgid "Tema"
+msgstr "Tema"
+
+#. module: dally_freight_data
+#: model:freight.airline,name:dally_freight_data.airline_tk
+msgid "Turkish Airlines"
+msgstr "Turkish Airlines"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_ek
+msgid "UAE"
+msgstr "UAE"
+
+#. module: dally_freight_data
+#: model:freight.airline,icao:dally_freight_data.airline_hf
+msgid "VRE"
+msgstr "VRE"
+
+#. module: dally_freight_data
+#: model:freight.port,city:dally_freight_data.airport_bru
+msgid "Zaventem"
+msgstr "Zaventem"

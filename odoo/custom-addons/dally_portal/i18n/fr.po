@@ -1,0 +1,607 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* dally_api
+# 	* dally_portal
+# 	* dally_freight_bridge
+# 	* dally_freight_routing
+# 	* dally_tracking
+# 	* dally_freight_billing
+# 	* dally_freight
+# 	* dally_freight_data
+# 	* dally_freight_dashboard
+# 	* dally_freight_notifications
+# 	* dally_crm
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 19.0-20260810\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-24 09:50+0000\n"
+"PO-Revision-Date: 2026-08-24 09:50+0000\n"
+"Last-Translator: \n"
+"Language: fr_FR\n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_portal
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__active
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__active
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__active
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__active
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__active
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__active
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__active
+msgid "Active"
+msgstr "Actif"
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_quote_request.py:0
+msgid "An acceptance cannot carry a rejection reason."
+msgstr "Une acceptation ne peut pas comporter de motif de refus."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/res_partner.py:0
+msgid "At least one profile field is required."
+msgstr "Au moins un champ de profil est requis."
+
+#. modules: dally_freight, dally_portal
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_freight_vehicle_cargo__category__other
+#: model:ir.model.fields.selection,name:dally_freight.selection__dally_freight_vehicle_cargo__fuel__other
+#: model:ir.model.fields.selection,name:dally_portal.selection__dally_portal_document__document_type__other
+msgid "Autre"
+msgstr "Autre"
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_portal_document.py:0
+msgid "Ce document n'est pas publié."
+msgstr "Ce document n'est pas publié."
+
+#. module: dally_portal
+#: model:ir.model.fields.selection,name:dally_portal.selection__dally_portal_document__document_type__certificate
+msgid "Certificat"
+msgstr "Certificat"
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__commercial_partner_id
+msgid "Client propriétaire"
+msgstr "Client propriétaire"
+
+#. modules: dally_crm, dally_portal
+#: model:ir.model,name:dally_portal.model_res_partner
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__partner_id
+#: model_terms:ir.ui.view,arch_db:dally_crm.dally_quote_request_view_form
+msgid "Contact"
+msgstr "Contact"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__create_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__create_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__create_uid
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__create_uid
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__create_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__create_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__create_uid
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__create_uid
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__create_uid
+msgid "Created by"
+msgstr "Créé par"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__create_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__create_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__create_date
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__create_date
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__create_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__create_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__create_date
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__create_date
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__create_date
+msgid "Created on"
+msgstr "Créé le"
+
+#. module: dally_portal
+#: model_terms:ir.ui.view,arch_db:dally_portal.dally_quote_request_view_form_portal_decision
+msgid "Customer Decision"
+msgstr "Décision du client"
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__customer_decision_at
+msgid "Customer Decision At"
+msgstr "Décision du client le"
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__customer_decision_by_id
+msgid "Customer Decision By"
+msgstr "Décision du client par"
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__customer_rejection_reason
+msgid "Customer Rejection Reason"
+msgstr "Motif de refus du client"
+
+#. module: dally_portal
+#: model:ir.model,name:dally_portal.model_dally_portal_document
+msgid "DallyTrading Portal Document"
+msgstr "Document portail DallyTrading"
+
+#. module: dally_portal
+#: model:ir.model,name:dally_portal.model_dally_quote_request
+msgid "DallyTrading Quote Request"
+msgstr "Demande de devis DallyTrading"
+
+#. module: dally_portal
+#: model:ir.model,name:dally_portal.model_dally_shipment_package
+msgid "DallyTrading Shipment Package"
+msgstr "Colis d’expédition DallyTrading"
+
+#. module: dally_portal
+#: model:ir.model,name:dally_portal.model_dally_sourcing_supplier
+msgid "DallyTrading Sourcing Candidate Supplier"
+msgstr "Fournisseur candidat Sourcing DallyTrading"
+
+#. module: dally_portal
+#: model:ir.model,name:dally_portal.model_dally_sourcing_proposal
+msgid "DallyTrading Sourcing Customer Proposal"
+msgstr "Proposition client Sourcing DallyTrading"
+
+#. module: dally_portal
+#: model:ir.model,name:dally_portal.model_dally_sourcing_request
+msgid "DallyTrading Sourcing Request"
+msgstr "Demande Sourcing DallyTrading"
+
+#. module: dally_portal
+#: model:ir.model,name:dally_portal.model_dally_sourcing_offer
+msgid "DallyTrading Sourcing Supplier Offer"
+msgstr "Offre fournisseur Sourcing DallyTrading"
+
+#. module: dally_portal
+#: model:ir.model,name:dally_portal.model_dally_trade_commission
+msgid "DallyTrading Trade Commission"
+msgstr "Commission commerciale DallyTrading"
+
+#. module: dally_portal
+#: model:ir.model,name:dally_portal.model_dally_trade_cost
+msgid "DallyTrading Trade Cost"
+msgstr "Coût commercial DallyTrading"
+
+#. module: dally_portal
+#: model:ir.model,name:dally_portal.model_dally_trade_opportunity
+msgid "DallyTrading Trade Opportunity"
+msgstr "Opportunité commerciale DallyTrading"
+
+#. module: dally_portal
+#: model:ir.model,name:dally_portal.model_dally_freight_vehicle_cargo
+msgid "DallyTrading Vehicle Cargo"
+msgstr "Marchandise véhicule DallyTrading"
+
+#. modules: dally_freight, dally_portal
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__quote_request_id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__quote_request_id
+msgid "Demande de devis"
+msgstr "Demande de devis"
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__sourcing_request_id
+msgid "Demande de sourcing"
+msgstr "Demande de sourcing"
+
+#. module: dally_portal
+#: model:ir.model.fields.selection,name:dally_portal.selection__dally_portal_document__document_type__quotation
+msgid "Devis / proposition"
+msgstr "Devis / proposition"
+
+#. modules: dally_api, dally_crm, dally_freight_billing, dally_freight_bridge,
+#. dally_freight_dashboard, dally_freight_notifications,
+#. dally_freight_routing, dally_portal, dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__display_name
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__display_name
+#: model:ir.model.fields,field_description:dally_crm.field_crm_lead__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_move__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_api_key__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_sync_service__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order_line__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_dally_freight_lockdown_guard__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_freight_documents__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_mail_template__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_shipment_freight_booking__display_name
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__display_name
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__display_name
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_account_incoterms__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_dally_freight_routing_mixin__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_freight_port__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country_state__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_freight_vehicle_cargo__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_projection_mixin__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_shipment_package__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_offer__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_proposal__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_request__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_supplier__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_commission__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_cost__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_opportunity__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_res_partner__display_name
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__display_name
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__display_name
+msgid "Display Name"
+msgstr "Nom d'affichage"
+
+#. modules: dally_freight_bridge, dally_portal
+#. odoo-python
+#: code:addons/dally_freight_bridge/models/document_publication.py:0
+#: model:ir.model.fields.selection,name:dally_portal.selection__dally_portal_document__document_type__transport
+msgid "Document de transport"
+msgstr "Document de transport"
+
+#. module: dally_portal
+#: model:ir.model.fields.selection,name:dally_portal.selection__dally_portal_document__document_type__customs
+msgid "Document douanier"
+msgstr "Document douanier"
+
+#. module: dally_portal
+#: model:ir.model.fields,help:dally_portal.field_dally_portal_document__commercial_partner_id
+msgid ""
+"Déduit de l'objet métier, jamais saisi. Stocké parce qu'une record rule doit"
+" pouvoir filtrer dessus en SQL."
+msgstr "Déduit de l'objet métier, jamais saisi. Stocké parce qu'une record rule doit pouvoir filtrer dessus en SQL."
+
+#. module: dally_portal
+#: model:ir.model.fields,help:dally_portal.field_dally_quote_request__customer_decision_by_id
+msgid "Exact portal user who accepted or rejected the quotation."
+msgstr "Utilisateur portail exact ayant accepté ou refusé le devis."
+
+#. modules: dally_freight, dally_freight_notifications, dally_portal
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__shipment_id
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__shipment_id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__shipment_id
+#: model_terms:ir.ui.view,arch_db:dally_freight_notifications.dally_shipment_notification_view_search
+msgid "Expédition"
+msgstr "Expédition"
+
+#. module: dally_portal
+#: model:ir.model.fields.selection,name:dally_portal.selection__dally_portal_document__document_type__invoice
+msgid "Facture"
+msgstr "Facture"
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__attachment_id
+msgid "Fichier"
+msgstr "Fichier"
+
+#. modules: dally_api, dally_crm, dally_freight_billing, dally_freight_bridge,
+#. dally_freight_dashboard, dally_freight_notifications,
+#. dally_freight_routing, dally_portal, dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__id
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__id
+#: model:ir.model.fields,field_description:dally_crm.field_crm_lead__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_move__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_api_key__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_sync_service__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order_line__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_dally_freight_lockdown_guard__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_freight_documents__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_mail_template__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_shipment_freight_booking__id
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__id
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__id
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_account_incoterms__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_dally_freight_routing_mixin__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_freight_port__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country_state__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_freight_vehicle_cargo__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_projection_mixin__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_shipment_package__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_offer__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_proposal__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_request__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_supplier__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_commission__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_cost__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_opportunity__id
+#: model:ir.model.fields,field_description:dally_portal.field_res_partner__id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__id
+msgid "ID"
+msgstr "IDENTIFIANT"
+
+#. module: dally_portal
+#: model:ir.model.fields,help:dally_portal.field_dally_portal_document__attachment_id
+msgid ""
+"La pièce jointe réelle. Le portail n'y accède jamais directement : le "
+"téléchargement passe par un contrôleur qui refait le contrôle."
+msgstr "La pièce jointe réelle. Le portail n'y accède jamais directement : le téléchargement passe par un contrôleur qui refait le contrôle."
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__write_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__write_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__write_uid
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__write_uid
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__write_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__write_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__write_uid
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__write_uid
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__write_uid
+msgid "Last Updated by"
+msgstr "Dernière mise à jour par"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__write_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__write_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__write_date
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__write_date
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__write_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__write_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__write_date
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__write_date
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__write_date
+msgid "Last Updated on"
+msgstr "Dernière mise à jour le"
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_portal_document.py:0
+msgid ""
+"Le document « %s » ne peut pas être publié : son dossier métier ne désigne "
+"aucun client. Renseignez le client sur le dossier d'abord."
+msgstr "Le document « %s » ne peut pas être publié : son dossier métier ne désigne aucun client. Renseignez le client sur le dossier d'abord."
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__name
+msgid "Libellé"
+msgstr "Libellé"
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/res_partner.py:0
+msgid "Name cannot be empty."
+msgstr "Le nom ne peut pas être vide."
+
+#. module: dally_portal
+#: model:ir.model.fields,help:dally_portal.field_dally_quote_request__customer_rejection_reason
+msgid "Optional plain-text reason. It is not part of the portal projection."
+msgstr "Motif facultatif en texte brut. Il ne fait pas partie de la projection portail."
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__trade_opportunity_id
+msgid "Opération de trading"
+msgstr "Opération de trading"
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/res_partner.py:0
+msgid "Phone number contains unsupported characters."
+msgstr "Le numéro de téléphone contient des caractères non pris en charge."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/res_partner.py:0
+msgid "Portal partner writes are restricted."
+msgstr "Les écritures de partenaires depuis le portail sont restreintes."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/res_partner.py:0
+msgid "Portal profile update denied."
+msgstr "Mise à jour du profil portail refusée."
+
+#. module: dally_portal
+#: model:ir.model,name:dally_portal.model_dally_portal_projection_mixin
+msgid "Portal projection helpers"
+msgstr "Assistants de projection portail"
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_quote_request.py:0
+msgid "Portal quote decision denied."
+msgstr "Décision portail sur le devis refusée."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_quote_request.py:0
+msgid "Portal quote writes are restricted."
+msgstr "Les écritures de devis depuis le portail sont restreintes."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/res_partner.py:0
+msgid "Profile field contains unsupported characters."
+msgstr "Le champ de profil contient des caractères non pris en charge."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/res_partner.py:0
+msgid "Profile field is too long."
+msgstr "Le champ de profil est trop long."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/res_partner.py:0
+msgid "Profile fields must be text."
+msgstr "Les champs de profil doivent être du texte."
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__sourcing_proposal_id
+msgid "Proposition de sourcing"
+msgstr "Proposition de sourcing"
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__published_to_portal
+msgid "Publié au client"
+msgstr "Publié au client"
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__published_on
+msgid "Publié le"
+msgstr "Publié le"
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__published_by_id
+msgid "Publié par"
+msgstr "Publié par"
+
+#. module: dally_portal
+#: model_terms:ir.ui.view,arch_db:dally_portal.dally_quote_request_view_form_portal_decision
+msgid "Rejection reason"
+msgstr "Motif de refus"
+
+#. module: dally_portal
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__company_id
+msgid "Société"
+msgstr "Société"
+
+#. module: dally_portal
+#: model:ir.model.fields,help:dally_portal.field_dally_portal_document__published_to_portal
+msgid ""
+"Tant que ce drapeau est faux, le document n'existe pas pour le client. La "
+"publication est un geste explicite du personnel, jamais une conséquence du "
+"dépôt d'un fichier."
+msgstr "Tant que ce drapeau est faux, le document n'existe pas pour le client. La publication est un geste explicite du personnel, jamais une conséquence du dépôt d'un fichier."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_quote_request.py:0
+msgid "The rejection reason contains unsupported characters."
+msgstr "Le motif de refus contient des caractères non pris en charge."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_quote_request.py:0
+msgid "The rejection reason is too long."
+msgstr "Le motif de refus est trop long."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_quote_request.py:0
+msgid "The rejection reason must be text."
+msgstr "Le motif de refus doit être du texte."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_quote_request.py:0
+msgid "This quotation already has a final decision."
+msgstr "Ce devis a déjà une décision définitive."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_quote_request.py:0
+msgid "This quotation is not available for a customer decision."
+msgstr "Ce devis n’est pas disponible pour une décision client."
+
+#. modules: dally_freight, dally_portal
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__package_type
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__document_type
+msgid "Type"
+msgstr "Type"
+
+#. module: dally_portal
+#: model:ir.model.fields,help:dally_portal.field_dally_quote_request__customer_decision_at
+msgid "UTC timestamp of the decision made from the authenticated portal."
+msgstr "Horodatage UTC de la décision prise depuis le portail authentifié."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_portal_document.py:0
+msgid ""
+"Un document portail doit être rattaché à exactement un dossier métier ; celui-ci en a %(count)s (%(links)s).\n"
+"\n"
+"Les rattachements possibles sont limités à : demande de devis, demande de sourcing, proposition de sourcing, opération de trading, expédition. Un document d'offre fournisseur, de coût ou de commission n'a volontairement aucun champ où être rattaché."
+msgstr "Un document portail doit être rattaché à exactement un dossier métier ; celui-ci en a %(count)s (%(links)s).\n\nLes rattachements possibles sont limités à : demande de devis, demande de sourcing, proposition de sourcing, opération de trading, expédition. Un document d'offre fournisseur, de coût ou de commission n'a volontairement aucun champ où être rattaché."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/res_partner.py:0
+msgid "Unknown profile field."
+msgstr "Champ de profil inconnu."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_quote_request.py:0
+msgid "Unknown quote decision."
+msgstr "Décision de devis inconnue."
+
+#. module: dally_portal
+#. odoo-python
+#: code:addons/dally_portal/models/dally_portal_document.py:0
+msgid "aucun"
+msgstr "aucun"

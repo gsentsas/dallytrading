@@ -1,0 +1,962 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* dally_api
+# 	* dally_portal
+# 	* dally_freight_bridge
+# 	* dally_freight_routing
+# 	* dally_tracking
+# 	* dally_freight_billing
+# 	* dally_freight
+# 	* dally_freight_data
+# 	* dally_freight_dashboard
+# 	* dally_freight_notifications
+# 	* dally_crm
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 19.0-20260810\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-24 09:50+0000\n"
+"PO-Revision-Date: 2026-08-24 09:50+0000\n"
+"Last-Translator: \n"
+"Language: fr_FR\n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+msgid ""
+"<strong>Available scopes:</strong>\n"
+"                        <code>leads:write</code>, <code>quotes:write</code>,\n"
+"                        <code>sourcing:write</code>, <code>trading:write</code>,\n"
+"                        <code>shipments:read</code>, <code>tracking:read</code>,\n"
+"                        <code>customers:read</code>.\n"
+"                        Grant only what the consumer actually calls: a key restricted to\n"
+"                        <code>leads:write</code> is useless to an attacker who wants to\n"
+"                        read customer data."
+msgstr ""
+"<strong>Portées disponibles :</strong>\n"
+"                        <code>leads:write</code>, <code>quotes:write</code>,\n"
+"                        <code>sourcing:write</code>, <code>trading:write</code>,\n"
+"                        <code>shipments:read</code>, <code>tracking:read</code>,\n"
+"                        <code>customers:read</code>.\n"
+"                        N’accordez que les portées réellement utilisées par le client : une clé limitée à\n"
+"                        <code>leads:write</code> est inutile à un attaquant qui cherche à\n"
+"                        lire les données client."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "A JSON body is required."
+msgstr "Un corps JSON est requis."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/quotes.py:0
+msgid "A groupage request requires a transport mode: sea or air."
+msgstr "Une demande de groupage requiert un mode de transport : maritime ou aérien."
+
+#. module: dally_api
+#: model:ir.model.constraint,message:dally_api.constraint_dally_api_key_dally_api_key_prefix_uniq
+msgid "A key with this prefix already exists."
+msgstr "Une clé avec ce préfixe existe déjà."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/quotes.py:0
+msgid "A vehicle transport request requires: %s."
+msgstr "Une demande de transport de véhicule requiert : %s."
+
+#. module: dally_api
+#: model:ir.ui.menu,name:dally_api.menu_dally_api_root
+msgid "API"
+msgstr "API"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__api_key_id
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__api_key_id
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_search
+msgid "API Key"
+msgstr "Clé API"
+
+#. module: dally_api
+#: model:ir.actions.act_window,name:dally_api.dally_api_key_action
+#: model:ir.ui.menu,name:dally_api.menu_dally_api_key
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_list
+msgid "API Keys"
+msgstr "Clés API"
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_form
+msgid "API Request"
+msgstr "Requête API"
+
+#. module: dally_api
+#: model:ir.actions.act_window,name:dally_api.dally_api_request_action
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_list
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_search
+msgid "API Requests"
+msgstr "Requêtes API"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__user_id
+msgid "Acting User"
+msgstr "Utilisateur exécutant"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_portal
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__active
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__active
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__active
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__active
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__active
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__active
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__active
+msgid "Active"
+msgstr "Actif"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__allowed_ips
+msgid "Allowed IPs"
+msgstr "Adresses IP autorisées"
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "An internal error occurred. Quote reference %s to support."
+msgstr "Une erreur interne est survenue. Communiquez la référence de devis %s au support."
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_request__request_uuid
+msgid "Client-generated idempotency key."
+msgstr "Clé d’idempotence générée par le client."
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_key__allowed_ips
+msgid ""
+"Comma-separated list of source IPs. Empty allows any source.\n"
+"\n"
+"ATTENTION — l'adresse observée n'est PAS 127.0.0.1 lorsque Odoo tourne en conteneur, quoi qu'en dise l'intuition. Mesuré sur l'instance :\n"
+"  • appel direct sur la loopback → passerelle Docker (172.22.0.1)\n"
+"  • appel via le reverse proxy   → IP publique du serveur, transmise par X-Forwarded-For\n"
+"\n"
+"Le défaut était 127.0.0.1, valeur correcte sur un hôte nu et jamais atteinte ici : toutes les clés étaient rejetées en « invalid_api_key ». Il n'y a plus de défaut — une valeur à renseigner sciemment vaut mieux qu'un défaut plausible et faux.\n"
+"\n"
+"Relever la valeur réelle : journal Odoo lors d'un appel authentifié."
+msgstr ""
+"Liste d’adresses IP sources séparées par des virgules. Une valeur vide autorise toute source.\n"
+"\n"
+"ATTENTION — l’adresse observée n’est PAS 127.0.0.1 lorsque Odoo s’exécute dans un conteneur, contrairement à l’intuition. Mesuré sur l’instance :\n"
+"  • appel direct sur la boucle locale → passerelle Docker (172.22.0.1)\n"
+"  • appel via le proxy inverse → IP publique du serveur, transmise par X-Forwarded-For\n"
+"\n"
+"L’ancienne valeur par défaut, 127.0.0.1, n’est jamais atteinte ici : toutes les clés étaient rejetées avec « invalid_api_key ». Il n’y a plus de valeur par défaut : une valeur définie consciemment vaut mieux qu’une valeur plausible mais fausse.\n"
+"\n"
+"Relevez la valeur réelle dans le journal Odoo lors d’un appel authentifié."
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_key__scopes
+msgid ""
+"Comma-separated permissions, e.g. 'leads:write,tracking:read'. Grant only "
+"what the consumer actually calls."
+msgstr "Autorisations séparées par des virgules, par exemple « leads:write,tracking:read ». N’accordez que celles réellement utilisées par le client."
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+msgid "Copy this key now"
+msgstr "Copier cette clé maintenant"
+
+#. module: dally_api
+#: model_terms:ir.actions.act_window,help:dally_api.dally_api_key_action
+msgid "Create an API key"
+msgstr "Créer une clé API"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__res_model
+msgid "Created Model"
+msgstr "Modèle créé"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__res_id
+msgid "Created Record"
+msgstr "Enregistrement créé"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__create_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__create_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__create_uid
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__create_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__create_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__create_uid
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__create_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__create_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__create_uid
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__create_uid
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__create_uid
+msgid "Created by"
+msgstr "Créé par"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__create_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__create_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__create_date
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__create_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__create_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__create_date
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__create_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__create_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__create_date
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__create_date
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__create_date
+msgid "Created on"
+msgstr "Créé le"
+
+#. module: dally_api
+#: model:ir.model,name:dally_api.model_dally_api_key_usage
+msgid "DallyTrading API Key Usage Event"
+msgstr "Événement d’utilisation de clé API DallyTrading"
+
+#. module: dally_api
+#: model:ir.model,name:dally_api.model_dally_api_request
+msgid "DallyTrading API Request Log"
+msgstr "Journal des requêtes API DallyTrading"
+
+#. module: dally_api
+#: model:ir.actions.server,name:dally_api.cron_dally_api_key_usage_aggregate_ir_actions_server
+msgid "DallyTrading — agréger la télémétrie des clés d'API"
+msgstr "DallyTrading — agréger la télémétrie des clés d'API"
+
+#. modules: dally_api, dally_freight_billing, dally_tracking
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__event_date
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_search
+#: model_terms:ir.ui.view,arch_db:dally_freight_billing.report_freight_invoice
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_search
+msgid "Date"
+msgstr "Date"
+
+#. modules: dally_api, dally_crm, dally_freight_billing, dally_freight_bridge,
+#. dally_freight_dashboard, dally_freight_notifications,
+#. dally_freight_routing, dally_portal, dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__display_name
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__display_name
+#: model:ir.model.fields,field_description:dally_crm.field_crm_lead__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_move__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_api_key__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_sync_service__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order__display_name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order_line__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_dally_freight_lockdown_guard__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_freight_documents__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_mail_template__display_name
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_shipment_freight_booking__display_name
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__display_name
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__display_name
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_account_incoterms__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_dally_freight_routing_mixin__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_freight_port__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country__display_name
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country_state__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_freight_vehicle_cargo__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_projection_mixin__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_shipment_package__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_offer__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_proposal__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_request__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_supplier__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_commission__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_cost__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_opportunity__display_name
+#: model:ir.model.fields,field_description:dally_portal.field_res_partner__display_name
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__display_name
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__display_name
+msgid "Display Name"
+msgstr "Nom d'affichage"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__endpoint
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_search
+msgid "Endpoint"
+msgstr "Point de terminaison"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__error_message
+msgid "Error"
+msgstr "Erreur"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__expires_on
+msgid "Expires On"
+msgstr "Expire le"
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_search
+msgid "Failed (5xx)"
+msgstr "Échouées (5xx)"
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/leads.py:0
+#: code:addons/dally_api/controllers/quotes.py:0
+#: code:addons/dally_api/controllers/sourcing.py:0
+#: code:addons/dally_api/controllers/trade.py:0
+msgid "Field '%(field)s' exceeds %(limit)s characters."
+msgstr "Le champ « %(field)s » dépasse %(limit)s caractères."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/quotes.py:0
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "Field '%s' cannot be negative."
+msgstr "Le champ « %s » ne peut pas être négatif."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/quotes.py:0
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "Field '%s' exceeds the accepted maximum."
+msgstr "Le champ « %s » dépasse le maximum accepté."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/trade.py:0
+msgid "Field '%s' is internal and cannot be set through this endpoint."
+msgstr "Le champ « %s » est interne et ne peut pas être défini par ce point de terminaison."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "Field '%s' must be a date in YYYY-MM-DD format."
+msgstr "Le champ « %s » doit être une date au format AAAA-MM-JJ."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/quotes.py:0
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "Field '%s' must be a number."
+msgstr "Le champ « %s » doit être un nombre."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/leads.py:0
+#: code:addons/dally_api/controllers/quotes.py:0
+#: code:addons/dally_api/controllers/sourcing.py:0
+#: code:addons/dally_api/controllers/trade.py:0
+msgid "Field '%s' must be a string."
+msgstr "Le champ « %s » doit être une chaîne de caractères."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/sourcing.py:0
+#: code:addons/dally_api/controllers/trade.py:0
+msgid "Field '%s' must be an object."
+msgstr "Le champ « %s » doit être un objet."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "Field 'utm' must be an object."
+msgstr "Le champ « utm » doit être un objet."
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_key__key_prefix
+msgid "First characters of the key, kept in clear to identify it in logs."
+msgstr "Premiers caractères de la clé, conservés en clair pour l’identifier dans les journaux."
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__key_to_display
+msgid "Generated Key"
+msgstr "Clé générée"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__status_code
+msgid "HTTP Status"
+msgstr "Statut HTTP"
+
+#. modules: dally_api, dally_crm, dally_freight_billing, dally_freight_bridge,
+#. dally_freight_dashboard, dally_freight_notifications,
+#. dally_freight_routing, dally_portal, dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__id
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__id
+#: model:ir.model.fields,field_description:dally_crm.field_crm_lead__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_move__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_account_payment__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_api_key__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_sync_service__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order__id
+#: model:ir.model.fields,field_description:dally_freight_billing.field_sale_order_line__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_dally_freight_lockdown_guard__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_freight_documents__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_mail_template__id
+#: model:ir.model.fields,field_description:dally_freight_bridge.field_shipment_freight_booking__id
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__id
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__id
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_account_incoterms__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_dally_freight_routing_mixin__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_freight_port__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country__id
+#: model:ir.model.fields,field_description:dally_freight_routing.field_res_country_state__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_freight_vehicle_cargo__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_projection_mixin__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_quote_request__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_shipment_package__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_offer__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_proposal__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_request__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_sourcing_supplier__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_commission__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_cost__id
+#: model:ir.model.fields,field_description:dally_portal.field_dally_trade_opportunity__id
+#: model:ir.model.fields,field_description:dally_portal.field_res_partner__id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment__id
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__id
+msgid "ID"
+msgstr "IDENTIFIANT"
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+msgid "Identification"
+msgstr "Identification"
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "Invalid API key."
+msgstr "Clé API invalide."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/quotes.py:0
+msgid "Invalid value for '%(field)s': '%(value)s'."
+msgstr "Valeur invalide pour « %(field)s » : « %(value)s »."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/quotes.py:0
+msgid "Invalid value for 'vehicle_key_count'."
+msgstr "Valeur invalide pour « vehicle_key_count »."
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+msgid ""
+"It is displayed only this once. It cannot be recovered\n"
+"                            afterwards — only regenerated, which invalidates this one."
+msgstr ""
+"Elle n’est affichée qu’une seule fois. Elle ne pourra pas être récupérée\n"
+"                            ensuite ; seule une régénération est possible, ce qui invalidera celle-ci."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/models/dally_api_key.py:0
+msgid ""
+"Key '%(name)s' has request history and cannot be deleted. Deactivate it "
+"instead — that revokes it immediately."
+msgstr "La clé « %(name)s » a un historique de requêtes et ne peut pas être supprimée. Désactivez-la : elle sera révoquée immédiatement."
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__key_hash
+msgid "Key Hash"
+msgstr "Empreinte de la clé"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__write_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__write_uid
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__write_uid
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__write_uid
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__write_uid
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__write_uid
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__write_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__write_uid
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__write_uid
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__write_uid
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__write_uid
+msgid "Last Updated by"
+msgstr "Dernière mise à jour par"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_freight_billing,
+#. dally_freight_dashboard, dally_freight_notifications, dally_portal,
+#. dally_tracking
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__write_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__write_date
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__write_date
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_freight_vehicle_cargo__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__write_date
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment_package__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_expense_allocation__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_cash_transfer__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_collection__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__write_date
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__write_date
+#: model:ir.model.fields,field_description:dally_freight_dashboard.field_dally_freight_dashboard__write_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_freight_state_policy__write_date
+#: model:ir.model.fields,field_description:dally_freight_notifications.field_dally_shipment_notification__write_date
+#: model:ir.model.fields,field_description:dally_portal.field_dally_portal_document__write_date
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__write_date
+msgid "Last Updated on"
+msgstr "Dernière mise à jour le"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__last_used_at
+msgid "Last Used"
+msgstr "Dernière utilisation"
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "Missing required field(s): %s"
+msgstr "Champ(s) obligatoire(s) manquant(s) : %s"
+
+#. modules: dally_api, dally_freight_billing
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_payment_channel__name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_family__name
+#: model:ir.model.fields,field_description:dally_freight_billing.field_dally_freight_tariff_rule__name
+msgid "Name"
+msgstr "Nom"
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_key_usage__delta
+msgid ""
+"Nombre de requêtes représentées par cet événement. Vaut 1 aujourd'hui ; le "
+"champ existe pour qu'un regroupement en mémoire puisse plus tard poser un "
+"seul événement pour N requêtes sans changer le schéma ni l'agrégateur."
+msgstr "Nombre de requêtes représentées par cet événement. Vaut 1 aujourd'hui ; le champ existe pour qu'un regroupement en mémoire puisse plus tard poser un seul événement pour N requêtes sans changer le schéma ni l'agrégateur."
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_key__user_id
+msgid ""
+"Odoo user the API acts as. Its groups bound what the API can do, so ACLs and"
+" record rules still apply — the API never runs as superuser. Use a dedicated"
+" integration user, never a real person's account."
+msgstr "Utilisateur Odoo au nom duquel l’API agit. Ses groupes limitent ce que l’API peut faire ; les ACL et règles d’enregistrement s’appliquent donc toujours. L’API ne s’exécute jamais en superutilisateur. Utilisez un utilisateur d’intégration dédié, jamais le compte d’une personne."
+
+#. module: dally_api
+#: model_terms:ir.actions.act_window,help:dally_api.dally_api_key_action
+msgid ""
+"One key per consumer, so a leak can be revoked without taking every\n"
+"                integration down. The key is shown once, at creation."
+msgstr ""
+"Une clé par client permet de révoquer une fuite sans interrompre toutes les\n"
+"                intégrations. La clé n’est affichée qu’une fois, à sa création."
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_form
+msgid "Open Created Record"
+msgstr "Ouvrir l’enregistrement créé"
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_key__expires_on
+msgid ""
+"Optional. After this date the key is refused. Rotating keys on a schedule "
+"limits the value of a leaked one."
+msgstr "Facultatif. Après cette date, la clé est refusée. La rotation périodique des clés limite l’impact d’une fuite."
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_form
+msgid "Outcome"
+msgstr "Résultat"
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_form
+msgid "Payload"
+msgstr "Charge utile"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__key_prefix
+msgid "Prefix"
+msgstr "Préfixe"
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "Provide a name or a company name."
+msgstr "Indiquez un nom ou une raison sociale."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "Provide at least an email address or a phone number."
+msgstr "Indiquez au moins une adresse e-mail ou un numéro de téléphone."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "Rate limit reached (%(limit)s requests per minute)."
+msgstr "Limite de débit atteinte (%(limit)s requêtes par minute)."
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+msgid "Regenerate Key"
+msgstr "Régénérer la clé"
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+msgid ""
+"Regenerating invalidates the current key immediately."
+"                                      Any consumer still using it will start"
+" receiving 401                                      responses. Continue?"
+msgstr "La régénération invalide immédiatement la clé actuelle. Tout client qui l’utilise encore recevra des réponses 401. Continuer ?"
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_search
+msgid "Rejected (4xx)"
+msgstr "Rejetées (4xx)"
+
+#. modules: dally_api, dally_crm
+#. odoo-python
+#: code:addons/dally_crm/models/crm_lead.py:0
+#: code:addons/dally_crm/models/dally_quote_request.py:0
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_form
+#: model_terms:ir.ui.view,arch_db:dally_crm.crm_lead_view_form_dally
+#: model_terms:ir.ui.view,arch_db:dally_crm.dally_quote_request_view_form
+msgid "Request"
+msgstr "Demande"
+
+#. module: dally_api
+#: model:ir.ui.menu,name:dally_api.menu_dally_api_request
+msgid "Request Log"
+msgstr "Journal des requêtes"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__payload
+msgid "Request Payload"
+msgstr "Charge utile de la requête"
+
+#. modules: dally_api, dally_crm
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__request_uuid
+#: model:ir.model.fields,field_description:dally_crm.field_crm_lead__dally_request_uuid
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__request_uuid
+msgid "Request UUID"
+msgstr "UUID de requête"
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "Request body exceeds the allowed size."
+msgstr "Le corps de la requête dépasse la taille autorisée."
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__request_count
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__delta
+msgid "Requests"
+msgstr "Requêtes"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__response
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_form
+msgid "Response"
+msgstr "Réponse"
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_request__response
+msgid ""
+"Response returned. Replayed verbatim when the same request UUID comes back, "
+"so a retry is indistinguishable from the original call."
+msgstr "Réponse renvoyée. Elle est rejouée à l’identique lorsque le même UUID de requête revient, de sorte qu’une nouvelle tentative est indissociable de l’appel d’origine."
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+msgid "Restrictions"
+msgstr "Restrictions"
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+msgid "Revoked"
+msgstr "Révoquée"
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_key__key_hash
+msgid "SHA-256 of the key. The key itself is never stored."
+msgstr "SHA-256 de la clé. La clé elle-même n’est jamais stockée."
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key__scopes
+msgid "Scopes"
+msgstr "Portées"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_request__source_ip
+msgid "Source IP"
+msgstr "Adresse IP source"
+
+#. modules: dally_api, dally_crm, dally_freight, dally_tracking
+#: model:ir.model.fields,field_description:dally_crm.field_dally_quote_request__state
+#: model:ir.model.fields,field_description:dally_freight.field_dally_shipment__state
+#: model:ir.model.fields,field_description:dally_tracking.field_dally_shipment_event__status
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_search
+#: model_terms:ir.ui.view,arch_db:dally_crm.dally_quote_request_view_search
+#: model_terms:ir.ui.view,arch_db:dally_freight.dally_shipment_view_search
+#: model_terms:ir.ui.view,arch_db:dally_tracking.dally_shipment_event_view_search
+msgid "Status"
+msgstr "Statut"
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+msgid ""
+"Store it in the <code>ODOO_API_KEY</code> variable of the\n"
+"                            website's <code>.env</code> file. Never commit it, and never\n"
+"                            expose it to the browser."
+msgstr ""
+"Stockez-la dans la variable <code>ODOO_API_KEY</code> du fichier <code>.env</code>\n"
+"                            du site web. Ne la validez jamais dans Git et ne l’exposez jamais\n"
+"                            au navigateur."
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_search
+msgid "Successful"
+msgstr "Réussies"
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "The X-API-Key header is required."
+msgstr "L’en-tête X-API-Key est requis."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/leads.py:0
+#: code:addons/dally_api/controllers/quotes.py:0
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "The email address is not valid."
+msgstr "L’adresse e-mail n’est pas valide."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "The quantity must be greater than zero."
+msgstr "La quantité doit être supérieure à zéro."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "The request body is not valid JSON."
+msgstr "Le corps de la requête n’est pas un JSON valide."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "The request body must be a JSON object."
+msgstr "Le corps de la requête doit être un objet JSON."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid ""
+"The required delivery date cannot precede the date you asked for an answer."
+msgstr "La date de livraison souhaitée ne peut pas précéder la date de demande de réponse."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/quotes.py:0
+msgid "The service '%(service)s' requires: %(fields)s."
+msgstr "Le service « %(service)s » requiert : %(fields)s."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/quotes.py:0
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "The service '%s' is not currently offered."
+msgstr "Le service « %s » n’est pas proposé actuellement."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/trade.py:0
+msgid "The trade module is not available on this instance."
+msgstr "Le module de commerce n’est pas disponible sur cette instance."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "This key does not carry the '%s' scope."
+msgstr "Cette clé ne possède pas la portée « %s »."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "This key has no active integration user."
+msgstr "Cette clé n’a aucun utilisateur d’intégration actif."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "This key is not allowed to perform this operation."
+msgstr "Cette clé n’est pas autorisée à effectuer cette opération."
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_form
+msgid ""
+"This log contains data submitted by customers. It is restricted to\n"
+"                        administrators and managers, and never records API keys."
+msgstr ""
+"Ce journal contient des données soumises par les clients. Il est réservé\n"
+"                        aux administrateurs et responsables, et n’enregistre jamais les clés API."
+
+#. module: dally_api
+#: model:ir.model.constraint,message:dally_api.constraint_dally_api_request_dally_api_request_uuid_endpoint_uniq
+msgid "This request has already been recorded for this endpoint."
+msgstr "Cette requête a déjà été enregistrée pour ce point de terminaison."
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_request__payload
+msgid ""
+"Truncated copy of the request, for diagnosis. Never contains the API key."
+msgstr "Copie tronquée de la requête à des fins de diagnostic. Elle ne contient jamais la clé API."
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_key__active
+msgid ""
+"Uncheck to revoke immediately. Revoking is preferred over deleting: the "
+"request log keeps referring to the key."
+msgstr "Décochez pour révoquer immédiatement. La révocation est préférable à la suppression : le journal des requêtes continue de référencer la clé."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "Unknown country code '%(code)s' for '%(field)s'."
+msgstr "Code pays « %(code)s » inconnu pour « %(field)s »."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/trade.py:0
+msgid "Unknown country code '%(code)s' for field '%(field)s'."
+msgstr "Code pays « %(code)s » inconnu pour le champ « %(field)s »."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "Unknown currency '%s'."
+msgstr "Devise « %s » inconnue."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/trade.py:0
+msgid "Unknown operation type '%(value)s'. Accepted: %(accepted)s."
+msgstr "Type d’opération « %(value)s » inconnu. Valeurs acceptées : %(accepted)s."
+
+#. modules: dally_api, dally_freight_billing
+#. odoo-python
+#: code:addons/dally_api/models/dally_api_key.py:0
+#: code:addons/dally_freight_billing/models/api_scope.py:0
+msgid "Unknown scope '%(scope)s'. Available scopes: %(available)s"
+msgstr "Portée « %(scope)s » inconnue. Portées disponibles : %(available)s"
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/quotes.py:0
+#: code:addons/dally_api/controllers/sourcing.py:0
+msgid "Unknown service '%s'."
+msgstr "Service « %s » inconnu."
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+msgid "Usage"
+msgstr "Utilisation"
+
+#. module: dally_api
+#: model:ir.model.fields,field_description:dally_api.field_dally_api_key_usage__used_at
+msgid "Used At"
+msgstr "Utilisée le"
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_key__key_to_display
+msgid ""
+"Visible only immediately after generation. Copy it now: it cannot be "
+"recovered afterwards, only regenerated."
+msgstr "Visible uniquement juste après la génération. Copiez-la maintenant : elle ne pourra ensuite qu’être régénérée."
+
+#. module: dally_api
+#: model:ir.model.fields,help:dally_api.field_dally_api_key__name
+msgid ""
+"What uses this key, e.g. 'Next.js production'. One key per consumer, so a "
+"leak can be revoked without taking everything else down."
+msgstr "Ce qui utilise cette clé, par exemple « production Next.js ». Une clé par client permet de révoquer une fuite sans interrompre les autres intégrations."
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_request_view_list
+msgid "When"
+msgstr "Date"
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+msgid "e.g. Next.js production"
+msgstr "par ex. production Next.js"
+
+#. module: dally_api
+#: model_terms:ir.ui.view,arch_db:dally_api.dally_api_key_view_form
+msgid "leads:write,tracking:read"
+msgstr "leads:write,tracking:read"
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "request_uuid is required."
+msgstr "request_uuid est requis."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/controllers/main.py:0
+msgid "request_uuid must be a valid UUID."
+msgstr "request_uuid doit être un UUID valide."
+
+#. module: dally_api
+#. odoo-python
+#: code:addons/dally_api/models/dally_api_request.py:0
+msgid "… [truncated]"
+msgstr "… [truncated]"

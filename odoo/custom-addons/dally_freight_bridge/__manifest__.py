@@ -24,7 +24,7 @@ Le portail client passe exclusivement par les projections de `dally_portal`.
     "author": "DallyTrading",
     "website": "https://dallytrading.com",
     "category": "Inventory/Delivery",
-    "version": "19.0.1.0.0",
+    "version": "19.0.1.0.1",
     "license": "LGPL-3",
     # tk_freight est un module tiers sous licence OPL-1. Il n'est pas versionné
     # dans ce dépôt : ce module ne s'installe que là où la copie licenciée est
@@ -32,6 +32,8 @@ Le portail client passe exclusivement par les projections de `dally_portal`.
     "depends": ["base", "mail", "tk_freight", "dally_crm", "dally_freight", "dally_tracking", "dally_portal"],
     "data": [
         "security/tk_freight_portal_lockdown.xml",
+        "data/tk_freight_fr_menu_overlay.xml",
+        "data/tk_freight_fr_view_overlay.xml",
     ],
     "post_init_hook": "post_init_hook",
     "installable": True,

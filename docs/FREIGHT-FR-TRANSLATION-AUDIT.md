@@ -75,10 +75,40 @@ ACL portail, neutralise les routes fournisseur et le garde-fou contrôle ces
 invariants. Les e-mails directs fournisseur sont également supprimés par le
 bridge.
 
-Conséquence : aucune surcharge fournisseur ne sera appliquée tant qu'un texte
-précisément visible dans un écran Dally n'est pas démontré. Si cela devient
-nécessaire, elle devra être portée par un module Dally, sans modifier
-`tk_freight`, ses ACL ni ses routes, et validée avec le test de confinement.
+Conséquence : les menus et quatorze vues fournisseur effectivement visibles ont
+été surchargés dans `dally_freight_bridge`, en contexte `fr_FR` uniquement.
+Cette surcouche ne modifie ni `tk_freight`, ni son catalogue, ni ses ACL, ni ses
+routes. Elle est réappliquée à chaque mise à jour du bridge et couverte par un
+test de non-régression, en plus du test de confinement.
+
+## Résultat de l'implémentation — 24 août 2026
+
+L'export Odoo canonique contient **1 203 msgid distincts**. Une même chaîne
+peut appartenir à plusieurs modules ; les onze catalogues comptent donc
+**1 424 occurrences de module**. Tous les `msgstr` sont renseignés : une
+chaîne source déjà française ou un identifiant technique conserve exactement sa
+valeur source ; une chaîne visible anglaise reçoit le libellé français revu.
+
+| Module | Occurrences | `msgstr` renseignés | Vides | Anglais métier restant |
+|---|---:|---:|---:|---:|
+| `dally_api` | 119 | 119 | 0 | 0 |
+| `dally_crm` | 177 | 177 | 0 | 0 |
+| `dally_freight` | 248 | 248 | 0 | 0 |
+| `dally_freight_billing` | 355 | 355 | 0 | 0 |
+| `dally_freight_bridge` | 31 | 31 | 0 | 0 |
+| `dally_freight_dashboard` | 42 | 42 | 0 | 0 |
+| `dally_freight_data` | 135 | 135 | 0 | 0 |
+| `dally_freight_notifications` | 110 | 110 | 0 | 0 |
+| `dally_freight_routing` | 46 | 46 | 0 | 0 |
+| `dally_portal` | 72 | 72 | 0 | 0 |
+| `dally_tracking` | 89 | 89 | 0 | 0 |
+| **Total** | **1 424** | **1 424** | **0** | **0** |
+
+Les seules chaînes identiques à la source sont des identifiants, scopes,
+chemins, expressions de nom de fichier, acronymes, noms propres ou une source
+déjà française. Elles n'exposent aucun libellé métier anglais. Les contrôles
+`msgfmt --check --check-format`, chargement Odoo `fr_FR`, contrôle des vues,
+tests applicatifs et confinement Freight sont exigés avant livraison.
 
 ## Plan de correction contrôlé
 

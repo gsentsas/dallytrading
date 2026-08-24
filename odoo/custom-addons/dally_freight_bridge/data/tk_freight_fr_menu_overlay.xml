@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Dally overlay: only fr_FR values of vendor translated fields. -->
+    <data noupdate="0">
+        <record id="tk_freight.freight_root" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Gestion du fret</field></record>
+        <record id="tk_freight.dasboard_id" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Tableau de bord</field></record>
+        <record id="tk_freight.menu_shipment_quot" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Cotations</field></record>
+        <record id="tk_freight.freight_house_freight_booking" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Réservations</field></record>
+        <record id="tk_freight.menu_freight_shipment" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Expéditions</field></record>
+        <record id="tk_freight.freight_all_operation" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Toutes les expéditions</field></record>
+        <record id="tk_freight.freight_air_operation" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Aérien</field></record>
+        <record id="tk_freight.freight_ocean_operation" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Maritime</field></record>
+        <record id="tk_freight.freight_land_operation" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Terrestre</field></record>
+        <record id="tk_freight.menu_freight_package_id" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Colis</field></record>
+        <record id="tk_freight.menu_freight_invoicing" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Facturation</field></record>
+        <record id="tk_freight.menu_policy_company" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Compagnie d’assurance</field></record>
+        <record id="tk_freight.menu_freight_archive" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Archives</field></record>
+        <record id="tk_freight.menu_consignee_customer" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Clients</field></record>
+        <record id="tk_freight.menu_shipper" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Expéditeurs</field></record>
+        <record id="tk_freight.menu_consignee" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Destinataires</field></record>
+        <record id="tk_freight.menu_vendors" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Fournisseurs</field></record>
+        <record id="tk_freight.menu_agent" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Agents</field></record>
+        <record id="tk_freight.menu_partner_vendors" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Fournisseurs</field></record>
+        <record id="tk_freight.menu_partner_notify" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Parties à notifier</field></record>
+        <record id="tk_freight.menu_fleet" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Flotte</field></record>
+        <record id="tk_freight.menu_land" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Terrestre</field></record>
+        <record id="tk_freight.menu_fleet_details" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Véhicules</field></record>
+        <record id="tk_freight.menu_ocean" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Maritime</field></record>
+        <record id="tk_freight.menu_freight_vessel_id" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Navires</field></record>
+        <record id="tk_freight.menu_air" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Aérien</field></record>
+        <record id="tk_freight.menu_freight_airline_id" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Compagnies aériennes</field></record>
+        <record id="tk_freight.menu_services" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Services</field></record>
+        <record id="tk_freight.freight_configuration" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Configuration</field></record>
+        <record id="tk_freight.menu_port_locations" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Ports / emplacements</field></record>
+        <record id="tk_freight.menu_freight_port_id" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Ports / emplacements</field></record>
+        <record id="tk_freight.menu_freight_frequent_route" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Itinéraires fréquents</field></record>
+        <record id="tk_freight.menu_other_details" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Autres paramètres</field></record>
+        <record id="tk_freight.menu_freight_move_type_id" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Types de mouvement</field></record>
+        <record id="tk_freight.menu_freight_document_type_id" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Types de documents</field></record>
+        <record id="tk_freight.menu_freight_incoterms_id" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Incoterms</field></record>
+        <record id="tk_freight.menu_stages_details" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Étapes</field></record>
+        <record id="tk_freight.menu_stages" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Étapes</field></record>
+        <record id="tk_freight.menu_policy_details" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Assurance</field></record>
+        <record id="tk_freight.menu_policy_risk" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Risques assurés</field></record>
+        <record id="tk_freight.menu_shipment_tracking" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Suivi des expéditions</field></record>
+        <record id="tk_freight.menu_shipment_tracking_location" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Lieux de suivi</field></record>
+        <record id="tk_freight.menu_shipment_tracking_activity" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Activités de suivi</field></record>
+        <record id="tk_freight.menu_shipment_tracking_template" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Modèles de suivi</field></record>
+        <record id="tk_freight.menu_freight_statement" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Relevés de règlement</field></record>
+        <record id="tk_freight.menu_freight_invoice_receivable" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Factures clients</field></record>
+        <record id="tk_freight.menu_freight_invoice_payable" model="ir.ui.menu" context="{'lang': 'fr_FR'}"><field name="name">Factures fournisseurs</field></record>
+    </data>
+</odoo>

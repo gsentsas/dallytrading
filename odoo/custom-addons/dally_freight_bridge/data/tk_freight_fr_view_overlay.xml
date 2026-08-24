@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+        <function model="ir.ui.view" name="dally_apply_tk_freight_fr_overlay">
+            <value eval="[]"/>
+        </function>
+    </data>
+</odoo>

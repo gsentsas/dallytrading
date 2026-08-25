@@ -154,7 +154,10 @@ class DallyShipmentEvent(models.Model):
     def create(self, vals_list):
         evenements = super().create(vals_list)
         # Seuls les événements engendrés par une transition mettent en file.
-        evenements.filtered("is_automatic")._dally_enqueue_notification()
+        # Un backfill historique matérialise les faits passés mais ne crée pas
+        # aujourd'hui un courriel « votre colis vient de partir ».
+        if not self.env.context.get("historical_backfill"):
+            evenements.filtered("is_automatic")._dally_enqueue_notification()
         return evenements
 
     def _dally_enqueue_notification(self):

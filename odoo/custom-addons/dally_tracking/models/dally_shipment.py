@@ -235,6 +235,11 @@ class DallyShipment(models.Model):
         """
         super()._apply_state_side_effects(new_state)
 
+        if self.env.context.get("historical_backfill") and not self.env.context.get(
+            "historical_event_date"
+        ):
+            return
+
         publishable = self._dally_public_state_wording()
         for shipment in self:
             if shipment.state == new_state:
@@ -244,7 +249,8 @@ class DallyShipment(models.Model):
             wording = publishable.get(new_state)
             self.env["dally.shipment.event"].create({
                 "shipment_id": shipment.id,
-                "event_date": fields.Datetime.now(),
+                "event_date": self.env.context.get("historical_event_date")
+                or fields.Datetime.now(),
                 "status": new_state,
                 "description": wording or shipment._dally_default_event_wording(new_state),
                 "location": shipment._dally_event_location(new_state),

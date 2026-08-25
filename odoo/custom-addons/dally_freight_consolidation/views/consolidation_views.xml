@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="consolidation_view_list" model="ir.ui.view">
+        <field name="name">dally.freight.consolidation.list</field>
+        <field name="model">dally.freight.consolidation</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'departed'" decoration-muted="state in ('closed','cancelled')">
+                <field name="name"/>
+                <field name="transport_mode"/>
+                <field name="route_summary"/>
+                <field name="collection_open_on"/>
+                <field name="collection_close_on"/>
+                <field name="mawb_number"/>
+                <field name="flight_number"/>
+                <field name="shipment_count"/>
+                <field name="client_package_count"/>
+                <field name="client_weight_kg"/>
+                <field name="master_piece_count"/>
+                <field name="master_gross_weight_kg"/>
+                <field name="manifest_mawb_difference_kg"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="consolidation_view_search" model="ir.ui.view">
+        <field name="name">dally.freight.consolidation.search</field>
+        <field name="model">dally.freight.consolidation</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/><field name="mawb_number"/><field name="flight_number"/>
+                <field name="carrier_name"/><field name="origin_city"/><field name="destination_city"/>
+                <filter name="collecting" string="Collecte ouverte" domain="[('state','=','collecting')]"/>
+                <filter name="ready" string="Prêtes au départ" domain="[('state','=','ready')]"/>
+                <filter name="departed" string="Parties" domain="[('state','=','departed')]"/>
+                <separator/>
+                <filter name="group_state" string="Statut" context="{'group_by':'state'}"/>
+                <filter name="group_mode" string="Mode" context="{'group_by':'transport_mode'}"/>
+                <filter name="group_company" string="Société" context="{'group_by':'company_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="consolidation_view_form" model="ir.ui.view">
+        <field name="name">dally.freight.consolidation.form</field>
+        <field name="model">dally.freight.consolidation</field>
+        <field name="arch" type="xml">
+            <form string="Consolidation">
+                <header>
+                    <button name="action_open_collection" type="object" string="Ouvrir la collecte"
+                            class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_close_collection" type="object" string="Clôturer la collecte"
+                            class="btn-primary" invisible="state != 'collecting'"/>
+                    <button name="action_mark_ready" type="object" string="Prête au départ"
+                            class="btn-primary" invisible="state != 'collection_closed'"/>
+                    <button name="action_record_departure" type="object" string="Enregistrer le départ"
+                            class="btn-primary" invisible="state != 'ready'"/>
+                    <button name="action_mark_arrived" type="object" string="Enregistrer l'arrivée"
+                            class="btn-primary" invisible="state != 'departed'"/>
+                    <button name="action_close" type="object" string="Clôturer"
+                            class="btn-primary" invisible="state != 'arrived'"/>
+                    <button name="action_create_next_departure" type="object" string="Créer le prochain départ"
+                            class="btn-secondary" invisible="state not in ('departed','arrived','closed')"/>
+                    <button name="action_historical_backfill" type="object" string="Prévisualiser le backfill"
+                            groups="dally_core.group_dally_manager"
+                            invisible="name != 'AIR-DSS-CDG-2026-001'"/>
+                    <button name="%(action_consolidation_manifest)d" type="action" string="Imprimer le manifeste"
+                            class="btn-secondary"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,collecting,collection_closed,ready,departed,arrived,closed,cancelled"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_shipments" type="object" class="oe_stat_button" icon="fa-folder-open">
+                            <field name="shipment_count" widget="statinfo" string="Dossiers"/>
+                        </button>
+                        <button name="action_view_packages" type="object" class="oe_stat_button" icon="fa-cubes">
+                            <field name="client_package_count" widget="statinfo" string="Colis"/>
+                        </button>
+                        <button name="action_view_invoices" type="object" class="oe_stat_button" icon="fa-file-text-o">
+                            <field name="invoice_count" widget="statinfo" string="Factures"/>
+                        </button>
+                        <button name="action_view_documents" type="object" class="oe_stat_button" icon="fa-paperclip">
+                            <field name="document_ids" widget="statinfo" string="Documents"/>
+                        </button>
+                        <button name="action_view_events" type="object" class="oe_stat_button" icon="fa-map-marker">
+                            <span class="o_stat_text">Événements</span>
+                        </button>
+                    </div>
+                    <div class="oe_title"><label for="name"/><h1><field name="name"/></h1></div>
+                    <group>
+                        <group><field name="company_id" groups="base.group_multi_company"/><field name="transport_mode"/>
+                            <field name="direction"/><field name="route_summary" readonly="1"/></group>
+                        <group><field name="collection_open_on"/><field name="collection_close_on"/>
+                            <field name="loading_closed_on" readonly="1"/><field name="active" invisible="1"/></group>
+                    </group>
+                    <notebook>
+                        <page string="Général">
+                            <group>
+                                <group string="Origine"><field name="origin_country_id"/><field name="origin_city"/><field name="origin_location"/></group>
+                                <group string="Destination"><field name="destination_country_id"/><field name="destination_city"/><field name="destination_location"/></group>
+                            </group>
+                        </page>
+                        <page string="Dossiers">
+                            <field name="shipment_ids" readonly="1">
+                                <list><field name="external_reference"/><field name="reference"/><field name="partner_id"/>
+                                    <field name="state"/><field name="weight_kg"/><field name="invoice_id"/><field name="payment_control"/></list>
+                            </field>
+                        </page>
+                        <page string="Colis / manifeste">
+                            <field name="line_ids" readonly="state != 'collecting'">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/><field name="shipment_id" readonly="1"/>
+                                    <field name="package_id"/><field name="quantity_loaded"/>
+                                    <field name="weight_loaded" sum="Poids"/><field name="volume_loaded" sum="Volume"/>
+                                </list>
+                            </field>
+                            <group>
+                                <group><field name="shipment_count"/><field name="client_package_count"/>
+                                    <field name="client_weight_kg"/><field name="client_volume_cbm"/></group>
+                                <group><field name="master_piece_count"/><field name="master_gross_weight_kg"/>
+                                    <field name="master_packaging_weight_kg"/><field name="manifest_mawb_difference_kg" readonly="1"/>
+                                    <field name="reconciled_difference_kg" readonly="1"/></group>
+                            </group>
+                            <div class="alert alert-warning" role="alert"
+                                 invisible="manifest_mawb_difference_kg &lt; 0.001 and manifest_mawb_difference_kg &gt; -0.001">
+                                L'écart est affiché sans modifier les poids clients. Utilisez le poids d'emballage maître uniquement pour les palettes, sacs maîtres et conditionnements réels.
+                            </div>
+                        </page>
+                        <page string="Vol / MAWB">
+                            <group>
+                                <group><field name="carrier_name"/><field name="flight_number"/><field name="scheduled_departure"/>
+                                    <field name="actual_departure"/><field name="estimated_arrival"/><field name="actual_arrival"/></group>
+                                <group><field name="mawb_number"/><field name="hawb_reference"/><field name="master_piece_count"/>
+                                    <field name="master_gross_weight_kg"/><field name="master_chargeable_weight_kg"/></group>
+                            </group>
+                            <group><field name="shipper_label"/><field name="consignee_label"/><field name="goods_nature"/></group>
+                        </page>
+                        <page string="Documents"><field name="document_ids" widget="many2many_binary"/></page>
+                        <page string="Contrôle financier" groups="dally_core.group_dally_finance">
+                            <field name="invoice_ids" readonly="1">
+                                <list><field name="name"/><field name="partner_id"/><field name="state"/>
+                                    <field name="payment_state"/><field name="amount_total"/><field name="amount_residual"/></list>
+                            </field>
+                        </page>
+                        <page string="Suivi / historique">
+                            <div class="alert alert-info" role="alert">
+                                Les changements, dérogations et imports historiques sont tracés dans le fil de discussion ci-dessous.
+                            </div>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="consolidation_action" model="ir.actions.act_window">
+        <field name="name">Consolidations</field><field name="res_model">dally.freight.consolidation</field>
+        <field name="view_mode">list,form</field><field name="search_view_id" ref="consolidation_view_search"/>
+    </record>
+</odoo>

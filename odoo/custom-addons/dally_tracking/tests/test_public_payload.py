@@ -11,6 +11,8 @@ import json
 
 from odoo.tests import TransactionCase, tagged
 
+from odoo.addons.dally_freight.tests.common import set_shipment_state
+
 from odoo.addons.dally_tracking.models.dally_shipment import (
     FORBIDDEN_PUBLIC_FIELDS,
     PUBLIC_PAYLOAD_KEYS,
@@ -204,7 +206,7 @@ class TestPublicPayload(TransactionCase):
 
     def test_status_label_is_human_readable(self):
         """The label, not the technical code, is what is displayed."""
-        self.shipment.state = "in_transit"
+        set_shipment_state(self.shipment, "in_transit")
         payload = self.shipment._dally_public_payload()
         self.assertEqual(payload["status"], "in_transit")
         self.assertNotEqual(payload["statusLabel"], "in_transit")

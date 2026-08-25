@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_consolidations" name="Consolidations"
+              parent="tk_freight.freight_root" action="consolidation_action"
+              sequence="4" groups="dally_core.group_dally_readonly"/>
+    <menuitem id="menu_client_packages" name="Colis clients"
+              parent="tk_freight.freight_root" action="client_package_action"
+              sequence="5" groups="dally_core.group_dally_readonly"/>
+
+    <!-- Le modèle fournisseur freight.package est un catalogue de types, pas
+         une liste de colis clients. On clarifie et range son menu sans toucher
+         au code du fournisseur. -->
+    <record id="tk_freight.menu_freight_package_id" model="ir.ui.menu">
+        <field name="name">Types de colis</field>
+        <field name="parent_id" ref="tk_freight.freight_configuration"/>
+        <field name="sequence">1</field>
+    </record>
+</odoo>

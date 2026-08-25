@@ -484,7 +484,11 @@ class TestColisProjetes(ProvisioningCommon):
         self.env["shipment.package.line"].sudo().create({
             "shipment_id": expedition.id, "qty": 3,
             "net_weight": 12.5, "length": 100.0, "width": 80.0, "height": 60.0,
-            "charges": 999.0,
+            # Canari à 8 chiffres : distinctif pour ne pas être confondu avec
+            # un identifiant d'enregistrement du test (les séquences
+            # PostgreSQL ne se réinitialisent pas au rollback, elles montent
+            # avec chaque exécution).
+            "charges": 74747474.0,
         })
         projection._dally_freight_sync_from_tk()
 
@@ -498,7 +502,7 @@ class TestColisProjetes(ProvisioningCommon):
 
         # Contrôle négatif : le montant `charges` du fournisseur ne doit
         # apparaître nulle part dans la projection client.
-        self.assertNotIn("999", repr(colis.read()))
+        self.assertNotIn("74747474", repr(colis.read()))
 
     def test_la_projection_des_colis_est_idempotente(self):
         devis = self._devis("ColisRejeu")

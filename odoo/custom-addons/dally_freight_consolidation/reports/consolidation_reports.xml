@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_consolidation_manifest" model="ir.actions.report">
+        <field name="name">Manifeste de consolidation</field>
+        <field name="model">dally.freight.consolidation</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">dally_freight_consolidation.report_consolidation_manifest</field>
+        <field name="report_file">dally_freight_consolidation.report_consolidation_manifest</field>
+        <field name="print_report_name">'Manifeste - %s' % object.name</field>
+        <field name="binding_model_id" ref="model_dally_freight_consolidation"/>
+        <field name="binding_type">report</field>
+    </record>
+</odoo>

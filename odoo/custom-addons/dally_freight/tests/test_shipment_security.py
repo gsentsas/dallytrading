@@ -65,9 +65,12 @@ class TestShipmentAccessRights(TransactionCase):
             })
 
     def test_logistics_user_can_update_status(self):
+        # Le test vérifie l'ACL, pas la mécanique de transition : on choisit
+        # une transition adjacente autorisée depuis `draft` pour ne pas
+        # interférer avec la garde de workflow (§20).
         shipment = self.shipment.with_user(self.logistics_user)
-        shipment.write({"state": "in_transit"})
-        self.assertEqual(shipment.state, "in_transit")
+        shipment.write({"state": "request_received"})
+        self.assertEqual(shipment.state, "request_received")
 
     def test_logistics_user_cannot_delete(self):
         """Deletion is reserved to managers, even for a draft file."""

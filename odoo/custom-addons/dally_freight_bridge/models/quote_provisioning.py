@@ -82,6 +82,7 @@ from .freight_mapping import (
     transport_from_vehicle_mode,
     mode_from_transport,
     state_from_stage,
+    stage_from_state,
     transport_from_service,
 )
 
@@ -498,8 +499,11 @@ class DallyShipmentProjection(models.Model):
             if etat:
                 valeurs["state"] = etat
 
+            projected_state = valeurs.pop("state", None)
             if valeurs:
                 projection.sudo().write(valeurs)
+            if projected_state and projection.sudo().state != projected_state:
+                projection.sudo()._write_state_from_operational_source(projected_state)
 
             projection._dally_freight_sync_packages(expedition)
             projection._dally_freight_sync_events(expedition)
@@ -521,7 +525,10 @@ class DallyShipmentProjection(models.Model):
             # jamais été prévenu, ce qui est précisément le défaut qu'on
             # corrige.
             if projection.sudo().state == "draft":
-                projection.sudo().write({"state": "request_received"})
+                stage = stage_from_state(projection.env, "request_received")
+                if not stage:
+                    raise UserError(_("L'étape opérationnelle « Demande reçue » est absente."))
+                expedition.sudo().write({"stage_id": stage.id})
 
     def _dally_freight_sync_packages(self, expedition):
         """Projette les colis opérationnels vers les colis client.

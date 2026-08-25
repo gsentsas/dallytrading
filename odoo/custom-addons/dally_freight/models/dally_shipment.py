@@ -46,6 +46,43 @@ SHIPMENT_STATES = [
 #: States that close a file. Reached, nothing further is expected.
 CLOSING_STATES = ("delivered", "cancelled")
 
+# Server-side lifecycle. Context values are caller-controlled over RPC, so the
+# only internal bypass is an unforgeable in-process object passed by private
+# bridge/backfill methods.
+_STATE_BYPASS_TOKEN = object()
+
+ALLOWED_STATE_TRANSITIONS = {
+    "draft": {"request_received", "cancelled"},
+    "request_received": {"awaiting_goods", "goods_received", "cancelled"},
+    "awaiting_goods": {"goods_received", "cancelled"},
+    "goods_received": {"preparing", "cancelled"},
+    "preparing": {"ready", "cancelled"},
+    "ready": {"departed", "cancelled"},
+    "departed": {"in_transit"},
+    "in_transit": {"arrived"},
+    "arrived": {"customs", "available", "out_for_delivery", "delivered"},
+    "customs": {"available", "out_for_delivery", "delivered"},
+    "available": {"out_for_delivery", "delivered"},
+    "out_for_delivery": {"delivered"},
+    "delivered": set(),
+    "cancelled": set(),
+}
+
+PRIMARY_NEXT_STATE = {
+    "draft": "request_received",
+    "request_received": "awaiting_goods",
+    "awaiting_goods": "goods_received",
+    "goods_received": "preparing",
+    "preparing": "ready",
+    "ready": "departed",
+    "departed": "in_transit",
+    "in_transit": "arrived",
+    "arrived": "available",
+    "customs": "available",
+    "available": "out_for_delivery",
+    "out_for_delivery": "delivered",
+}
+
 TRANSPORT_MODES = [
     ("sea", "Sea Freight"),
     ("air", "Air Freight"),
@@ -477,15 +514,86 @@ class DallyShipment(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
-            if vals.get("state") and vals["state"] != "draft":
+            initial_state = vals.get("state", "draft")
+            if (
+                initial_state not in ("draft", "request_received")
+                and self.env.context.get("_dally_state_bypass") is not _STATE_BYPASS_TOKEN
+            ):
+                raise UserError(
+                    _("Une nouvelle expédition doit commencer à « Brouillon » "
+                      "ou « Demande reçue ».")
+                )
+            if initial_state != "draft":
                 vals.setdefault("state_changed_on", fields.Datetime.now())
         return super().create(vals_list)
 
     def write(self, vals):
         if "state" in vals:
+            self._check_state_transition(vals["state"])
             vals["state_changed_on"] = fields.Datetime.now()
             self._apply_state_side_effects(vals["state"])
         return super().write(vals)
+
+    def _check_state_transition(self, new_state):
+        """Reject every non-adjacent state change, including direct RPC writes."""
+        valid = dict(SHIPMENT_STATES)
+        if new_state not in valid:
+            raise UserError(_("Statut inconnu : « %s ».", new_state))
+        if self.env.context.get("_dally_state_bypass") is _STATE_BYPASS_TOKEN:
+            return True
+
+        labels = dict(self._fields["state"]._description_selection(self.env))
+        for shipment in self:
+            if shipment.state == new_state:
+                continue
+            allowed = ALLOWED_STATE_TRANSITIONS.get(shipment.state, set())
+            if new_state not in allowed:
+                next_states = [labels.get(code, code) for code in allowed]
+                path = " puis ".join("« %s »" % label for label in next_states)
+                detail = (
+                    _(" Elle doit d'abord passer par %s.", path)
+                    if path else _(" Aucune transition n'est autorisée depuis cet état.")
+                )
+                reference = shipment.reference
+                if "external_reference" in shipment._fields and shipment.external_reference:
+                    reference = shipment.external_reference
+                raise UserError(
+                    _(
+                        "Transition impossible\n\nLe dossier %(reference)s est "
+                        "actuellement « %(current)s ».%(detail)s",
+                        reference=reference,
+                        current=labels.get(shipment.state, shipment.state),
+                        detail=detail,
+                    )
+                )
+            if new_state == "ready":
+                shipment._check_ready_requirements()
+            elif new_state == "departed":
+                shipment._check_departure_requirements()
+        return True
+
+    def _check_ready_requirements(self):
+        """Extension hook for pricing/consolidation operational readiness."""
+        return True
+
+    def _check_departure_requirements(self):
+        """Extension hook for the final financial/operational gate."""
+        return True
+
+    def _write_state_from_operational_source(self, new_state):
+        """Private bridge entry point; private methods are not RPC-callable."""
+        return self.with_context(_dally_state_bypass=_STATE_BYPASS_TOKEN).write(
+            {"state": new_state}
+        )
+
+    def _write_historical_state(self, new_state):
+        """Private, Manager-only historical migration entry point."""
+        if not self.env.user.has_group("dally_core.group_dally_manager"):
+            raise UserError(_("Seul un Manager peut importer un état historique."))
+        return self.with_context(
+            _dally_state_bypass=_STATE_BYPASS_TOKEN,
+            historical_backfill=True,
+        ).write({"state": new_state})
 
     def _apply_state_side_effects(self, new_state):
         """Fill the obvious dates when a milestone is reached.
@@ -493,7 +601,13 @@ class DallyShipment(models.Model):
         Operators forget to set them, and an empty arrival date on a delivered
         shipment makes reporting wrong. Never overwrite a value already there.
         """
-        today = fields.Date.context_today(self)
+        historical_date = self.env.context.get("historical_event_date")
+        if self.env.context.get("historical_backfill") and not historical_date:
+            return
+        today = (
+            fields.Date.to_date(historical_date)
+            if historical_date else fields.Date.context_today(self)
+        )
         for shipment in self:
             if new_state == "departed" and not shipment.departure_date:
                 shipment.departure_date = today
@@ -531,6 +645,30 @@ class DallyShipment(models.Model):
             raise UserError(_("Unknown status '%s'.", new_state))
         self.write({"state": new_state})
         return True
+
+    def action_next_state(self):
+        """Move each file to its normal next operational step."""
+        for shipment in self:
+            next_state = PRIMARY_NEXT_STATE.get(shipment.state)
+            if not next_state:
+                raise UserError(
+                    _("Aucune étape suivante n'est définie pour le dossier %s.",
+                      shipment.display_name)
+                )
+            shipment.action_set_state(next_state)
+        return True
+
+    def action_set_customs(self):
+        return self.action_set_state("customs")
+
+    def action_set_available(self):
+        return self.action_set_state("available")
+
+    def action_set_out_for_delivery(self):
+        return self.action_set_state("out_for_delivery")
+
+    def action_set_delivered(self):
+        return self.action_set_state("delivered")
 
     def action_cancel(self):
         for shipment in self:

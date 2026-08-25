@@ -3,6 +3,8 @@
 
 from odoo.tests import TransactionCase, tagged
 
+from odoo.addons.dally_freight.tests.common import set_shipment_state
+
 
 @tagged("post_install", "-at_install", "dally")
 class TestPolicyVisibilityRefresh(TransactionCase):
@@ -24,7 +26,9 @@ class TestPolicyVisibilityRefresh(TransactionCase):
             "service_type_id": self.service.id,
             "transport_mode": "sea",
         })
-        shipment.action_set_state(state)
+        # On teste la politique de visibilité, pas la mécanique de transition ;
+        # on utilise donc l'helper de setup qui court-circuite la garde d'état.
+        set_shipment_state(shipment, state)
         return shipment
 
     def test_creating_policy_refreshes_existing_shipment(self):

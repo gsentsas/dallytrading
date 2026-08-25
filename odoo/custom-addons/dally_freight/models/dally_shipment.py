@@ -533,14 +533,8 @@ class DallyShipment(models.Model):
     def create(self, vals_list):
         for vals in vals_list:
             initial_state = vals.get("state", "draft")
-            if (
-                initial_state not in ("draft", "request_received")
-                and self.env.context.get("_dally_state_bypass") is not _STATE_BYPASS_TOKEN
-            ):
-                raise UserError(
-                    _("Une nouvelle expédition doit commencer à « Brouillon » "
-                      "ou « Demande reçue ».")
-                )
+            if initial_state not in dict(SHIPMENT_STATES):
+                raise UserError(_("Statut initial inconnu : « %s ».", initial_state))
             if initial_state != "draft":
                 vals.setdefault("state_changed_on", fields.Datetime.now())
         return super().create(vals_list)

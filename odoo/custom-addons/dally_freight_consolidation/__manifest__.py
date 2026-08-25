@@ -13,7 +13,6 @@
     "data": [
         "security/ir.model.access.csv",
         "security/consolidation_rules.xml",
-        "data/ir_sequence_data.xml",
         "reports/consolidation_reports.xml",
         "reports/consolidation_manifest.xml",
         "views/consolidation_views.xml",

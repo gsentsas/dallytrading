@@ -12,6 +12,9 @@ Portée : mise en service de `dally_freight_consolidation` + résserrement du wo
 
 ```bash
 cd /var/www/vhosts/dallytrading.com/platform
+set -a
+. ./.env
+set +a
 git status --short --branch                  # doit rester sur feat/freight-consolidation-workflow-20260825
 bash infrastructure/scripts/preflight.sh     # santé Docker sans mutation
 docker exec dallytrading-postgres psql -U odoo_dally -d dallytrading -tAc \
@@ -30,6 +33,9 @@ La sauvegarde nocturne existe déjà (§Runbook Backup), mais on en refait une *
 
 ```bash
 cd /var/www/vhosts/dallytrading.com/platform
+set -a
+. ./.env
+set +a
 bash infrastructure/scripts/backup.sh
 ls -1 backups/daily | tail -3
 ```
@@ -137,7 +143,7 @@ docker run --rm -i \
     --test-tags "/dally_freight,/dally_freight_bridge,/dally_freight_billing,/dally_freight_notifications,/dally_tracking,/dally_freight_consolidation"
 ```
 
-Cible attendue : **437 tests, 0 failed, 0 error** (identique à la mesure sur `dallytrading_freight_dev` le 2026-08-25 à 04:42Z). Une divergence non-zéro doit stopper le dry-run.
+Cible attendue : le nombre final de tests est renseigné après la suite complète ; **0 failed, 0 error**. La version Odoo est `19.0-20260810`.
 
 ---
 

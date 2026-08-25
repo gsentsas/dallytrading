@@ -35,6 +35,10 @@ def _route_text(value):
     return re.sub(r"\s+", " ", (value or "").strip().casefold())
 
 
+def _is_airport_code(value):
+    return bool(re.fullmatch(r"[A-Za-z]{3}", (value or "").strip()))
+
+
 def route_endpoint_compatible(consolidation, shipment, prefix):
     """Compare an endpoint without confusing an airport code with its city."""
     country = getattr(consolidation, f"{prefix}_country_id")
@@ -48,7 +52,15 @@ def route_endpoint_compatible(consolidation, shipment, prefix):
     location = _route_text(getattr(consolidation, f"{prefix}_location"))
     shipment_location = _route_text(getattr(shipment, f"{prefix}_location"))
     if city and shipment_city:
-        return city == shipment_city
+        if city != shipment_city:
+            return False
+        # When both locations are actual airport/location codes, the city is
+        # not precise enough: Paris/CDG and Paris/ORY are different routes.
+        if location and shipment_location:
+            same_kind = _is_airport_code(location) == _is_airport_code(shipment_location)
+            if same_kind:
+                return location == shipment_location
+        return True
     if location and shipment_location:
         return location == shipment_location
     return False
@@ -217,7 +229,7 @@ class DallyFreightConsolidation(models.Model):
         self.env.cr.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ["consolidation:" + prefix]
         )
-        existing = self.search([("company_id", "=", vals.get("company_id") or self.env.company.id),
+        existing = self.with_context(active_test=False).search([("company_id", "=", vals.get("company_id") or self.env.company.id),
                                 ("name", "like", prefix + "%")]).mapped("name")
         numbers = [int(name[-3:]) for name in existing if re.match(r"^.*-\d{3}$", name)]
         return "%s%03d" % (prefix, (max(numbers) if numbers else 0) + 1)
@@ -549,6 +561,8 @@ class DallyFreightConsolidationLine(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
+            if not vals.get("consolidation_id") or not vals.get("package_id"):
+                raise ValidationError(_("La consolidation et le colis sont obligatoires."))
             consolidation = self.env["dally.freight.consolidation"].browse(vals["consolidation_id"])
             package = self.env["dally.shipment.package"].browse(vals["package_id"])
             if consolidation.state != "collecting":

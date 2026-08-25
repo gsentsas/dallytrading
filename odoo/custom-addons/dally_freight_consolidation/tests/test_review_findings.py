@@ -230,6 +230,16 @@ class TestOperationalCompatibility(ConsolidationCommon):
         })
         self.assertTrue(line.id)
 
+    def test_meme_ville_aeroports_differents_refuse(self):
+        consolidation = self._consolidation()
+        shipment = self._other_route_shipment(destination_city="Paris", destination_location="ORY", reference="ORY-KO")
+        with self.assertRaises(UserError):
+            self.env["dally.freight.consolidation.line"].create({
+                "consolidation_id": consolidation.id, "package_id": shipment.package_ids.id,
+                "quantity_loaded": 1,
+            })
+
+
 
 @tagged("post_install", "-at_install", "dally_freight")
 class TestConcurrentLineWrite(ConsolidationCommon):
@@ -273,9 +283,15 @@ class TestConcurrentLineWrite(ConsolidationCommon):
             with Registry(dbname).cursor() as cr:
                 env = api.Environment(cr, uid or SUPERUSER_ID, {})
                 try:
+                    other = env["dally.freight.consolidation"].create({
+                        "name": "AIR-DSS-CDG-2026-CONCURRENT-B-%s" % uuid.uuid4().hex[:8],
+                        "transport_mode": "air", "direction": "export",
+                        "origin_city": "Dakar", "origin_location": "DSS",
+                        "destination_city": "Paris", "destination_location": "CDG",
+                        "state": "collecting",
+                    })
                     env["dally.freight.consolidation.line"].create({
-                        "consolidation_id": consolidation_id,
-                        "package_id": package_id,
+                        "consolidation_id": other.id, "package_id": package_id,
                         "quantity_loaded": 1,
                     })
                     cr.commit()

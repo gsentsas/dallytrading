@@ -54,7 +54,8 @@
                             <div class="col-6"><strong>Poids colis clients :</strong> <span t-field="o.client_weight_kg"/> kg<br/>
                                 <strong>Emballage maître :</strong> <span t-field="o.master_packaging_weight_kg"/> kg</div>
                             <div class="col-6"><strong>Poids brut MAWB :</strong> <span t-field="o.master_gross_weight_kg"/> kg<br/>
-                                <strong>Écart manifeste / MAWB :</strong> <span t-field="o.manifest_mawb_difference_kg"/> kg</div>
+                                <strong>Écart manifeste / MAWB :</strong> <span t-field="o.manifest_mawb_difference_kg"/> kg<br/>
+                                <strong>Écart réconcilié :</strong> <span t-field="o.reconciled_difference_kg"/> kg</div>
                         </div>
                         <p class="text-muted" style="font-size:9px; margin-top:20px;">
                             Le nombre de pièces MAWB décrit les unités maîtres du transporteur. Il est distinct du nombre de colis clients.

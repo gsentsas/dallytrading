@@ -66,21 +66,15 @@ class DallyConsolidationBackfillWizard(models.TransientModel):
         Candidate = self.env["dally.consolidation.backfill.line"]
         rows = []
         for shipment in shipments:
-            if not route_endpoint_compatible(consolidation, shipment, "origin") or not route_endpoint_compatible(
-                consolidation, shipment, "destination"
-            ):
+            reason = self._eligibility_reason(shipment)
+            if reason == _("Route incompatible."):
                 _logger.info("Backfill route exclusion %s: route mismatch", shipment.external_reference or shipment.reference)
                 continue
             existing = shipment.consolidation_ids.filtered(
                 lambda record: record.state != "cancelled"
             )
             invoice = shipment.invoice_id
-            include = shipment.state != "cancelled" and not existing
-            reason = False
-            if shipment.state == "cancelled":
-                reason = _("Dossier annulé : exclu par défaut.")
-            elif existing:
-                reason = _("Déjà rattaché à %s.", ", ".join(existing.mapped("name")))
+            include = not reason and not existing
             Candidate.create({
                 "wizard_id": self.id, "shipment_id": shipment.id, "include": include,
                 "external_reference": shipment.external_reference,
@@ -109,6 +103,31 @@ class DallyConsolidationBackfillWizard(models.TransientModel):
             "res_id": self.id, "view_mode": "form", "target": "new",
         }
 
+    def _eligibility_reason(self, shipment):
+        """Single authoritative eligibility check shared by preview/confirm."""
+        consolidation = self.consolidation_id
+        if shipment.company_id != consolidation.company_id:
+            return _("Société incompatible.")
+        if shipment.transport_mode != consolidation.transport_mode or shipment.direction != consolidation.direction:
+            return _("Mode ou direction incompatible.")
+        if not route_endpoint_compatible(consolidation, shipment, "origin") or not route_endpoint_compatible(consolidation, shipment, "destination"):
+            return _("Route incompatible.")
+        if not shipment.goods_received_on or shipment.goods_received_on >= self.cutoff_date:
+            return _("Date de réception hors cutoff.")
+        if shipment.state == "cancelled":
+            return _("Dossier annulé : exclu par défaut.")
+        existing = shipment.consolidation_ids.filtered(lambda record: record.state != "cancelled")
+        if existing and any(record != consolidation for record in existing):
+            return _("Déjà rattaché à une autre consolidation : %s", ", ".join(existing.mapped("name")))
+        if not existing:
+            for package in shipment.package_ids:
+                loaded = sum(package.consolidation_line_ids.filtered(
+                    lambda line: line.consolidation_id.state != "cancelled"
+                ).mapped("quantity_loaded"))
+                if loaded >= package.quantity:
+                    return _("Le colis %s n'est plus disponible.", package.display_name)
+        return False
+
     def action_confirm(self):
         self.ensure_one()
         if not self.env.user.has_group("dally_core.group_dally_manager"):
@@ -120,6 +139,13 @@ class DallyConsolidationBackfillWizard(models.TransientModel):
         selected = self.candidate_line_ids.filtered("include")
         if not selected:
             raise UserError(_("Aucun dossier n'est sélectionné."))
+        invalid = []
+        for candidate in selected:
+            reason = self._eligibility_reason(candidate.shipment_id)
+            if reason:
+                invalid.append("%s : %s" % (candidate.external_reference or candidate.shipment_id.reference, reason))
+        if invalid:
+            raise UserError(_("Backfill impossible : la prévisualisation n'est plus valide.\n\n%s", "\n".join(invalid)))
         created = 0
         Line = self.env["dally.freight.consolidation.line"].with_context(historical_backfill=True)
         for candidate in selected:

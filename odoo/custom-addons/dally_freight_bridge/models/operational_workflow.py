@@ -98,7 +98,11 @@ class FreightShipment(models.Model):
             )
             if target:
                 for projection in projections:
-                    projection._check_state_transition(target)
+                    # Allow tk's coarser workflow to skip Dally adjacency, but
+                    # retain readiness, departure and payment gates.
+                    projection.with_context(
+                        _dally_operational_sync=_OPERATIONAL_SYNC_TOKEN
+                    )._check_state_transition(target)
 
         result = super().write(vals)
         if projections:

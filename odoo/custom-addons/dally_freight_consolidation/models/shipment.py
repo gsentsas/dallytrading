@@ -2,7 +2,7 @@
 """Shipment readiness, payment gate and consolidation projections."""
 
 from odoo import _, api, fields, models
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
 
 _OVERRIDE_TOKEN = object()
@@ -97,6 +97,7 @@ class DallyShipment(models.Model):
         if protected.intersection(vals) and self.env.context.get("_dally_override_token") is not _OVERRIDE_TOKEN:
             raise AccessError(_("La trace de dérogation paiement est immuable."))
         return super().write(vals)
+
 
     def _customer_segment(self):
         self.ensure_one()
@@ -282,6 +283,7 @@ class DallyShipmentPackage(models.Model):
     @api.depends(
         "consolidation_line_ids.quantity_loaded",
         "consolidation_line_ids.consolidation_id.state",
+
         # Finding #6 : sans dépendance sur `quantity`, l'ajustement direct
         # de la quantité d'un colis ne recalcule pas `available_quantity`.
         "quantity",
@@ -292,5 +294,19 @@ class DallyShipmentPackage(models.Model):
                 lambda line: line.consolidation_id.state != "cancelled"
             )
             package.loaded_quantity = sum(active_lines.mapped("quantity_loaded"))
+
+
             package.available_quantity = package.quantity - package.loaded_quantity
             package.consolidation_id = active_lines.sorted("id", reverse=True)[:1].consolidation_id
+    def write(self, vals):
+        if "quantity" in vals:
+            for package in self:
+                loaded = sum(package.consolidation_line_ids.filtered(
+                    lambda line: line.consolidation_id.state != "cancelled"
+                ).mapped("quantity_loaded"))
+                if vals["quantity"] < loaded:
+                    raise ValidationError(_(
+                        "La quantité du colis %(package)s ne peut pas être inférieure "
+                        "à la quantité déjà chargée (%(loaded)s).",
+                        package=package.display_name, loaded=loaded))
+        return super().write(vals)

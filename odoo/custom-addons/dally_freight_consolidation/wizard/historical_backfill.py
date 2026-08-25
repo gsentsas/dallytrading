@@ -6,6 +6,8 @@ import logging
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
+from ..models.consolidation import route_endpoint_compatible
+
 _logger = logging.getLogger(__name__)
 
 
@@ -39,14 +41,36 @@ class DallyConsolidationBackfillWizard(models.TransientModel):
     def action_preview(self):
         self.ensure_one()
         self.candidate_line_ids.unlink()
-        shipments = self.env["dally.shipment"].search([
-            ("company_id", "=", self.consolidation_id.company_id.id),
-            ("transport_mode", "=", self.consolidation_id.transport_mode),
+        # Finding #8 : filtrer aussi sur direction + route.
+        # On priorise les identifiants structurés (`*_country_id`) qui
+        # existent quasi systématiquement en base ; les champs texte
+        # `city` / `location` sont utilisés en fallback seulement quand la
+        # consolidation ne porte pas le pays. Sans cela, une consolidation
+        # DSS→CDG dont l'operateur écrit "DSS" en `origin_location` alors
+        # que les dossiers historiques écrivent "Dakar" excluerait tout
+        # candidat — c'est ce qu'a montré le dry-run 2026-08-25 round 2.
+        consolidation = self.consolidation_id
+        domain = [
+            ("company_id", "=", consolidation.company_id.id),
+            ("transport_mode", "=", consolidation.transport_mode),
+            ("direction", "=", consolidation.direction),
             ("goods_received_on", "<", self.cutoff_date),
-        ], order="goods_received_on, external_reference, id")
+        ]
+        if consolidation.origin_country_id:
+            domain.append(("origin_country_id", "=", consolidation.origin_country_id.id))
+        if consolidation.destination_country_id:
+            domain.append(("destination_country_id", "=", consolidation.destination_country_id.id))
+        shipments = self.env["dally.shipment"].search(
+            domain, order="goods_received_on, external_reference, id",
+        )
         Candidate = self.env["dally.consolidation.backfill.line"]
         rows = []
         for shipment in shipments:
+            if not route_endpoint_compatible(consolidation, shipment, "origin") or not route_endpoint_compatible(
+                consolidation, shipment, "destination"
+            ):
+                _logger.info("Backfill route exclusion %s: route mismatch", shipment.external_reference or shipment.reference)
+                continue
             existing = shipment.consolidation_ids.filtered(
                 lambda record: record.state != "cancelled"
             )

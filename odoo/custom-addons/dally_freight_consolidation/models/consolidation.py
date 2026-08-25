@@ -31,6 +31,28 @@ CONSOLIDATION_TRANSITIONS = {
 
 _CONSOLIDATION_BYPASS_TOKEN = object()
 
+def _route_text(value):
+    return re.sub(r"\s+", " ", (value or "").strip().casefold())
+
+
+def route_endpoint_compatible(consolidation, shipment, prefix):
+    """Compare an endpoint without confusing an airport code with its city."""
+    country = getattr(consolidation, f"{prefix}_country_id")
+    shipment_country = getattr(shipment, f"{prefix}_country_id")
+    if bool(country) != bool(shipment_country):
+        return False
+    if country and shipment_country and country != shipment_country:
+        return False
+    city = _route_text(getattr(consolidation, f"{prefix}_city"))
+    shipment_city = _route_text(getattr(shipment, f"{prefix}_city"))
+    location = _route_text(getattr(consolidation, f"{prefix}_location"))
+    shipment_location = _route_text(getattr(shipment, f"{prefix}_location"))
+    if city and shipment_city:
+        return city == shipment_city
+    if location and shipment_location:
+        return location == shipment_location
+    return False
+
 
 class DallyFreightConsolidation(models.Model):
     _name = "dally.freight.consolidation"
@@ -283,7 +305,67 @@ class DallyFreightConsolidation(models.Model):
                 blockers.append(detail)
         return blockers
 
+    def _shipment_partial_departure_blockers(self):
+        """Retourne les motifs de refus de départ partiel pour chaque dossier.
+
+        Un dossier ne peut passer `departed` que si TOUS ses colis sont
+        intégralement rattachés à CETTE consolidation. Trois cas de refus :
+
+        - un colis a encore `available_quantity > 0` (ni ici, ni ailleurs) ;
+        - une partie du colis figure dans une autre consolidation active ;
+        - la quantité chargée dans cette consolidation ne couvre pas la
+          totalité du colis, même si le reste est ailleurs.
+
+        Un dossier « partiellement chargé ici » resterait comptable et
+        traçable sur cette consolidation alors que le client ne verrait
+        partir qu'une fraction : ce n'est pas un vrai départ.
+        """
+        self.ensure_one()
+        blockers = []
+        for shipment in self.shipment_ids.sorted(
+            lambda rec: rec.external_reference or rec.reference
+        ):
+            reference = shipment.external_reference or shipment.reference
+            for package in shipment.package_ids:
+                loaded_here = sum(
+                    package.consolidation_line_ids.filtered(
+                        lambda line: line.consolidation_id == self
+                    ).mapped("quantity_loaded")
+                )
+                loaded_elsewhere = sum(
+                    package.consolidation_line_ids.filtered(
+                        lambda line: line.consolidation_id != self
+                        and line.consolidation_id.state != "cancelled"
+                    ).mapped("quantity_loaded")
+                )
+                if loaded_here == 0:
+                    blockers.append(
+                        _("%(ref)s : le colis « %(pkg)s » n'est pas chargé "
+                          "dans cette consolidation.",
+                          ref=reference, pkg=package.display_name)
+                    )
+                    continue
+                if loaded_elsewhere:
+                    blockers.append(
+                        _("%(ref)s : le colis « %(pkg)s » est réparti entre "
+                          "plusieurs consolidations actives ; le départ "
+                          "partiel n'est pas autorisé.",
+                          ref=reference, pkg=package.display_name)
+                    )
+                    continue
+                if loaded_here < package.quantity:
+                    blockers.append(
+                        _("%(ref)s : le colis « %(pkg)s » est chargé "
+                          "partiellement (%(loaded)s / %(total)s) ; il ne "
+                          "peut pas partir tant qu'il n'est pas complet.",
+                          ref=reference, pkg=package.display_name,
+                          loaded=loaded_here, total=package.quantity)
+                    )
+        return blockers
+
     def action_record_departure(self):
+        # Pré-validation entièrement en lecture : aucun `write` n'a encore été
+        # émis. Si une seule consolidation bloque, aucun dossier ne bouge.
         for record in self:
             if record.state != "ready":
                 raise UserError(_("La consolidation doit être « Prête au départ »."))
@@ -292,6 +374,14 @@ class DallyFreightConsolidation(models.Model):
                 raise UserError(
                     _("Départ impossible\n\n%(count)s dossier(s) ou contrôle(s) nécessitent une action :\n\n%(details)s",
                       count=len(blockers), details="\n\n".join(blockers))
+                )
+            partial = record._shipment_partial_departure_blockers()
+            if partial:
+                raise UserError(
+                    _("Départ impossible : chargement incomplet\n\n"
+                      "%(count)s colis nécessitent une action avant le départ :\n\n"
+                      "%(details)s",
+                      count=len(partial), details="\n".join(partial))
                 )
 
         now = fields.Datetime.now()
@@ -393,6 +483,69 @@ class DallyFreightConsolidationLine(models.Model):
         "La quantité doit être positive et les mesures ne peuvent pas être négatives.",
     )
 
+    # Champs métier de la consolidation qui doivent correspondre à ceux du
+    # dossier pour qu'un colis soit rattachable. On les centralise ici pour
+    # que les gardes create/write et le wizard consultent la même liste.
+    _COMPATIBILITY_FIELDS = (
+        "company_id",
+        "transport_mode",
+        "direction",
+        "origin_country_id",
+        "origin_city",
+        "origin_location",
+        "destination_country_id",
+        "destination_city",
+        "destination_location",
+    )
+
+    @api.model
+    def _check_operational_compatibility(self, consolidation, package):
+        """Refuse un couple (consolidation, colis) opérationnellement
+        incompatible. Cette garde s'applique au create et à tout write qui
+        modifie `package_id` ou `consolidation_id` ; c'est le dernier rempart
+        lorsque le wizard, un import ou un RPC direct passe outre le
+        filtrage de l'UI (finding #3)."""
+        shipment = package.shipment_id
+        if not shipment:
+            raise ValidationError(_("Ce colis n'est rattaché à aucun dossier."))
+        mismatches = []
+        for field in self._COMPATIBILITY_FIELDS:
+            if field in ("origin_country_id", "origin_city", "origin_location",
+                         "destination_country_id", "destination_city", "destination_location"):
+                continue
+            cons_value = consolidation[field]
+            ship_value = shipment[field]
+            if cons_value and ship_value and cons_value != ship_value:
+                mismatches.append(field)
+            elif bool(cons_value) != bool(ship_value):
+                # Un dossier sans destination alors que la consolidation en
+                # a une (ou l'inverse) est aussi une incompatibilité.
+                mismatches.append(field)
+        if not route_endpoint_compatible(consolidation, shipment, "origin"):
+            mismatches.append("origin route")
+        if not route_endpoint_compatible(consolidation, shipment, "destination"):
+            mismatches.append("destination route")
+        if mismatches:
+            raise UserError(
+                _("Ce colis n'est pas compatible avec la consolidation "
+                  "%(consolidation)s : divergence sur %(fields)s.",
+                  consolidation=consolidation.display_name,
+                  fields=", ".join(mismatches))
+            )
+
+    @staticmethod
+    def _lock_package(cr, package_id):
+        """Verrou advisory déterministe par colis, actif pour la transaction.
+
+        Toutes les mutations de lignes touchant un colis passent par ce
+        verrou. Deux transactions concurrentes qui visent le même colis se
+        sérialisent donc automatiquement — la seconde attend puis re-valide
+        `_check_loaded_quantity` sur l'état à jour."""
+        cr.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+            ["consolidation-package:%s" % package_id],
+        )
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -400,28 +553,68 @@ class DallyFreightConsolidationLine(models.Model):
             package = self.env["dally.shipment.package"].browse(vals["package_id"])
             if consolidation.state != "collecting":
                 raise UserError(_("Seule une consolidation en collecte peut recevoir des colis."))
+            self._check_operational_compatibility(consolidation, package)
             vals["shipment_id"] = package.shipment_id.id
             quantity = vals.get("quantity_loaded") or 1
             vals.setdefault("weight_loaded", package.unit_weight_kg * quantity)
             vals.setdefault("volume_loaded", package.unit_volume_cbm * quantity)
-            self.env.cr.execute(
-                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
-                ["consolidation-package:%s" % package.id],
-            )
+            self._lock_package(self.env.cr, package.id)
         lines = super().create(vals_list)
         lines._check_loaded_quantity()
         return lines
 
     def write(self, vals):
-        if self.filtered(lambda line: line.consolidation_id.state in ("departed", "arrived", "closed")):
-            raise UserError(_("Une ligne partie ne peut plus être modifiée ni déplacée."))
+        # Finding #5 : la composition d'une consolidation n'est modifiable
+        # que tant que la collecte est ouverte. Après clôture, réouverture
+        # explicite exigée (`action_reopen_collection`).
+        if self.filtered(lambda line: line.consolidation_id.state != "collecting"):
+            raise UserError(
+                _("La composition d'une consolidation n'est modifiable "
+                  "que lorsque la collecte est ouverte.")
+            )
+        # Finding #5 + #3 : un déplacement vers une autre consolidation exige
+        # que la cible soit également en collecte et compatible.
+        target_consolidation = None
+        if "consolidation_id" in vals:
+            target_consolidation = self.env["dally.freight.consolidation"].browse(
+                vals["consolidation_id"]
+            )
+            if target_consolidation.state != "collecting":
+                raise UserError(
+                    _("La consolidation cible doit être en collecte pour "
+                      "accepter un déplacement de ligne.")
+                )
+        target_package = None
+        if "package_id" in vals:
+            target_package = self.env["dally.shipment.package"].browse(vals["package_id"])
+
+        # Finding #4 : le verrou advisory doit couvrir aussi les writes, pas
+        # seulement les creates. On verrouille tous les colis actuellement
+        # concernés PLUS le colis cible s'il change, avant `super().write` et
+        # avant `_check_loaded_quantity`.
+        package_ids_to_lock = set(self.mapped("package_id.id"))
+        if target_package:
+            package_ids_to_lock.add(target_package.id)
+        for package_id in sorted(package_ids_to_lock):
+            self._lock_package(self.env.cr, package_id)
+
+        # Finding #3 : ré-évalue la compatibilité si l'un des deux côtés change.
+        if target_consolidation or target_package:
+            for line in self:
+                consolidation = target_consolidation or line.consolidation_id
+                package = target_package or line.package_id
+                self._check_operational_compatibility(consolidation, package)
+
         result = super().write(vals)
         self._check_loaded_quantity()
         return result
 
     def unlink(self):
-        if self.filtered(lambda line: line.consolidation_id.state in ("departed", "arrived", "closed")):
-            raise UserError(_("Une ligne partie ne peut pas être supprimée."))
+        if self.filtered(lambda line: line.consolidation_id.state != "collecting"):
+            raise UserError(
+                _("Une ligne ne peut être supprimée que tant que la "
+                  "collecte est ouverte.")
+            )
         return super().unlink()
 
     @api.constrains("package_id", "shipment_id", "quantity_loaded", "consolidation_id")

@@ -4,9 +4,27 @@
 from odoo import _, models
 from odoo.exceptions import UserError
 
-from odoo.addons.dally_freight.models.dally_shipment import _STATE_BYPASS_TOKEN
+from odoo.addons.dally_freight.models.dally_shipment import (
+    _OPERATIONAL_SYNC_TOKEN,
+    _STATE_BYPASS_TOKEN,
+)
 
 from .freight_mapping import stage_from_state, state_from_stage
+
+
+def _is_internal_projection(env):
+    """Vrai si l'appelant est déjà dans la boucle de sync tk↔Dally.
+
+    Deux tokens couvrent cette boucle : le bypass historique complet et le
+    bypass opérationnel qui garde la gate financière. Les deux doivent
+    court-circuiter la re-écriture côté tk pour éviter une récursion infinie
+    et une double sync.
+    """
+    ctx = env.context
+    return (
+        ctx.get("_dally_state_bypass") is _STATE_BYPASS_TOKEN
+        or ctx.get("_dally_operational_sync") is _OPERATIONAL_SYNC_TOKEN
+    )
 
 
 class DallyShipment(models.Model):
@@ -14,9 +32,7 @@ class DallyShipment(models.Model):
 
     def write(self, vals):
         new_state = vals.get("state")
-        internal_projection = (
-            self.env.context.get("_dally_state_bypass") is _STATE_BYPASS_TOKEN
-        )
+        internal_projection = _is_internal_projection(self.env)
         # `tk_shipment_id` est un lien technique portail-lockdown : les
         # utilisateurs de synchronisation (Sheets / API) n'y ont pas accès
         # en lecture. On repère les dossiers liés en sudo mais on continue
@@ -75,9 +91,7 @@ class FreightShipment(models.Model):
             [("tk_shipment_id", "in", self.ids)]
         ) if "stage_id" in vals else self.env["dally.shipment"]
 
-        internal_projection = (
-            self.env.context.get("_dally_state_bypass") is _STATE_BYPASS_TOKEN
-        )
+        internal_projection = _is_internal_projection(self.env)
         if projections and vals.get("stage_id") and not internal_projection:
             target = state_from_stage(
                 self.env, self.env["freight.shipment.stages"].browse(vals["stage_id"])

@@ -46,10 +46,25 @@ SHIPMENT_STATES = [
 #: States that close a file. Reached, nothing further is expected.
 CLOSING_STATES = ("delivered", "cancelled")
 
-# Server-side lifecycle. Context values are caller-controlled over RPC, so the
-# only internal bypass is an unforgeable in-process object passed by private
+# Server-side lifecycle. Context values are caller-controlled over RPC, so
+# every internal bypass is an unforgeable in-process object passed by private
 # bridge/backfill methods.
+#
+# Deux tokens distincts, avec des surfaces de bypass volontairement séparées :
+#
+# - `_STATE_BYPASS_TOKEN` court-circuite TOUT contrôle de transition, y compris
+#   la gate financière et opérationnelle. Il est réservé au chemin historique
+#   (`_write_historical_state`) qui exige déjà le groupe Manager. Ne l'utilise
+#   pas pour projeter un état vécu en temps réel : ce serait un contournement
+#   du contrôle de paiement.
+#
+# - `_OPERATIONAL_SYNC_TOKEN` sert à la synchronisation tk → Dally. Il autorise
+#   les sauts d'état non adjacents (le kanban tk peut téléporter un dossier),
+#   mais **conserve** la gate `_check_ready_requirements` /
+#   `_check_departure_requirements`. Une projection `departed` qui ne satisfait
+#   pas la facture est rejetée, la transaction tk est ainsi annulée.
 _STATE_BYPASS_TOKEN = object()
+_OPERATIONAL_SYNC_TOKEN = object()
 
 ALLOWED_STATE_TRANSITIONS = {
     "draft": {"request_received", "cancelled"},
@@ -58,12 +73,15 @@ ALLOWED_STATE_TRANSITIONS = {
     "goods_received": {"preparing", "cancelled"},
     "preparing": {"ready", "cancelled"},
     "ready": {"departed", "cancelled"},
-    "departed": {"in_transit"},
-    "in_transit": {"arrived"},
-    "arrived": {"customs", "available", "out_for_delivery", "delivered"},
-    "customs": {"available", "out_for_delivery", "delivered"},
-    "available": {"out_for_delivery", "delivered"},
-    "out_for_delivery": {"delivered"},
+    # L'annulation reste un chemin métier valide après le départ (voyage
+    # avorté, refoulement, sinistre). Seule une livraison finalisée ferme la
+    # porte, ce que traduit l'ensemble vide pour `delivered`.
+    "departed": {"in_transit", "cancelled"},
+    "in_transit": {"arrived", "cancelled"},
+    "arrived": {"customs", "available", "out_for_delivery", "delivered", "cancelled"},
+    "customs": {"available", "out_for_delivery", "delivered", "cancelled"},
+    "available": {"out_for_delivery", "delivered", "cancelled"},
+    "out_for_delivery": {"delivered", "cancelled"},
     "delivered": set(),
     "cancelled": set(),
 }
@@ -535,19 +553,34 @@ class DallyShipment(models.Model):
         return super().write(vals)
 
     def _check_state_transition(self, new_state):
-        """Reject every non-adjacent state change, including direct RPC writes."""
+        """Reject every non-adjacent state change, including direct RPC writes.
+
+        Deux tokens de bypass co-existent :
+
+        - `_STATE_BYPASS_TOKEN` (historique) : court-circuit total, y compris
+          la gate financière. Il faut être Manager en amont
+          (`_write_historical_state`) pour l'employer.
+        - `_OPERATIONAL_SYNC_TOKEN` (sync tk → Dally) : autorise un saut d'état
+          non adjacent, mais laisse la gate `_check_departure_requirements` /
+          `_check_ready_requirements` s'exécuter. Une projection `departed`
+          sans facture réglée est donc rejetée et la transaction tk annulée.
+        """
         valid = dict(SHIPMENT_STATES)
         if new_state not in valid:
             raise UserError(_("Statut inconnu : « %s ».", new_state))
         if self.env.context.get("_dally_state_bypass") is _STATE_BYPASS_TOKEN:
             return True
 
+        operational_sync = (
+            self.env.context.get("_dally_operational_sync") is _OPERATIONAL_SYNC_TOKEN
+        )
+
         labels = dict(self._fields["state"]._description_selection(self.env))
         for shipment in self:
             if shipment.state == new_state:
                 continue
             allowed = ALLOWED_STATE_TRANSITIONS.get(shipment.state, set())
-            if new_state not in allowed:
+            if new_state not in allowed and not operational_sync:
                 next_states = [labels.get(code, code) for code in allowed]
                 path = " puis ".join("« %s »" % label for label in next_states)
                 detail = (
@@ -581,8 +614,15 @@ class DallyShipment(models.Model):
         return True
 
     def _write_state_from_operational_source(self, new_state):
-        """Private bridge entry point; private methods are not RPC-callable."""
-        return self.with_context(_dally_state_bypass=_STATE_BYPASS_TOKEN).write(
+        """Private bridge entry point; private methods are not RPC-callable.
+
+        Utilise `_OPERATIONAL_SYNC_TOKEN` : la sync tk → Dally peut sauter des
+        étapes intermédiaires (le kanban tk n'a pas la même granularité) mais
+        elle reste soumise au contrôle métier des passages critiques :
+        `_check_ready_requirements` et `_check_departure_requirements`. La
+        gate financière n'est donc pas contournable via cette entrée.
+        """
+        return self.with_context(_dally_operational_sync=_OPERATIONAL_SYNC_TOKEN).write(
             {"state": new_state}
         )
 

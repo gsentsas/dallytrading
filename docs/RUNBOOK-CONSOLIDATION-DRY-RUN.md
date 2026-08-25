@@ -74,7 +74,7 @@ docker run --rm -it \
   -v /var/www/vhosts/dallytrading.com/platform/odoo/custom-addons:/mnt/extra-addons:ro \
   -v /var/www/vhosts/dallytrading.com/vendor-addons:/mnt/vendor-addons:ro \
   --volumes-from dallytrading-restore-odoo \
-  odoo:19.0 \
+  odoo:19.0-20260810 \
   odoo \
     --db_host=dallytrading-restore-postgres --db_port=5432 \
     --db_user=postgres --db_password="$POSTGRES_PASSWORD" \
@@ -97,7 +97,7 @@ docker run --rm -i \
   -v /var/www/vhosts/dallytrading.com/platform/odoo/custom-addons:/mnt/extra-addons:ro \
   -v /var/www/vhosts/dallytrading.com/vendor-addons:/mnt/vendor-addons:ro \
   --volumes-from dallytrading-restore-odoo \
-  odoo:19.0 \
+  odoo:19.0-20260810 \
   odoo \
     --db_host=dallytrading-restore-postgres --db_port=5432 \
     --db_user=postgres --db_password="$POSTGRES_PASSWORD" \
@@ -128,7 +128,7 @@ docker run --rm -i \
   -v /var/www/vhosts/dallytrading.com/platform/odoo/custom-addons:/mnt/extra-addons:ro \
   -v /var/www/vhosts/dallytrading.com/vendor-addons:/mnt/vendor-addons:ro \
   --volumes-from dallytrading-restore-odoo \
-  odoo:19.0 \
+  odoo:19.0-20260810 \
   odoo \
     --db_host=dallytrading-restore-postgres --db_port=5432 \
     --db_user=postgres --db_password="$POSTGRES_PASSWORD" \
@@ -154,7 +154,7 @@ docker run --rm -d --name dallytrading-dryrun-web \
   -v /var/www/vhosts/dallytrading.com/platform/odoo/custom-addons:/mnt/extra-addons:ro \
   -v /var/www/vhosts/dallytrading.com/vendor-addons:/mnt/vendor-addons:ro \
   --volumes-from dallytrading-restore-odoo \
-  odoo:19.0 \
+  odoo:19.0-20260810 \
   odoo \
     --db_host=dallytrading-restore-postgres --db_port=5432 \
     --db_user=postgres --db_password="$POSTGRES_PASSWORD" \

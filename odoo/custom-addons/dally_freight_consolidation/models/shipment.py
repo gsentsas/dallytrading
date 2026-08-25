@@ -60,9 +60,26 @@ class DallyShipment(models.Model):
             shipment.consolidation_id = consolidations.sorted("id", reverse=True)[:1]
 
     @api.depends(
-        "package_ids.total_weight_kg", "package_ids.description", "goods_description",
-        "invoice_id.state", "invoice_id.payment_state", "invoice_id.amount_residual",
+        # Colis et désignation (préparation).
+        "package_ids",
+        "package_ids.total_weight_kg", "package_ids.description",
+        "goods_description",
+        # Facturation optionnelle par colis (finding #6).
+        "package_ids.billing_method", "package_ids.applied_unit_price_eur",
+        # Route et mode (contrôles opérationnels).
+        "origin_country_id", "origin_city", "origin_location",
+        "destination_country_id", "destination_city", "destination_location",
+        "transport_mode",
+        # Facture et paiement.
+        "invoice_id", "invoice_id.state", "invoice_id.payment_state",
+        "invoice_id.amount_residual", "invoice_id.currency_id",
+        "sale_order_id",
+        # Segment client (dérogation Manager possible).
+        "customer_segment_snapshot", "partner_id", "partner_id.company_type",
+        # Consolidation aérienne rattachée.
         "consolidation_line_ids.consolidation_id.state",
+        # Dérogation Manager (trace immuable, mais son apparition change
+        # le contrôle affiché).
         "departure_payment_override_reason",
     )
     def _compute_operational_controls(self):
@@ -262,7 +279,13 @@ class DallyShipmentPackage(models.Model):
     goods_received_on = fields.Date(related="shipment_id.goods_received_on", string="Réception",
                                     store=True)
 
-    @api.depends("consolidation_line_ids.quantity_loaded", "consolidation_line_ids.consolidation_id.state")
+    @api.depends(
+        "consolidation_line_ids.quantity_loaded",
+        "consolidation_line_ids.consolidation_id.state",
+        # Finding #6 : sans dépendance sur `quantity`, l'ajustement direct
+        # de la quantité d'un colis ne recalcule pas `available_quantity`.
+        "quantity",
+    )
     def _compute_consolidation_data(self):
         for package in self:
             active_lines = package.consolidation_line_ids.filtered(

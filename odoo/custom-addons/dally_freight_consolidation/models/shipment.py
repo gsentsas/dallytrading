@@ -125,10 +125,10 @@ class DallyShipment(models.Model):
             blockers.append(_("origine absente"))
         if not (self.destination_location or self.destination_city or self.destination_country_id):
             blockers.append(_("destination absente"))
-        if self.transport_mode == "air" and not self.consolidation_ids.filtered(
+        if not self.consolidation_ids.filtered(
             lambda record: record.state in ("collecting", "collection_closed", "ready")
         ):
-            blockers.append(_("aucune consolidation aérienne sélectionnée"))
+            blockers.append(_("aucune consolidation opérationnelle sélectionnée"))
         return blockers
 
     def _check_ready_requirements(self):
@@ -301,6 +301,11 @@ class DallyShipmentPackage(models.Model):
     def write(self, vals):
         if "quantity" in vals:
             for package in self:
+                self.env.cr.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                    ["consolidation-package:%s" % package.id],
+                )
+                package.invalidate_recordset(["consolidation_line_ids", "quantity"])
                 loaded = sum(package.consolidation_line_ids.filtered(
                     lambda line: line.consolidation_id.state != "cancelled"
                 ).mapped("quantity_loaded"))

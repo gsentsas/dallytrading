@@ -13,13 +13,13 @@
                                     <td><strong>Mode</strong></td><td><span t-field="o.transport_mode"/></td></tr>
                                 <tr><td><strong>Origine</strong></td><td><span t-field="o.origin_location"/> <span t-field="o.origin_city"/></td>
                                     <td><strong>Destination</strong></td><td><span t-field="o.destination_location"/> <span t-field="o.destination_city"/></td></tr>
-                                <tr><td><strong>Compagnie</strong></td><td><span t-field="o.carrier_name"/></td>
+                                <tr t-if="o.transport_mode == 'air'"><td><strong>Compagnie</strong></td><td><span t-field="o.carrier_name"/></td>
                                     <td><strong>Vol</strong></td><td><span t-field="o.flight_number"/></td></tr>
-                                <tr><td><strong>MAWB</strong></td><td><span t-field="o.mawb_number"/></td>
+                                <tr t-if="o.transport_mode == 'air'"><td><strong>MAWB</strong></td><td><span t-field="o.mawb_number"/></td>
                                     <td><strong>Départ réel</strong></td><td><span t-field="o.actual_departure"/></td></tr>
                                 <tr><td><strong>Dossiers</strong></td><td><span t-field="o.shipment_count"/></td>
                                     <td><strong>Colis clients</strong></td><td><span t-field="o.client_package_count"/></td></tr>
-                                <tr><td><strong>Pièces MAWB</strong></td><td><span t-field="o.master_piece_count"/></td>
+                                <tr t-if="o.transport_mode == 'air'"><td><strong>Pièces MAWB</strong></td><td><span t-field="o.master_piece_count"/></td>
                                     <td><strong>Poids MAWB</strong></td><td><span t-field="o.master_gross_weight_kg"/> kg</td></tr>
                             </tbody>
                         </table>
@@ -53,8 +53,8 @@
                         <div class="row" style="margin-top:18px;">
                             <div class="col-6"><strong>Poids colis clients :</strong> <span t-field="o.client_weight_kg"/> kg<br/>
                                 <strong>Emballage maître :</strong> <span t-field="o.master_packaging_weight_kg"/> kg</div>
-                            <div class="col-6"><strong>Poids brut MAWB :</strong> <span t-field="o.master_gross_weight_kg"/> kg<br/>
-                                <strong>Écart manifeste / MAWB :</strong> <span t-field="o.manifest_mawb_difference_kg"/> kg<br/>
+                            <div class="col-6"><strong>Poids brut transporteur :</strong> <span t-field="o.master_gross_weight_kg"/> kg<br/>
+                                <strong>Écart manifeste / transporteur :</strong> <span t-field="o.manifest_mawb_difference_kg"/> kg<br/>
                                 <strong>Écart réconcilié :</strong> <span t-field="o.reconciled_difference_kg"/> kg</div>
                         </div>
                         <p class="text-muted" style="font-size:9px; margin-top:20px;">

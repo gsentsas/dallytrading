@@ -5,10 +5,11 @@ Chaque test cible un invariant que la revue a désigné comme faible. Ils sont
 écrits en préalable à la correction, comme TDD : ils échouent sur le code
 courant (avant patch) et doivent passer une fois la correction appliquée.
 """
+import threading
 
 import uuid
 
-from odoo import SUPERUSER_ID, api
+from odoo import SUPERUSER_ID, api, sql_db
 from odoo.exceptions import UserError, ValidationError
 from odoo.modules.registry import Registry
 from odoo.tests import tagged
@@ -241,6 +242,35 @@ class TestOperationalCompatibility(ConsolidationCommon):
 
 
 
+    def test_maritime_sans_mawb_ni_vol_accepte(self):
+        consolidation = self.env["dally.freight.consolidation"].create({
+            "name": "SEA-DKR-MRS-2026-OK", "transport_mode": "sea", "direction": "export",
+            "origin_city": "Dakar", "origin_location": "Port de Dakar",
+            "destination_city": "Marseille", "destination_location": "FOS",
+            "carrier_name": "MSC", "state": "collecting",
+        })
+        shipment = self._other_route_shipment(transport_mode="sea", origin_city="Dakar", origin_location="Port de Dakar", destination_city="Marseille", destination_location="FOS", reference="SEA-OK")
+        line = self.env["dally.freight.consolidation.line"].create({
+            "consolidation_id": consolidation.id, "package_id": shipment.package_ids.id, "quantity_loaded": 1,
+        })
+        self.assertTrue(line.id)
+        self.assertFalse(consolidation.mawb_number)
+        self.assertFalse(consolidation.flight_number)
+
+    def test_maritime_port_different_refuse(self):
+        consolidation = self.env["dally.freight.consolidation"].create({
+            "name": "SEA-DKR-MRS-2026-KO", "transport_mode": "sea", "direction": "export",
+            "origin_city": "Dakar", "origin_location": "Port de Dakar",
+            "destination_city": "Marseille", "destination_location": "FOS",
+            "carrier_name": "MSC", "state": "collecting",
+        })
+        shipment = self._other_route_shipment(transport_mode="sea", origin_city="Dakar", origin_location="Port de Dakar", destination_city="Marseille", destination_location="MRS", reference="SEA-KO")
+        with self.assertRaises(UserError):
+            self.env["dally.freight.consolidation.line"].create({
+                "consolidation_id": consolidation.id, "package_id": shipment.package_ids.id, "quantity_loaded": 1,
+            })
+
+
 @tagged("post_install", "-at_install", "dally_freight")
 class TestConcurrentLineWrite(ConsolidationCommon):
     """Finding #4 : deux transactions ne peuvent dépasser la quantité."""
@@ -322,6 +352,95 @@ class TestConcurrentLineWrite(ConsolidationCommon):
             env["dally.freight.consolidation"].browse(consolidation_id).unlink()
             cr.commit()
         self.assertEqual(results.count("ok"), 1)
+
+
+    def test_transaction_a_bloque_transaction_b_sur_package_write(self):
+        """Two independent cursors cannot lower quantity under a held lock."""
+        dbname = self.env.cr.dbname
+        uid = self.env.uid
+        with Registry(dbname).cursor() as cr:
+            env = api.Environment(cr, uid or SUPERUSER_ID, {})
+            partner = env.ref("base.partner_admin")
+            suffix = uuid.uuid4().hex[:8]
+            consolidation = env["dally.freight.consolidation"].create({
+                "name": "AIR-DSS-CDG-2026-RACE-%s" % suffix,
+                "transport_mode": "air", "direction": "export",
+                "origin_city": "Dakar", "origin_location": "DSS",
+                "destination_city": "Paris", "destination_location": "CDG",
+                "state": "collecting",
+            })
+            shipment = env["dally.shipment"].create({
+                "partner_id": partner.id, "external_reference": "RACE-%s" % suffix,
+                "transport_mode": "air", "direction": "export",
+                "origin_city": "Dakar", "origin_location": "DSS",
+                "destination_city": "Paris", "destination_location": "CDG",
+                "goods_description": "Race",
+            })
+            package = env["dally.shipment.package"].create({
+                "shipment_id": shipment.id, "external_line_key": "RACE-%s|A|1" % suffix,
+                "package_type": "parcel", "description": "Race",
+                "quantity": 3, "unit_weight_kg": 1.0,
+            })
+            env["dally.freight.consolidation.line"].create({
+                "consolidation_id": consolidation.id, "package_id": package.id,
+                "quantity_loaded": 3,
+            })
+            cr.commit()
+            package_id, shipment_id, consolidation_id = package.id, shipment.id, consolidation.id
+
+        holder = Registry(dbname).cursor()
+        holder.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+            ["consolidation-package:%s" % package_id],
+        )
+        started = threading.Event()
+        result = {}
+
+        def contender():
+            started.set()
+            with sql_db.db_connect(dbname).cursor() as cr:
+                cr.execute("SET LOCAL lock_timeout = %s", ["500ms"])
+                try:
+                    cr.execute(
+                        "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                        ["consolidation-package:%s" % package_id],
+                    )
+                    cr.commit()
+                    result["value"] = "ok"
+                except Exception as exc:
+                    cr.rollback()
+                    result["value"] = type(exc).__name__
+
+        thread = threading.Thread(target=contender)
+        try:
+            thread.start()
+            self.assertTrue(started.wait(10), "La transaction B n'a pas démarré")
+            # B started before A commits; release A, then let B resolve and
+            # revalidate the loaded quantity under the shared advisory lock.
+            holder.rollback()
+            holder.close()
+            thread.join(12)
+            self.assertFalse(thread.is_alive(), "La transaction B est restée bloquée")
+            self.assertEqual(result.get("value"), "ok")
+            with Registry(dbname).cursor() as cr:
+                env = api.Environment(cr, uid or SUPERUSER_ID, {})
+                with self.assertRaises(ValidationError):
+                    env["dally.shipment.package"].browse(package_id).write({"quantity": 2})
+                cr.rollback()
+        finally:
+            if not holder.closed:
+                holder.rollback()
+                holder.close()
+            thread.join(12)
+        with Registry(dbname).cursor() as cr:
+            env = api.Environment(cr, uid or SUPERUSER_ID, {})
+            package = env["dally.shipment.package"].browse(package_id)
+            self.assertLessEqual(sum(package.consolidation_line_ids.mapped("quantity_loaded")), package.quantity)
+            env["dally.freight.consolidation.line"].search([("package_id", "=", package_id)]).unlink()
+            package.unlink()
+            env["dally.shipment"].browse(shipment_id).unlink()
+            env["dally.freight.consolidation"].browse(consolidation_id).unlink()
+            cr.commit()
 
 
 @tagged("post_install", "-at_install", "dally_freight")

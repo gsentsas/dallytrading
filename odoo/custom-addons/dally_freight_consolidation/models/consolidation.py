@@ -40,7 +40,7 @@ def _is_airport_code(value):
 
 
 def route_endpoint_compatible(consolidation, shipment, prefix):
-    """Compare an endpoint without confusing an airport code with its city."""
+    """Compare a route endpoint with mode-aware precision semantics."""
     country = getattr(consolidation, f"{prefix}_country_id")
     shipment_country = getattr(shipment, f"{prefix}_country_id")
     if bool(country) != bool(shipment_country):
@@ -51,18 +51,19 @@ def route_endpoint_compatible(consolidation, shipment, prefix):
     shipment_city = _route_text(getattr(shipment, f"{prefix}_city"))
     location = _route_text(getattr(consolidation, f"{prefix}_location"))
     shipment_location = _route_text(getattr(shipment, f"{prefix}_location"))
-    if city and shipment_city:
-        if city != shipment_city:
-            return False
-        # When both locations are actual airport/location codes, the city is
-        # not precise enough: Paris/CDG and Paris/ORY are different routes.
-        if location and shipment_location:
+    if city and shipment_city and city != shipment_city:
+        return False
+    if location and shipment_location:
+        if getattr(consolidation, "transport_mode", None) != "air":
+            return location == shipment_location
+        if city and shipment_city:
             same_kind = _is_airport_code(location) == _is_airport_code(shipment_location)
             if same_kind:
                 return location == shipment_location
-        return True
-    if location and shipment_location:
+            return True
         return location == shipment_location
+    if city and shipment_city:
+        return True
     return False
 
 

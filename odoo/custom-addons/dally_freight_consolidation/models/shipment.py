@@ -125,10 +125,10 @@ class DallyShipment(models.Model):
             blockers.append(_("origine absente"))
         if not (self.destination_location or self.destination_city or self.destination_country_id):
             blockers.append(_("destination absente"))
-        if not self.consolidation_ids.filtered(
+        if self.transport_mode == "air" and not self.consolidation_ids.filtered(
             lambda record: record.state in ("collecting", "collection_closed", "ready")
         ):
-            blockers.append(_("aucune consolidation opérationnelle sélectionnée"))
+            blockers.append(_("aucune consolidation aérienne sélectionnée"))
         return blockers
 
     def _check_ready_requirements(self):

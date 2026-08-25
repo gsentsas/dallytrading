@@ -17,6 +17,8 @@ import secrets
 
 from odoo import _, api, fields, models
 
+from odoo.addons.dally_freight.models.dally_shipment import _HISTORICAL_BACKFILL_TOKEN
+
 #: Bytes of entropy in the public tracking token. 32 bytes = 256 bits, which is
 #: not walkable at any rate.
 TRACKING_TOKEN_BYTES = 32
@@ -235,9 +237,9 @@ class DallyShipment(models.Model):
         """
         super()._apply_state_side_effects(new_state)
 
-        if self.env.context.get("historical_backfill") and not self.env.context.get(
-            "historical_event_date"
-        ):
+        historical_mode = self.env.context.get("_dally_historical_backfill") is _HISTORICAL_BACKFILL_TOKEN
+        historical_date = self.env.context.get("historical_event_date") if historical_mode else None
+        if historical_mode and not historical_date:
             return
 
         publishable = self._dally_public_state_wording()
@@ -249,8 +251,7 @@ class DallyShipment(models.Model):
             wording = publishable.get(new_state)
             self.env["dally.shipment.event"].create({
                 "shipment_id": shipment.id,
-                "event_date": self.env.context.get("historical_event_date")
-                or fields.Datetime.now(),
+                "event_date": historical_date or fields.Datetime.now(),
                 "status": new_state,
                 "description": wording or shipment._dally_default_event_wording(new_state),
                 "location": shipment._dally_event_location(new_state),

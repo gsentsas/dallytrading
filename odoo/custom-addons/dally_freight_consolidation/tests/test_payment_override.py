@@ -53,6 +53,11 @@ class TestPaymentOverride(AccountTestInvoicingCommon):
         with self.assertRaises(AccessError):
             shipment._record_payment_override("Test")
 
+    def test_non_manager_peut_evaluer_le_depart_blocker(self):
+        shipment = self._shipment("business")
+        self.env.user.group_ids -= self.env.ref("dally_core.group_dally_manager")
+        self.assertTrue(shipment._departure_blocker())
+
     def test_derogation_interdite_pour_un_particulier(self):
         shipment = self._shipment("individual")
         with self.assertRaises(UserError):

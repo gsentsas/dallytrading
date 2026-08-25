@@ -15,7 +15,7 @@ Ces tests couvrent les invariants du pont :
 
 import uuid
 
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -25,6 +25,7 @@ class TestOperationalWorkflow(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        cls.env.user.group_ids += cls.env.ref("dally_core.group_dally_logistics")
         cls.service = cls.env["dally.service.type"].search(
             [("code", "=", "freight_sea")], limit=1
         )
@@ -59,6 +60,11 @@ class TestOperationalWorkflow(TransactionCase):
         """
         self.projection.action_cancel()
         self.assertEqual(self.projection.state, "cancelled")
+
+    def test_non_logistics_ne_peut_pas_modifier_projection_liee(self):
+        self.env.user.group_ids -= self.env.ref("dally_core.group_dally_logistics")
+        with self.assertRaises(AccessError):
+            self.projection.write({"state": "request_received"})
 
     def test_transition_non_adjacente_est_refusee(self):
         """draft → in_transit doit être refusé, même sur un dossier tk-linké."""

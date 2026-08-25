@@ -65,6 +65,7 @@ CLOSING_STATES = ("delivered", "cancelled")
 #   pas la facture est rejetée, la transaction tk est ainsi annulée.
 _STATE_BYPASS_TOKEN = object()
 _OPERATIONAL_SYNC_TOKEN = object()
+_HISTORICAL_BACKFILL_TOKEN = object()
 
 ALLOWED_STATE_TRANSITIONS = {
     "draft": {"request_received", "cancelled"},
@@ -548,10 +549,11 @@ class DallyShipment(models.Model):
             if not internal and not self.env.user.has_group("dally_core.group_dally_logistics"):
                 raise AccessError(_("Seuls les rôles Logistics et Manager peuvent modifier l’état d’un dossier."))
             self._check_state_transition(vals["state"])
-            historical_date = self.env.context.get("historical_event_date")
+            historical_mode = self.env.context.get("_dally_historical_backfill") is _HISTORICAL_BACKFILL_TOKEN
+            historical_date = self.env.context.get("historical_event_date") if historical_mode else None
             if historical_date:
                 vals["state_changed_on"] = historical_date
-            elif not self.env.context.get("historical_backfill"):
+            elif not historical_mode:
                 vals["state_changed_on"] = fields.Datetime.now()
             self._apply_state_side_effects(vals["state"])
         return super().write(vals)
@@ -636,7 +638,7 @@ class DallyShipment(models.Model):
             raise UserError(_("Seul un Manager peut importer un état historique."))
         return self.with_context(
             _dally_state_bypass=_STATE_BYPASS_TOKEN,
-            historical_backfill=True,
+            _dally_historical_backfill=_HISTORICAL_BACKFILL_TOKEN,
         ).write({"state": new_state})
 
     def _apply_state_side_effects(self, new_state):
@@ -645,8 +647,9 @@ class DallyShipment(models.Model):
         Operators forget to set them, and an empty arrival date on a delivered
         shipment makes reporting wrong. Never overwrite a value already there.
         """
-        historical_date = self.env.context.get("historical_event_date")
-        if self.env.context.get("historical_backfill") and not historical_date:
+        historical_mode = self.env.context.get("_dally_historical_backfill") is _HISTORICAL_BACKFILL_TOKEN
+        historical_date = self.env.context.get("historical_event_date") if historical_mode else None
+        if historical_mode and not historical_date:
             return
         today = (
             fields.Date.to_date(historical_date)

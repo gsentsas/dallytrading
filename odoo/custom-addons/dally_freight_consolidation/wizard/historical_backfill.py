@@ -5,6 +5,7 @@ import logging
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
+from odoo.addons.dally_freight.models.dally_shipment import _HISTORICAL_BACKFILL_TOKEN
 
 from ..models.consolidation import route_endpoint_compatible
 
@@ -147,7 +148,7 @@ class DallyConsolidationBackfillWizard(models.TransientModel):
         if invalid:
             raise UserError(_("Backfill impossible : la prévisualisation n'est plus valide.\n\n%s", "\n".join(invalid)))
         created = 0
-        Line = self.env["dally.freight.consolidation.line"].with_context(historical_backfill=True)
+        Line = self.env["dally.freight.consolidation.line"].with_context(_dally_historical_backfill=_HISTORICAL_BACKFILL_TOKEN)
         for candidate in selected:
             shipment = candidate.shipment_id
             for package in shipment.package_ids:

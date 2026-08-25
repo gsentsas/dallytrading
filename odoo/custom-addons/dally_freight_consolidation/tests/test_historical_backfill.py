@@ -9,6 +9,7 @@ donc trois invariants :
 - la matérialisation est idempotente (relancer ne recrée pas de doublons).
 """
 
+from odoo import fields
 from odoo.exceptions import AccessError
 from odoo.tests import tagged
 
@@ -109,3 +110,11 @@ class TestHistoricalBackfill(ConsolidationCommon):
         second_wizard.candidate_line_ids.write({"include": True})
         second_wizard.action_confirm()
         self.assertEqual(sorted(self.historical.line_ids.ids), sorted(first))
+
+    def test_context_historique_forgeable_ne_supprime_pas_les_effets(self):
+        shipment = self._shipment(reference="HIST-CTX")
+        before = self.env["dally.shipment.event"].search_count([("shipment_id", "=", shipment.id)])
+        forged = fields.Datetime.to_datetime("2026-08-18 10:00:00")
+        shipment.with_context(historical_backfill=True, historical_event_date=forged).write({"state": "request_received"})
+        self.assertGreater(self.env["dally.shipment.event"].search_count([("shipment_id", "=", shipment.id)]), before)
+        self.assertNotEqual(shipment.state_changed_on, forged)

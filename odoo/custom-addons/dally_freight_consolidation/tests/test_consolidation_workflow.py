@@ -11,6 +11,7 @@ from odoo.exceptions import AccessError, UserError
 from odoo.tests import tagged
 
 from .common import ConsolidationCommon
+from ..models.consolidation import _CONSOLIDATION_BYPASS_TOKEN, _CONSOLIDATION_STATE_WRITE_TOKEN
 
 
 @tagged("post_install", "-at_install", "dally_freight")
@@ -65,12 +66,19 @@ class TestConsolidationLifecycle(ConsolidationCommon):
         self.assertEqual(consolidation.state, "collecting")
         self.assertFalse(consolidation.loading_closed_on)
 
+    def test_creation_etat_terminal_est_refusee(self):
+        with self.assertRaises(UserError):
+            self.env["dally.freight.consolidation"].create({
+                "transport_mode": "air", "direction": "export", "state": "departed",
+            })
+
     def test_creation_prochain_depart_reinitialise_les_champs_operationnels(self):
         consolidation = self._consolidation()
         consolidation.write({
             "mawb_number": "297-99999999",
             "flight_number": "SN0207",
         })
+        consolidation.with_context(_dally_consolidation_state_write=_CONSOLIDATION_STATE_WRITE_TOKEN, _dally_consolidation_bypass=_CONSOLIDATION_BYPASS_TOKEN).write({"state": "departed"})
         action = consolidation.action_create_next_departure()
         successor = self.env["dally.freight.consolidation"].browse(action["res_id"])
         self.assertNotEqual(successor.id, consolidation.id)

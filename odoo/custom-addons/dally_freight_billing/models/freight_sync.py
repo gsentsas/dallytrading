@@ -116,6 +116,8 @@ class DallyFreightSyncService(models.AbstractModel):
         self._apply_route(values, payload)
 
         if shipment:
+            if target_state == "draft":
+                raise ValidationError(_("Un dossier existant ne peut pas être resynchronisé vers « Brouillon »."))
             shipment.write(values)
         else:
             shipment = Shipment.create(values)

@@ -524,7 +524,7 @@ class DallyShipmentProjection(models.Model):
             # directe produirait un dossier avancé dont le client n'aurait
             # jamais été prévenu, ce qui est précisément le défaut qu'on
             # corrige.
-            if projection.sudo().state == "draft":
+            if etat == "draft" and projection.sudo().state == "draft":
                 stage = stage_from_state(projection.env, "request_received")
                 if not stage:
                     raise UserError(_("L'étape opérationnelle « Demande reçue » est absente."))

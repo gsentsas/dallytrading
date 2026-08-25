@@ -2,11 +2,12 @@
 """Make tk_freight the single operational workflow authority."""
 
 from odoo import _, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 
 from odoo.addons.dally_freight.models.dally_shipment import (
     _OPERATIONAL_SYNC_TOKEN,
     _STATE_BYPASS_TOKEN,
+    _HISTORICAL_BACKFILL_TOKEN,
 )
 
 from .freight_mapping import stage_from_state, state_from_stage
@@ -46,6 +47,8 @@ class DallyShipment(models.Model):
         unlinked = self - linked
 
         if linked and not internal_projection:
+            if not self.env.user.has_group("dally_core.group_dally_logistics"):
+                raise AccessError(_("Seuls les rôles Logistics et Manager peuvent modifier l’état d’un dossier."))
             linked._check_state_transition(new_state)
             stage = stage_from_state(self.env, new_state)
             if not stage:
@@ -75,7 +78,7 @@ class DallyShipment(models.Model):
         for shipment in linked:
             shipment.tk_shipment_id.with_context(
                 _dally_state_bypass=_STATE_BYPASS_TOKEN,
-                historical_backfill=True,
+                _dally_historical_backfill=_HISTORICAL_BACKFILL_TOKEN,
                 historical_event_date=self.env.context.get("historical_event_date"),
             ).write({"stage_id": stage.id})
         if unlinked:

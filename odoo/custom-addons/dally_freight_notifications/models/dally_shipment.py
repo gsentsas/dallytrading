@@ -24,6 +24,8 @@ intermédiaire, et l'opérateur qui veut écrire au client le fera explicitement
 
 from odoo import api, fields, models
 
+from odoo.addons.dally_freight.models.dally_shipment import _HISTORICAL_BACKFILL_TOKEN
+
 from .dally_shipment_notification import (
     MOTIF_NON_PUBLIE,
     MOTIF_POLITIQUE,
@@ -156,7 +158,7 @@ class DallyShipmentEvent(models.Model):
         # Seuls les événements engendrés par une transition mettent en file.
         # Un backfill historique matérialise les faits passés mais ne crée pas
         # aujourd'hui un courriel « votre colis vient de partir ».
-        if not self.env.context.get("historical_backfill"):
+        if self.env.context.get("_dally_historical_backfill") is not _HISTORICAL_BACKFILL_TOKEN:
             evenements.filtered("is_automatic")._dally_enqueue_notification()
         return evenements
 

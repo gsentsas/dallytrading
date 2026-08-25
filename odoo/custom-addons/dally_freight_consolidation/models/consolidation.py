@@ -207,6 +207,9 @@ class DallyFreightConsolidation(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
+            initial_state = vals.get("state", "draft")
+            if initial_state not in {"draft", "collecting"}:
+                raise UserError(_("Une consolidation doit être créée à l’état « Brouillon » ou « Collecte ouverte »."))
             # `vals.get("name")` vaut `None` quand la clé n'est pas fournie
             # depuis un create serveur : le premier test tombait sur un dossier
             # nommé « Nouveau » (valeur par défaut appliquée par le super après
@@ -429,6 +432,8 @@ class DallyFreightConsolidation(models.Model):
 
     def action_create_next_departure(self):
         self.ensure_one()
+        if self.state not in {"departed", "arrived", "closed"}:
+            raise UserError(_("Le prochain départ ne peut être créé qu’après un départ, une arrivée ou une clôture."))
         next_record = self.copy({
             "name": _("Nouveau"), "state": "collecting", "collection_open_on": fields.Date.context_today(self),
             "collection_close_on": False, "loading_closed_on": False, "flight_number": False,

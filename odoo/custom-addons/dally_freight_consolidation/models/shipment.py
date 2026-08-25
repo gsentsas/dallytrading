@@ -171,20 +171,21 @@ class DallyShipment(models.Model):
 
     def _departure_blocker(self):
         self.ensure_one()
-        reference = self.external_reference or self.reference
-        invoice = self.invoice_id
+        secured = self.sudo()
+        reference = secured.external_reference or secured.reference
+        invoice = secured.invoice_id
         if not invoice:
             return _("%(ref)s - %(client)s\nAucune facture comptabilisée.",
-                     ref=reference, client=self.partner_id.display_name)
+                     ref=reference, client=secured.partner_id.display_name)
         if invoice.state != "posted":
             return _("%(ref)s - %(client)s\nFacture %(invoice)s non comptabilisée (état : %(state)s).",
-                     ref=reference, client=self.partner_id.display_name,
+                     ref=reference, client=secured.partner_id.display_name,
                      invoice=invoice.display_name, state=invoice.state)
-        if self._invoice_is_settled():
+        if secured._invoice_is_settled():
             return False
-        if (self._customer_segment() == "business"
-                and self.departure_payment_override_reason
-                and self.departure_payment_override_invoice_id == invoice):
+        if (secured._customer_segment() == "business"
+                and secured.departure_payment_override_reason
+                and secured.departure_payment_override_invoice_id == invoice):
             return False
 
         paid = invoice.amount_total - invoice.amount_residual
@@ -192,7 +193,7 @@ class DallyShipment(models.Model):
             "%(ref)s - %(client)s\nFacture : %(invoice)s\nTotal : %(total)s\n"
             "Réglé : %(paid)s\nReste à payer : %(residual)s\n"
             "La facture doit être entièrement réglée avant le départ.",
-            ref=reference, client=self.partner_id.display_name,
+            ref=reference, client=secured.partner_id.display_name,
             invoice=invoice.display_name,
             total=_format_money(invoice.currency_id, invoice.amount_total),
             paid=_format_money(invoice.currency_id, paid),

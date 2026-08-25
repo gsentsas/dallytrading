@@ -620,6 +620,9 @@ class DallyFreightConsolidationLine(models.Model):
         target_package = None
         if "package_id" in vals:
             target_package = self.env["dally.shipment.package"].browse(vals["package_id"])
+            # The package is the source of truth for the shipment relation;
+            # never accept a forged or stale shipment_id in the payload.
+            vals["shipment_id"] = target_package.shipment_id.id
 
         # Finding #4 : le verrou advisory doit couvrir aussi les writes, pas
         # seulement les creates. On verrouille tous les colis actuellement

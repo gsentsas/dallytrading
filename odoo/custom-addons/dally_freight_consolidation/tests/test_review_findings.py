@@ -7,6 +7,7 @@ courant (avant patch) et doivent passer une fois la correction appliquée.
 """
 from odoo.exceptions import UserError, ValidationError
 from odoo.tests import tagged
+from unittest.mock import patch
 
 from odoo.addons.dally_freight.tests.common import set_shipment_state
 
@@ -243,6 +244,29 @@ class TestOperationalCompatibility(ConsolidationCommon):
 
 
 
+    def test_move_package_synchronise_shipment_id_et_ignore_payload_forge(self):
+        consolidation = self._consolidation(name="AIR-DSS-CDG-2026-MOVE-SYNC")
+        shipment_a = self._shipment(reference="MOVE-SYNC-A")
+        shipment_b = self._shipment(reference="MOVE-SYNC-B")
+        line = self.env["dally.freight.consolidation.line"].create({
+            "consolidation_id": consolidation.id, "package_id": shipment_a.package_ids.id,
+            "quantity_loaded": 1,
+        })
+        line.write({"package_id": shipment_b.package_ids.id, "shipment_id": shipment_a.id})
+        self.assertEqual(line.package_id, shipment_b.package_ids)
+        self.assertEqual(line.shipment_id, shipment_b)
+
+    def test_move_package_incompatible_reste_refuse(self):
+        consolidation = self._consolidation(name="AIR-DSS-CDG-2026-MOVE-KO")
+        shipment = self._shipment(reference="MOVE-KO-A")
+        incompatible = self._other_route_shipment(destination_city="Lyon", destination_location="LYS", reference="MOVE-KO-B")
+        line = self.env["dally.freight.consolidation.line"].create({
+            "consolidation_id": consolidation.id, "package_id": shipment.package_ids.id,
+            "quantity_loaded": 1,
+        })
+        with self.assertRaises(UserError):
+            line.write({"package_id": incompatible.package_ids.id})
+
     def test_maritime_sans_mawb_ni_vol_accepte(self):
         consolidation = self.env["dally.freight.consolidation"].create({
             "name": "SEA-DKR-MRS-2026-OK", "transport_mode": "sea", "direction": "export",
@@ -399,6 +423,28 @@ class TestAddToConsolidationServerRecheck(ConsolidationCommon):
         })
         with self.assertRaises(UserError):
             wizard.action_confirm()
+
+    def test_server_compatible_propage_les_exceptions_inattendues(self):
+        shipment = self._shipment(reference="WIZ-EXC")
+        consolidation = self._consolidation(name="AIR-DSS-CDG-2026-WIZ-EXC")
+        wizard = self.env["dally.add.to.consolidation.wizard"].new({"shipment_id": shipment.id})
+        with patch(
+            "odoo.addons.dally_freight_consolidation.models.consolidation.DallyFreightConsolidationLine._check_operational_compatibility",
+            side_effect=RuntimeError("unexpected"),
+        ):
+            with self.assertRaises(RuntimeError):
+                wizard._server_compatible(shipment)
+
+    def test_server_compatible_filtre_validation_et_user_error(self):
+        shipment = self._shipment(reference="WIZ-EXPECTED")
+        self._consolidation(name="AIR-DSS-CDG-2026-WIZ-EXPECTED")
+        wizard = self.env["dally.add.to.consolidation.wizard"].new({"shipment_id": shipment.id})
+        for error in (ValidationError("validation"), UserError("user")):
+            with patch(
+                "odoo.addons.dally_freight_consolidation.models.consolidation.DallyFreightConsolidationLine._check_operational_compatibility",
+                side_effect=error,
+            ):
+                self.assertFalse(wizard._server_compatible(shipment))
 
 
 @tagged("post_install", "-at_install", "dally_freight")

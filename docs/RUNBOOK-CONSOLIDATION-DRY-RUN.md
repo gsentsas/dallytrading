@@ -2,7 +2,7 @@
 
 Branche : `feat/freight-consolidation-workflow-20260825`
 Date de rédaction : 2026-08-25
-Portée : mise en service de `dally_freight_consolidation` + résserrement du workflow d'état de `dally.shipment` (garde des transitions, garde de `create`, propagation tk_freight ↔ Dally, jalon d'annulation).
+Portée : mise en service de `dally_freight_consolidation` + resserrement du workflow d'état de `dally.shipment` (garde des transitions, garde de `create`, propagation tk_freight ↔ Dally, jalon d'annulation).
 
 **Ce document décrit le dry-run. Il n'exécute jamais la migration production.** L'exécution se fait en trois passes lisibles ; chacune est réversible tant qu'aucun `--production` n'est passé à `restore.sh`.
 
@@ -164,7 +164,7 @@ docker run --rm -i --entrypoint /usr/bin/python3 \
   --volumes-from dallytrading-restore-odoo \
   odoo:19.0-20260810 /usr/bin/odoo shell --config=/dev/null \
   --db_host=dallytrading-restore-postgres --db_port=5432 \
-  --db_user="$RESTORE_DB_USER" --db_password="$POSTGRES_PASSWORD" \
+  --db_user=postgres --db_password="$POSTGRES_PASSWORD" \
   -d dallytrading_restore --addons-path=/mnt/extra-addons,/mnt/vendor-addons \
   < /mnt/extra-addons/dally_freight_consolidation/scripts/verify_concurrency_probe.py
 ```
@@ -225,7 +225,7 @@ Cette section est intentionnellement séparée : **rien de ce qui suit ne s'exé
 
 1. Commit + push de la branche `feat/freight-consolidation-workflow-20260825` sur `origin`.
 2. Créer la PR vers `main`, joindre :
-   - le résultat des 488 tests (0 failed, 0 error) ;
+   - le résultat des 492 tests (0 failed, 0 error) ;
    - les captures d'écran des 6 parcours manuels ;
    - la liste explicite des invariants introduits (gardes `create`/`write`, stage tk `cancelled`, backfill idempotent).
 3. Review par un deuxième pair sur les modifications de `dally_freight/models/dally_shipment.py` (§20 est du code critique).

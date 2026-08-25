@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 
 # Le wizard n'ajoute qu'un dossier déjà réceptionné ou en préparation. Un
@@ -59,7 +59,7 @@ class DallyAddToConsolidationWizard(models.TransientModel):
                 if not pivot:
                     continue
                 Line._check_operational_compatibility(candidate, pivot)
-            except Exception:  # noqa: BLE001 — filtre sur un candidat, ni log ni relance.
+            except (UserError, ValidationError):
                 continue
             compatible |= candidate
         return compatible

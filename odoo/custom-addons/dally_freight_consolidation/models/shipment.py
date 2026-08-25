@@ -290,7 +290,7 @@ class DallyShipmentPackage(models.Model):
     )
     def _compute_consolidation_data(self):
         for package in self:
-            active_lines = package.consolidation_line_ids.filtered(
+            active_lines = package.sudo().consolidation_line_ids.filtered(
                 lambda line: line.consolidation_id.state != "cancelled"
             )
             package.loaded_quantity = sum(active_lines.mapped("quantity_loaded"))
@@ -306,7 +306,7 @@ class DallyShipmentPackage(models.Model):
                     ["consolidation-package:%s" % package.id],
                 )
                 package.invalidate_recordset(["consolidation_line_ids", "quantity"])
-                loaded = sum(package.consolidation_line_ids.filtered(
+                loaded = sum(package.sudo().consolidation_line_ids.filtered(
                     lambda line: line.consolidation_id.state != "cancelled"
                 ).mapped("quantity_loaded"))
                 if vals["quantity"] < loaded:

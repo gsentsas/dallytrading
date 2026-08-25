@@ -3,6 +3,8 @@ from unittest.mock import patch
 
 from odoo.tests import TransactionCase, tagged
 
+from odoo.addons.dally_freight.tests.common import set_shipment_state
+
 from odoo.addons.dally_freight_notifications.models.dally_shipment_notification import (
     CRON_BATCH_SIZE,
     MAX_ATTEMPTS,
@@ -40,7 +42,7 @@ class TestFreightEmailDelivery(TransactionCase):
 
     def _pending(self, state="in_transit"):
         shipment = self._shipment()
-        shipment.write({"state": state})
+        set_shipment_state(shipment, state)
         notification = self.Notification.search(
             [("shipment_id", "=", shipment.id)], limit=1)
         return shipment, notification
@@ -233,8 +235,8 @@ class TestFreightEmailDelivery(TransactionCase):
 
     def test_reecriture_du_meme_etat_ne_cree_pas_un_second_mail(self):
         shipment, notification = self._pending()
-        shipment.write({"state": "in_transit"})
-        shipment.write({"state": "in_transit"})
+        set_shipment_state(shipment, "in_transit")
+        set_shipment_state(shipment, "in_transit")
         self.assertEqual(
             self.Notification.search_count([("shipment_id", "=", shipment.id)]),
             1,

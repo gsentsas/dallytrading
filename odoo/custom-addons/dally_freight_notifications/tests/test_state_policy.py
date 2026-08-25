@@ -23,6 +23,8 @@ formulation qui résiste à l'ajout d'une colonne.
 from odoo.exceptions import AccessError
 from odoo.tests import TransactionCase, tagged
 
+from odoo.addons.dally_freight.tests.common import set_shipment_state
+
 from odoo.addons.dally_freight_notifications.models.dally_shipment_notification import (
     MOTIF_NON_PUBLIE,
     MOTIF_POLITIQUE,
@@ -113,7 +115,7 @@ class TestStatePolicy(TransactionCase):
     def test_une_politique_absente_ferme_la_porte(self):
         self.Politique._dally_policy_for("customs").unlink()
         expedition = self._expedition()
-        expedition.write({"state": "customs"})
+        set_shipment_state(expedition, "customs")
         evenement = expedition.event_ids
         self.assertEqual(len(evenement), 1)
         self.assertFalse(evenement.visible_to_customer)
@@ -123,7 +125,7 @@ class TestStatePolicy(TransactionCase):
     def test_une_politique_archivee_ferme_la_porte(self):
         self.Politique._dally_policy_for("arrived").active = False
         expedition = self._expedition()
-        expedition.write({"state": "arrived"})
+        set_shipment_state(expedition, "arrived")
         self.assertFalse(expedition.event_ids.visible_to_customer)
         self.assertNotIn("arrived", self.env["dally.shipment"]._dally_public_state_wording())
 
@@ -139,15 +141,15 @@ class TestStatePolicy(TransactionCase):
         expedition = self._expedition()
         self.assertFalse(expedition.event_ids)
         self.assertFalse(self._notifications(expedition))
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         self.assertEqual(len(expedition.event_ids), 1)
         self.assertEqual(len(self._notifications(expedition)), 1)
 
     def test_reecrire_le_meme_etat_ne_produit_rien(self):
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
-        expedition.write({"state": "in_transit"})
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
+        set_shipment_state(expedition, "in_transit")
+        set_shipment_state(expedition, "in_transit")
         self.assertEqual(len(expedition.event_ids), 1)
         self.assertEqual(len(self._notifications(expedition)), 1)
 
@@ -155,7 +157,7 @@ class TestStatePolicy(TransactionCase):
         from psycopg2 import IntegrityError
         from odoo.tools import mute_logger
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         evenement = expedition.event_ids
         with self.assertRaises(IntegrityError), mute_logger("odoo.sql_db"):
             with self.cr.savepoint():
@@ -188,7 +190,7 @@ class TestStatePolicy(TransactionCase):
     def test_sans_gabarit_la_notification_est_ignoree(self):
         self.Politique._dally_policy_for("in_transit").email_template_id = False
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         notification = self._notifications(expedition)
         self.assertEqual(notification.status, "skipped")
         self.assertEqual(notification.last_error, MOTIF_SANS_GABARIT)
@@ -196,7 +198,7 @@ class TestStatePolicy(TransactionCase):
     def test_un_etat_non_notifiant_est_ignore_avec_son_motif(self):
         self.Politique._dally_policy_for("preparing").email_template_id = self._gabarit()
         expedition = self._expedition()
-        expedition.write({"state": "preparing"})
+        set_shipment_state(expedition, "preparing")
         notification = self._notifications(expedition)
         self.assertEqual(notification.status, "skipped")
         self.assertEqual(notification.last_error, MOTIF_POLITIQUE)
@@ -205,7 +207,7 @@ class TestStatePolicy(TransactionCase):
         self.Politique._dally_policy_for("in_transit").email_template_id = self._gabarit()
         muet = self.env["res.partner"].create({"name": "Sans adresse"})
         expedition = self._expedition(partner_id=muet.id)
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         notification = self._notifications(expedition)
         self.assertEqual(notification.status, "skipped")
         self.assertEqual(notification.last_error, MOTIF_SANS_ADRESSE)
@@ -214,7 +216,7 @@ class TestStatePolicy(TransactionCase):
         self.Politique._dally_policy_for("in_transit").email_template_id = self._gabarit()
         self.client.dally_freight_notify = False
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         notification = self._notifications(expedition)
         self.assertEqual(notification.status, "skipped")
         self.assertEqual(notification.last_error, MOTIF_REFUS_CLIENT)
@@ -222,7 +224,7 @@ class TestStatePolicy(TransactionCase):
     def test_tout_reuni_la_notification_attend_son_envoi(self):
         self.Politique._dally_policy_for("in_transit").email_template_id = self._gabarit()
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         notification = self._notifications(expedition)
         self.assertEqual(notification.status, "pending")
         self.assertFalse(notification.last_error)
@@ -234,7 +236,7 @@ class TestStatePolicy(TransactionCase):
 
     def test_la_photographie_suffit_a_ecrire_un_message(self):
         expedition = self._expedition(origin_city="Le Havre", destination_city="Dakar")
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         notification = self._notifications(expedition)
         self.assertEqual(notification.shipment_reference, expedition.reference)
         self.assertEqual(notification.customer_label, "En transit")
@@ -252,21 +254,21 @@ class TestStatePolicy(TransactionCase):
 
     def test_le_lien_de_suivi_ne_porte_aucun_identifiant(self):
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         url = self._notifications(expedition).tracking_url
         self.assertNotIn("/id/", url)
         self.assertNotIn("=%s" % expedition.id, url)
 
     def test_le_badge_porte_le_mot_du_client_et_le_code_reste(self):
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         charge = expedition._dally_public_payload()
         self.assertEqual(charge["status"], "in_transit")
         self.assertEqual(charge["statusLabel"], "En transit")
 
     def test_portail_et_suivi_lisent_la_meme_politique(self):
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         self.assertTrue(expedition.dally_portal_visible)
         self.assertTrue(expedition.event_ids.visible_to_customer)
         self.assertEqual(len(expedition._dally_portal_timeline()), 1)
@@ -280,8 +282,8 @@ class TestStatePolicy(TransactionCase):
         autre = self.env["res.partner"].create({"name": "Autre client", "email": "autre@example.invalid"})
         sienne = self._expedition()
         celle_de_l_autre = self._expedition(partner_id=autre.id)
-        sienne.write({"state": "in_transit"})
-        celle_de_l_autre.write({"state": "in_transit"})
+        set_shipment_state(sienne, "in_transit")
+        set_shipment_state(celle_de_l_autre, "in_transit")
         portail = self.env["res.users"].create({
             "name": "Client portail", "login": "notif.canari@dallytrading.invalid",
             "partner_id": self.client.id,
@@ -293,7 +295,7 @@ class TestStatePolicy(TransactionCase):
 
     def test_decocher_un_etat_retire_les_dossiers_deja_dedans(self):
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         self.assertTrue(expedition.dally_portal_visible)
         self.Politique._dally_policy_for("in_transit").visible_in_portal = False
         expedition.invalidate_recordset()
@@ -318,7 +320,7 @@ class TestStatePolicy(TransactionCase):
 
     def test_le_suivi_public_revoque_aussi_l_historique(self):
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         charge = expedition._dally_public_payload()
         self.assertEqual(len(charge["timeline"]), 1)
         self.assertTrue(charge["lastUpdate"])
@@ -380,7 +382,7 @@ class TestStatePolicy(TransactionCase):
 
     def test_le_sudo_de_la_file_n_ouvre_aucune_lecture(self):
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         self.assertTrue(self._notifications(expedition))
         portail = self.env["res.users"].create({
             "name": "Client portail", "login": "notif.sudo@dallytrading.invalid",
@@ -393,7 +395,7 @@ class TestStatePolicy(TransactionCase):
 
     def test_aucun_sudo_n_elargit_une_lecture_metier(self):
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         expedition._dally_public_payload()
         api = self.env["res.users"].create({
             "name": "Utilisateur API", "login": "notif.api@dallytrading.invalid",
@@ -406,7 +408,7 @@ class TestStatePolicy(TransactionCase):
 
     def test_la_charge_publique_ne_porte_rien_de_sensible(self):
         expedition = self._expedition()
-        expedition.write({"state": "in_transit"})
+        set_shipment_state(expedition, "in_transit")
         charge = repr(expedition._dally_public_payload())
         for interdit in ("supplier", "margin", "internal", "cost", "purchase"):
             self.assertNotIn(interdit, charge, interdit)
@@ -420,5 +422,5 @@ class TestStatePolicy(TransactionCase):
         brouillon = self._expedition()
         self.assertFalse(brouillon.dally_portal_visible)
         self.assertNotIn(brouillon, self.env["dally.shipment"].with_user(portail).search([]))
-        brouillon.write({"state": "in_transit"})
+        set_shipment_state(brouillon, "in_transit")
         self.assertTrue(brouillon.dally_portal_visible)

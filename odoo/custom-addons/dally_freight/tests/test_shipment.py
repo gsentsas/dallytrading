@@ -4,6 +4,8 @@ import re
 from odoo.exceptions import UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
+from .common import create_shipment, set_shipment_state
+
 
 @tagged("post_install", "-at_install", "dally")
 class TestDallyShipment(TransactionCase):
@@ -29,6 +31,11 @@ class TestDallyShipment(TransactionCase):
             "direction": "import",
         }
         values.update(overrides)
+        # Le create() applique une garde d'état initial (§20). Un test
+        # qui a besoin d'instancier directement en `arrived` passe par
+        # l'helper de test qui utilise le token de bypass in-process.
+        if values.get("state") and values["state"] not in ("draft", "request_received"):
+            return create_shipment(self.env, values)
         return self.Shipment.create(values)
 
     # ─── Reference ────────────────────────────────────────────────────
@@ -190,7 +197,7 @@ class TestDallyShipment(TransactionCase):
 
     def test_not_late_when_delivered(self):
         shipment = self._shipment(estimated_arrival="2020-01-01")
-        shipment.state = "delivered"
+        set_shipment_state(shipment, "delivered")
         self.assertFalse(shipment.is_late)
 
     def test_not_late_without_eta(self):
@@ -215,22 +222,22 @@ class TestDallyShipment(TransactionCase):
     def test_state_change_stamps_the_time(self):
         shipment = self._shipment()
         self.assertFalse(shipment.state_changed_on)
-        shipment.state = "in_transit"
+        set_shipment_state(shipment, "in_transit")
         self.assertTrue(shipment.state_changed_on)
 
     def test_departure_date_filled_on_departure(self):
         shipment = self._shipment()
-        shipment.state = "departed"
+        set_shipment_state(shipment, "departed")
         self.assertTrue(shipment.departure_date)
 
     def test_existing_departure_date_is_not_overwritten(self):
         shipment = self._shipment(departure_date="2026-01-15")
-        shipment.state = "departed"
+        set_shipment_state(shipment, "departed")
         self.assertEqual(str(shipment.departure_date), "2026-01-15")
 
     def test_delivery_fills_arrival_and_delivery_dates(self):
         shipment = self._shipment()
-        shipment.state = "delivered"
+        set_shipment_state(shipment, "delivered")
         self.assertTrue(shipment.actual_arrival)
         self.assertTrue(shipment.delivery_date)
 
@@ -240,7 +247,7 @@ class TestDallyShipment(TransactionCase):
 
     def test_delivered_cannot_be_cancelled(self):
         shipment = self._shipment()
-        shipment.state = "delivered"
+        set_shipment_state(shipment, "delivered")
         with self.assertRaises(UserError):
             shipment.action_cancel()
 

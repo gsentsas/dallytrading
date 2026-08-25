@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from odoo.exceptions import ValidationError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -109,6 +110,25 @@ class TestFreightSyncService(TransactionCase):
         self.assertAlmostEqual(line.applied_unit_price_eur, 3.5, places=2)
         self.assertAlmostEqual(line.transport_amount_eur, 34.65, places=2)
         self.assertEqual(data["lines"][0]["pricing_status"], "automatic")
+
+    def test_existing_shipment_rejects_draft_state_payload(self):
+        _data, shipment = self.Sync.upsert(self._payload())
+        self.assertEqual(shipment.state, "request_received")
+        payload = self._payload(state="draft")
+        with self.assertRaises(ValidationError):
+            self.Sync.upsert(payload)
+
+    def test_existing_draft_rejection_happens_before_partner_mutation(self):
+        _data, shipment = self.Sync.upsert(self._payload())
+        partner = shipment.partner_id
+        original_name = partner.name
+        payload = self._payload(state="draft")
+        payload["client"] = dict(payload["client"], name="Client B invalide")
+        with self.assertRaises(ValidationError):
+            self.Sync.upsert(payload)
+        self.assertEqual(shipment.partner_id, partner)
+        self.assertEqual(partner.name, original_name)
+        self.assertFalse(self.env["res.partner"].search([("name", "=", "Client B invalide")]))
 
     def test_same_business_keys_are_idempotent_with_new_http_request(self):
         first, first_shipment = self.Sync.upsert(self._payload())

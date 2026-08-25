@@ -2,6 +2,8 @@
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import TransactionCase, tagged
 
+from odoo.addons.dally_freight.tests.common import set_shipment_state
+
 
 @tagged("post_install", "-at_install", "dally")
 class TestFreightNotificationOps(TransactionCase):
@@ -46,7 +48,7 @@ class TestFreightNotificationOps(TransactionCase):
 
     def _pending(self):
         shipment = self._shipment()
-        shipment.write({"state": "in_transit"})
+        set_shipment_state(shipment, "in_transit")
         notification = self.Notification.search(
             [("shipment_id", "=", shipment.id)], limit=1)
         self.assertEqual(notification.status, "pending")
@@ -54,7 +56,7 @@ class TestFreightNotificationOps(TransactionCase):
 
     def test_compteurs_refletent_exactement_la_file_du_dossier(self):
         shipment, pending = self._pending()
-        shipment.write({"state": "arrived"})
+        set_shipment_state(shipment, "arrived")
         notifications = self.Notification.search([
             ("shipment_id", "=", shipment.id),
         ])

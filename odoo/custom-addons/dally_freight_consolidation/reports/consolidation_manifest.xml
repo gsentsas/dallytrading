@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_consolidation_manifest">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <h2 style="text-align:center; color:#17324d;">LISTE DE COLISAGE</h2>
+                        <h3 style="text-align:center; margin-top:0;">MANIFESTE DE CONSOLIDATION</h3>
+                        <table class="table table-sm table-borderless" style="margin-top:20px;">
+                            <tbody>
+                                <tr><td><strong>Référence</strong></td><td><span t-field="o.name"/></td>
+                                    <td><strong>Mode</strong></td><td><span t-field="o.transport_mode"/></td></tr>
+                                <tr><td><strong>Origine</strong></td><td><span t-field="o.origin_location"/> <span t-field="o.origin_city"/></td>
+                                    <td><strong>Destination</strong></td><td><span t-field="o.destination_location"/> <span t-field="o.destination_city"/></td></tr>
+                                <tr><td><strong>Compagnie / transporteur</strong></td><td><span t-field="o.carrier_name"/></td>
+                                    <td><strong>Départ réel</strong></td><td><span t-field="o.actual_departure"/></td></tr>
+                                <tr t-if="o.transport_mode == 'air'"><td><strong>Vol</strong></td><td><span t-field="o.flight_number"/></td>
+                                    <td><strong>MAWB</strong></td><td><span t-field="o.mawb_number"/></td></tr>
+                                <tr><td><strong>Dossiers</strong></td><td><span t-field="o.shipment_count"/></td>
+                                    <td><strong>Colis clients</strong></td><td><span t-field="o.client_package_count"/></td></tr>
+                                <tr t-if="o.transport_mode == 'air'"><td><strong>Pièces MAWB</strong></td><td><span t-field="o.master_piece_count"/></td>
+                                    <td><strong>Poids MAWB</strong></td><td><span t-field="o.master_gross_weight_kg"/> kg</td></tr>
+                            </tbody>
+                        </table>
+
+                        <table class="table table-sm table-bordered" style="font-size:10px;">
+                            <thead style="background:#17324d; color:white;">
+                                <tr><th>N°</th><th>Dossier</th><th>Référence expédition</th><th>Client</th>
+                                    <th>Désignation</th><th>Type</th><th class="text-end">Qté</th>
+                                    <th class="text-end">Poids kg</th><th class="text-end">Volume m³</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="o.line_ids" t-as="line">
+                                    <td><span t-out="line_index + 1"/></td>
+                                    <td><span t-field="line.shipment_id.external_reference"/></td>
+                                    <td><span t-field="line.shipment_id.reference"/></td>
+                                    <td><span t-field="line.shipment_id.partner_id"/></td>
+                                    <td><span t-out="line.package_id.description or line.shipment_id.goods_description or ''"/></td>
+                                    <td><span t-field="line.package_id.package_type"/></td>
+                                    <td class="text-end"><span t-field="line.quantity_loaded"/></td>
+                                    <td class="text-end"><span t-field="line.weight_loaded"/></td>
+                                    <td class="text-end"><span t-field="line.volume_loaded"/></td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr><th colspan="6" class="text-end">TOTAUX CLIENTS</th>
+                                    <th class="text-end"><span t-field="o.client_package_count"/></th>
+                                    <th class="text-end"><span t-field="o.client_weight_kg"/></th>
+                                    <th class="text-end"><span t-field="o.client_volume_cbm"/></th></tr>
+                            </tfoot>
+                        </table>
+                        <div class="row" style="margin-top:18px;">
+                            <div class="col-6"><strong>Poids colis clients :</strong> <span t-field="o.client_weight_kg"/> kg<br/>
+                                <strong>Emballage maître :</strong> <span t-field="o.master_packaging_weight_kg"/> kg</div>
+                            <div class="col-6"><strong>Poids brut transporteur :</strong> <span t-field="o.master_gross_weight_kg"/> kg<br/>
+                                <strong>Écart manifeste / transporteur :</strong> <span t-field="o.manifest_mawb_difference_kg"/> kg<br/>
+                                <strong>Écart réconcilié :</strong> <span t-field="o.reconciled_difference_kg"/> kg</div>
+                        </div>
+                        <p class="text-muted" style="font-size:9px; margin-top:20px;">
+                            Le nombre de pièces MAWB décrit les unités maîtres du transporteur. Il est distinct du nombre de colis clients.
+                        </p>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

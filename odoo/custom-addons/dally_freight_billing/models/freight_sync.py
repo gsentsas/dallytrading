@@ -86,6 +86,11 @@ class DallyFreightSyncService(models.AbstractModel):
                 % {"reference": shipment.display_name}
             )
 
+        state = payload.get("state")
+        target_state = self._choice(state, VALID_STATES, "state") if state else ("request_received" if shipment_created else None)
+        if shipment and target_state == "draft":
+            raise ValidationError(_("Un dossier existant ne peut pas être resynchronisé vers « Brouillon »."))
+
         partner, partner_created = self._resolve_partner(
             payload.get("client") or {},
             existing=shipment.partner_id if shipment else None,
@@ -108,11 +113,8 @@ class DallyFreightSyncService(models.AbstractModel):
         if goods_received_on:
             values["goods_received_on"] = goods_received_on
 
-        state = payload.get("state")
-        if state:
-            values["state"] = self._choice(state, VALID_STATES, "state")
-        elif shipment_created:
-            values["state"] = "request_received"
+        # Les créations passent toujours par Brouillon ; la projection
+        # opérationnelle est appliquée après création via le chemin sécurisé.
 
         self._apply_route(values, payload)
 
@@ -142,6 +144,8 @@ class DallyFreightSyncService(models.AbstractModel):
             summary = " ; ".join(dict.fromkeys(descriptions))
             shipment.goods_description = summary[:5000]
 
+        if target_state and target_state != "draft" and shipment.state != target_state:
+            shipment._write_state_from_operational_source(target_state)
         shipment.write({
             "last_sync_at": fields.Datetime.now(),
             "sync_message": "OK",

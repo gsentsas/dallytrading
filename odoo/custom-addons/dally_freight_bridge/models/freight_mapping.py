@@ -43,7 +43,30 @@ STAGE_XMLID_TO_STATE = {
     "tk_freight.stage_data_3": "preparing",   # In Progress
     "tk_freight.stage_data_4": "in_transit",  # In Transit
     "tk_freight.stage_data_5": "delivered",   # Delivered
+    "dally_freight_bridge.stage_request_received": "request_received",
+    "dally_freight_bridge.stage_awaiting_goods": "awaiting_goods",
+    "dally_freight_bridge.stage_goods_received": "goods_received",
+    "dally_freight_bridge.stage_preparing": "preparing",
+    "dally_freight_bridge.stage_ready": "ready",
+    "dally_freight_bridge.stage_departed": "departed",
+    "dally_freight_bridge.stage_in_transit": "in_transit",
+    "dally_freight_bridge.stage_arrived": "arrived",
+    "dally_freight_bridge.stage_customs": "customs",
+    "dally_freight_bridge.stage_available": "available",
+    "dally_freight_bridge.stage_out_for_delivery": "out_for_delivery",
+    "dally_freight_bridge.stage_delivered": "delivered",
+    "dally_freight_bridge.stage_cancelled": "cancelled",
 }
+
+STATE_TO_STAGE_XMLID = {
+    state: "dally_freight_bridge.stage_%s" % state
+    for state in (
+        "request_received", "awaiting_goods", "goods_received", "preparing",
+        "ready", "departed", "in_transit", "arrived", "customs",
+        "available", "out_for_delivery", "delivered", "cancelled",
+    )
+}
+STATE_TO_STAGE_XMLID["draft"] = "tk_freight.stage_data_1"
 
 #: Transport tk → mode `dally.shipment`.
 #:
@@ -281,6 +304,12 @@ def state_from_stage(env, stage):
             stage.name,
         )
     return etat
+
+
+def stage_from_state(env, state):
+    """Resolve the Dally-owned operational stage for a Dally state."""
+    xmlid = STATE_TO_STAGE_XMLID.get(state)
+    return env.ref(xmlid, raise_if_not_found=False) if xmlid else None
 
 
 def mode_from_transport(transport):

@@ -2,6 +2,8 @@
 from odoo.exceptions import AccessError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
+from odoo.addons.dally_freight.tests.common import set_shipment_state
+
 
 @tagged("post_install", "-at_install", "dally")
 class TestShipmentEvents(TransactionCase):
@@ -57,13 +59,13 @@ class TestShipmentEvents(TransactionCase):
     # ─── Automatic events on status change ────────────────────────────
 
     def test_status_change_creates_an_event(self):
-        self.shipment.state = "departed"
+        set_shipment_state(self.shipment, "departed")
         events = self.shipment.event_ids.filtered(lambda e: e.status == "departed")
         self.assertEqual(len(events), 1)
         self.assertTrue(events.is_automatic)
 
     def test_customer_milestone_is_published(self):
-        self.shipment.state = "delivered"
+        set_shipment_state(self.shipment, "delivered")
         event = self.shipment.event_ids.filtered(lambda e: e.status == "delivered")
         self.assertTrue(
             event.visible_to_customer,
@@ -87,7 +89,7 @@ class TestShipmentEvents(TransactionCase):
         publishable = self.env["dally.shipment"]._dally_public_state_wording()
 
         for state in ("awaiting_goods", "cancelled"):
-            self.shipment.state = state
+            set_shipment_state(self.shipment, state)
             event = self.shipment.event_ids.filtered(lambda e: e.status == state)
             self.assertTrue(event, "The transition must still be recorded")
             self.assertEqual(
@@ -97,25 +99,25 @@ class TestShipmentEvents(TransactionCase):
             )
 
     def test_departure_event_carries_the_origin(self):
-        self.shipment.state = "departed"
+        set_shipment_state(self.shipment, "departed")
         event = self.shipment.event_ids.filtered(lambda e: e.status == "departed")
         self.assertIn("Le Havre", event.location or "")
 
     def test_arrival_event_carries_the_destination(self):
-        self.shipment.state = "arrived"
+        set_shipment_state(self.shipment, "arrived")
         event = self.shipment.event_ids.filtered(lambda e: e.status == "arrived")
         self.assertIn("Dakar", event.location or "")
 
     def test_intermediate_state_leaves_location_empty(self):
         """A wrong location is worse than none."""
-        self.shipment.state = "preparing"
+        set_shipment_state(self.shipment, "preparing")
         event = self.shipment.event_ids.filtered(lambda e: e.status == "preparing")
         self.assertFalse(event.location)
 
     def test_rewriting_the_same_status_creates_no_duplicate(self):
-        self.shipment.state = "in_transit"
+        set_shipment_state(self.shipment, "in_transit")
         count = len(self.shipment.event_ids)
-        self.shipment.write({"state": "in_transit"})
+        set_shipment_state(self.shipment, "in_transit")
         self.assertEqual(
             len(self.shipment.event_ids), count,
             "Writing the current status again must not add an event",
@@ -123,7 +125,7 @@ class TestShipmentEvents(TransactionCase):
 
     def test_full_journey_builds_a_coherent_timeline(self):
         for state in ("goods_received", "departed", "in_transit", "arrived", "delivered"):
-            self.shipment.state = state
+            set_shipment_state(self.shipment, state)
 
         published = self.shipment.event_ids.filtered("visible_to_customer")
         self.assertEqual(len(published), 5)

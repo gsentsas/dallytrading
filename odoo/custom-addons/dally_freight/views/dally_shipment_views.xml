@@ -41,8 +41,44 @@
                     <!-- Only the milestones an operator moves between by hand are
                          on the bar. All 14 states would make it unreadable. -->
                     <field name="state" widget="statusbar"
-                           statusbar_visible="request_received,goods_received,departed,in_transit,arrived,delivered"
+                           statusbar_visible="request_received,goods_received,preparing,ready,departed,in_transit,arrived,delivered"
                            options="{'clickable': true}"/>
+                    <button name="action_next_state" type="object" string="Prendre en charge"
+                            class="btn-primary" groups="dally_core.group_dally_logistics"
+                            invisible="state != 'draft'"/>
+                    <button name="action_next_state" type="object" string="Attendre la marchandise"
+                            class="btn-primary" groups="dally_core.group_dally_logistics"
+                            invisible="state != 'request_received'"/>
+                    <button name="action_next_state" type="object" string="Enregistrer la réception"
+                            class="btn-primary" groups="dally_core.group_dally_logistics"
+                            invisible="state != 'awaiting_goods'"/>
+                    <button name="action_next_state" type="object" string="Mettre en préparation"
+                            class="btn-primary" groups="dally_core.group_dally_logistics"
+                            invisible="state != 'goods_received'"/>
+                    <button name="action_next_state" type="object" string="Marquer prête à partir"
+                            class="btn-primary" groups="dally_core.group_dally_logistics"
+                            invisible="state != 'preparing'"/>
+                    <button name="action_next_state" type="object" string="Enregistrer le départ"
+                            class="btn-primary" groups="dally_core.group_dally_logistics"
+                            invisible="state != 'ready'"/>
+                    <button name="action_next_state" type="object" string="Passer en transit"
+                            class="btn-primary" groups="dally_core.group_dally_logistics"
+                            invisible="state != 'departed'"/>
+                    <button name="action_next_state" type="object" string="Enregistrer l'arrivée"
+                            class="btn-primary" groups="dally_core.group_dally_logistics"
+                            invisible="state != 'in_transit'"/>
+                    <button name="action_set_customs" type="object" string="Passer en dédouanement"
+                            class="btn-primary" groups="dally_core.group_dally_logistics"
+                            invisible="state != 'arrived'"/>
+                    <button name="action_set_available" type="object" string="Marquer disponible"
+                            class="btn-secondary" groups="dally_core.group_dally_logistics"
+                            invisible="state not in ('arrived', 'customs')"/>
+                    <button name="action_set_out_for_delivery" type="object" string="Mettre en livraison"
+                            class="btn-primary" groups="dally_core.group_dally_logistics"
+                            invisible="state not in ('arrived', 'customs', 'available')"/>
+                    <button name="action_set_delivered" type="object" string="Marquer livré"
+                            class="btn-primary" groups="dally_core.group_dally_logistics"
+                            invisible="state not in ('arrived', 'customs', 'available', 'out_for_delivery')"/>
                     <button name="action_cancel" type="object" string="Cancel"
                             class="btn-secondary"
                             confirm="Cancel this shipment?"

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="consolidation_company_rule" model="ir.rule">
+        <field name="name">Consolidation : sociétés autorisées</field>
+        <field name="model_id" ref="model_dally_freight_consolidation"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+    <record id="consolidation_line_company_rule" model="ir.rule">
+        <field name="name">Ligne de consolidation : sociétés autorisées</field>
+        <field name="model_id" ref="model_dally_freight_consolidation_line"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+</odoo>

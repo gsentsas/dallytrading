@@ -200,7 +200,7 @@ Cette section est intentionnellement séparée : **rien de ce qui suit ne s'exé
 
 1. Commit + push de la branche `feat/freight-consolidation-workflow-20260825` sur `origin`.
 2. Créer la PR vers `main`, joindre :
-   - le résultat des 437 tests verts ;
+   - le résultat des 473 tests (0 erreur ; 1 canari adjacent préexistant documenté) ;
    - les captures d'écran des 6 parcours manuels ;
    - la liste explicite des invariants introduits (gardes `create`/`write`, stage tk `cancelled`, backfill idempotent).
 3. Review par un deuxième pair sur les modifications de `dally_freight/models/dally_shipment.py` (§20 est du code critique).

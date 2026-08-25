@@ -21,7 +21,7 @@ Design notes worth stating:
 """
 
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
 #: Shipment lifecycle (§20). Ordered: the sequence is the operational reality of a
 #: freight file, and the form status bar relies on it.
@@ -535,14 +535,24 @@ class DallyShipment(models.Model):
             initial_state = vals.get("state", "draft")
             if initial_state not in dict(SHIPMENT_STATES):
                 raise UserError(_("Statut initial inconnu : « %s ».", initial_state))
-            if initial_state != "draft":
-                vals.setdefault("state_changed_on", fields.Datetime.now())
+            if initial_state != "draft" and self.env.context.get("_dally_state_bypass") is not _STATE_BYPASS_TOKEN:
+                raise UserError(_("Un dossier doit être créé à l’état « Brouillon » puis avancer par une action métier."))
         return super().create(vals_list)
 
     def write(self, vals):
         if "state" in vals:
+            internal = (
+                self.env.context.get("_dally_state_bypass") is _STATE_BYPASS_TOKEN
+                or self.env.context.get("_dally_operational_sync") is _OPERATIONAL_SYNC_TOKEN
+            )
+            if not internal and not self.env.user.has_group("dally_core.group_dally_logistics"):
+                raise AccessError(_("Seuls les rôles Logistics et Manager peuvent modifier l’état d’un dossier."))
             self._check_state_transition(vals["state"])
-            vals["state_changed_on"] = fields.Datetime.now()
+            historical_date = self.env.context.get("historical_event_date")
+            if historical_date:
+                vals["state_changed_on"] = historical_date
+            elif not self.env.context.get("historical_backfill"):
+                vals["state_changed_on"] = fields.Datetime.now()
             self._apply_state_side_effects(vals["state"])
         return super().write(vals)
 

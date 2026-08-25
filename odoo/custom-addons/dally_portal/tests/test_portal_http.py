@@ -85,8 +85,8 @@ class TestPortalHttp(HttpCase):
         # « brouillon » n'en est pas — un dossier que personne n'a encore relu
         # et qui peut encore être supprimé n'a rien à faire dans l'espace
         # client. Un état réel rend cette fixture juste avec ou sans ce module.
-        shipment = cls.env["dally.shipment"].create({
-            "partner_id": partner.id, "state": "in_transit"})
+        shipment = cls.env["dally.shipment"].create({"partner_id": partner.id})
+        shipment._write_state_from_operational_source("in_transit")
         attachment = cls.env["ir.attachment"].create({
             "name": f"HTTP doc {tag}.pdf", "datas": b"JVBERi0xLjQK",
         })

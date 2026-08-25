@@ -14,6 +14,7 @@ from odoo.addons.dally_freight_bridge.models.freight_mapping import (
     STAGE_XMLID_TO_STATE,
     mode_from_transport,
     state_from_stage,
+    stage_from_state,
 )
 
 
@@ -148,6 +149,11 @@ class TestIdempotence(ProvisioningCommon):
 @tagged("post_install", "-at_install", "dally_freight")
 class TestMapping(ProvisioningCommon):
     """La traduction tk → Dally est centralisée et ferme sur l'inconnu."""
+
+    def test_round_trip_draft_vers_stage_tk_reel(self):
+        stage = stage_from_state(self.env, "draft")
+        self.assertEqual(stage, self.env.ref("tk_freight.stage_data_1"))
+        self.assertEqual(state_from_stage(self.env, stage), "draft")
 
     def test_mode_maritime_et_aerien(self):
         self.assertEqual(mode_from_transport("ocean"), "sea")

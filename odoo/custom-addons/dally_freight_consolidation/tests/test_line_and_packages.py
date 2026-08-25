@@ -63,16 +63,10 @@ class TestConsolidationLines(ConsolidationCommon):
             "package_id": shipment.package_ids.id,
             "quantity_loaded": 1,
         })
-        # On force l'état sans transiter par les gates de départ ni les
-        # préconditions dossier : le point testé est l'immutabilité, pas la
-        # gate de départ (couverte par test_departure_gate).
-        consolidation.write({"state": "collection_closed"})
-        consolidation.write({"state": "ready"})
-        consolidation.with_context(_dally_consolidation_bypass_test=True)
-        consolidation.write({"actual_departure": "2026-08-25 06:00:00"})
-        # bypass via un write direct — on est en dev, la contrainte de write
-        # sur `state` autorise ready → departed.
-        consolidation.write({"state": "departed"})
+        # Les transitions passent par les actions métier ; le test porte
+        # ensuite sur l'immutabilité de la ligne en état prêt.
+        consolidation.action_close_collection()
+        consolidation.action_mark_ready()
 
         with self.assertRaises(UserError):
             line.write({"quantity_loaded": 2})

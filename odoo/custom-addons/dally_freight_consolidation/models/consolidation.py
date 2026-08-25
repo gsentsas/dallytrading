@@ -30,6 +30,7 @@ CONSOLIDATION_TRANSITIONS = {
 }
 
 _CONSOLIDATION_BYPASS_TOKEN = object()
+_CONSOLIDATION_STATE_WRITE_TOKEN = object()
 
 def _route_text(value):
     return re.sub(r"\s+", " ", (value or "").strip().casefold())
@@ -236,10 +237,16 @@ class DallyFreightConsolidation(models.Model):
         return "%s%03d" % (prefix, (max(numbers) if numbers else 0) + 1)
 
     def write(self, vals):
+        internal_state = (
+            self.env.context.get("_dally_consolidation_state_write")
+            is _CONSOLIDATION_STATE_WRITE_TOKEN
+        )
         internal_backfill = (
             self.env.context.get("_dally_consolidation_bypass")
             is _CONSOLIDATION_BYPASS_TOKEN
         )
+        if "state" in vals and not internal_state and not internal_backfill:
+            raise UserError(_("Le statut d’une consolidation ne peut être modifié que par son action métier."))
         if "state" in vals and not internal_backfill:
             for record in self:
                 if vals["state"] != record.state and vals["state"] not in CONSOLIDATION_TRANSITIONS[record.state]:
@@ -264,18 +271,18 @@ class DallyFreightConsolidation(models.Model):
         ).write({"state": "departed", "loading_closed_on": fields.Datetime.now()})
 
     def action_open_collection(self):
-        self.write({"state": "collecting"})
+        self.with_context(_dally_consolidation_state_write=_CONSOLIDATION_STATE_WRITE_TOKEN).write({"state": "collecting"})
         return True
 
     def action_close_collection(self):
-        self.write({"state": "collection_closed", "loading_closed_on": fields.Datetime.now()})
+        self.with_context(_dally_consolidation_state_write=_CONSOLIDATION_STATE_WRITE_TOKEN).write({"state": "collection_closed", "loading_closed_on": fields.Datetime.now()})
         return True
 
     def action_mark_ready(self):
         for record in self:
             if not record.line_ids:
                 raise UserError(_("Une consolidation vide ne peut pas être prête au départ."))
-        self.write({"state": "ready"})
+        self.with_context(_dally_consolidation_state_write=_CONSOLIDATION_STATE_WRITE_TOKEN).write({"state": "ready"})
         return True
 
     def action_reopen_collection(self):
@@ -289,7 +296,7 @@ class DallyFreightConsolidation(models.Model):
                 raise UserError(_("Cette consolidation ne peut pas être rouverte."))
             record.message_post(body=_("Collecte rouverte par %(user)s. Raison : %(reason)s",
                                        user=self.env.user.display_name, reason=reason))
-        self.write({"state": "collecting", "loading_closed_on": False})
+        self.with_context(_dally_consolidation_state_write=_CONSOLIDATION_STATE_WRITE_TOKEN).write({"state": "collecting", "loading_closed_on": False})
         return True
 
     def _departure_blockers(self):
@@ -399,7 +406,7 @@ class DallyFreightConsolidation(models.Model):
 
         now = fields.Datetime.now()
         for record in self:
-            record.write({"actual_departure": record.actual_departure or now, "state": "departed"})
+            record.with_context(_dally_consolidation_state_write=_CONSOLIDATION_STATE_WRITE_TOKEN).write({"actual_departure": record.actual_departure or now, "state": "departed"})
             # One transaction: any failure rolls back the consolidation and every dossier.
             for shipment in record.shipment_ids:
                 shipment.action_set_state("departed")
@@ -409,15 +416,15 @@ class DallyFreightConsolidation(models.Model):
         return True
 
     def action_mark_arrived(self):
-        self.write({"state": "arrived", "actual_arrival": fields.Datetime.now()})
+        self.with_context(_dally_consolidation_state_write=_CONSOLIDATION_STATE_WRITE_TOKEN).write({"state": "arrived", "actual_arrival": fields.Datetime.now()})
         return True
 
     def action_close(self):
-        self.write({"state": "closed"})
+        self.with_context(_dally_consolidation_state_write=_CONSOLIDATION_STATE_WRITE_TOKEN).write({"state": "closed"})
         return True
 
     def action_cancel(self):
-        self.write({"state": "cancelled"})
+        self.with_context(_dally_consolidation_state_write=_CONSOLIDATION_STATE_WRITE_TOKEN).write({"state": "cancelled"})
         return True
 
     def action_create_next_departure(self):

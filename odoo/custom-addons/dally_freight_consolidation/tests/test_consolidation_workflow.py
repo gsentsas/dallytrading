@@ -89,7 +89,7 @@ class TestConsolidationLifecycle(ConsolidationCommon):
             "quantity_loaded": 2,
         })
 
-        # 2 colis × 5 kg = 10 kg côté client. La MAWB rapporte 12 kg brut
+        # 2 colis x 5 kg = 10 kg côté client. La MAWB rapporte 12 kg brut
         # dont 1.5 kg d'emballage maître. L'écart réconcilié doit être 0.5.
         consolidation.write({
             "master_gross_weight_kg": 12.0,

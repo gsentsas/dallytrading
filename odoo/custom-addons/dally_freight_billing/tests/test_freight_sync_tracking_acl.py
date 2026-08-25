@@ -19,13 +19,13 @@ class TestFreightSyncTrackingAcl(TransactionCase):
             "external_reference": "SYNC-TRACKING-ACL",
             "transport_mode": "air",
             "direction": "export",
-            "state": "request_received",
         })
+        self.shipment._write_state_from_operational_source("request_received")
 
     def test_sync_user_can_create_automatic_event_on_state_change(self):
-        self.shipment.with_user(self.sync_user).write({
-            "state": "goods_received",
-        })
+        self.shipment.with_user(self.sync_user)._write_state_from_operational_source(
+            "goods_received"
+        )
 
         event = self.env["dally.shipment.event"].sudo().search([
             ("shipment_id", "=", self.shipment.id),

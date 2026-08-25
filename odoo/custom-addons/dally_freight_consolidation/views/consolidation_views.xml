@@ -127,7 +127,7 @@
                                 L'écart est affiché sans modifier les poids clients. Utilisez le poids d'emballage maître uniquement pour les palettes, sacs maîtres et conditionnements réels.
                             </div>
                         </page>
-                        <page string="Vol / MAWB">
+                        <page string="Vol / MAWB" invisible="transport_mode != 'air'">
                             <group>
                                 <group><field name="carrier_name"/><field name="flight_number"/><field name="scheduled_departure"/>
                                     <field name="actual_departure"/><field name="estimated_arrival"/><field name="actual_arrival"/></group>

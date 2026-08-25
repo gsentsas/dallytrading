@@ -68,3 +68,17 @@ class TestPaymentOverride(AccountTestInvoicingCommon):
         shipment._record_payment_override("Client VIP")
         with self.assertRaises(AccessError):
             shipment.write({"departure_payment_override_reason": "hacked"})
+
+    def test_override_est_invalidee_si_la_facture_change(self):
+        shipment = self._shipment("business")
+        invoice_a = shipment.invoice_id
+        shipment._record_payment_override("Crédit validé")
+        self.assertEqual(shipment.departure_payment_override_invoice_id, invoice_a)
+        invoice_b = self.env["account.move"].create({
+            "move_type": "out_invoice", "partner_id": shipment.partner_id.id,
+            "invoice_line_ids": [(0, 0, {"name": "Fret B", "quantity": 1, "price_unit": 300.0})],
+        })
+        invoice_b.action_post()
+        shipment.write({"invoice_id": invoice_b.id})
+        self.assertFalse(shipment.departure_payment_override_invoice_id)
+        self.assertTrue(shipment._departure_blocker())

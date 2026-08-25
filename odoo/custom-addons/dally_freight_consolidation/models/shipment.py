@@ -45,6 +45,10 @@ class DallyShipment(models.Model):
         string="Dérogation accordée le", readonly=True, copy=False,
         groups="dally_core.group_dally_manager",
     )
+    departure_payment_override_invoice_id = fields.Many2one(
+        "account.move", string="Facture autorisée", readonly=True, copy=False,
+        groups="dally_core.group_dally_manager",
+    )
     departure_payment_override_residual = fields.Monetary(
         string="Solde lors de la dérogation", readonly=True, copy=False,
         currency_field="currency_id", groups="dally_core.group_dally_manager",
@@ -80,7 +84,7 @@ class DallyShipment(models.Model):
         "consolidation_line_ids.consolidation_id.state",
         # Dérogation Manager (trace immuable, mais son apparition change
         # le contrôle affiché).
-        "departure_payment_override_reason",
+        "departure_payment_override_reason", "departure_payment_override_invoice_id",
     )
     def _compute_operational_controls(self):
         for shipment in self:
@@ -90,10 +94,22 @@ class DallyShipment(models.Model):
                 shipment.payment_control = _("Dérogation Manager")
 
     def write(self, vals):
+        invalidating_invoice = "invoice_id" in vals and self.env.context.get("_dally_override_token") is not _OVERRIDE_TOKEN
         protected = {
             "departure_payment_override_reason", "departure_payment_override_user_id",
             "departure_payment_override_on", "departure_payment_override_residual",
+            "departure_payment_override_invoice_id",
         }
+        if invalidating_invoice:
+            result = super().write(vals)
+            self.sudo().with_context(_dally_override_token=_OVERRIDE_TOKEN).write({
+                "departure_payment_override_reason": False,
+                "departure_payment_override_user_id": False,
+                "departure_payment_override_on": False,
+                "departure_payment_override_residual": 0.0,
+                "departure_payment_override_invoice_id": False,
+            })
+            return result
         if protected.intersection(vals) and self.env.context.get("_dally_override_token") is not _OVERRIDE_TOKEN:
             raise AccessError(_("La trace de dérogation paiement est immuable."))
         return super().write(vals)
@@ -166,7 +182,9 @@ class DallyShipment(models.Model):
                      invoice=invoice.display_name, state=invoice.state)
         if self._invoice_is_settled():
             return False
-        if self._customer_segment() == "business" and self.departure_payment_override_reason:
+        if (self._customer_segment() == "business"
+                and self.departure_payment_override_reason
+                and self.departure_payment_override_invoice_id == invoice):
             return False
 
         paid = invoice.amount_total - invoice.amount_residual
@@ -201,6 +219,7 @@ class DallyShipment(models.Model):
         residual = self.invoice_id.amount_residual if self.invoice_id else 0.0
         self.with_context(_dally_override_token=_OVERRIDE_TOKEN).write({
             "departure_payment_override_reason": reason,
+            "departure_payment_override_invoice_id": self.invoice_id.id,
             "departure_payment_override_user_id": self.env.user.id,
             "departure_payment_override_on": fields.Datetime.now(),
             "departure_payment_override_residual": residual,

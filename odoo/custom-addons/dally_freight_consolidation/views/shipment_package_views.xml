@@ -15,7 +15,7 @@
                 <button name="action_add_to_open_consolidation" type="object"
                         string="Ajouter à la consolidation ouverte" class="btn-secondary"
                         groups="dally_core.group_dally_logistics"
-                        invisible="transport_mode != 'air' or state not in ('goods_received','preparing')"/>
+                        invisible="state not in ('goods_received','preparing')"/>
                 <button name="action_payment_override" type="object"
                         string="Dérogation paiement" class="btn-secondary"
                         groups="dally_core.group_dally_manager"
@@ -34,6 +34,7 @@
                     <field name="departure_payment_override_user_id"/>
                     <field name="departure_payment_override_on"/>
                     <field name="departure_payment_override_residual"/>
+                    <field name="departure_payment_override_invoice_id"/>
                 </group>
             </xpath>
         </field>

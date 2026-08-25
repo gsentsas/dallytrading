@@ -7,7 +7,7 @@ costs, margins and internal notes are unreachable for users who should not see
 them — enforced by the ORM, before any API layer gets involved.
 """
 
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, UserError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -48,6 +48,10 @@ class TestShipmentAccessRights(TransactionCase):
 
     # ─── Model-level access ───────────────────────────────────────────
 
+    def test_create_non_draft_state_is_refused(self):
+        with self.assertRaises(UserError):
+            self.Shipment.create({"partner_id": self.partner.id, "state": "ready"})
+
     def test_readonly_user_can_read(self):
         shipment = self.shipment.with_user(self.readonly_user)
         self.assertEqual(shipment.reference, self.shipment.reference)
@@ -63,6 +67,11 @@ class TestShipmentAccessRights(TransactionCase):
                 "transport_mode": "air",
                 "direction": "export",
             })
+
+    def test_commercial_and_finance_cannot_update_status(self):
+        for user in (self.commercial_user, self.finance_user):
+            with self.assertRaises(AccessError):
+                self.shipment.with_user(user).write({"state": "request_received"})
 
     def test_logistics_user_can_update_status(self):
         # Le test vérifie l'ACL, pas la mécanique de transition : on choisit

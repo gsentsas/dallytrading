@@ -66,6 +66,7 @@ STATE_TO_STAGE_XMLID = {
         "available", "out_for_delivery", "delivered", "cancelled",
     )
 }
+STATE_TO_STAGE_XMLID["draft"] = "tk_freight.stage_data_1"
 
 #: Transport tk → mode `dally.shipment`.
 #:

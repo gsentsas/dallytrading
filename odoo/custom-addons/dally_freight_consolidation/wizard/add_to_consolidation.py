@@ -77,6 +77,8 @@ class DallyAddToConsolidationWizard(models.TransientModel):
                   state=self.shipment_id.state,
                   allowed=", ".join(_ALLOWED_SHIPMENT_STATES))
             )
+        if not self.shipment_id.package_ids:
+            raise UserError(_("Ce dossier ne contient aucun colis à charger."))
         if self.consolidation_id.state != "collecting":
             raise UserError(
                 _("La consolidation choisie n'est plus en collecte."))

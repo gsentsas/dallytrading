@@ -362,6 +362,27 @@ class TestAddToConsolidationServerRecheck(ConsolidationCommon):
             ("consolidation_id", "=", bad.id),
         ]))
 
+    def test_dossier_sans_colis_refuse_avec_message_metier(self):
+        consolidation = self._consolidation(name="AIR-DSS-CDG-2026-WIZ-NO-PACKAGE")
+        shipment = self.env["dally.shipment"].create({
+            "partner_id": self.business.id,
+            "external_reference": "WIZ-NO-PACKAGE",
+            "transport_mode": "air",
+            "direction": "export",
+            "origin_city": "Dakar", "origin_location": "DSS",
+            "destination_city": "Paris", "destination_location": "CDG",
+            "customer_segment_snapshot": "business",
+        })
+        set_shipment_state(shipment, "goods_received")
+        wizard = self.env["dally.add.to.consolidation.wizard"].create({
+            "shipment_id": shipment.id, "consolidation_id": consolidation.id,
+        })
+        with self.assertRaisesRegex(UserError, "aucun colis à charger"):
+            wizard.action_confirm()
+        self.assertFalse(self.env["dally.freight.consolidation.line"].search([
+            ("shipment_id", "=", shipment.id),
+        ]))
+
     def test_dossier_en_ready_refuse_par_le_wizard(self):
         consolidation = self._consolidation(name="AIR-DSS-CDG-2026-WIZ-READY")
         shipment = self._shipment(reference="WIZ-STATE-KO")

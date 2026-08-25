@@ -228,7 +228,8 @@ class DallyFreightConsolidation(models.Model):
         destination = (
             vals.get("destination_location") or vals.get("destination_city") or "DST"
         )
-        clean = lambda value: re.sub(r"[^A-Z0-9]", "", str(value).upper())[:3] or "XXX"
+        def clean(value):
+            return re.sub(r"[^A-Z0-9]", "", str(value).upper())[:3] or "XXX"
         date = fields.Date.to_date(vals.get("collection_open_on")) or fields.Date.context_today(self)
         prefix = "%s-%s-%s-%s-" % (mode, clean(origin), clean(destination), date.year)
         self.env.cr.execute(

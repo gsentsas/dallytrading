@@ -88,7 +88,7 @@ def _setup(env, prefix, quantity):
 
 
 def _scenario(dbname, uid, ids, mode):
-    shipment_id, package_id, cons_a_id, cons_b_id = ids
+    _shipment_id, package_id, cons_a_id, cons_b_id = ids
     a_holds = threading.Event()
     release_a = threading.Event()
     b_started = threading.Event()
@@ -210,7 +210,7 @@ def _cleanup(dbname, uid, prefix):
         raise AssertionError("nettoyage incomplet: %r" % remaining)
 
 
-def run(env):
+def run(env):  # noqa: F821
     dbname = env.cr.dbname
     uid = SUPERUSER_ID
     prefix = "CONCURRENCY-PROBE-%s" % uuid.uuid4().hex[:10]

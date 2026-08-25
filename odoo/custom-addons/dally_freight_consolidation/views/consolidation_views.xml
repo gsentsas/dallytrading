@@ -62,7 +62,7 @@
                     <button name="action_create_next_departure" type="object" string="Créer le prochain départ"
                             class="btn-secondary" invisible="state not in ('departed','arrived','closed')"/>
                     <button name="action_historical_backfill" type="object" string="Prévisualiser le backfill"
-                            groups="dally_core.group_dally_manager"
+                            groups="dally_core.group_dally_manager"/>
                     <button name="%(action_consolidation_manifest)d" type="action" string="Imprimer le manifeste"
                             class="btn-secondary"/>
                     <field name="state" widget="statusbar"

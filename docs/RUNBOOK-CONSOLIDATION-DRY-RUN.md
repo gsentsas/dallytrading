@@ -164,7 +164,7 @@ docker run --rm -i --entrypoint /usr/bin/python3 \
   --volumes-from dallytrading-restore-odoo \
   odoo:19.0-20260810 /usr/bin/odoo shell --config=/dev/null \
   --db_host=dallytrading-restore-postgres --db_port=5432 \
-  --db_user=dryrun_odoo --db_password="" \
+  --db_user="$RESTORE_DB_USER" --db_password="$POSTGRES_PASSWORD" \
   -d dallytrading_restore --addons-path=/mnt/extra-addons,/mnt/vendor-addons \
   < /mnt/extra-addons/dally_freight_consolidation/scripts/verify_concurrency_probe.py
 ```
@@ -175,7 +175,6 @@ enregistrement.
 
 Facultatif si (5) est vert. À réserver aux Managers freight.
 
-Facultatif si (5) est vert. À réserver aux Managers freight.
 
 Publier temporairement Odoo sur `127.0.0.1:8199` — jamais sur `0.0.0.0` :
 
@@ -226,7 +225,7 @@ Cette section est intentionnellement séparée : **rien de ce qui suit ne s'exé
 
 1. Commit + push de la branche `feat/freight-consolidation-workflow-20260825` sur `origin`.
 2. Créer la PR vers `main`, joindre :
-   - le résultat des 476 tests (0 failed, 0 error) ;
+   - le résultat des 479 tests (0 failed, 0 error) ;
    - les captures d'écran des 6 parcours manuels ;
    - la liste explicite des invariants introduits (gardes `create`/`write`, stage tk `cancelled`, backfill idempotent).
 3. Review par un deuxième pair sur les modifications de `dally_freight/models/dally_shipment.py` (§20 est du code critique).

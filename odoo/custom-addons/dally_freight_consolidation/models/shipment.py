@@ -94,23 +94,26 @@ class DallyShipment(models.Model):
                 shipment.payment_control = _("Dérogation Manager")
 
     def write(self, vals):
-        invalidating_invoice = "invoice_id" in vals and self.env.context.get("_dally_override_token") is not _OVERRIDE_TOKEN
+        internal = self.env.context.get("_dally_override_token") is _OVERRIDE_TOKEN
         protected = {
             "departure_payment_override_reason", "departure_payment_override_user_id",
             "departure_payment_override_on", "departure_payment_override_residual",
             "departure_payment_override_invoice_id",
         }
-        if invalidating_invoice:
+        if "invoice_id" in vals and not internal:
+            new_invoice_id = vals.get("invoice_id") or False
+            changed_invoice = self.filtered(lambda shipment: shipment.invoice_id.id != new_invoice_id)
             result = super().write(vals)
-            self.sudo().with_context(_dally_override_token=_OVERRIDE_TOKEN).write({
-                "departure_payment_override_reason": False,
-                "departure_payment_override_user_id": False,
-                "departure_payment_override_on": False,
-                "departure_payment_override_residual": 0.0,
-                "departure_payment_override_invoice_id": False,
-            })
+            if changed_invoice:
+                changed_invoice.sudo().with_context(_dally_override_token=_OVERRIDE_TOKEN).write({
+                    "departure_payment_override_reason": False,
+                    "departure_payment_override_user_id": False,
+                    "departure_payment_override_on": False,
+                    "departure_payment_override_residual": 0.0,
+                    "departure_payment_override_invoice_id": False,
+                })
             return result
-        if protected.intersection(vals) and self.env.context.get("_dally_override_token") is not _OVERRIDE_TOKEN:
+        if protected.intersection(vals) and not internal:
             raise AccessError(_("La trace de dérogation paiement est immuable."))
         return super().write(vals)
 

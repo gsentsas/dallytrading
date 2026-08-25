@@ -87,3 +87,17 @@ class TestPaymentOverride(AccountTestInvoicingCommon):
         shipment.write({"invoice_id": invoice_b.id})
         self.assertFalse(shipment.departure_payment_override_invoice_id)
         self.assertTrue(shipment._departure_blocker())
+    def test_override_conservee_si_la_meme_facture_est_recrite(self):
+        shipment = self._shipment("business")
+        invoice = shipment.invoice_id
+        shipment._record_payment_override("Crédit validé")
+        shipment.write({"invoice_id": invoice.id})
+        self.assertEqual(shipment.departure_payment_override_invoice_id, invoice)
+        self.assertEqual(shipment.departure_payment_override_reason, "Crédit validé")
+
+    def test_override_invalidee_si_la_facture_est_effacee(self):
+        shipment = self._shipment("business")
+        shipment._record_payment_override("Crédit validé")
+        shipment.write({"invoice_id": False})
+        self.assertFalse(shipment.departure_payment_override_invoice_id)
+        self.assertFalse(shipment.departure_payment_override_reason)

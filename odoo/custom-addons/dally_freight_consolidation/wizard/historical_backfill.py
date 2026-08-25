@@ -10,6 +10,7 @@ from odoo.addons.dally_freight.models.dally_shipment import _HISTORICAL_BACKFILL
 from ..models.consolidation import route_endpoint_compatible
 
 _logger = logging.getLogger(__name__)
+_REASON_ROUTE = "route"
 
 
 class DallyConsolidationBackfillWizard(models.TransientModel):
@@ -67,8 +68,8 @@ class DallyConsolidationBackfillWizard(models.TransientModel):
         Candidate = self.env["dally.consolidation.backfill.line"]
         rows = []
         for shipment in shipments:
-            reason = self._eligibility_reason(shipment)
-            if reason == _("Route incompatible."):
+            reason_code, reason = self._eligibility(shipment)
+            if reason_code == _REASON_ROUTE:
                 _logger.info("Backfill route exclusion %s: route mismatch", shipment.external_reference or shipment.reference)
                 continue
             existing = shipment.consolidation_ids.filtered(
@@ -104,30 +105,36 @@ class DallyConsolidationBackfillWizard(models.TransientModel):
             "res_id": self.id, "view_mode": "form", "target": "new",
         }
 
-    def _eligibility_reason(self, shipment):
-        """Single authoritative eligibility check shared by preview/confirm."""
+    def _eligibility(self, shipment):
+        """Return a stable reason code and its translated display message."""
         consolidation = self.consolidation_id
         if shipment.company_id != consolidation.company_id:
-            return _("Société incompatible.")
+            return "company", _("Société incompatible.")
         if shipment.transport_mode != consolidation.transport_mode or shipment.direction != consolidation.direction:
-            return _("Mode ou direction incompatible.")
+            return "mode_direction", _("Mode ou direction incompatible.")
         if not route_endpoint_compatible(consolidation, shipment, "origin") or not route_endpoint_compatible(consolidation, shipment, "destination"):
-            return _("Route incompatible.")
+            return _REASON_ROUTE, _("Route incompatible.")
         if not shipment.goods_received_on or shipment.goods_received_on >= self.cutoff_date:
-            return _("Date de réception hors cutoff.")
+            return "cutoff", _("Date de réception hors cutoff.")
         if shipment.state == "cancelled":
-            return _("Dossier annulé : exclu par défaut.")
+            return "cancelled", _("Dossier annulé : exclu par défaut.")
         existing = shipment.consolidation_ids.filtered(lambda record: record.state != "cancelled")
         if existing and any(record != consolidation for record in existing):
-            return _("Déjà rattaché à une autre consolidation : %s", ", ".join(existing.mapped("name")))
+            return "consolidation", _(
+                "Déjà rattaché à une autre consolidation : %s", ", ".join(existing.mapped("name"))
+            )
         if not existing:
             for package in shipment.package_ids:
                 loaded = sum(package.consolidation_line_ids.filtered(
                     lambda line: line.consolidation_id.state != "cancelled"
                 ).mapped("quantity_loaded"))
                 if loaded >= package.quantity:
-                    return _("Le colis %s n'est plus disponible.", package.display_name)
-        return False
+                    return "package", _("Le colis %s n'est plus disponible.", package.display_name)
+        return False, False
+
+    def _eligibility_reason(self, shipment):
+        """Compatibility helper returning only the translated message."""
+        return self._eligibility(shipment)[1]
 
     def action_confirm(self):
         self.ensure_one()
@@ -142,7 +149,7 @@ class DallyConsolidationBackfillWizard(models.TransientModel):
             raise UserError(_("Aucun dossier n'est sélectionné."))
         invalid = []
         for candidate in selected:
-            reason = self._eligibility_reason(candidate.shipment_id)
+            _reason_code, reason = self._eligibility(candidate.shipment_id)
             if reason:
                 invalid.append("%s : %s" % (candidate.external_reference or candidate.shipment_id.reference, reason))
         if invalid:

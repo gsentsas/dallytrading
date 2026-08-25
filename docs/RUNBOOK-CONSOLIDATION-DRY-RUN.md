@@ -149,6 +149,32 @@ Cible attendue : le nombre final de tests est renseigné après la suite complè
 
 ## 6. Contrôles fonctionnels manuels (Odoo interactif éphémère)
 
+### Validation concurrence réelle
+
+Sur une base de dry-run isolée, le probe ouvre deux connexions PostgreSQL
+indépendantes et appelle réellement `line.create()` / `package.write()` depuis
+deux `Environment` Odoo. Il vérifie dans `pg_locks` que le second appel attend
+le même verrou advisory avant d'être revalidé.
+
+```bash
+docker run --rm -i --entrypoint /usr/bin/python3 \
+  --network dallytrading_restore_private \
+  -v /var/www/vhosts/dallytrading.com/platform/odoo/custom-addons:/mnt/extra-addons:ro \
+  -v /var/www/vhosts/dallytrading.com/vendor-addons:/mnt/vendor-addons:ro \
+  --volumes-from dallytrading-restore-odoo \
+  odoo:19.0-20260810 /usr/bin/odoo shell --config=/dev/null \
+  --db_host=dallytrading-restore-postgres --db_port=5432 \
+  --db_user=dryrun_odoo --db_password="" \
+  -d dallytrading_restore --addons-path=/mnt/extra-addons,/mnt/vendor-addons \
+  < /mnt/extra-addons/dally_freight_consolidation/scripts/verify_concurrency_probe.py
+```
+
+Le probe crée des données préfixées `CONCURRENCY-PROBE-*`, confirme les deux
+scénarios, puis les supprime dans un `finally` et vérifie qu'il ne reste aucun
+enregistrement.
+
+Facultatif si (5) est vert. À réserver aux Managers freight.
+
 Facultatif si (5) est vert. À réserver aux Managers freight.
 
 Publier temporairement Odoo sur `127.0.0.1:8199` — jamais sur `0.0.0.0` :

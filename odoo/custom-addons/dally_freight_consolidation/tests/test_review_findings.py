@@ -172,6 +172,12 @@ class TestOperationalCompatibility(ConsolidationCommon):
         self.env["dally.shipment.package"].create(pkg)
         return shipment
 
+    def test_filtres_route_utilisent_les_champs_structures(self):
+        arch = self.env.ref("dally_freight_consolidation.client_package_view_search").arch_db
+        self.assertIn("shipment_id.origin_city", arch)
+        self.assertIn("shipment_id.destination_city", arch)
+        self.assertNotIn("route_summary','ilike','Dakar", arch)
+
     def test_autre_mode_refuse(self):
         consolidation = self._consolidation()
         shipment = self._other_route_shipment(transport_mode="sea", reference="MODE-KO")
@@ -301,7 +307,7 @@ class TestLinesFrozenOutsideCollecting(ConsolidationCommon):
             line.write({"quantity_loaded": 2})
 
     def test_deplacement_vers_consolidation_hors_collecting_refuse(self):
-        consolidation_src, shipment, line = self._line_at("MOVE-SRC")
+        _consolidation_src, _shipment, line = self._line_at("MOVE-SRC")
         # Une consolidation cible existe, en `ready` — elle ne doit pas accepter
         # une ligne déplacée depuis une consolidation ouverte.
         cible = self._consolidation(name="AIR-DSS-CDG-2026-FROZEN-CIBLE-READY")
@@ -525,6 +531,20 @@ class TestCancelAfterDeparture(ConsolidationCommon):
 class TestPaymentGateNotBypassable(ConsolidationCommon):
     """Finding #10 : la projection tk → Dally ne doit pas contourner le
     contrôle de paiement pour `departed`."""
+
+    def test_operational_sync_ne_rouvre_pas_delivered(self):
+        shipment = self._shipment(reference="OPSYNC-CLOSED-DEL")
+        set_shipment_state(shipment, "delivered")
+        with self.assertRaises(UserError):
+            shipment._write_state_from_operational_source("in_transit")
+        self.assertEqual(shipment.state, "delivered")
+
+    def test_operational_sync_ne_rouvre_pas_cancelled(self):
+        shipment = self._shipment(reference="OPSYNC-CLOSED-CAN")
+        set_shipment_state(shipment, "cancelled")
+        with self.assertRaises(UserError):
+            shipment._write_state_from_operational_source("preparing")
+        self.assertEqual(shipment.state, "cancelled")
 
     def test_write_state_from_operational_source_refuse_departed_sans_facture(self):
         """L'entrée privée du bridge doit re-vérifier la gate financière."""

@@ -100,6 +100,8 @@ class DallyShipment(models.Model):
             "departure_payment_override_on", "departure_payment_override_residual",
             "departure_payment_override_invoice_id",
         }
+        if protected.intersection(vals) and not internal:
+            raise AccessError(_("La trace de dérogation paiement est immuable."))
         if "invoice_id" in vals and not internal:
             new_invoice_id = vals.get("invoice_id") or False
             changed_invoice = self.filtered(lambda shipment: shipment.invoice_id.id != new_invoice_id)
@@ -113,8 +115,6 @@ class DallyShipment(models.Model):
                     "departure_payment_override_invoice_id": False,
                 })
             return result
-        if protected.intersection(vals) and not internal:
-            raise AccessError(_("La trace de dérogation paiement est immuable."))
         return super().write(vals)
 
 

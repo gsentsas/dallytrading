@@ -118,6 +118,18 @@ class TestFreightSyncService(TransactionCase):
         with self.assertRaises(ValidationError):
             self.Sync.upsert(payload)
 
+    def test_existing_draft_rejection_happens_before_partner_mutation(self):
+        _data, shipment = self.Sync.upsert(self._payload())
+        partner = shipment.partner_id
+        original_name = partner.name
+        payload = self._payload(state="draft")
+        payload["client"] = dict(payload["client"], name="Client B invalide")
+        with self.assertRaises(ValidationError):
+            self.Sync.upsert(payload)
+        self.assertEqual(shipment.partner_id, partner)
+        self.assertEqual(partner.name, original_name)
+        self.assertFalse(self.env["res.partner"].search([("name", "=", "Client B invalide")]))
+
     def test_same_business_keys_are_idempotent_with_new_http_request(self):
         first, first_shipment = self.Sync.upsert(self._payload())
         second_payload = self._payload()

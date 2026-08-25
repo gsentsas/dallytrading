@@ -67,6 +67,7 @@ class DallyConsolidationBackfillWizard(models.TransientModel):
         )
         Candidate = self.env["dally.consolidation.backfill.line"]
         rows = []
+        included_count = 0
         for shipment in shipments:
             reason_code, reason = self._eligibility(shipment)
             if reason_code == _REASON_ROUTE:
@@ -77,6 +78,7 @@ class DallyConsolidationBackfillWizard(models.TransientModel):
             )
             invoice = shipment.invoice_id
             include = not reason and not existing
+            included_count += int(include)
             Candidate.create({
                 "wizard_id": self.id, "shipment_id": shipment.id, "include": include,
                 "external_reference": shipment.external_reference,
@@ -99,7 +101,10 @@ class DallyConsolidationBackfillWizard(models.TransientModel):
                    invoice.display_name if invoice else "-", invoice.payment_state if invoice else "-",
                    invoice.amount_residual if invoice else "-", ",".join(existing.mapped("name")) or "-")
             )
-        _logger.info("DRY RUN consolidation %s\n%s", self.consolidation_id.name, "\n".join(rows))
+        _logger.info(
+            "Historical consolidation dry-run: consolidation_id=%s candidates=%s included=%s",
+            consolidation.id, len(rows), included_count,
+        )
         return {
             "type": "ir.actions.act_window", "res_model": self._name,
             "res_id": self.id, "view_mode": "form", "target": "new",

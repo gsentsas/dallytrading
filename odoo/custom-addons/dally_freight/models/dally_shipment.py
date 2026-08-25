@@ -585,6 +585,8 @@ class DallyShipment(models.Model):
         for shipment in self:
             if shipment.state == new_state:
                 continue
+            if shipment.state in CLOSING_STATES:
+                raise UserError(_("Le dossier est clôturé et ne peut plus être rouvert."))
             allowed = ALLOWED_STATE_TRANSITIONS.get(shipment.state, set())
             if new_state not in allowed and not operational_sync:
                 next_states = [labels.get(code, code) for code in allowed]

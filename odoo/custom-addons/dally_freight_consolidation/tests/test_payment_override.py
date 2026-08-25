@@ -87,6 +87,28 @@ class TestPaymentOverride(AccountTestInvoicingCommon):
         shipment.write({"invoice_id": invoice_b.id})
         self.assertFalse(shipment.departure_payment_override_invoice_id)
         self.assertTrue(shipment._departure_blocker())
+    def test_champs_override_proteges_avec_invoice_id_meme(self):
+        shipment = self._shipment("business")
+        invoice_a = shipment.invoice_id
+        shipment._record_payment_override("Origine")
+        with self.assertRaises(AccessError):
+            shipment.write({"invoice_id": invoice_a.id, "departure_payment_override_reason": "forged"})
+        self.assertEqual(shipment.departure_payment_override_reason, "Origine")
+        self.assertEqual(shipment.invoice_id, invoice_a)
+
+    def test_champs_override_proteges_avant_changement_invoice(self):
+        shipment = self._shipment("business")
+        invoice_b = self.env["account.move"].create({
+            "move_type": "out_invoice", "partner_id": shipment.partner_id.id,
+            "invoice_line_ids": [(0, 0, {"name": "Fret B", "quantity": 1, "price_unit": 300.0})],
+        })
+        invoice_b.action_post()
+        shipment._record_payment_override("Origine")
+        with self.assertRaises(AccessError):
+            shipment.write({"invoice_id": invoice_b.id, "departure_payment_override_reason": "forged"})
+        self.assertEqual(shipment.invoice_id, shipment.departure_payment_override_invoice_id)
+        self.assertEqual(shipment.departure_payment_override_reason, "Origine")
+
     def test_override_conservee_si_la_meme_facture_est_recrite(self):
         shipment = self._shipment("business")
         invoice = shipment.invoice_id

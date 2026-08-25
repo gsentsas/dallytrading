@@ -12,6 +12,7 @@ donc trois invariants :
 from odoo import fields
 from odoo.exceptions import AccessError
 from odoo.tests import tagged
+from unittest.mock import patch
 
 from .common import ConsolidationCommon
 
@@ -46,6 +47,15 @@ class TestHistoricalBackfill(ConsolidationCommon):
             "consolidation_id": self.historical.id,
             "cutoff_date": "2026-08-25",
         })
+
+    def test_preview_log_ne_contient_pas_les_donnees_client_ou_financieres(self):
+        wizard = self._wizard()
+        with patch("odoo.addons.dally_freight_consolidation.wizard.historical_backfill._logger.info") as logger:
+            wizard.action_preview()
+        messages = " ".join(str(call.args) for call in logger.call_args_list)
+        self.assertNotIn("Business Client", messages)
+        self.assertNotIn("residual", messages)
+        self.assertNotIn("not_paid", messages)
 
     def test_previsualisation_ne_modifie_aucune_donnee(self):
         packages_before = self.past_a.package_ids.consolidation_line_ids

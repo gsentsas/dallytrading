@@ -206,6 +206,7 @@ class DallyFreightConsolidation(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        reserved_names = set()
         for vals in vals_list:
             initial_state = vals.get("state", "draft")
             if initial_state not in {"draft", "collecting"}:
@@ -216,11 +217,12 @@ class DallyFreightConsolidation(models.Model):
             # notre garde). On teste explicitement toutes les formes vides.
             placeholder = vals.get("name")
             if not placeholder or placeholder in (_("Nouveau"), "Nouveau", "New"):
-                vals["name"] = self._next_route_reference(vals)
+                vals["name"] = self._next_route_reference(vals, reserved_names)
+                reserved_names.add(vals["name"])
         return super().create(vals_list)
 
     @api.model
-    def _next_route_reference(self, vals):
+    def _next_route_reference(self, vals, reserved_names=None):
         mode = {"air": "AIR", "sea": "SEA", "road": "ROAD"}.get(
             vals.get("transport_mode", "air"), "CONS"
         )
@@ -238,6 +240,9 @@ class DallyFreightConsolidation(models.Model):
         existing = self.with_context(active_test=False).search([("company_id", "=", vals.get("company_id") or self.env.company.id),
                                 ("name", "like", prefix + "%")]).mapped("name")
         numbers = [int(name[-3:]) for name in existing if re.match(r"^.*-\d{3}$", name)]
+        reserved_names = reserved_names or ()
+        numbers.extend(int(name[-3:]) for name in reserved_names
+                       if name.startswith(prefix) and re.match(r"^.*-\d{3}$", name))
         return "%s%03d" % (prefix, (max(numbers) if numbers else 0) + 1)
 
     def write(self, vals):

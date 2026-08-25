@@ -72,8 +72,8 @@
                 <separator/>
                 <filter name="air" string="Aérien" domain="[('transport_mode','=','air')]"/>
                 <filter name="sea" string="Maritime" domain="[('transport_mode','=','sea')]"/>
-                <filter name="dss_cdg" string="Dakar → Paris" domain="[('route_summary','ilike','Dakar'),('route_summary','ilike','Paris')]"/>
-                <filter name="cdg_dss" string="Paris → Dakar" domain="[('route_summary','ilike','Paris'),('route_summary','ilike','Dakar')]"/>
+                <filter name="dss_cdg" string="Dakar → Paris" domain="[('shipment_id.origin_city','=ilike','Dakar'),'|',('shipment_id.origin_location','=',False),('shipment_id.origin_location','=ilike','DSS'),('shipment_id.destination_city','=ilike','Paris'),'|',('shipment_id.destination_location','=',False),('shipment_id.destination_location','=ilike','CDG')]"/>
+                <filter name="cdg_dss" string="Paris → Dakar" domain="[('shipment_id.origin_city','=ilike','Paris'),'|',('shipment_id.origin_location','=',False),('shipment_id.origin_location','=ilike','CDG'),('shipment_id.destination_city','=ilike','Dakar'),'|',('shipment_id.destination_location','=',False),('shipment_id.destination_location','=ilike','DSS')]"/>
                 <separator/>
                 <filter name="group_client" string="Client" context="{'group_by':'partner_id'}"/>
                 <filter name="group_shipment" string="Dossier" context="{'group_by':'shipment_id'}"/>

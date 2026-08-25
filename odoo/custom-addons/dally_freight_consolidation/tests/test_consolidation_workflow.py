@@ -31,6 +31,25 @@ class TestConsolidationLifecycle(ConsolidationCommon):
         # dépend pas d'une année précise pour ne pas casser en 2027.
         self.assertRegex(consolidation.name, r"^AIR-DSS-CDG-\d{4}-\d{3}$")
 
+    def test_creation_batch_reserve_des_references_uniques(self):
+        vals = [{
+            "transport_mode": "air", "direction": "export",
+            "origin_city": "Dakar", "origin_location": "DSS",
+            "destination_city": "Paris", "destination_location": "CDG",
+        } for _ in range(3)]
+        records = self.env["dally.freight.consolidation"].create(vals)
+        self.assertEqual(len(set(records.mapped("name"))), 3)
+        self.assertEqual([name[-3:] for name in records.mapped("name")], ["001", "002", "003"])
+
+    def test_creation_batch_routes_differentes_garde_les_sequences(self):
+        records = self.env["dally.freight.consolidation"].create([
+            {"transport_mode": "air", "direction": "export", "origin_city": "Dakar", "origin_location": "DSS", "destination_city": "Paris", "destination_location": "CDG"},
+            {"transport_mode": "air", "direction": "export", "origin_city": "Paris", "origin_location": "CDG", "destination_city": "Dakar", "destination_location": "DSS"},
+        ])
+        self.assertNotEqual(records[0].name, records[1].name)
+        self.assertTrue(records[0].name.endswith("-001"))
+        self.assertTrue(records[1].name.endswith("-001"))
+
     def test_ouvrir_puis_cloturer_la_collecte(self):
         consolidation = self._consolidation()
         consolidation.action_close_collection()

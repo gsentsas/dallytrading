@@ -269,7 +269,7 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
   const plannedRef = firstText_(rows, DALLY.columns.plannedConsolidation);
   const sourceKey = sourceKey_(sheetName, dossier, rows);
   const payload = {
-    external_reference: (firstText_(rows, DALLY.columns.globalExternalReference) || (firstNumber_(rows, DALLY.columns.shipmentId) ? '' : dossier)) || undefined,
+    external_reference: payloadExternalReference_(rows, dossier),
     sync_source_key: sourceKey,
     transport_mode: route.mode || DALLY.modeCodes[display_(first, DALLY.columns.transportMode)],
     direction: route.direction,
@@ -334,8 +334,9 @@ function prepareInvoice_(sheet, rows, cfg, force) {
     if (force) throw new Error(message);
     return null;
   }
-  const globalRef = firstText_(rows, DALLY.columns.globalExternalReference) || (shipmentId ? '' : dossier);
-  const payload = shipmentId ? {shipment_id: shipmentId, external_reference: globalRef} : {external_reference: globalRef};
+  const globalRef = payloadExternalReference_(rows, dossier);
+  const payload = shipmentId ? {shipment_id: shipmentId} : {};
+  if (globalRef) payload.external_reference = globalRef;
   const data = apiPost_('/api/v1/freight/invoice', 'DALLY_FREIGHT_BILLING_API_KEY', payload, cfg);
   rows.forEach(row => {
     setCell_(sheet, row.row, DALLY.columns.saleOrderId, data.sale_order_id || '');
@@ -377,7 +378,7 @@ function syncPayments_(sheet, rows, cfg, force) {
     if (!method) throw new Error('Mode de paiement non mappé: ' + methodLabel);
     const payload = {
       external_payment_key: key,
-      external_reference: firstText_(rows, DALLY.columns.globalExternalReference) || (shipmentId ? '' : dossier),
+      ...(payloadExternalReference_(rows, dossier) ? {external_reference: payloadExternalReference_(rows, dossier)} : {}),
       shipment_id: shipmentId || undefined,
       amount: eur > 0 ? eur : xof,
       currency_code: eur > 0 ? 'EUR' : 'XOF',
@@ -397,7 +398,7 @@ function syncPayments_(sheet, rows, cfg, force) {
   });
 
   const reconcilePayload = {
-    external_reference: firstText_(rows, DALLY.columns.globalExternalReference) || (shipmentId ? '' : dossier),
+    ...(payloadExternalReference_(rows, dossier) ? {external_reference: payloadExternalReference_(rows, dossier)} : {}),
     shipment_id: shipmentId || undefined,
     active_payment_keys: activeKeys,
     source: source,
@@ -528,13 +529,67 @@ function logicalDossierKey_(row) {
   return (planned ? planned + '|' : '') + dossier;
 }
 
+// Resolve the identity sent to freight/billing endpoints.  A planned dossier
+// only falls back to its visible Axxx while it is still a legacy first bind;
+// once Odoo has returned a server identity, the local Axxx must never be sent
+// as a forged global reference.
+function payloadExternalReference_(rows, dossier) {
+  const global = firstText_(rows, DALLY.columns.globalExternalReference);
+  if (global) return global;
+  const planned = firstText_(rows, DALLY.columns.plannedConsolidation);
+  if (!planned) return dossier;
+  const serverIdentified = !!(
+    firstNumber_(rows, DALLY.columns.shipmentId) ||
+    firstText_(rows, DALLY.columns.intakeConsolidationRef) ||
+    firstText_(rows, DALLY.columns.collectionLocalRef) ||
+    firstText_(rows, DALLY.columns.lastSync)
+  );
+  return serverIdentified ? '' : dossier;
+}
+
 function dirtyDossiers_(sheet) {
   const last = sheet.getLastRow();
   if (last < DALLY.firstDataRow) return [];
-  const data = sheet.getRange(DALLY.firstDataRow, 1, last - DALLY.firstDataRow + 1, DALLY.maxColumn).getDisplayValues();
-  const out = []; const seen = new Set();
-  data.forEach(r => { const key = logicalDossierKey_(r); const status = String(r[DALLY.columns.syncStatus - 1] || '').trim(); if (key && status === 'À synchroniser' && !seen.has(key)) { seen.add(key); out.push(key); } });
-  return out;
+  const start = DALLY.firstDataRow;
+  const count = last - start + 1;
+  const values = sheet.getRange(start, 1, count, DALLY.maxColumn).getValues();
+  const display = sheet.getRange(start, 1, count, DALLY.maxColumn).getDisplayValues();
+  const groups = new Map();
+  for (let i = 0; i < count; i++) {
+    const row = display[i];
+    const dossier = String(row[DALLY.columns.dossier - 1] || '').trim();
+    const planned = String(row[DALLY.columns.plannedConsolidation - 1] || '').trim();
+    if (!dossier) continue; // blank-B dossiers remain manual-init only.
+    const namespace = (planned ? planned + '|' : '') + dossier;
+    if (!groups.has(namespace)) groups.set(namespace, []);
+    groups.get(namespace).push({index: i, values: values[i], display: row});
+  }
+  const out = [];
+  groups.forEach((members, namespace) => {
+    const unique = column => new Set(members.map(m => String(m.display[column - 1] || '').trim()).filter(Boolean));
+    const planned = unique(DALLY.columns.plannedConsolidation);
+    const clients = unique(DALLY.columns.client);
+    const sources = unique(DALLY.columns.syncSourceKey);
+    const globals = unique(DALLY.columns.globalExternalReference);
+    const shipments = unique(DALLY.columns.shipmentId);
+    if (planned.size > 1 || clients.size > 1 || sources.size > 1 || globals.size > 1 || shipments.size > 1) {
+      members.forEach(m => {
+        setCell_(sheet, start + m.index, DALLY.columns.syncStatus, 'Erreur');
+        setCell_(sheet, start + m.index, DALLY.columns.syncMessage, 'La sélection contient des identités de dossier en conflit.');
+      });
+      return;
+    }
+    const source = sources.values().next().value || '';
+    if (source && members.some(m => !String(m.display[DALLY.columns.syncSourceKey - 1] || '').trim())) {
+      members.forEach(m => {
+        setCell_(sheet, start + m.index, DALLY.columns.syncSourceKey, source);
+        m.display[DALLY.columns.syncSourceKey - 1] = source;
+      });
+    }
+    const key = source ? 'source|' + source : (globals.values().next().value ? 'global|' + globals.values().next().value : namespace);
+    if (members.some(m => String(m.display[DALLY.columns.syncStatus - 1] || '').trim() === 'À synchroniser')) out.push(key);
+  });
+  return [...new Set(out)];
 }
 
 function rowsForDossier_(sheet, key) {

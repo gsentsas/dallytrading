@@ -45,11 +45,15 @@ if (externalRef({planned: 'C1', dossier: 'A001', global: 'C1-A001'}) !== 'C1-A00
 
 const normalizeGroups = rows => {
   const groups = new Map();
-  rows.filter(r => r.dossier).forEach(r => {
-    const namespace = r.planned ? `${r.planned}|${r.dossier}` : r.dossier;
-    if (!groups.has(namespace)) groups.set(namespace, []);
-    groups.get(namespace).push({...r});
-  });
+  rows
+    .filter(r => String(r.dossier ?? '').trim())
+    .forEach(r => {
+      const dossier = String(r.dossier ?? '').trim();
+      const planned = String(r.planned ?? '').trim();
+      const namespace = planned ? `${planned}|${dossier}` : dossier;
+      if (!groups.has(namespace)) groups.set(namespace, []);
+      groups.get(namespace).push({...r, dossier, planned});
+    });
   for (const field of ['source', 'global', 'shipmentId']) {
     const index = new Map();
     groups.forEach((members, namespace) => members.forEach(m => {
@@ -77,6 +81,9 @@ for (const field of ['source', 'global', 'shipmentId']) {
 }
 if (normalizeGroups([{dossier: 'A001', planned: 'C1', source: 's1'}, {dossier: 'A001', planned: 'C2', source: 's2'}]).length !== 2) throw new Error('distinct namespaces collapsed');
 if (normalizeGroups([{dossier: '', planned: 'C1'}]).length !== 0) throw new Error('blank-B entered autosync');
+if (normalizeGroups([{dossier: '   ', planned: 'C1'}]).length !== 0) {
+  throw new Error('whitespace-only dossier entered autosync');
+}
 if (normalizeGroups([{dossier: 'A001', planned: 'C1'}, {dossier: 'A001', planned: 'C1'}]).length !== 1) throw new Error('one API call invariant failed');
 const fs = require('fs');
 const code = fs.readFileSync('integrations/google-sheets/freight-sync/Code.gs', 'utf8');

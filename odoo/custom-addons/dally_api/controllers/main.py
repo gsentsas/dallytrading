@@ -22,7 +22,7 @@ import logging
 import uuid
 
 from odoo import _, http, SUPERUSER_ID
-from odoo.exceptions import AccessDenied, AccessError, UserError, ValidationError
+from odoo.exceptions import AccessDenied, AccessError, ConcurrencyError, UserError, ValidationError
 from odoo.http import Response, request
 
 _logger = logging.getLogger(__name__)
@@ -330,6 +330,9 @@ class DallyApiController(http.Controller):
             cls._log_failure(endpoint, error.status, api_key, source_ip, payload,
                              error.message)
             return cls._error(error.status, error.code, error.message, correlation_id)
+
+        except ConcurrencyError:
+            raise
 
         except (ValidationError, UserError) as error:
             # Business rule rejected the request: the caller can fix it.

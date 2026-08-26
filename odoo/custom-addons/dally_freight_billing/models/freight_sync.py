@@ -12,7 +12,8 @@ engine.
 import re
 
 from odoo import api, fields, models, _
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import ConcurrencyError, UserError, ValidationError
+from psycopg2 import IntegrityError
 
 
 VALID_MODES = frozenset({"air", "sea"})
@@ -96,6 +97,8 @@ class DallyFreightSyncService(models.AbstractModel):
             if planned.transport_mode != mode or planned.direction != direction:
                 raise ValidationError(_("La consolidation prévue est incompatible avec le dossier."))
         if shipment_created and planned:
+            if source == "google_sheets" and local_ref:
+                raise ValidationError(_("collection_local_ref est attribué par le serveur."))
             identity = Shipment._allocate_intake_identity(planned, sync_source_key=sync_source_key, local_ref=local_ref, source=source)
             if isinstance(identity, tuple):
                 sequence, local = identity
@@ -165,7 +168,13 @@ class DallyFreightSyncService(models.AbstractModel):
         if shipment:
             shipment.write(values)
         elif planned:
-            shipment = Shipment._create_with_intake_identity(values)
+            try:
+                with self.env.cr.savepoint():
+                    shipment = Shipment._create_with_intake_identity(values)
+            except IntegrityError as exc:
+                if getattr(exc.diag, "constraint_name", None) == "dally_shipment_sync_source_key_unique":
+                    raise ConcurrencyError("Concurrent Freight source creation") from exc
+                raise
         else:
             shipment = Shipment.create(values)
 

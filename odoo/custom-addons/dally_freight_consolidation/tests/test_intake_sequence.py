@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Regression coverage for consolidation-scoped intake identities."""
 
-from odoo.exceptions import AccessError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import TransactionCase
 
 
@@ -117,6 +117,21 @@ class TestIntakeSequence(TransactionCase):
             with self.assertRaises(AccessError):
                 shipment.write(values)
 
+    def test_intake_sequence_and_namespace_are_protected(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-NAMESPACE")
+        _, shipment = self.service.upsert(self._payload("sheet:namespace", consolidation))
+        other_sequence = self.env["ir.sequence"].sudo().create({
+            "name": "test other", "code": "test.other.%s" % self.id,
+            "implementation": "standard",
+        })
+        with self.assertRaises(AccessError):
+            consolidation.write({"intake_sequence_id": other_sequence.id})
+        with self.assertRaises(UserError):
+            consolidation.write({"name": "AIR-DSS-CDG-2099-RENAMED"})
+        with self.assertRaises(UserError):
+            consolidation.unlink()
+        self.assertEqual(shipment.external_reference, "%s-A001" % consolidation.name)
+
     def test_legacy_external_reference_remains_supported(self):
         result, shipment = self.service.upsert({
             "external_reference": "A001",
@@ -127,18 +142,11 @@ class TestIntakeSequence(TransactionCase):
         self.assertEqual(shipment.external_reference, "A001")
         self.assertEqual(result["external_reference"], "A001")
 
-    def test_manual_local_reference_is_normalized_and_duplicate_rejected(self):
+    def test_google_sheets_local_reference_is_server_assigned(self):
         consolidation = self._consolidation("AIR-DSS-CDG-2099-004")
-        _, shipment = self.service.upsert(
-            self._payload("sheet:004:a", consolidation, state="request_received") | {
-                "collection_local_ref": "A001",
-            }
-        )
-        self.assertEqual(shipment.collection_sequence, 1)
-        self.assertEqual(shipment.collection_local_ref, "A001")
         with self.assertRaises(ValidationError):
             self.service.upsert(
-                self._payload("sheet:004:b", consolidation) | {
+                self._payload("sheet:004:a", consolidation, state="request_received") | {
                     "collection_local_ref": "A001",
                 }
             )

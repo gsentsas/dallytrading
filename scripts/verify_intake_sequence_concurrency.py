@@ -14,12 +14,12 @@ Partner = odoo_env["res.partner"]
 company = odoo_env.company
 odoo_env["dally.shipment"].search([("sync_source_key", "like", PREFIX + "%")]).unlink()
 Con.search([("name", "like", PREFIX + "%")]).unlink()
-partner = company.partner_id
-partner_b = company.partner_id
+partner = Partner.create({"name": "Probe partner A %s" % PREFIX})
+partner_b = Partner.create({"name": "Probe partner B %s" % PREFIX})
 con2 = Con.create({"name": PREFIX + "-002", "company_id": company.id, "transport_mode": "air", "direction": "export", "origin_city": "Dakar", "destination_city": "Paris", "state": "collecting"})
 con3 = Con.create({"name": PREFIX + "-003", "company_id": company.id, "transport_mode": "air", "direction": "export", "origin_city": "Dakar", "destination_city": "Paris", "state": "collecting"})
-env.cr.commit()
-registry = Registry(env.cr.dbname)
+odoo_env.cr.commit()
+registry = Registry(odoo_env.cr.dbname)
 barrier = Barrier(2)
 results = []
 errors = []
@@ -29,7 +29,6 @@ def worker(payload):
         try:
             with registry.cursor() as cr:
                 worker_env = api.Environment(cr, odoo_env.uid, {})
-                cr.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
                 if attempt == 0:
                     barrier.wait(timeout=15)
                 result, shipment = worker_env["dally.freight.sync.service"].upsert(payload)
@@ -59,7 +58,9 @@ for ref, con in (("-c", con2), ("-d", con3)):
     assert result["collection_local_ref"] == ("A003" if con == con2 else "A001"), result
 
 # Same source key concurrently resolves to one identity.
-barrier = Barrier(2); results[:] = []; errors[:] = []
+barrier = Barrier(2)
+results[:] = []
+errors[:] = []
 threads = [Thread(target=worker, args=(dict(base, sync_source_key=PREFIX + "-same"),)), Thread(target=worker, args=(dict(base, sync_source_key=PREFIX + "-same"),))]
 for thread in threads:
     thread.start()
@@ -73,7 +74,7 @@ print("INTAKE_CONCURRENCY=PASS", results)
 odoo_env["dally.shipment"].search([("sync_source_key", "like", PREFIX + "%")]).unlink()
 Con.search([("name", "like", PREFIX + "%")]).unlink()
 
-env.cr.commit()
+odoo_env.cr.commit()
 remaining = Con.search_count([("name", "like", PREFIX + "%")])
 assert remaining == 0, remaining
 print("CLEANUP=PASS")

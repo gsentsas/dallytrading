@@ -154,7 +154,7 @@ class DallyFreightSyncService(models.AbstractModel):
                            "sync_source_key": sync_source_key})
         elif bind_source_key:
             values["sync_source_key"] = sync_source_key
-        elif shipment and planned:
+        if shipment and planned and not shipment_created:
             if shipment.planned_consolidation_id != planned:
                 shipment._check_planned_consolidation_compatibility(planned)
                 values["planned_consolidation_id"] = planned.id

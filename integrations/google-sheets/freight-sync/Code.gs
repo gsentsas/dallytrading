@@ -121,9 +121,14 @@ function dallyMarkEdited_(e) {
   // API output columns must not create an edit loop.
   if (firstCol >= DALLY.columns.syncStatus && lastCol <= DALLY.columns.syncMessage) return;
   for (let r = firstRow; r <= lastRow; r++) {
-    if (String(sheet.getRange(r, DALLY.columns.dossier).getDisplayValue() || '').trim()) {
+    const dossier = String(sheet.getRange(r, DALLY.columns.dossier).getDisplayValue() || '').trim();
+    const planned = String(sheet.getRange(r, DALLY.columns.plannedConsolidation).getDisplayValue() || '').trim();
+    if (dossier) {
       sheet.getRange(r, DALLY.columns.syncStatus).setValue('À synchroniser');
       sheet.getRange(r, DALLY.columns.syncMessage).clearContent();
+    } else if (planned) {
+      sheet.getRange(r, DALLY.columns.syncStatus).setValue('À initialiser manuellement');
+      sheet.getRange(r, DALLY.columns.syncMessage).setValue('Sélectionnez toutes les lignes du nouveau dossier puis utilisez « Synchroniser le dossier sélectionné ».');
     }
   }
 }
@@ -145,7 +150,9 @@ function dallyMarkAllForSync() {
     const last = sh.getLastRow();
     if (last < DALLY.firstDataRow) return;
     const dossiers = sh.getRange(DALLY.firstDataRow, DALLY.columns.dossier, last - DALLY.firstDataRow + 1, 1).getDisplayValues();
-    const out = dossiers.map(r => [String(r[0] || '').trim() ? 'À synchroniser' : '']);
+    const rowCount = last - DALLY.firstDataRow + 1;
+    const planned = sh.getRange(DALLY.firstDataRow, DALLY.columns.plannedConsolidation, rowCount, 1).getDisplayValues();
+    const out = dossiers.map((r, i) => [String(r[0] || '').trim() ? 'À synchroniser' : (String(planned[i][0] || '').trim() ? 'À initialiser manuellement' : '')]);
     sh.getRange(DALLY.firstDataRow, DALLY.columns.syncStatus, out.length, 1).setValues(out);
   });
   SpreadsheetApp.getActive().toast('Tous les dossiers renseignés ont été marqués « À synchroniser ».', 'Dally CRM', 6);
@@ -558,10 +565,9 @@ function selectedDossier_() {
     if (!rows.every(r=>!display_(r,DALLY.columns.syncSourceKey) && !display_(r,DALLY.columns.globalExternalReference) && display_(r,DALLY.columns.plannedConsolidation)===planned && display_(r,DALLY.columns.client)===client)) throw new Error('Les lignes sélectionnées doivent partager client/consolidation et ne posséder aucune identité existante.');
     return {sheet, dossier:'', key:logicalDossierKey_(values[0]), rows};
   }
-  const selectedKeys = rows.map(r=>display_(r,DALLY.columns.syncSourceKey)).filter(Boolean);
-  const selectedGlobals = rows.map(r=>display_(r,DALLY.columns.globalExternalReference)).filter(Boolean);
-  if (new Set(selectedKeys).size > 1 || new Set(selectedGlobals).size > 1) throw new Error('La sélection contient plusieurs dossiers logiques.');
-  const key = selectedKeys.length ? 'source|' + selectedKeys[0] : selectedGlobals.length ? 'global|' + selectedGlobals[0] : logicalDossierKey_(rows[0].display);
+  const logicalKeys = rows.map(r => logicalDossierKey_(r.display));
+  if (new Set(logicalKeys).size > 1) throw new Error('La sélection contient plusieurs dossiers logiques.');
+  const key = logicalKeys[0];
   const allRows = rowsForDossier_(sheet, key);
   if (!allRows.length) throw new Error('Dossier sélectionné introuvable.');
   return {sheet, dossier, key, rows:allRows};

@@ -232,8 +232,8 @@ class DallyShipment(models.Model):
         }
         if protected.intersection(vals) and not internal:
             raise AccessError(_("La trace de dérogation paiement est immuable."))
-        if identity and any(shipment.intake_consolidation_id for shipment in self) and not (
-            self.env.context.get("_dally_intake_identity_token") is _INTAKE_IDENTITY_TOKEN
+        if identity and any(shipment.intake_consolidation_id for shipment in self) and (
+            self.env.context.get("_dally_intake_identity_token") is not _INTAKE_IDENTITY_TOKEN
         ):
             raise AccessError(_("Les identifiants de collecte sont immuables."))
         if "invoice_id" in vals and not internal:

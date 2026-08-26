@@ -258,6 +258,25 @@ class TestIntakeSequence(TransactionCase):
         self.assertEqual(rebound, shipment)
         self.assertEqual(rebound.sync_source_key, "sheet:bind:001")
 
+    def test_legacy_bind_and_planned_consolidation_in_same_sync(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-BIND-PLAN")
+        _, shipment = self.service.upsert({
+            "external_reference": "LEGACY-BIND-PLAN",
+            "transport_mode": "air", "direction": "export",
+            "client": {"name": self.partner.name},
+        })
+        result, rebound = self.service.upsert({
+            "external_reference": "LEGACY-BIND-PLAN",
+            "sync_source_key": "sheet:bind:plan",
+            "planned_consolidation_ref": consolidation.name,
+            "transport_mode": "air", "direction": "export",
+            "client": {"name": self.partner.name},
+        })
+        self.assertEqual(rebound, shipment)
+        self.assertEqual(rebound.sync_source_key, "sheet:bind:plan")
+        self.assertEqual(rebound.planned_consolidation_id, consolidation)
+        self.assertFalse(result["shipment_created"])
+
     def test_external_reference_match_rejects_conflicting_source_key(self):
         self.service.upsert({
             "external_reference": "LEGACY-BIND-002",

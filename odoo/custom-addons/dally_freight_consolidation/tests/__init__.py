@@ -7,3 +7,5 @@ from . import test_payment_override
 from . import test_review_findings
 
 from . import test_intake_sequence
+
+from . import test_open_consolidations_endpoint

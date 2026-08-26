@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Regression coverage for consolidation-scoped intake identities."""
 
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessError, ValidationError
 from odoo.tests import TransactionCase
 
 
@@ -76,6 +76,46 @@ class TestIntakeSequence(TransactionCase):
             ]),
             1,
         )
+
+    def test_retry_preserves_global_identity_and_forged_external_is_rejected(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-RETRY")
+        payload = self._payload("sheet:retry", consolidation)
+        first, shipment = self.service.upsert(payload)
+        second, retry = self.service.upsert(payload)
+        self.assertEqual(shipment, retry)
+        self.assertEqual(first["external_reference"], second["external_reference"])
+        self.assertEqual(first["collection_local_ref"], "A001")
+        with self.assertRaises(ValidationError):
+            self.service.upsert(dict(payload, external_reference="A999"))
+
+    def test_new_intake_requires_collecting_and_closed_existing_reports_replan(self):
+        closed = self._consolidation("AIR-DSS-CDG-2099-CLOSED")
+        closed.action_close_collection()
+        with self.assertRaises(ValidationError):
+            self.service.upsert(self._payload("sheet:closed:new", closed))
+        collecting = self._consolidation("AIR-DSS-CDG-2099-REPLAN")
+        payload = self._payload("sheet:replan", collecting)
+        first, shipment = self.service.upsert(payload)
+        collecting.action_close_collection()
+        retry, same = self.service.upsert(payload)
+        self.assertEqual(first["external_reference"], retry["external_reference"])
+        self.assertTrue(retry["requires_replan"])
+        self.assertEqual(same.planned_consolidation_id, collecting)
+
+    def test_intake_identity_cannot_be_forged_by_create_or_write(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-GUARD")
+        _, shipment = self.service.upsert(self._payload("sheet:guard", consolidation))
+        with self.assertRaises(AccessError):
+            self.env["dally.shipment"].create({
+                "partner_id": self.partner.id, "external_reference": "FORGED",
+                "intake_consolidation_id": consolidation.id,
+                "collection_sequence": 1, "collection_local_ref": "A001",
+                "sync_source_key": "forged",
+            })
+        for values in ({"collection_sequence": 999}, {"collection_local_ref": "A999"},
+                       {"sync_source_key": "forged"}, {"external_reference": "FORGED"}):
+            with self.assertRaises(AccessError):
+                shipment.write(values)
 
     def test_legacy_external_reference_remains_supported(self):
         result, shipment = self.service.upsert({

@@ -85,17 +85,9 @@ class DallyShipment(models.Model):
         if consolidation.state != "collecting":
             raise ValidationError(_("Une nouvelle collecte ne peut être initialisée que sur une consolidation ouverte."))
         if sync_source_key:
-            self.env.cr.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ["freight-source-dossier:%s:%s:%s" % (consolidation.company_id.id, source, sync_source_key)])
             existing = self.search([("company_id", "=", consolidation.company_id.id), ("sync_source", "=", source), ("sync_source_key", "=", sync_source_key)], limit=1)
             if existing:
                 return existing
-        self.env.cr.execute(
-            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
-            ["freight-intake-consolidation:%s:%s" % (consolidation.company_id.id, consolidation.id)],
-        )
-        # The row lock makes the allocation deterministic even on installations
-        # where advisory-lock hash functions are not stable across extensions.
-        self.env.cr.execute("SELECT id FROM dally_freight_consolidation WHERE id=%s FOR UPDATE", [consolidation.id])
         if local_ref:
             match = re.fullmatch(r"A([0-9]+)", str(local_ref).strip().upper())
             if not match or int(match.group(1)) <= 0:

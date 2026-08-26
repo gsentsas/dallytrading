@@ -31,6 +31,7 @@ CONSOLIDATION_TRANSITIONS = {
 
 _CONSOLIDATION_BYPASS_TOKEN = object()
 _CONSOLIDATION_STATE_WRITE_TOKEN = object()
+_INTAKE_SEQUENCE_SETUP_TOKEN = object()
 
 def _route_text(value):
     return re.sub(r"\s+", " ", (value or "").strip().casefold())
@@ -143,6 +144,10 @@ class DallyFreightConsolidation(models.Model):
     shipment_ids = fields.Many2many(
         "dally.shipment", compute="_compute_totals", string="Dossiers"
     )
+    intake_shipment_ids = fields.One2many(
+        "dally.shipment", "intake_consolidation_id", string="Dossiers d'entrée",
+        readonly=True,
+    )
     shipment_count = fields.Integer(compute="_compute_totals", string="Nb dossiers")
     package_line_count = fields.Integer(compute="_compute_totals", string="Lignes colis")
     client_package_count = fields.Integer(compute="_compute_totals", string="Colis clients")
@@ -230,11 +235,12 @@ class DallyFreightConsolidation(models.Model):
                 "name": "Dally Intake - %s" % record.name,
                 "code": "dally.freight.intake.%s" % record.id,
                 "company_id": record.company_id.id,
+                "implementation": "standard",
                 "number_next": 1,
                 "number_increment": 1,
                 "padding": 1,
             })
-            record.with_context(_dally_sequence_setup=True).write({"intake_sequence_id": sequence.id})
+            record.with_context(_dally_intake_sequence_setup=_INTAKE_SEQUENCE_SETUP_TOKEN).write({"intake_sequence_id": sequence.id})
         return records
 
     @api.model
@@ -262,6 +268,8 @@ class DallyFreightConsolidation(models.Model):
         return "%s%03d" % (prefix, (max(numbers) if numbers else 0) + 1)
 
     def write(self, vals):
+        if "intake_sequence_id" in vals and self.env.context.get("_dally_intake_sequence_setup") is not _INTAKE_SEQUENCE_SETUP_TOKEN:
+            raise AccessError(_("La séquence de collecte est gérée uniquement par le serveur."))
         internal_state = (
             self.env.context.get("_dally_consolidation_state_write")
             is _CONSOLIDATION_STATE_WRITE_TOKEN
@@ -280,7 +288,7 @@ class DallyFreightConsolidation(models.Model):
                           current=record.state, target=vals["state"])
                     )
         if "name" in vals:
-            linked = self.filtered(lambda rec: bool(rec.shipment_ids))
+            linked = self.filtered(lambda rec: bool(rec.intake_shipment_ids))
             if linked:
                 raise UserError(_("La référence est immuable après attribution d'un dossier de collecte."))
         immutable = {"transport_mode", "direction", "origin_country_id", "origin_city",
@@ -293,7 +301,7 @@ class DallyFreightConsolidation(models.Model):
         return super().write(vals)
 
     def unlink(self):
-        if self.filtered(lambda rec: rec.shipment_ids or rec.line_ids or rec.state not in ("draft", "cancelled")):
+        if self.filtered(lambda rec: rec.intake_shipment_ids or rec.line_ids or rec.state not in ("draft", "cancelled")):
             raise UserError(_("Cette consolidation ne peut pas être supprimée après utilisation."))
         sequences = self.mapped("intake_sequence_id")
         result = super().unlink()

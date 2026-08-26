@@ -265,7 +265,7 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
     customer_segment: DALLY.segmentCodes[display_(first, DALLY.columns.clientType)] || 'individual',
     state: sheetShipmentState_(first),
     planned_consolidation_ref: plannedRef || undefined,
-    collection_local_ref: firstText_(rows, DALLY.columns.collectionLocalRef) || undefined,
+    collection_local_ref: plannedRef ? undefined : (firstText_(rows, DALLY.columns.collectionLocalRef) || undefined),
     dossier_fee_eur: firstNumber_(rows, DALLY.columns.dossierFee) || 0,
     other_fees_eur: sum_(articleRows, DALLY.columns.otherFees),
     client: {

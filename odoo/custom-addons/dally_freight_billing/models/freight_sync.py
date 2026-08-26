@@ -64,9 +64,10 @@ class DallyFreightSyncService(models.AbstractModel):
             segment = self._choice(segment, VALID_SEGMENTS, "customer_segment")
         if not external_reference and not (sync_source_key and planned_ref):
             raise ValidationError(_("external_reference est requis hors flux de collecte planifiée."))
-        if sync_source_key:
+        if sync_source_key and not planned_ref:
             self._lock("freight-source-dossier", "%s:%s:%s" % (self.env.company.id, source, sync_source_key))
-        self._lock("freight-dossier", "%s:%s" % (self.env.company.id, external_reference or sync_source_key))
+        if not planned_ref:
+            self._lock("freight-dossier", "%s:%s" % (self.env.company.id, external_reference or sync_source_key))
         Shipment = self.env["dally.shipment"].with_context(active_test=False)
         consolidation_fields = "sync_source_key" in Shipment._fields
         shipment = Shipment.search([
@@ -95,12 +96,6 @@ class DallyFreightSyncService(models.AbstractModel):
             if planned.transport_mode != mode or planned.direction != direction:
                 raise ValidationError(_("La consolidation prévue est incompatible avec le dossier."))
         if shipment_created and planned:
-            # Serialize allocations for the physical intake namespace before
-            # the consolidation-scoped identity allocator reads MAX().
-            self._lock(
-                "freight-intake-consolidation",
-                "%s:%s" % (planned.company_id.id, planned.id),
-            )
             identity = Shipment._allocate_intake_identity(planned, sync_source_key=sync_source_key, local_ref=local_ref, source=source)
             if isinstance(identity, tuple):
                 sequence, local = identity

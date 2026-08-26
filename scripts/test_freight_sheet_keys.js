@@ -49,6 +49,7 @@ if (externalRef({planned: 'C1', dossier: 'A001', global: 'C1-A001'}) !== 'C1-A00
 const numberOrNull = value => {
   if (value === '' || value === null || typeof value === 'undefined') return null;
   const normalized = typeof value === 'string' ? value.replace(/[\s\u00A0\u202F]/g, '').replace(',', '.') : value;
+  if (normalized === '') return null;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : null;
 };
@@ -56,6 +57,9 @@ for (const value of ['1234,56', '1 234,56', '1\u00A0234,56', '1\u202F234,56']) {
   if (numberOrNull(value) !== 1234.56) throw new Error('localized number parsing failed');
 }
 if (numberOrNull(1234.56) !== 1234.56 || numberOrNull('') !== null || numberOrNull(null) !== null || numberOrNull('not-a-number') !== null) throw new Error('number parsing contract failed');
+for (const value of ['   ', '\u00A0', '\u202F', ' \u00A0\u202F ']) {
+  if (numberOrNull(value) !== null) throw new Error('whitespace-only value became zero');
+}
 
 const normalizeGroups = rows => {
   const groups = new Map();
@@ -107,6 +111,13 @@ if (normalizeGroups([{dossier: '   ', planned: 'C1'}]).length !== 0) {
   throw new Error('whitespace-only dossier entered autosync');
 }
 if (normalizeGroups([{dossier: 'A001', planned: 'C1'}, {dossier: 'A001', planned: 'C1'}]).length !== 1) throw new Error('one API call invariant failed');
+const reloadedNamespace = rows => new Set(rows.map(row => row.planned ? `${row.planned}|${row.dossier}` : row.dossier));
+let reloadRejected = false;
+try {
+  if (reloadedNamespace([{dossier: 'A001', planned: 'C1'}, {dossier: 'A001', planned: 'C2'}]).size > 1) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
+} catch (e) { reloadRejected = true; }
+if (!reloadRejected) throw new Error('reloaded namespace collision accepted');
+if (reloadedNamespace([{dossier: 'A001', planned: 'C1', collectionLocalRef: 'A001'}, {dossier: 'A001', planned: 'C2', collectionLocalRef: 'A001'}]).size !== 2) throw new Error('local ref reuse across namespaces rejected');
 const fs = require('fs');
 const code = fs.readFileSync('integrations/google-sheets/freight-sync/Code.gs', 'utf8');
 if (!code.includes('getValues()') || !code.includes('getDisplayValues()')) throw new Error('raw/display snapshot contract missing');

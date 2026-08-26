@@ -648,6 +648,12 @@ function selectedDossier_() {
   const key = logicalKeys[0];
   const allRows = rowsForDossier_(sheet, key);
   if (!allRows.length) throw new Error('Dossier sélectionné introuvable.');
+  const namespaces = new Set(allRows.map(row => {
+    const rowDossier = display_(row, DALLY.columns.dossier);
+    const planned = display_(row, DALLY.columns.plannedConsolidation);
+    return planned ? planned + '|' + rowDossier : rowDossier;
+  }));
+  if (namespaces.size > 1) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
   return {sheet, dossier, key, rows:allRows};
 }
 
@@ -742,7 +748,7 @@ function firstText_(rows, column) { for (const r of rows) { const v = display_(r
 function firstNumber_(rows, column) { for (const r of rows) { const v = numberOrNull_(value_(r, column)); if (v !== null) return v; } return null; }
 function sum_(rows, column) { return rows.reduce((acc, r) => acc + Number(value_(r, column) || 0), 0); }
 function numberOr_(value, fallback) { const n = Number(value); return Number.isFinite(n) && n > 0 ? n : fallback; }
-function numberOrNull_(value) { if (value === '' || value === null || typeof value === 'undefined') return null; const normalized = typeof value === 'string' ? value.replace(/[\s\u00A0\u202F]/g, '').replace(',', '.') : value; const n = Number(normalized); return Number.isFinite(n) ? n : null; }
+function numberOrNull_(value) { if (value === '' || value === null || typeof value === 'undefined') return null; const normalized = typeof value === 'string' ? value.replace(/[\s\u00A0\u202F]/g, '').replace(',', '.') : value; if (normalized === '') return null; const n = Number(normalized); return Number.isFinite(n) ? n : null; }
 function dateIso_(value) { if (!value) return ''; if (value instanceof Date) return Utilities.formatDate(value, 'Etc/UTC', 'yyyy-MM-dd'); const d = new Date(value); return isNaN(d.getTime()) ? '' : Utilities.formatDate(d, 'Etc/UTC', 'yyyy-MM-dd'); }
 function pruneEmptyObject_(obj) { Object.keys(obj).forEach(k => { if (!obj[k]) delete obj[k]; }); }
 function errorText_(err) { return err && err.message ? err.message : String(err); }

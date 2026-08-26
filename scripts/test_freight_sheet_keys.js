@@ -118,6 +118,20 @@ try {
 } catch (e) { reloadRejected = true; }
 if (!reloadRejected) throw new Error('reloaded namespace collision accepted');
 if (reloadedNamespace([{dossier: 'A001', planned: 'C1', collectionLocalRef: 'A001'}, {dossier: 'A001', planned: 'C2', collectionLocalRef: 'A001'}]).size !== 2) throw new Error('local ref reuse across namespaces rejected');
+const assertSelectedIdentityScope = (selected, all) => {
+  const namespace = row => row.planned ? `${row.planned}|${row.dossier}` : row.dossier;
+  const selectedNamespace = namespace(selected[0]);
+  for (const field of ['source', 'global', 'shipmentId']) {
+    const identities = new Set(selected.map(row => row[field]).filter(Boolean));
+    if (all.some(row => namespace(row) !== selectedNamespace && identities.has(row[field]))) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
+  }
+};
+let hiddenGlobalRejected = false;
+try { assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}], [{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}, {dossier: 'A001', planned: 'C2', source: 'S2', global: 'G1'}]); } catch (e) { hiddenGlobalRejected = true; }
+if (!hiddenGlobalRejected) throw new Error('hidden global collision accepted');
+let hiddenShipmentRejected = false;
+try { assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}], [{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}, {dossier: 'A001', planned: 'C2', source: 'S2', shipmentId: 10}]); } catch (e) { hiddenShipmentRejected = true; }
+if (!hiddenShipmentRejected) throw new Error('hidden shipment collision accepted');
 const fs = require('fs');
 const code = fs.readFileSync('integrations/google-sheets/freight-sync/Code.gs', 'utf8');
 if (!code.includes('getValues()') || !code.includes('getDisplayValues()')) throw new Error('raw/display snapshot contract missing');

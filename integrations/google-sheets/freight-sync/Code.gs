@@ -624,6 +624,26 @@ function rowsForDossier_(sheet, key) {
   return out;
 }
 
+function assertNoSelectedIdentityCollision_(sheet, selectedRows) {
+  const namespaceOf = row => {
+    const dossier = display_(row, DALLY.columns.dossier);
+    const planned = display_(row, DALLY.columns.plannedConsolidation);
+    return planned ? planned + '|' + dossier : dossier;
+  };
+  const selectedNamespace = namespaceOf(selectedRows[0]);
+  const identities = [DALLY.columns.syncSourceKey, DALLY.columns.globalExternalReference, DALLY.columns.shipmentId]
+    .map(column => new Set(selectedRows.map(row => display_(row, column)).filter(Boolean)));
+  const all = sheet.getRange(DALLY.firstDataRow, 1, sheet.getLastRow() - DALLY.firstDataRow + 1, DALLY.maxColumn).getDisplayValues();
+  for (const row of all) {
+    if (!String(row[DALLY.columns.dossier - 1] || '').trim()) continue;
+    if (namespaceOf({display: row}) === selectedNamespace) continue;
+    for (let i = 0; i < identities.length; i++) {
+      const value = String(row[[DALLY.columns.syncSourceKey, DALLY.columns.globalExternalReference, DALLY.columns.shipmentId][i] - 1] || '').trim();
+      if (value && identities[i].has(value)) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
+    }
+  }
+}
+
 function selectedDossier_() {
   const sheet=SpreadsheetApp.getActiveSheet(); if (!DALLY.dataSheets.includes(sheet.getName())) throw new Error('Sélectionnez une ligne dans une feuille de saisie.');
   const range=SpreadsheetApp.getActiveRange(); const first=range.getRow(); const last=first + Math.max(1, range.getNumRows()) - 1;
@@ -654,6 +674,7 @@ function selectedDossier_() {
     return planned ? planned + '|' + rowDossier : rowDossier;
   }));
   if (namespaces.size > 1) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
+  assertNoSelectedIdentityCollision_(sheet, allRows);
   return {sheet, dossier, key, rows:allRows};
 }
 

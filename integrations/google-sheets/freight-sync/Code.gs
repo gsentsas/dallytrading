@@ -562,8 +562,25 @@ function dirtyDossiers_(sheet) {
     if (!dossier) continue; // blank-B dossiers remain manual-init only.
     const namespace = (planned ? planned + '|' : '') + dossier;
     if (!groups.has(namespace)) groups.set(namespace, []);
-    groups.get(namespace).push({index: i, values: values[i], display: row});
+    groups.get(namespace).push({index: i, display: row});
   }
+  // A server identity must never span two visible namespaces (for example
+  // C1|A001 and C2|A001).  Build the indexes before normalising any row so a
+  // duplicate cannot be hidden by propagation.
+  const identityIndexes = [DALLY.columns.syncSourceKey, DALLY.columns.globalExternalReference, DALLY.columns.shipmentId].map(column => {
+    const index = new Map();
+    groups.forEach((members, namespace) => members.forEach(m => {
+      const value = String(m.display[column - 1] || '').trim();
+      if (!value) return;
+      if (!index.has(value)) index.set(value, new Set());
+      index.get(value).add(namespace);
+    }));
+    return index;
+  });
+  const crossNamespace = new Set();
+  identityIndexes.forEach(index => index.forEach(namespaces => {
+    if (namespaces.size > 1) namespaces.forEach(namespace => crossNamespace.add(namespace));
+  }));
   const out = [];
   groups.forEach((members, namespace) => {
     const unique = column => new Set(members.map(m => String(m.display[column - 1] || '').trim()).filter(Boolean));
@@ -572,21 +589,26 @@ function dirtyDossiers_(sheet) {
     const sources = unique(DALLY.columns.syncSourceKey);
     const globals = unique(DALLY.columns.globalExternalReference);
     const shipments = unique(DALLY.columns.shipmentId);
-    if (planned.size > 1 || clients.size > 1 || sources.size > 1 || globals.size > 1 || shipments.size > 1) {
+    if (crossNamespace.has(namespace) || planned.size > 1 || clients.size > 1 || sources.size > 1 || globals.size > 1 || shipments.size > 1) {
       members.forEach(m => {
         setCell_(sheet, start + m.index, DALLY.columns.syncStatus, 'Erreur');
-        setCell_(sheet, start + m.index, DALLY.columns.syncMessage, 'La sélection contient des identités de dossier en conflit.');
+        setCell_(sheet, start + m.index, DALLY.columns.syncMessage, crossNamespace.has(namespace) ? 'Identité serveur associée à plusieurs namespaces de dossier.' : 'La sélection contient des identités de dossier en conflit.');
       });
       return;
     }
     const source = sources.values().next().value || '';
-    if (source && members.some(m => !String(m.display[DALLY.columns.syncSourceKey - 1] || '').trim())) {
+    const global = globals.values().next().value || '';
+    const shipment = shipments.values().next().value || '';
+    [[DALLY.columns.syncSourceKey, source], [DALLY.columns.globalExternalReference, global], [DALLY.columns.shipmentId, shipment]].forEach(([column, value]) => {
+      if (!value) return;
       members.forEach(m => {
-        setCell_(sheet, start + m.index, DALLY.columns.syncSourceKey, source);
-        m.display[DALLY.columns.syncSourceKey - 1] = source;
+        if (!String(m.display[column - 1] || '').trim()) {
+          setCell_(sheet, start + m.index, column, value);
+          m.display[column - 1] = value;
+        }
       });
-    }
-    const key = source ? 'source|' + source : (globals.values().next().value ? 'global|' + globals.values().next().value : namespace);
+    });
+    const key = source ? 'source|' + source : (global ? 'global|' + global : namespace);
     if (members.some(m => String(m.display[DALLY.columns.syncStatus - 1] || '').trim() === 'À synchroniser')) out.push(key);
   });
   return [...new Set(out)];

@@ -68,7 +68,7 @@ const normalizeGroups = rows => {
       if (!groups.has(namespace)) groups.set(namespace, []);
       groups.get(namespace).push({...r, dossier, planned});
     });
-  for (const field of ['source', 'global', 'shipmentId', 'collectionLocalRef']) {
+  for (const field of ['source', 'global', 'shipmentId']) {
     const index = new Map();
     groups.forEach((members, namespace) => members.forEach(m => {
       if (!m[field]) return;
@@ -94,7 +94,9 @@ if (normalizeGroups([{dossier: 'A001', planned: 'C1', collectionLocalRef: 'A001'
 let localConflict = false;
 try { normalizeGroups([{dossier: 'A001', planned: 'C1', collectionLocalRef: 'A001'}, {dossier: 'A001', planned: 'C1', collectionLocalRef: 'A002'}]); } catch (e) { localConflict = true; }
 if (!localConflict) throw new Error('intra-namespace local ref conflict accepted');
-for (const field of ['source', 'global', 'shipmentId', 'collectionLocalRef']) {
+const sameLocal = normalizeGroups([{dossier: 'A001', planned: 'C1', collectionLocalRef: 'A001'}, {dossier: 'A001', planned: 'C2', collectionLocalRef: 'A001'}]);
+if (sameLocal.length !== 2 || sameLocal.some(group => group[0].collectionLocalRef !== 'A001')) throw new Error('local ref incorrectly treated as global');
+for (const field of ['source', 'global', 'shipmentId']) {
   let conflict = false;
   try { normalizeGroups([{dossier: 'A001', planned: 'C1', [field]: 'x'}, {dossier: 'A001', planned: 'C2', [field]: 'x'}]); } catch (e) { conflict = true; }
   if (!conflict) throw new Error('cross-namespace ' + field + ' accepted');

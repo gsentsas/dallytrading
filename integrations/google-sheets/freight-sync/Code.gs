@@ -566,7 +566,7 @@ function dirtyDossiers_(sheet) {
   // A server identity must never span two visible namespaces (for example
   // C1|A001 and C2|A001).  Build the indexes before normalising any row so a
   // duplicate cannot be hidden by propagation.
-  const identityIndexes = [DALLY.columns.syncSourceKey, DALLY.columns.globalExternalReference, DALLY.columns.shipmentId, DALLY.columns.collectionLocalRef].map(column => {
+  const identityIndexes = [DALLY.columns.syncSourceKey, DALLY.columns.globalExternalReference, DALLY.columns.shipmentId].map(column => {
     const index = new Map();
     groups.forEach((members, namespace) => members.forEach(m => {
       const value = String(m.display[column - 1] || '').trim();

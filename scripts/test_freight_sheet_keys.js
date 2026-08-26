@@ -10,6 +10,7 @@ const fs = require('fs');
 const code = fs.readFileSync('integrations/google-sheets/freight-sync/Code.gs', 'utf8');
 if (!code.includes('getValues()') || !code.includes('getDisplayValues()')) throw new Error('raw/display snapshot contract missing');
 if (!/new Set\(logicalKeys\).*size > 1/.test(code)) throw new Error('mixed dossier selection guard missing');
-if (!/plannedRef \? undefined/.test(code)) throw new Error('planned flow still supplies local ref');
+if (!/firstNumber_\(rows, DALLY\.columns\.shipmentId\)/.test(code)) throw new Error('server identity fallback missing');
+if (!/nonEmptySourceKeys\.length !== sourceKeys\.length/.test(code)) throw new Error('partial source key guard missing');
 if (!code.includes("const stableKey = data.sync_source_key")) throw new Error('post-sync refresh missing');
 console.log('SHEET_KEY_IDENTITY=PASS');

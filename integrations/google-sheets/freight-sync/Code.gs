@@ -269,7 +269,7 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
   const plannedRef = firstText_(rows, DALLY.columns.plannedConsolidation);
   const sourceKey = sourceKey_(sheetName, dossier, rows);
   const payload = {
-    external_reference: (firstText_(rows, DALLY.columns.globalExternalReference) || dossier) || undefined,
+    external_reference: (firstText_(rows, DALLY.columns.globalExternalReference) || (firstNumber_(rows, DALLY.columns.shipmentId) ? '' : dossier)) || undefined,
     sync_source_key: sourceKey,
     transport_mode: route.mode || DALLY.modeCodes[display_(first, DALLY.columns.transportMode)],
     direction: route.direction,
@@ -334,7 +334,7 @@ function prepareInvoice_(sheet, rows, cfg, force) {
     if (force) throw new Error(message);
     return null;
   }
-  const globalRef = firstText_(rows, DALLY.columns.globalExternalReference) || dossier;
+  const globalRef = firstText_(rows, DALLY.columns.globalExternalReference) || (shipmentId ? '' : dossier);
   const payload = shipmentId ? {shipment_id: shipmentId, external_reference: globalRef} : {external_reference: globalRef};
   const data = apiPost_('/api/v1/freight/invoice', 'DALLY_FREIGHT_BILLING_API_KEY', payload, cfg);
   rows.forEach(row => {
@@ -377,7 +377,7 @@ function syncPayments_(sheet, rows, cfg, force) {
     if (!method) throw new Error('Mode de paiement non mappé: ' + methodLabel);
     const payload = {
       external_payment_key: key,
-      external_reference: firstText_(rows, DALLY.columns.globalExternalReference) || dossier,
+      external_reference: firstText_(rows, DALLY.columns.globalExternalReference) || (shipmentId ? '' : dossier),
       shipment_id: shipmentId || undefined,
       amount: eur > 0 ? eur : xof,
       currency_code: eur > 0 ? 'EUR' : 'XOF',
@@ -397,7 +397,7 @@ function syncPayments_(sheet, rows, cfg, force) {
   });
 
   const reconcilePayload = {
-    external_reference: firstText_(rows, DALLY.columns.globalExternalReference) || dossier,
+    external_reference: firstText_(rows, DALLY.columns.globalExternalReference) || (shipmentId ? '' : dossier),
     shipment_id: shipmentId || undefined,
     active_payment_keys: activeKeys,
     source: source,
@@ -531,7 +531,7 @@ function logicalDossierKey_(row) {
 function dirtyDossiers_(sheet) {
   const last = sheet.getLastRow();
   if (last < DALLY.firstDataRow) return [];
-  const data = sheet.getRange(DALLY.firstDataRow, 1, last - DALLY.firstDataRow + 1, DALLY.columns.syncStatus).getDisplayValues();
+  const data = sheet.getRange(DALLY.firstDataRow, 1, last - DALLY.firstDataRow + 1, DALLY.maxColumn).getDisplayValues();
   const out = []; const seen = new Set();
   data.forEach(r => { const key = logicalDossierKey_(r); const status = String(r[DALLY.columns.syncStatus - 1] || '').trim(); if (key && status === 'À synchroniser' && !seen.has(key)) { seen.add(key); out.push(key); } });
   return out;
@@ -560,8 +560,9 @@ function selectedDossier_() {
     const planned=String(display[0][DALLY.columns.plannedConsolidation-1]||'').trim();
     const client=String(display[0][DALLY.columns.client-1]||'').trim();
     if (!planned) throw new Error('Un nouveau dossier doit choisir une consolidation prévue.');
-    const sourceKeys = rows.map(r=>display_(r,DALLY.columns.syncSourceKey)).filter(Boolean);
-    if (new Set(sourceKeys).size > 1 || rows.some(r=>display_(r,DALLY.columns.globalExternalReference) || display_(r,DALLY.columns.shipmentId) || display_(r,DALLY.columns.plannedConsolidation)!==planned || display_(r,DALLY.columns.client)!==client)) throw new Error('Les lignes sélectionnées doivent partager client/consolidation et ne posséder aucune identité conflictuelle.');
+    const sourceKeys = rows.map(r=>display_(r,DALLY.columns.syncSourceKey));
+    const nonEmptySourceKeys = sourceKeys.filter(Boolean);
+    if ((nonEmptySourceKeys.length && nonEmptySourceKeys.length !== sourceKeys.length) || new Set(nonEmptySourceKeys).size > 1 || rows.some(r=>display_(r,DALLY.columns.globalExternalReference) || display_(r,DALLY.columns.shipmentId) || display_(r,DALLY.columns.plannedConsolidation)!==planned || display_(r,DALLY.columns.client)!==client)) throw new Error('Les lignes sélectionnées doivent partager client/consolidation et ne posséder aucune identité conflictuelle.');
     return {sheet, dossier:'', key:logicalDossierKey_(values[0]), rows};
   }
   const logicalKeys = rows.map(r => logicalDossierKey_(r.display));

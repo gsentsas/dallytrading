@@ -146,7 +146,7 @@ class DallyFreightSyncService(models.AbstractModel):
             "last_sync_at": fields.Datetime.now(),
             "sync_message": False,
         }
-        if shipment_created or not (shipment and consolidation_fields and shipment.intake_consolidation_id):
+        if shipment_created:
             values["external_reference"] = external_reference
         if shipment_created and planned:
             values.update({"intake_consolidation_id": planned.id, "planned_consolidation_id": planned.id,

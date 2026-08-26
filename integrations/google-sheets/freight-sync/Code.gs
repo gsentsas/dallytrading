@@ -269,7 +269,7 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
   const plannedRef = firstText_(rows, DALLY.columns.plannedConsolidation);
   const sourceKey = sourceKey_(sheetName, dossier, rows);
   const payload = {
-    external_reference: plannedRef ? undefined : dossier,
+    external_reference: (firstText_(rows, DALLY.columns.globalExternalReference) || dossier) || undefined,
     sync_source_key: sourceKey,
     transport_mode: route.mode || DALLY.modeCodes[display_(first, DALLY.columns.transportMode)],
     direction: route.direction,
@@ -357,7 +357,6 @@ function syncPayments_(sheet, rows, cfg, force) {
   const source = cfg.migrationMode ? 'legacy_xlsx' : 'google_sheets';
   const results = [];
   const activeKeys = [];
-  let paymentOrdinal = 0;
 
   rows.forEach(row => {
     const eur = Number(value_(row, DALLY.columns.paymentEur) || 0);
@@ -365,10 +364,9 @@ function syncPayments_(sheet, rows, cfg, force) {
     if (eur > 0 && xof > 0) throw new Error('Deux devises sur la même ligne de paiement du dossier ' + dossier);
     if (eur <= 0 && xof <= 0) return;
 
-    paymentOrdinal++;
     let key = display_(row, DALLY.columns.paymentKey);
     if (!key) {
-      key = stableGlobalKey_(row, dossier) + '|P|' + paymentOrdinal;
+      key = stableGlobalKey_(row, dossier) + '|P|' + Utilities.getUuid();
       setCell_(sheet, row.row, DALLY.columns.paymentKey, key);
     }
     setCell_(sheet, row.row, DALLY.columns.paymentFlag, 1);
@@ -562,7 +560,8 @@ function selectedDossier_() {
     const planned=String(display[0][DALLY.columns.plannedConsolidation-1]||'').trim();
     const client=String(display[0][DALLY.columns.client-1]||'').trim();
     if (!planned) throw new Error('Un nouveau dossier doit choisir une consolidation prévue.');
-    if (!rows.every(r=>!display_(r,DALLY.columns.syncSourceKey) && !display_(r,DALLY.columns.globalExternalReference) && display_(r,DALLY.columns.plannedConsolidation)===planned && display_(r,DALLY.columns.client)===client)) throw new Error('Les lignes sélectionnées doivent partager client/consolidation et ne posséder aucune identité existante.');
+    const sourceKeys = rows.map(r=>display_(r,DALLY.columns.syncSourceKey)).filter(Boolean);
+    if (new Set(sourceKeys).size > 1 || rows.some(r=>display_(r,DALLY.columns.globalExternalReference) || display_(r,DALLY.columns.shipmentId) || display_(r,DALLY.columns.plannedConsolidation)!==planned || display_(r,DALLY.columns.client)!==client)) throw new Error('Les lignes sélectionnées doivent partager client/consolidation et ne posséder aucune identité conflictuelle.');
     return {sheet, dossier:'', key:logicalDossierKey_(values[0]), rows};
   }
   const logicalKeys = rows.map(r => logicalDossierKey_(r.display));
@@ -594,11 +593,9 @@ function sourceKey_(sheetName, dossier, rows) {
 
 function prepareArticleRows_(sheet, dossier, rows) {
   const articleRows = rows.filter(isArticleRow_);
-  let ordinal = 0;
   articleRows.forEach(row => {
-    ordinal++;
     const existing = display_(row, DALLY.columns.articleKey);
-    row._syncArticleKey = existing || (stableGlobalKey_(row, dossier) + '|A|' + ordinal);
+    row._syncArticleKey = existing || (stableGlobalKey_(row, dossier) + '|A|' + Utilities.getUuid());
     if (!existing) setCell_(sheet, row.row, DALLY.columns.articleKey, row._syncArticleKey);
   });
   return articleRows;

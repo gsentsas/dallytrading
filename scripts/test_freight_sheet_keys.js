@@ -26,7 +26,7 @@ const autoGroup = rows => {
 const externalRef = row => {
   if (row.global) return row.global;
   if (!row.planned) return row.dossier || '';
-  if (row.shipmentId || row.intake || row.local) return '';
+  if (row.shipmentId || row.intake || row.collectionLocalRef) return '';
   return row.dossier || '';
 };
 if (autoGroup([{dossier: 'A001'}, {dossier: 'A001'}]) !== 'A001') throw new Error('same legacy dossier split');
@@ -43,7 +43,7 @@ if (externalRef({planned: 'C1', dossier: '', source: 's'}) !== '') throw new Err
 if (externalRef({planned: 'C1', dossier: 'A001', shipmentId: 9}) !== '') throw new Error('server-managed planned dossier sent local ref');
 if (externalRef({planned: 'C1', dossier: 'A001', lastSync: '2026-01-01'}) !== 'A001') throw new Error('failed retry lost legacy reference');
 if (externalRef({planned: 'C1', dossier: 'A001', intake: 'C1'}) !== '') throw new Error('intake identity did not suppress local ref');
-if (externalRef({planned: 'C1', dossier: 'A001', local: 'A001'}) !== '') throw new Error('local identity did not suppress local ref');
+if (externalRef({planned: 'C1', dossier: 'A001', collectionLocalRef: 'A001'}) !== '') throw new Error('local identity did not suppress local ref');
 if (externalRef({planned: 'C1', dossier: 'A001', global: 'C1-A001'}) !== 'C1-A001') throw new Error('global reference not authoritative');
 
 const numberOrNull = value => {
@@ -68,7 +68,7 @@ const normalizeGroups = rows => {
       if (!groups.has(namespace)) groups.set(namespace, []);
       groups.get(namespace).push({...r, dossier, planned});
     });
-  for (const field of ['source', 'global', 'shipmentId']) {
+  for (const field of ['source', 'global', 'shipmentId', 'collectionLocalRef']) {
     const index = new Map();
     groups.forEach((members, namespace) => members.forEach(m => {
       if (!m[field]) return;
@@ -77,8 +77,10 @@ const normalizeGroups = rows => {
     }));
     for (const namespaces of index.values()) if (namespaces.size > 1) throw new Error('cross-namespace identity conflict');
   }
-  groups.forEach(members => ['source', 'global', 'shipmentId'].forEach(field => {
-    const value = members.map(m => m[field]).find(Boolean) || '';
+  groups.forEach(members => ['source', 'global', 'shipmentId', 'collectionLocalRef'].forEach(field => {
+    const distinct = [...new Set(members.map(m => m[field]).filter(Boolean))];
+    if (distinct.length > 1) throw new Error('intra-namespace identity conflict');
+    const value = distinct[0] || '';
     if (value) members.forEach(m => { if (!m[field]) m[field] = value; });
   }));
   return [...groups.values()];
@@ -88,7 +90,11 @@ if (oneGroup.length !== 1) throw new Error('empty identities split');
 if (normalizeGroups([{dossier: 'A001', planned: 'C1', source: 's'}, {dossier: 'A001', planned: 'C1'}])[0][1].source !== 's') throw new Error('partial source not propagated');
 if (normalizeGroups([{dossier: 'A001', planned: 'C1', global: 'C1-A001'}, {dossier: 'A001', planned: 'C1'}])[0][1].global !== 'C1-A001') throw new Error('partial global not propagated');
 if (normalizeGroups([{dossier: 'A001', planned: 'C1', shipmentId: 7}, {dossier: 'A001', planned: 'C1'}])[0][1].shipmentId !== 7) throw new Error('partial shipment not propagated');
-for (const field of ['source', 'global', 'shipmentId']) {
+if (normalizeGroups([{dossier: 'A001', planned: 'C1', collectionLocalRef: 'A001'}, {dossier: 'A001', planned: 'C1'}])[0][1].collectionLocalRef !== 'A001') throw new Error('partial local ref not propagated');
+let localConflict = false;
+try { normalizeGroups([{dossier: 'A001', planned: 'C1', collectionLocalRef: 'A001'}, {dossier: 'A001', planned: 'C1', collectionLocalRef: 'A002'}]); } catch (e) { localConflict = true; }
+if (!localConflict) throw new Error('intra-namespace local ref conflict accepted');
+for (const field of ['source', 'global', 'shipmentId', 'collectionLocalRef']) {
   let conflict = false;
   try { normalizeGroups([{dossier: 'A001', planned: 'C1', [field]: 'x'}, {dossier: 'A001', planned: 'C2', [field]: 'x'}]); } catch (e) { conflict = true; }
   if (!conflict) throw new Error('cross-namespace ' + field + ' accepted');

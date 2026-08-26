@@ -566,7 +566,7 @@ function dirtyDossiers_(sheet) {
   // A server identity must never span two visible namespaces (for example
   // C1|A001 and C2|A001).  Build the indexes before normalising any row so a
   // duplicate cannot be hidden by propagation.
-  const identityIndexes = [DALLY.columns.syncSourceKey, DALLY.columns.globalExternalReference, DALLY.columns.shipmentId].map(column => {
+  const identityIndexes = [DALLY.columns.syncSourceKey, DALLY.columns.globalExternalReference, DALLY.columns.shipmentId, DALLY.columns.collectionLocalRef].map(column => {
     const index = new Map();
     groups.forEach((members, namespace) => members.forEach(m => {
       const value = String(m.display[column - 1] || '').trim();
@@ -588,7 +588,8 @@ function dirtyDossiers_(sheet) {
     const sources = unique(DALLY.columns.syncSourceKey);
     const globals = unique(DALLY.columns.globalExternalReference);
     const shipments = unique(DALLY.columns.shipmentId);
-    if (crossNamespace.has(namespace) || planned.size > 1 || clients.size > 1 || sources.size > 1 || globals.size > 1 || shipments.size > 1) {
+    const locals = unique(DALLY.columns.collectionLocalRef);
+    if (crossNamespace.has(namespace) || planned.size > 1 || clients.size > 1 || sources.size > 1 || globals.size > 1 || shipments.size > 1 || locals.size > 1) {
       members.forEach(m => {
         setCell_(sheet, start + m.index, DALLY.columns.syncStatus, 'Erreur');
         setCell_(sheet, start + m.index, DALLY.columns.syncMessage, crossNamespace.has(namespace) ? 'Identité serveur associée à plusieurs namespaces de dossier.' : 'La sélection contient des identités de dossier en conflit.');
@@ -598,7 +599,8 @@ function dirtyDossiers_(sheet) {
     const source = sources.values().next().value || '';
     const global = globals.values().next().value || '';
     const shipment = shipments.values().next().value || '';
-    [[DALLY.columns.syncSourceKey, source], [DALLY.columns.globalExternalReference, global], [DALLY.columns.shipmentId, shipment]].forEach(([column, value]) => {
+    const local = locals.values().next().value || '';
+    [[DALLY.columns.syncSourceKey, source], [DALLY.columns.globalExternalReference, global], [DALLY.columns.shipmentId, shipment], [DALLY.columns.collectionLocalRef, local]].forEach(([column, value]) => {
       if (!value) return;
       members.forEach(m => {
         if (!String(m.display[column - 1] || '').trim()) {

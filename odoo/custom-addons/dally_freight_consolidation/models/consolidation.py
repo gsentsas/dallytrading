@@ -80,6 +80,10 @@ class DallyFreightConsolidation(models.Model):
         "res.company", required=True, default=lambda self: self.env.company,
         index=True,
     )
+    intake_sequence_id = fields.Many2one(
+        "ir.sequence", string="Séquence collecte", readonly=True,
+        copy=False, ondelete="restrict",
+    )
     active = fields.Boolean(default=True)
     state = fields.Selection(
         CONSOLIDATION_STATES, default="draft", required=True, tracking=True,
@@ -219,7 +223,19 @@ class DallyFreightConsolidation(models.Model):
             if not placeholder or placeholder in (_("Nouveau"), "Nouveau", "New"):
                 vals["name"] = self._next_route_reference(vals, reserved_names)
                 reserved_names.add(vals["name"])
-        return super().create(vals_list)
+        records = super().create(vals_list)
+        Sequence = self.env["ir.sequence"].sudo()
+        for record in records.filtered(lambda rec: not rec.intake_sequence_id):
+            sequence = Sequence.create({
+                "name": "Dally Intake - %s" % record.name,
+                "code": "dally.freight.intake.%s" % record.id,
+                "company_id": record.company_id.id,
+                "number_next": 1,
+                "number_increment": 1,
+                "padding": 1,
+            })
+            record.with_context(_dally_sequence_setup=True).write({"intake_sequence_id": sequence.id})
+        return records
 
     @api.model
     def _next_route_reference(self, vals, reserved_names=None):
@@ -263,6 +279,10 @@ class DallyFreightConsolidation(models.Model):
                         _("Transition de consolidation impossible : %(current)s → %(target)s.",
                           current=record.state, target=vals["state"])
                     )
+        if "name" in vals:
+            linked = self.filtered(lambda rec: bool(rec.shipment_ids))
+            if linked:
+                raise UserError(_("La référence est immuable après attribution d'un dossier de collecte."))
         immutable = {"transport_mode", "direction", "origin_country_id", "origin_city",
                      "origin_location", "destination_country_id", "destination_city",
                      "destination_location", "mawb_number", "line_ids"}
@@ -271,6 +291,14 @@ class DallyFreightConsolidation(models.Model):
             if blocked:
                 raise UserError(_("La composition et le dossier maître sont figés après le départ."))
         return super().write(vals)
+
+    def unlink(self):
+        if self.filtered(lambda rec: rec.shipment_ids or rec.line_ids or rec.state not in ("draft", "cancelled")):
+            raise UserError(_("Cette consolidation ne peut pas être supprimée après utilisation."))
+        sequences = self.mapped("intake_sequence_id")
+        result = super().unlink()
+        sequences.sudo().unlink()
+        return result
 
     def _historical_mark_departed(self):
         if not self.env.user.has_group("dally_core.group_dally_manager"):

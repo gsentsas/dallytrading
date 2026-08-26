@@ -11,7 +11,6 @@ engine.
 
 import re
 
-from psycopg2 import IntegrityError
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -171,32 +170,7 @@ class DallyFreightSyncService(models.AbstractModel):
         if shipment:
             shipment.write(values)
         elif planned:
-            try:
-                shipment = Shipment._create_with_intake_identity(values)
-            except IntegrityError as error:
-                # A concurrent allocator may have committed the same global
-                # reference before this transaction reached INSERT.  Retry
-                # the complete idempotent operation after rolling back the
-                # failed transaction/savepoint; the source key then resolves
-                # to the committed shipment instead of consuming Axxx again.
-                if "dally_shipment_external_reference_unique" not in str(error):
-                    raise
-                self.env.cr.rollback()
-                identity = Shipment._allocate_intake_identity(
-                    planned, sync_source_key=sync_source_key,
-                    local_ref=False, source=source,
-                )
-                if not isinstance(identity, tuple):
-                    shipment = identity
-                else:
-                    sequence, local = identity
-                    external_reference = "%s-%s" % (planned.name, local)
-                    values.update({
-                        "external_reference": external_reference,
-                        "collection_sequence": sequence,
-                        "collection_local_ref": local,
-                    })
-                    shipment = Shipment._create_with_intake_identity(values)
+            shipment = Shipment._create_with_intake_identity(values)
         else:
             shipment = Shipment.create(values)
 

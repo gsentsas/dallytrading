@@ -104,8 +104,9 @@ class DallyShipment(models.Model):
             if self.search_count([("company_id", "=", consolidation.company_id.id), ("intake_consolidation_id", "=", consolidation.id), ("collection_sequence", "=", sequence)]):
                 raise ValidationError(_("Le numéro local %s est déjà utilisé dans cette consolidation.", local))
         else:
-            self.env.cr.execute("SELECT COALESCE(MAX(collection_sequence), 0) FROM dally_shipment WHERE company_id=%s AND intake_consolidation_id=%s", [consolidation.company_id.id, consolidation.id])
-            sequence = int(self.env.cr.fetchone()[0] or 0) + 1
+            if not consolidation.intake_sequence_id:
+                raise ValidationError(_("La séquence de collecte est indisponible."))
+            sequence = int(consolidation.intake_sequence_id.sudo().next_by_id())
             local = ("A%03d" % sequence) if sequence < 1000 else ("A%d" % sequence)
         return sequence, local
 

@@ -4,7 +4,7 @@
  *   DALLY_FREIGHT_SYNC_API_KEY
  *   DALLY_FREIGHT_BILLING_API_KEY
  *
- * The connector groups rows by dossier, sends one freight payload per dossier,
+ * The connector groups rows by planned consolidation plus dossier, sends one freight payload per logical dossier,
  * then optionally creates the draft invoice and synchronises payments.
  */
 
@@ -14,7 +14,7 @@ const DALLY = Object.freeze({
   dataSheets: ['Saisie maritime', 'Saisie aérien'],
   headerRow: 2,
   firstDataRow: 3,
-  maxColumn: 58,
+  maxColumn: 63,
   columns: Object.freeze({
     depositDate: 1, dossier: 2, client: 3, phone: 4, clientType: 5,
     goodsCategory: 6, description: 7, quantity: 8, length: 9, width: 10,
@@ -28,6 +28,8 @@ const DALLY = Object.freeze({
     transportMode: 45, tariffFamily: 46, address: 47, email: 48,
     paymentEur: 49, paymentXof: 50, paymentMethod: 54, collectedBy: 55,
     articleKey: 56, paymentFlag: 57, paymentKey: 58,
+    plannedConsolidation: 59, syncSourceKey: 60, globalExternalReference: 61,
+    intakeConsolidationRef: 62, collectionLocalRef: 63,
   }),
   familyCodes: Object.freeze({
     'Alimentaire standard': 'food',
@@ -56,6 +58,7 @@ function onOpen() {
     .addItem('Initialiser / installer les déclencheurs', 'dallySetup')
     .addItem('Diagnostic configuration', 'dallyDiagnostic')
     .addSeparator()
+    .addItem('Actualiser les départs ouverts', 'dallyRefreshOpenConsolidations')
     .addItem('Synchroniser les dossiers en attente', 'dallySyncPending')
     .addItem('Synchroniser le dossier sélectionné', 'dallySyncSelectedDossier')
     .addItem('Créer la facture brouillon du dossier', 'dallyInvoiceSelectedDossier')
@@ -150,14 +153,14 @@ function dallyMarkAllForSync() {
 function dallySyncSelectedDossier() {
   withScriptLock_(() => {
     const ctx = selectedDossier_();
-    syncDossier_(ctx.sheet, ctx.dossier, rowsForDossier_(ctx.sheet, ctx.dossier), readConfig_());
+    syncDossier_(ctx.sheet, ctx.dossier, rowsForDossier_(ctx.sheet, ctx.key), readConfig_());
   });
 }
 
 function dallyInvoiceSelectedDossier() {
   withScriptLock_(() => {
     const ctx = selectedDossier_();
-    const rows = rowsForDossier_(ctx.sheet, ctx.dossier);
+    const rows = rowsForDossier_(ctx.sheet, ctx.key);
     prepareInvoice_(ctx.sheet, rows, readConfig_(), true);
   });
 }
@@ -165,7 +168,7 @@ function dallyInvoiceSelectedDossier() {
 function dallyPaymentsSelectedDossier() {
   withScriptLock_(() => {
     const ctx = selectedDossier_();
-    syncPayments_(ctx.sheet, rowsForDossier_(ctx.sheet, ctx.dossier), readConfig_(), true);
+    syncPayments_(ctx.sheet, rowsForDossier_(ctx.sheet, ctx.key), readConfig_(), true);
   });
 }
 
@@ -180,7 +183,8 @@ function syncPending_(cfg, manual) {
     for (const dossier of dirty) {
       if (remaining-- <= 0) break;
       try {
-        syncDossier_(sheet, dossier, rowsForDossier_(sheet, dossier), cfg);
+        const group = rowsForDossier_(sheet, dossier);
+        syncDossier_(sheet, firstText_(group, DALLY.columns.dossier), group, cfg);
         done++;
       } catch (err) {
         markDossierError_(sheet, dossier, err);
@@ -204,6 +208,10 @@ function syncDossier_(sheet, dossier, rows, cfg) {
     setCell_(sheet, row.row, DALLY.columns.syncStatus, 'Synchronisé');
     setCell_(sheet, row.row, DALLY.columns.partnerId, data.partner_id || '');
     setCell_(sheet, row.row, DALLY.columns.shipmentId, data.shipment_id || '');
+    setCell_(sheet, row.row, DALLY.columns.collectionLocalRef, data.collection_local_ref || '');
+    setCell_(sheet, row.row, DALLY.columns.globalExternalReference, data.external_reference || '');
+    setCell_(sheet, row.row, DALLY.columns.intakeConsolidationRef, data.intake_consolidation_ref || '');
+    setCell_(sheet, row.row, DALLY.columns.syncSourceKey, data.sync_source_key || sourceKey_(sheet.getName(), dossier, rows));
     setCell_(sheet, row.row, DALLY.columns.lastSync, now);
     const msg = line ? ('CRM OK • tarif ' + line.pricing_status) : 'CRM OK • ligne paiement/administrative';
     setCell_(sheet, row.row, DALLY.columns.syncMessage, msg);
@@ -242,14 +250,19 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
   const route = cfg.routes[sheetName];
   const partnerId = firstNumber_(rows, DALLY.columns.partnerId);
   const source = cfg.migrationMode ? 'legacy_xlsx' : 'google_sheets';
+  const plannedRef = firstText_(rows, DALLY.columns.plannedConsolidation);
+  const sourceKey = sourceKey_(sheetName, dossier, rows);
   const payload = {
-    external_reference: dossier,
+    external_reference: plannedRef ? undefined : dossier,
+    sync_source_key: sourceKey,
     transport_mode: route.mode || DALLY.modeCodes[display_(first, DALLY.columns.transportMode)],
     direction: route.direction,
     source: source,
     goods_received_on: dateIso_(value_(first, DALLY.columns.depositDate)),
     customer_segment: DALLY.segmentCodes[display_(first, DALLY.columns.clientType)] || 'individual',
     state: sheetShipmentState_(first),
+    planned_consolidation_ref: plannedRef || undefined,
+    collection_local_ref: firstText_(rows, DALLY.columns.collectionLocalRef) || undefined,
     dossier_fee_eur: firstNumber_(rows, DALLY.columns.dossierFee) || 0,
     other_fees_eur: sum_(articleRows, DALLY.columns.otherFees),
     client: {
@@ -258,12 +271,13 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
       phone: firstText_(rows, DALLY.columns.phone),
       address: firstText_(rows, DALLY.columns.address),
     },
-    origin: {country_code: route.originCountry, city: route.originCity, location: route.originCity},
-    destination: {country_code: route.destinationCountry, city: route.destinationCity, location: route.destinationCity},
+    origin: {country_code: route.originCountry, city: route.originCity, location: route.originLocation || undefined},
+    destination: {country_code: route.destinationCountry, city: route.destinationCity, location: route.destinationLocation || undefined},
     lines: articleRows.map(buildLine_),
   };
   if (partnerId) payload.partner_id = partnerId;
   pruneEmptyObject_(payload.client);
+  Object.keys(payload).forEach(k => { if (typeof payload[k] === 'undefined' || payload[k] === '') delete payload[k]; });
   return payload;
 }
 
@@ -304,7 +318,8 @@ function prepareInvoice_(sheet, rows, cfg, force) {
     if (force) throw new Error(message);
     return null;
   }
-  const payload = shipmentId ? {shipment_id: shipmentId, external_reference: dossier} : {external_reference: dossier};
+  const globalRef = firstText_(rows, DALLY.columns.globalExternalReference) || dossier;
+  const payload = shipmentId ? {shipment_id: shipmentId, external_reference: globalRef} : {external_reference: globalRef};
   const data = apiPost_('/api/v1/freight/invoice', 'DALLY_FREIGHT_BILLING_API_KEY', payload, cfg);
   rows.forEach(row => {
     setCell_(sheet, row.row, DALLY.columns.saleOrderId, data.sale_order_id || '');
@@ -337,7 +352,7 @@ function syncPayments_(sheet, rows, cfg, force) {
     paymentOrdinal++;
     let key = display_(row, DALLY.columns.paymentKey);
     if (!key) {
-      key = dossier + '|P|' + paymentOrdinal;
+      key = stableGlobalKey_(row, dossier) + '|P|' + paymentOrdinal;
       setCell_(sheet, row.row, DALLY.columns.paymentKey, key);
     }
     setCell_(sheet, row.row, DALLY.columns.paymentFlag, 1);
@@ -348,7 +363,7 @@ function syncPayments_(sheet, rows, cfg, force) {
     if (!method) throw new Error('Mode de paiement non mappé: ' + methodLabel);
     const payload = {
       external_payment_key: key,
-      external_reference: dossier,
+      external_reference: firstText_(rows, DALLY.columns.globalExternalReference) || dossier,
       shipment_id: shipmentId || undefined,
       amount: eur > 0 ? eur : xof,
       currency_code: eur > 0 ? 'EUR' : 'XOF',
@@ -368,7 +383,7 @@ function syncPayments_(sheet, rows, cfg, force) {
   });
 
   const reconcilePayload = {
-    external_reference: dossier,
+    external_reference: firstText_(rows, DALLY.columns.globalExternalReference) || dossier,
     shipment_id: shipmentId || undefined,
     active_payment_keys: activeKeys,
     source: source,
@@ -403,6 +418,31 @@ function apiPost_(path, propertyName, payload, cfg) {
     throw new Error('HTTP ' + status + ' • ' + (err.code || 'api_error') + ' • ' + (err.message || 'Erreur CRM'));
   }
   return parsed.data || {};
+}
+
+function dallyRefreshOpenConsolidations() {
+  const cfg=readConfig_(); const data=apiGet_('/api/v1/freight/consolidations/open','DALLY_FREIGHT_SYNC_API_KEY',cfg);
+  const sh=ensureConfigSheet_(); const start=20; const rows=(data.consolidations||[]).map(c=>[c.name,c.transport_mode,c.direction,c.origin,c.destination,c.collection_close_on]);
+  if (rows.length) {
+    sh.getRange(start,1,rows.length,6).setValues(rows);
+    DALLY.dataSheets.forEach(name => {
+      const dataSheet = SpreadsheetApp.getActive().getSheetByName(name);
+      const mode = cfg.routes[name] && cfg.routes[name].mode;
+      const allowed = rows.filter(row => !mode || row[1] === mode).map(row => row[0]);
+      if (dataSheet && allowed.length && dataSheet.getMaxRows() >= DALLY.firstDataRow) {
+        const validation = SpreadsheetApp.newDataValidation().requireValueInList(allowed, true).setAllowInvalid(false).build();
+        dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.plannedConsolidation, dataSheet.getMaxRows() - DALLY.firstDataRow + 1, 1).setDataValidation(validation);
+      }
+    });
+  }
+  SpreadsheetApp.getActive().toast((rows.length)+' départ(s) ouvert(s) actualisé(s).','Dally CRM',6);
+}
+
+function apiGet_(path, propertyName, cfg) {
+  const key=PropertiesService.getScriptProperties().getProperty(propertyName); if (!key) throw new Error('Script Property manquante: '+propertyName);
+  const response=UrlFetchApp.fetch(cfg.baseUrl.replace(/\/$/,'')+path,{method:'get',muteHttpExceptions:true,headers:{'X-API-Key':key}});
+  const status=response.getResponseCode(); let parsed; try { parsed=JSON.parse(response.getContentText()||'{}'); } catch(e) { throw new Error('Réponse CRM non JSON (HTTP '+status+')'); }
+  if (status<200 || status>=300 || !parsed.success) throw new Error('HTTP '+status+' • '+((parsed.error||{}).message||'Erreur CRM')); return parsed.data||{};
 }
 
 function readConfig_() {
@@ -452,43 +492,44 @@ function ensureConfigSheet_() {
   return sh;
 }
 
+function logicalDossierKey_(row) {
+  const dossier = String(row[DALLY.columns.dossier - 1] || '').trim();
+  const planned = String(row[DALLY.columns.plannedConsolidation - 1] || '').trim();
+  return (planned ? planned + '|' : '') + dossier;
+}
+
 function dirtyDossiers_(sheet) {
   const last = sheet.getLastRow();
   if (last < DALLY.firstDataRow) return [];
   const data = sheet.getRange(DALLY.firstDataRow, 1, last - DALLY.firstDataRow + 1, DALLY.columns.syncStatus).getDisplayValues();
-  const out = [];
-  const seen = new Set();
-  data.forEach(r => {
-    const dossier = String(r[DALLY.columns.dossier - 1] || '').trim();
-    const status = String(r[DALLY.columns.syncStatus - 1] || '').trim();
-    if (dossier && status === 'À synchroniser' && !seen.has(dossier)) { seen.add(dossier); out.push(dossier); }
-  });
+  const out = []; const seen = new Set();
+  data.forEach(r => { const key = logicalDossierKey_(r); const status = String(r[DALLY.columns.syncStatus - 1] || '').trim(); if (key && status === 'À synchroniser' && !seen.has(key)) { seen.add(key); out.push(key); } });
   return out;
 }
 
-function rowsForDossier_(sheet, dossier) {
-  const last = sheet.getLastRow();
-  if (last < DALLY.firstDataRow) return [];
+function rowsForDossier_(sheet, key) {
+  const last = sheet.getLastRow(); if (last < DALLY.firstDataRow) return [];
   const count = last - DALLY.firstDataRow + 1;
   const values = sheet.getRange(DALLY.firstDataRow, 1, count, DALLY.maxColumn).getValues();
-  const display = sheet.getRange(DALLY.firstDataRow, 1, count, DALLY.maxColumn).getDisplayValues();
-  const out = [];
-  for (let i = 0; i < count; i++) {
-    if (String(display[i][DALLY.columns.dossier - 1] || '').trim() === dossier) {
-      out.push({row: DALLY.firstDataRow + i, values: values[i], display: display[i]});
-    }
-  }
+  const display = sheet.getRange(DALLY.firstDataRow, 1, count, DALLY.maxColumn).getDisplayValues(); const out=[];
+  for (let i=0;i<count;i++) if (logicalDossierKey_(display[i]) === key) out.push({row:DALLY.firstDataRow+i,values:values[i],display:display[i]});
   return out;
 }
 
 function selectedDossier_() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  if (!DALLY.dataSheets.includes(sheet.getName())) throw new Error('Sélectionnez une ligne dans Saisie maritime ou Saisie aérien.');
-  const row = SpreadsheetApp.getActiveRange().getRow();
-  if (row < DALLY.firstDataRow) throw new Error('Sélectionnez une ligne de dossier.');
-  const dossier = String(sheet.getRange(row, DALLY.columns.dossier).getDisplayValue() || '').trim();
-  if (!dossier) throw new Error('Aucun N dossier sur la ligne sélectionnée.');
-  return {sheet, dossier};
+  const sheet=SpreadsheetApp.getActiveSheet(); if (!DALLY.dataSheets.includes(sheet.getName())) throw new Error('Sélectionnez une ligne dans une feuille de saisie.');
+  const row=SpreadsheetApp.getActiveRange().getRow(); if (row < DALLY.firstDataRow) throw new Error('Sélectionnez une ligne de dossier.');
+  const values=sheet.getRange(row,1,1,DALLY.maxColumn).getDisplayValues()[0]; const dossier=String(values[DALLY.columns.dossier-1]||'').trim();
+  if (!dossier) throw new Error('Aucun dossier sur la ligne sélectionnée.');
+  return {sheet, dossier, key: logicalDossierKey_(values)};
+}
+
+function sourceKey_(sheetName, dossier, rows) {
+  const existing = rows.map(r => display_(r,DALLY.columns.syncSourceKey)).find(Boolean);
+  if (existing) return existing;
+  const planned = firstText_(rows,DALLY.columns.plannedConsolidation);
+  const key = 'sheets:' + sheetName + ':' + (planned || 'legacy') + ':' + dossier;
+  return key;
 }
 
 function prepareArticleRows_(sheet, dossier, rows) {
@@ -497,10 +538,14 @@ function prepareArticleRows_(sheet, dossier, rows) {
   articleRows.forEach(row => {
     ordinal++;
     const existing = display_(row, DALLY.columns.articleKey);
-    row._syncArticleKey = existing || (dossier + '|A|' + ordinal);
+    row._syncArticleKey = existing || (stableGlobalKey_(row, dossier) + '|A|' + ordinal);
     if (!existing) setCell_(sheet, row.row, DALLY.columns.articleKey, row._syncArticleKey);
   });
   return articleRows;
+}
+
+function stableGlobalKey_(row, dossier) {
+  return display_(row, DALLY.columns.globalExternalReference) || display_(row, DALLY.columns.syncSourceKey) || dossier;
 }
 
 function articleKey_(row) {

@@ -6,6 +6,7 @@
     "license": "LGPL-3",
     "author": "DallyTrading",
     "depends": [
+        "dally_api",
         "dally_freight_billing",
         "dally_freight_bridge",
         "dally_freight_notifications",

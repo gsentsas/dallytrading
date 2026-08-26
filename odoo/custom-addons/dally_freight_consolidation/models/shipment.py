@@ -3,6 +3,7 @@
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
+import re
 
 
 _OVERRIDE_TOKEN = object()
@@ -33,6 +34,15 @@ class DallyShipment(models.Model):
     payment_control = fields.Char(compute="_compute_operational_controls", string="Contrôle paiement",
                                   store=True)
 
+    intake_consolidation_id = fields.Many2one("dally.freight.consolidation", string="Consolidation d'entrée", copy=False, index=True, readonly=True)
+    planned_consolidation_id = fields.Many2one("dally.freight.consolidation", string="Consolidation prévue", copy=False, index=True)
+    collection_sequence = fields.Integer(string="N° collecte", copy=False, index=True)
+    collection_local_ref = fields.Char(string="Référence locale", copy=False, index=True)
+    sync_source_key = fields.Char(string="Clé source de synchronisation", copy=False, index=True)
+
+    _intake_sequence_unique = models.Constraint("UNIQUE(company_id, intake_consolidation_id, collection_sequence)", "Le numéro local doit être unique dans la consolidation d'entrée.")
+    _sync_source_key_unique = models.Constraint("UNIQUE(company_id, sync_source, sync_source_key)", "La clé source doit être unique par société et source.")
+
     departure_payment_override_reason = fields.Text(
         string="Raison de dérogation paiement", readonly=True, copy=False,
         groups="dally_core.group_dally_manager",
@@ -62,6 +72,47 @@ class DallyShipment(models.Model):
             )
             shipment.consolidation_ids = consolidations
             shipment.consolidation_id = consolidations.sorted("id", reverse=True)[:1]
+
+    @api.model
+    def _allocate_intake_identity(self, consolidation, *, sync_source_key=False, local_ref=False, source="google_sheets"):
+        if not consolidation or consolidation.company_id != self.env.company:
+            raise ValidationError(_("La consolidation d'entrée est invalide pour cette société."))
+        if sync_source_key:
+            self.env.cr.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ["freight-source-dossier:%s:%s:%s" % (consolidation.company_id.id, source, sync_source_key)])
+            existing = self.search([("company_id", "=", consolidation.company_id.id), ("sync_source", "=", source), ("sync_source_key", "=", sync_source_key)], limit=1)
+            if existing:
+                return existing
+        self.env.cr.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ["consolidation-intake:%s:%s" % (consolidation.company_id.id, consolidation.id)])
+        if local_ref:
+            match = re.fullmatch(r"A([0-9]+)", str(local_ref).strip().upper())
+            if not match or int(match.group(1)) <= 0:
+                raise ValidationError(_("collection_local_ref doit respecter le format A001."))
+            sequence = int(match.group(1)); local = ("A%03d" % sequence) if sequence < 1000 else ("A%d" % sequence)
+            if self.search_count([("company_id", "=", consolidation.company_id.id), ("intake_consolidation_id", "=", consolidation.id), ("collection_sequence", "=", sequence)]):
+                raise ValidationError(_("Le numéro local %s est déjà utilisé dans cette consolidation.", local))
+        else:
+            self.env.cr.execute("SELECT COALESCE(MAX(collection_sequence), 0) FROM dally_shipment WHERE company_id=%s AND intake_consolidation_id=%s", [consolidation.company_id.id, consolidation.id])
+            sequence = int(self.env.cr.fetchone()[0]) + 1; local = ("A%03d" % sequence) if sequence < 1000 else ("A%d" % sequence)
+        return sequence, local
+
+    def _add_available_packages_to_consolidation(self, consolidation):
+        Line = self.env["dally.freight.consolidation.line"]
+        for shipment in self:
+            if shipment.company_id != consolidation.company_id:
+                raise ValidationError(_("Société incompatible."))
+            if shipment.state not in ("goods_received", "preparing"):
+                raise UserError(_("Le dossier doit être reçu ou en préparation."))
+            if consolidation.state != "collecting":
+                raise UserError(_("La consolidation n'est plus ouverte à la collecte."))
+            if not shipment.package_ids:
+                raise UserError(_("Ce dossier ne contient aucun colis à charger."))
+            for package in shipment.package_ids:
+                Line._check_operational_compatibility(consolidation, package)
+            for package in shipment.package_ids:
+                if package.available_quantity > 0 and not Line.search_count([("consolidation_id", "=", consolidation.id), ("package_id", "=", package.id)]):
+                    Line.create({"consolidation_id": consolidation.id, "package_id": package.id, "quantity_loaded": package.available_quantity})
+            shipment.planned_consolidation_id = consolidation
+        return True
 
     @api.depends(
         # Colis et désignation (préparation).
@@ -94,6 +145,30 @@ class DallyShipment(models.Model):
                 shipment.payment_control = _("Dérogation Manager")
 
     def write(self, vals):
+        if "intake_consolidation_id" in vals:
+            target = vals.get("intake_consolidation_id") or False
+            for shipment in self:
+                if shipment.intake_consolidation_id.id != target:
+                    raise ValidationError(_("La consolidation d'entrée est immuable après allocation."))
+        if "planned_consolidation_id" in vals:
+            target = self.env["dally.freight.consolidation"].browse(vals.get("planned_consolidation_id")).exists()
+            for shipment in self:
+                if not target:
+                    raise ValidationError(_("Une consolidation prévue est requise."))
+                if target.company_id != shipment.company_id:
+                    raise ValidationError(_("Société incompatible."))
+                if target.state != "collecting":
+                    raise UserError(_("La consolidation prévue doit être en collecte."))
+                if shipment.consolidation_line_ids.filtered(lambda line: line.consolidation_id != target):
+                    raise UserError(_("Le dossier est déjà chargé dans une autre consolidation."))
+                for prefix in ("origin", "destination"):
+                    for suffix in ("country_id", "city", "location"):
+                        current = getattr(shipment, "%s_%s" % (prefix, suffix))
+                        expected = getattr(target, "%s_%s" % (prefix, suffix))
+                        if current and expected and current != expected:
+                            raise ValidationError(_("La route de la consolidation prévue est incompatible avec le dossier."))
+                if shipment.package_ids:
+                    self.env["dally.freight.consolidation.line"]._check_operational_compatibility(target, shipment.package_ids[:1])
         internal = self.env.context.get("_dally_override_token") is _OVERRIDE_TOKEN
         protected = {
             "departure_payment_override_reason", "departure_payment_override_user_id",

@@ -68,11 +68,12 @@ class DallyFreightSyncService(models.AbstractModel):
             self._lock("freight-source-dossier", "%s:%s:%s" % (self.env.company.id, source, sync_source_key))
         self._lock("freight-dossier", "%s:%s" % (self.env.company.id, external_reference or sync_source_key))
         Shipment = self.env["dally.shipment"].with_context(active_test=False)
+        consolidation_fields = "sync_source_key" in Shipment._fields
         shipment = Shipment.search([
             ("company_id", "=", self.env.company.id),
             ("sync_source_key", "=", sync_source_key),
             ("sync_source", "=", source),
-        ], limit=1) if sync_source_key else Shipment.browse()
+        ], limit=1) if sync_source_key and consolidation_fields else Shipment.browse()
         if not shipment and external_reference:
             shipment = Shipment.search([
                 ("company_id", "=", self.env.company.id),
@@ -101,7 +102,7 @@ class DallyFreightSyncService(models.AbstractModel):
                 external_reference = shipment.external_reference
                 sequence = shipment.collection_sequence
                 local = shipment.collection_local_ref
-        if shipment and sync_source_key and shipment.sync_source_key != sync_source_key:
+        if shipment and sync_source_key and consolidation_fields and shipment.sync_source_key != sync_source_key:
             raise ValidationError(_("La clé source appartient déjà à un autre dossier."))
         state = payload.get("state")
         target_state = self._choice(state, VALID_STATES, "state") if state else ("request_received" if shipment_created else None)
@@ -189,6 +190,9 @@ class DallyFreightSyncService(models.AbstractModel):
         if planned and shipment.state in ("goods_received", "preparing") and not requires_replan:
             shipment._add_available_packages_to_consolidation(planned)
 
+        intake = shipment.intake_consolidation_id if consolidation_fields else self.env["dally.freight.consolidation"].browse()
+        planned_record = shipment.planned_consolidation_id if consolidation_fields else self.env["dally.freight.consolidation"].browse()
+        loaded = shipment.consolidation_id if "consolidation_id" in shipment._fields else self.env["dally.freight.consolidation"].browse()
         return {
             "partner_id": partner.id,
             "partner_created": partner_created,
@@ -199,14 +203,14 @@ class DallyFreightSyncService(models.AbstractModel):
             "sync_source_key": shipment.sync_source_key or sync_source_key,
             "collection_local_ref": shipment.collection_local_ref,
             "collection_sequence": shipment.collection_sequence,
-            "intake_consolidation_id": shipment.intake_consolidation_id.id,
-            "intake_consolidation_ref": shipment.intake_consolidation_id.name,
-            "planned_consolidation_id": shipment.planned_consolidation_id.id,
-            "planned_consolidation_ref": shipment.planned_consolidation_id.name,
-            "consolidation_status": ("requires_replan" if requires_replan else shipment.consolidation_id.state),
+            "intake_consolidation_id": intake.id,
+            "intake_consolidation_ref": intake.name,
+            "planned_consolidation_id": planned_record.id,
+            "planned_consolidation_ref": planned_record.name,
+            "consolidation_status": ("requires_replan" if requires_replan else loaded.state),
             "requires_replan": requires_replan,
             "sync_message": ("Départ clôturé — replanification requise" if requires_replan else shipment.sync_message),
-            "attached_to_consolidation": bool(shipment.consolidation_id),
+            "attached_to_consolidation": bool(loaded),
             "state": shipment.state,
             "lines": line_results,
         }, shipment

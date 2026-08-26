@@ -26,7 +26,7 @@ const autoGroup = rows => {
 const externalRef = row => {
   if (row.global) return row.global;
   if (!row.planned) return row.dossier || '';
-  if (row.shipmentId || row.intake || row.local || row.lastSync) return '';
+  if (row.shipmentId || row.intake || row.local) return '';
   return row.dossier || '';
 };
 if (autoGroup([{dossier: 'A001'}, {dossier: 'A001'}]) !== 'A001') throw new Error('same legacy dossier split');
@@ -41,7 +41,21 @@ if (autoGroup([{dossier: '', planned: 'C1'}]) !== null) throw new Error('blank-B
 if (externalRef({planned: 'C1', dossier: 'A001'}) !== 'A001') throw new Error('legacy first bind fallback missing');
 if (externalRef({planned: 'C1', dossier: '', source: 's'}) !== '') throw new Error('new planned dossier sent local ref');
 if (externalRef({planned: 'C1', dossier: 'A001', shipmentId: 9}) !== '') throw new Error('server-managed planned dossier sent local ref');
+if (externalRef({planned: 'C1', dossier: 'A001', lastSync: '2026-01-01'}) !== 'A001') throw new Error('failed retry lost legacy reference');
+if (externalRef({planned: 'C1', dossier: 'A001', intake: 'C1'}) !== '') throw new Error('intake identity did not suppress local ref');
+if (externalRef({planned: 'C1', dossier: 'A001', local: 'A001'}) !== '') throw new Error('local identity did not suppress local ref');
 if (externalRef({planned: 'C1', dossier: 'A001', global: 'C1-A001'}) !== 'C1-A001') throw new Error('global reference not authoritative');
+
+const numberOrNull = value => {
+  if (value === '' || value === null || typeof value === 'undefined') return null;
+  const normalized = typeof value === 'string' ? value.replace(/[\s\u00A0\u202F]/g, '').replace(',', '.') : value;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+};
+for (const value of ['1234,56', '1 234,56', '1\u00A0234,56', '1\u202F234,56']) {
+  if (numberOrNull(value) !== 1234.56) throw new Error('localized number parsing failed');
+}
+if (numberOrNull(1234.56) !== 1234.56 || numberOrNull('') !== null || numberOrNull(null) !== null || numberOrNull('not-a-number') !== null) throw new Error('number parsing contract failed');
 
 const normalizeGroups = rows => {
   const groups = new Map();

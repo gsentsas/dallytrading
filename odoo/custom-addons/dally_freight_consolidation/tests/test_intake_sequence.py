@@ -132,6 +132,30 @@ class TestIntakeSequence(TransactionCase):
             consolidation.unlink()
         self.assertEqual(shipment.external_reference, "%s-A001" % consolidation.name)
 
+    def test_historical_line_without_intake_also_freezes_namespace(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-HISTORICAL")
+        _, shipment = self.service.upsert({
+            "external_reference": "A001-HISTORICAL",
+            "transport_mode": "air", "direction": "export",
+            "state": "request_received",
+            "client": {"name": self.partner.name, "email": self.partner.email},
+            "origin": {"city": "Dakar", "location": "DSS"},
+            "destination": {"city": "Paris", "location": "CDG"},
+        })
+        package = self.env["dally.shipment.package"].create({
+            "shipment_id": shipment.id, "quantity": 1, "unit_weight_kg": 2.0,
+        })
+        self.env["dally.freight.consolidation.line"].create({
+            "consolidation_id": consolidation.id,
+            "package_id": package.id,
+            "quantity_loaded": 1,
+        })
+        self.assertFalse(consolidation.intake_shipment_ids)
+        self.assertTrue(consolidation.line_ids)
+        with self.assertRaises(UserError):
+            consolidation.write({"name": "AIR-DSS-CDG-2099-HISTORICAL-RENAMED"})
+        self.assertEqual(consolidation.name, "AIR-DSS-CDG-2099-HISTORICAL")
+
     def test_legacy_external_reference_remains_supported(self):
         result, shipment = self.service.upsert({
             "external_reference": "A001",

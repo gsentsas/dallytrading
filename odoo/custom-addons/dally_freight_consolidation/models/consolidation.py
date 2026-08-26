@@ -288,7 +288,9 @@ class DallyFreightConsolidation(models.Model):
                           current=record.state, target=vals["state"])
                     )
         if "name" in vals:
-            linked = self.filtered(lambda rec: bool(rec.intake_shipment_ids))
+            linked = self.filtered(
+                lambda rec: bool(rec.intake_shipment_ids or rec.line_ids)
+            )
             if linked:
                 raise UserError(_("La référence est immuable après attribution d'un dossier de collecte."))
         immutable = {"transport_mode", "direction", "origin_country_id", "origin_city",

@@ -172,7 +172,15 @@ class DallyFreightSyncService(models.AbstractModel):
                 with self.env.cr.savepoint():
                     shipment = Shipment._create_with_intake_identity(values)
             except IntegrityError as exc:
-                if getattr(exc.diag, "constraint_name", None) == "dally_shipment_sync_source_key_unique":
+                constraint = getattr(exc.diag, "constraint_name", None)
+                server_assigned = bool(
+                    shipment_created and planned and not local_ref
+                    and external_reference.startswith("%s-" % planned.name)
+                )
+                if constraint == "dally_shipment_sync_source_key_unique" or (
+                    constraint == "dally_shipment_external_reference_unique"
+                    and server_assigned
+                ):
                     raise ConcurrencyError("Concurrent Freight source creation") from exc
                 raise
         else:

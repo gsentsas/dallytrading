@@ -92,7 +92,8 @@ class DallyShipment(models.Model):
             match = re.fullmatch(r"A([0-9]+)", str(local_ref).strip().upper())
             if not match or int(match.group(1)) <= 0:
                 raise ValidationError(_("collection_local_ref doit respecter le format A001."))
-            sequence = int(match.group(1)); local = ("A%03d" % sequence) if sequence < 1000 else ("A%d" % sequence)
+            sequence = int(match.group(1))
+            local = ("A%03d" % sequence) if sequence < 1000 else ("A%d" % sequence)
             if self.search_count([("company_id", "=", consolidation.company_id.id), ("intake_consolidation_id", "=", consolidation.id), ("collection_sequence", "=", sequence)]):
                 raise ValidationError(_("Le numéro local %s est déjà utilisé dans cette consolidation.", local))
         else:

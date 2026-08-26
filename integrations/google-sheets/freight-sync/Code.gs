@@ -220,8 +220,14 @@ function syncDossier_(sheet, dossier, rows, cfg) {
     setCell_(sheet, row.row, DALLY.columns.syncMessage, msg);
   });
 
+  // The writes above make the in-memory snapshot stale. Reload by the
+  // server-issued source identity before invoice/payment calls.
+  const stableKey = data.sync_source_key ? 'source|' + data.sync_source_key : logicalDossierKey_(rows[0].display);
+  rows = rowsForDossier_(sheet, stableKey);
+  const refreshedArticleRows = prepareArticleRows_(sheet, dossier, rows);
+
   let invoiceData = null;
-  if (cfg.autoInvoice && invoiceReady_(articleRows)) {
+  if (cfg.autoInvoice && invoiceReady_(refreshedArticleRows)) {
     try { invoiceData = prepareInvoice_(sheet, rows, cfg, false); }
     catch (err) { appendMessage_(sheet, rows, 'Facture: ' + errorText_(err)); }
   }
@@ -539,19 +545,26 @@ function selectedDossier_() {
   const sheet=SpreadsheetApp.getActiveSheet(); if (!DALLY.dataSheets.includes(sheet.getName())) throw new Error('Sélectionnez une ligne dans une feuille de saisie.');
   const range=SpreadsheetApp.getActiveRange(); const first=range.getRow(); const last=first + Math.max(1, range.getNumRows()) - 1;
   if (first < DALLY.firstDataRow) throw new Error('Sélectionnez une ligne de dossier.');
-  const values=sheet.getRange(first,1,last-first+1,DALLY.maxColumn).getDisplayValues();
-  const rows=values.map((v,i)=>({row:first+i,values:v,display:v}));
-  const dossier=String(values[0][DALLY.columns.dossier-1]||'').trim();
-  const blank=values.some(v=>!String(v[DALLY.columns.dossier-1]||'').trim());
-  if (blank && values.some(v=>String(v[DALLY.columns.dossier-1]||'').trim())) throw new Error('La sélection contient des dossiers Axxx et des lignes vierges.');
+  const values=sheet.getRange(first,1,last-first+1,DALLY.maxColumn).getValues();
+  const display=sheet.getRange(first,1,last-first+1,DALLY.maxColumn).getDisplayValues();
+  const rows=values.map((v,i)=>({row:first+i,values:v,display:display[i]}));
+  const dossier=String(display[0][DALLY.columns.dossier-1]||'').trim();
+  const blank=display.some(v=>!String(v[DALLY.columns.dossier-1]||'').trim());
+  if (blank && display.some(v=>String(v[DALLY.columns.dossier-1]||'').trim())) throw new Error('La sélection contient des dossiers Axxx et des lignes vierges.');
   if (blank) {
-    const planned=String(values[0][DALLY.columns.plannedConsolidation-1]||'').trim();
-    const client=String(values[0][DALLY.columns.client-1]||'').trim();
+    const planned=String(display[0][DALLY.columns.plannedConsolidation-1]||'').trim();
+    const client=String(display[0][DALLY.columns.client-1]||'').trim();
     if (!planned) throw new Error('Un nouveau dossier doit choisir une consolidation prévue.');
-    if (!values.every(v=>String(v[DALLY.columns.plannedConsolidation-1]||'').trim()===planned && String(v[DALLY.columns.client-1]||'').trim()===client)) throw new Error('Les lignes sélectionnées doivent partager client et consolidation prévue.');
+    if (!rows.every(r=>!display_(r,DALLY.columns.syncSourceKey) && !display_(r,DALLY.columns.globalExternalReference) && display_(r,DALLY.columns.plannedConsolidation)===planned && display_(r,DALLY.columns.client)===client)) throw new Error('Les lignes sélectionnées doivent partager client/consolidation et ne posséder aucune identité existante.');
     return {sheet, dossier:'', key:logicalDossierKey_(values[0]), rows};
   }
-  return {sheet, dossier, key:logicalDossierKey_(values[0]), rows};
+  const selectedKeys = rows.map(r=>display_(r,DALLY.columns.syncSourceKey)).filter(Boolean);
+  const selectedGlobals = rows.map(r=>display_(r,DALLY.columns.globalExternalReference)).filter(Boolean);
+  if (new Set(selectedKeys).size > 1 || new Set(selectedGlobals).size > 1) throw new Error('La sélection contient plusieurs dossiers logiques.');
+  const key = selectedKeys.length ? 'source|' + selectedKeys[0] : selectedGlobals.length ? 'global|' + selectedGlobals[0] : logicalDossierKey_(rows[0].display);
+  const allRows = rowsForDossier_(sheet, key);
+  if (!allRows.length) throw new Error('Dossier sélectionné introuvable.');
+  return {sheet, dossier, key, rows:allRows};
 }
 
 function ensureSourceKey_(sheet, dossier, rows) {
@@ -647,7 +660,7 @@ function firstText_(rows, column) { for (const r of rows) { const v = display_(r
 function firstNumber_(rows, column) { for (const r of rows) { const v = numberOrNull_(value_(r, column)); if (v !== null) return v; } return null; }
 function sum_(rows, column) { return rows.reduce((acc, r) => acc + Number(value_(r, column) || 0), 0); }
 function numberOr_(value, fallback) { const n = Number(value); return Number.isFinite(n) && n > 0 ? n : fallback; }
-function numberOrNull_(value) { if (value === '' || value === null || typeof value === 'undefined') return null; const n = Number(value); return Number.isFinite(n) ? n : null; }
+function numberOrNull_(value) { if (value === '' || value === null || typeof value === 'undefined') return null; const normalized = typeof value === 'string' ? value.replace(',', '.') : value; const n = Number(normalized); return Number.isFinite(n) ? n : null; }
 function dateIso_(value) { if (!value) return ''; if (value instanceof Date) return Utilities.formatDate(value, 'Etc/UTC', 'yyyy-MM-dd'); const d = new Date(value); return isNaN(d.getTime()) ? '' : Utilities.formatDate(d, 'Etc/UTC', 'yyyy-MM-dd'); }
 function pruneEmptyObject_(obj) { Object.keys(obj).forEach(k => { if (!obj[k]) delete obj[k]; }); }
 function errorText_(err) { return err && err.message ? err.message : String(err); }

@@ -71,16 +71,20 @@ class DallyFreightSyncService(models.AbstractModel):
             self._lock("freight-dossier", "%s:%s" % (self.env.company.id, external_reference or sync_source_key))
         Shipment = self.env["dally.shipment"].with_context(active_test=False)
         consolidation_fields = "sync_source_key" in Shipment._fields
+        matched_by_source_key = False
+        matched_by_external_reference = False
         shipment = Shipment.search([
             ("company_id", "=", self.env.company.id),
             ("sync_source_key", "=", sync_source_key),
             ("sync_source", "=", source),
         ], limit=1) if sync_source_key and consolidation_fields else Shipment.browse()
+        matched_by_source_key = bool(shipment)
         if not shipment and external_reference:
             shipment = Shipment.search([
                 ("company_id", "=", self.env.company.id),
                 ("external_reference", "=", external_reference),
             ], limit=1)
+            matched_by_external_reference = bool(shipment)
         shipment_created = not bool(shipment)
         if self._is_tk_managed(shipment):
             raise UserError(_("Shipment lié au moteur opérationnel : synchronisation Sheet refusée."))
@@ -96,6 +100,14 @@ class DallyFreightSyncService(models.AbstractModel):
                 raise ValidationError(_("La consolidation prévue est introuvable."))
             if planned.transport_mode != mode or planned.direction != direction:
                 raise ValidationError(_("La consolidation prévue est incompatible avec le dossier."))
+        if shipment and matched_by_source_key and external_reference and external_reference != shipment.external_reference:
+            raise ValidationError(_("La référence globale d'une collecte ne peut pas être forgée."))
+        bind_source_key = bool(
+            shipment and matched_by_external_reference and sync_source_key
+            and consolidation_fields and not shipment.sync_source_key
+        )
+        if shipment and matched_by_external_reference and sync_source_key and consolidation_fields and shipment.sync_source_key and shipment.sync_source_key != sync_source_key:
+            raise ValidationError(_("La clé source appartient déjà à un autre dossier."))
         if shipment_created and planned:
             if source == "google_sheets" and local_ref:
                 raise ValidationError(_("collection_local_ref est attribué par le serveur."))
@@ -109,7 +121,7 @@ class DallyFreightSyncService(models.AbstractModel):
                 external_reference = shipment.external_reference
                 sequence = shipment.collection_sequence
                 local = shipment.collection_local_ref
-        if shipment and sync_source_key and consolidation_fields and shipment.sync_source_key != sync_source_key:
+        if shipment and sync_source_key and consolidation_fields and shipment.sync_source_key and shipment.sync_source_key != sync_source_key:
             raise ValidationError(_("La clé source appartient déjà à un autre dossier."))
         if shipment and consolidation_fields and shipment.intake_consolidation_id:
             if external_reference and external_reference != shipment.external_reference:
@@ -140,6 +152,8 @@ class DallyFreightSyncService(models.AbstractModel):
             values.update({"intake_consolidation_id": planned.id, "planned_consolidation_id": planned.id,
                            "collection_sequence": sequence, "collection_local_ref": local,
                            "sync_source_key": sync_source_key})
+        elif bind_source_key:
+            values["sync_source_key"] = sync_source_key
         elif shipment and planned:
             if shipment.planned_consolidation_id != planned:
                 shipment._check_planned_consolidation_compatibility(planned)
@@ -185,6 +199,8 @@ class DallyFreightSyncService(models.AbstractModel):
                 raise
         else:
             shipment = Shipment.create(values)
+        if shipment_created and sync_source_key and consolidation_fields and not planned:
+            shipment._bind_sync_source_key(sync_source_key)
 
         line_results = []
         descriptions = []

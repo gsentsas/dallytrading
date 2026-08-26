@@ -217,6 +217,8 @@ class DallyFreightConsolidation(models.Model):
     def create(self, vals_list):
         reserved_names = set()
         for vals in vals_list:
+            if "intake_sequence_id" in vals:
+                raise AccessError(_("La séquence de collecte est attribuée uniquement par le serveur."))
             initial_state = vals.get("state", "draft")
             if initial_state not in {"draft", "collecting"}:
                 raise UserError(_("Une consolidation doit être créée à l’état « Brouillon » ou « Collecte ouverte »."))

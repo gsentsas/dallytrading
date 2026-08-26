@@ -108,6 +108,10 @@ class DallyShipment(models.Model):
             raise ValidationError(_("Société incompatible."))
         if consolidation.state != "collecting":
             raise UserError(_("La consolidation prévue doit être en collecte."))
+        if self.transport_mode != consolidation.transport_mode:
+            raise ValidationError(_("Le mode de transport de la consolidation prévue est incompatible."))
+        if self.direction != consolidation.direction:
+            raise ValidationError(_("La direction de la consolidation prévue est incompatible."))
         if self.consolidation_line_ids.filtered(lambda line: line.consolidation_id != consolidation):
             raise UserError(_("Le dossier est déjà chargé dans une autre consolidation."))
         for prefix in ("origin", "destination"):
@@ -122,6 +126,13 @@ class DallyShipment(models.Model):
     def _create_with_intake_identity(self, values):
         created = self.with_context(_dally_intake_identity_token=_INTAKE_IDENTITY_TOKEN).create(values)
         return self.browse(created.ids)
+
+    def _bind_sync_source_key(self, source_key):
+        self.ensure_one()
+        self.with_context(_dally_intake_identity_token=_INTAKE_IDENTITY_TOKEN).write({
+            "sync_source_key": source_key,
+        })
+        return self
 
     def _add_available_packages_to_consolidation(self, consolidation):
         Line = self.env["dally.freight.consolidation.line"]

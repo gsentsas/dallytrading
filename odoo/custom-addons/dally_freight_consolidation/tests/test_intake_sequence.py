@@ -132,6 +132,19 @@ class TestIntakeSequence(TransactionCase):
             consolidation.unlink()
         self.assertEqual(shipment.external_reference, "%s-A001" % consolidation.name)
 
+    def test_consolidation_create_cannot_inject_intake_sequence(self):
+        sequence = self.env["ir.sequence"].sudo().create({
+            "name": "forged intake", "code": "forged.intake.%s" % self.id,
+            "implementation": "standard",
+        })
+        with self.assertRaises(AccessError):
+            self.env["dally.freight.consolidation"].create({
+                "name": "AIR-DSS-CDG-2099-FORGED",
+                "company_id": self.company.id,
+                "transport_mode": "air", "direction": "export",
+                "state": "collecting", "intake_sequence_id": sequence.id,
+            })
+
     def test_historical_line_without_intake_also_freezes_namespace(self):
         consolidation = self._consolidation("AIR-DSS-CDG-2099-HISTORICAL")
         _, shipment = self.service.upsert({
@@ -202,5 +215,60 @@ class TestIntakeSequence(TransactionCase):
                 "planned_consolidation_ref": consolidation.name,
                 "transport_mode": "sea",
                 "direction": "export",
+                "client": {"name": self.partner.name},
+            })
+
+    def test_existing_air_shipment_cannot_plan_sea_without_packages(self):
+        sea = self._consolidation("SEA-DKR-PAR-2099-MISMATCH")
+        sea.write({"transport_mode": "sea"})
+        _, shipment = self.service.upsert({
+            "external_reference": "AIR-REQUEST-NO-PACKAGE",
+            "transport_mode": "air", "direction": "export",
+            "state": "request_received",
+            "client": {"name": self.partner.name},
+        })
+        with self.assertRaises(ValidationError):
+            shipment.write({"planned_consolidation_id": sea.id})
+
+    def test_existing_export_shipment_cannot_plan_import_without_packages(self):
+        imported = self._consolidation("AIR-DSS-CDG-2099-IMPORT")
+        imported.write({"direction": "import"})
+        _, shipment = self.service.upsert({
+            "external_reference": "AIR-EXPORT-NO-PACKAGE",
+            "transport_mode": "air", "direction": "export",
+            "state": "request_received",
+            "client": {"name": self.partner.name},
+        })
+        with self.assertRaises(ValidationError):
+            shipment.write({"planned_consolidation_id": imported.id})
+
+    def test_external_reference_match_binds_empty_source_key(self):
+        result, shipment = self.service.upsert({
+            "external_reference": "LEGACY-BIND-001",
+            "transport_mode": "air", "direction": "export",
+            "client": {"name": self.partner.name},
+        })
+        self.assertFalse(shipment.sync_source_key)
+        result, rebound = self.service.upsert({
+            "external_reference": "LEGACY-BIND-001",
+            "sync_source_key": "sheet:bind:001",
+            "transport_mode": "air", "direction": "export",
+            "client": {"name": self.partner.name},
+        })
+        self.assertEqual(rebound, shipment)
+        self.assertEqual(rebound.sync_source_key, "sheet:bind:001")
+
+    def test_external_reference_match_rejects_conflicting_source_key(self):
+        self.service.upsert({
+            "external_reference": "LEGACY-BIND-002",
+            "sync_source_key": "sheet:bind:old",
+            "transport_mode": "air", "direction": "export",
+            "client": {"name": self.partner.name},
+        })
+        with self.assertRaises(ValidationError):
+            self.service.upsert({
+                "external_reference": "LEGACY-BIND-002",
+                "sync_source_key": "sheet:bind:new",
+                "transport_mode": "air", "direction": "export",
                 "client": {"name": self.partner.name},
             })

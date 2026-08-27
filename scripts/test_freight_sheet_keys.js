@@ -1,5 +1,26 @@
 'use strict';
 const assert = require('assert');
+const sheetColumns = Object.freeze({
+  plannedConsolidation: 2,
+  dossier: 3,
+  articleKey: 57,
+  paymentKey: 59,
+  syncSourceKey: 60,
+  globalExternalReference: 61,
+  intakeConsolidationRef: 62,
+  collectionLocalRef: 63,
+});
+const columnIndexes = Object.values(sheetColumns);
+assert.strictEqual(sheetColumns.plannedConsolidation, 2);
+assert.strictEqual(sheetColumns.dossier, 3);
+assert.strictEqual(sheetColumns.articleKey, 57);
+assert.strictEqual(sheetColumns.paymentKey, 59);
+assert.strictEqual(sheetColumns.syncSourceKey, 60);
+assert.strictEqual(sheetColumns.globalExternalReference, 61);
+assert.strictEqual(sheetColumns.intakeConsolidationRef, 62);
+assert.strictEqual(sheetColumns.collectionLocalRef, 63);
+assert.strictEqual(new Set(columnIndexes).size, columnIndexes.length, 'column indexes overlap');
+assert.strictEqual(Math.max(...columnIndexes), 63, 'max column must remain BK/63');
 // Deterministic regression check for the Sheet key contract (no API/Sheet access).
 const source002 = 'sheets:spreadsheet:uuid-002';
 const source003 = 'sheets:spreadsheet:uuid-003';
@@ -153,6 +174,18 @@ assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1'
 assert.doesNotThrow(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', shipmentId: 10}], [{dossier: 'A001', planned: 'C1', shipmentId: '10'}]));
 const fs = require('fs');
 const code = fs.readFileSync('integrations/google-sheets/freight-sync/Code.gs', 'utf8');
+const columnsBlock = code.match(/columns:\s*Object\.freeze\(\{([\s\S]*?)\n\s*\}\)/);
+if (!columnsBlock) throw new Error('DALLY.columns map missing');
+const parsedColumns = Object.fromEntries(
+  [...columnsBlock[1].matchAll(/([A-Za-z][A-Za-z0-9]*):\s*(\d+)/g)]
+    .map(([, name, value]) => [name, Number(value)])
+);
+for (const [name, expected] of Object.entries(sheetColumns)) {
+  if (parsedColumns[name] !== expected) throw new Error(`DALLY.columns.${name} expected ${expected}, got ${parsedColumns[name]}`);
+}
+const allColumnIndexes = Object.values(parsedColumns);
+if (new Set(allColumnIndexes).size !== allColumnIndexes.length) throw new Error('DALLY.columns indexes overlap');
+if (Math.max(...allColumnIndexes) !== 63) throw new Error('DALLY.columns maxColumn contract failed');
 if (!code.includes('getValues()') || !code.includes('getDisplayValues()')) throw new Error('raw/display snapshot contract missing');
 if (!/new Set\(logicalKeys\).*size > 1/.test(code)) throw new Error('mixed dossier selection guard missing');
 if (!/firstNumber_\(rows, DALLY\.columns\.shipmentId\)/.test(code)) throw new Error('server identity fallback missing');

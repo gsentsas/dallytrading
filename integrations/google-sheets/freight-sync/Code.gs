@@ -16,19 +16,19 @@ const DALLY = Object.freeze({
   firstDataRow: 3,
   maxColumn: 63,
   columns: Object.freeze({
-    depositDate: 1, dossier: 2, client: 3, phone: 4, clientType: 5,
-    goodsCategory: 6, description: 7, quantity: 8, length: 9, width: 10,
-    height: 11, unitVolume: 12, totalVolume: 13, announcedWeight: 14,
-    exactWeight: 15, billingMethod: 18, billableWeight: 19, manualPrice: 20,
-    appliedPrice: 21, dossierFee: 22, otherFees: 23, totalEur: 25,
-    parcelState: 30, notes: 31,
-    syncStatus: 32, partnerId: 33, shipmentId: 34, lastSync: 35,
-    saleOrderId: 36, invoiceId: 37, invoiceNumber: 38, syncMessage: 39,
-    responsible: 40, pricingType: 41, pricingReason: 42, customsValue: 43,
-    transportMode: 45, tariffFamily: 46, address: 47, email: 48,
-    paymentEur: 49, paymentXof: 50, paymentMethod: 54, collectedBy: 55,
-    articleKey: 56, paymentFlag: 57, paymentKey: 58,
-    plannedConsolidation: 59, syncSourceKey: 60, globalExternalReference: 61,
+    depositDate: 1, plannedConsolidation: 2, dossier: 3, client: 4, phone: 5, clientType: 6,
+    goodsCategory: 7, description: 8, quantity: 9, length: 10, width: 11,
+    height: 12, unitVolume: 13, totalVolume: 14, announcedWeight: 15,
+    exactWeight: 16, billingMethod: 19, billableWeight: 20, manualPrice: 21,
+    appliedPrice: 22, dossierFee: 23, otherFees: 24, totalEur: 26,
+    parcelState: 31, notes: 32,
+    syncStatus: 33, partnerId: 34, shipmentId: 35, lastSync: 36,
+    saleOrderId: 37, invoiceId: 38, invoiceNumber: 39, syncMessage: 40,
+    responsible: 41, pricingType: 42, pricingReason: 43, customsValue: 44,
+    transportMode: 46, tariffFamily: 47, address: 48, email: 49,
+    paymentEur: 50, paymentXof: 51, paymentMethod: 55, collectedBy: 56,
+    articleKey: 57, paymentFlag: 58, paymentKey: 59,
+    syncSourceKey: 60, globalExternalReference: 61,
     intakeConsolidationRef: 62, collectionLocalRef: 63,
   }),
   familyCodes: Object.freeze({
@@ -489,10 +489,11 @@ function readConfig_() {
 function ensureSheetLayout_(sheet) {
   if (!sheet) return;
   if (sheet.getMaxColumns() < DALLY.maxColumn) sheet.insertColumnsAfter(sheet.getMaxColumns(), DALLY.maxColumn-sheet.getMaxColumns());
-  const headers = [['Consolidation prévue','sync source key','global external reference','intake consolidation ref','collection local ref']];
-  const range = sheet.getRange(DALLY.headerRow, DALLY.columns.plannedConsolidation, 1, 5);
+  const planned = sheet.getRange(DALLY.headerRow, DALLY.columns.plannedConsolidation);
+  if (!planned.getValue()) planned.setValue('Consolidation prévue');
+  const labels = ['sync source key','global external reference','intake consolidation ref','collection local ref'];
+  const range = sheet.getRange(DALLY.headerRow, DALLY.columns.syncSourceKey, 1, labels.length);
   const current = range.getValues()[0];
-  const labels = headers[0];
   labels.forEach((label,i) => { if (!current[i]) range.getCell(1,i+1).setValue(label); });
   sheet.hideColumns(DALLY.columns.syncSourceKey, 4);
 }

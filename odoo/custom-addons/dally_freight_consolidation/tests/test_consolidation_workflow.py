@@ -7,6 +7,7 @@ de transitions — si demain la matrice change, seule la matrice bouge, ces
 tests décrivent ce qui reste vrai pour l'opérateur.
 """
 
+from odoo import fields
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import tagged
 
@@ -32,23 +33,51 @@ class TestConsolidationLifecycle(ConsolidationCommon):
         self.assertRegex(consolidation.name, r"^AIR-DSS-CDG-\d{4}-\d{3}$")
 
     def test_creation_batch_reserve_des_references_uniques(self):
+        year = fields.Date.today().year
+        prefix = f"AIR-DSS-CDG-{year}-"
+        existing = self.env["dally.freight.consolidation"].search(
+            [("name", "like", prefix + "%")]
+        ).mapped("name")
+        previous_max = max(
+            [int(name.rsplit("-", 1)[1]) for name in existing
+             if name.rsplit("-", 1)[-1].isdigit()],
+            default=0,
+        )
         vals = [{
             "transport_mode": "air", "direction": "export",
             "origin_city": "Dakar", "origin_location": "DSS",
             "destination_city": "Paris", "destination_location": "CDG",
         } for _ in range(3)]
         records = self.env["dally.freight.consolidation"].create(vals)
-        self.assertEqual(len(set(records.mapped("name"))), 3)
-        self.assertEqual([name[-3:] for name in records.mapped("name")], ["001", "002", "003"])
+        names = records.mapped("name")
+        self.assertEqual(len(set(names)), 3)
+        self.assertTrue(all(name.startswith(prefix) for name in names))
+        suffixes = [int(name.rsplit("-", 1)[1]) for name in names]
+        self.assertEqual(suffixes, list(range(previous_max + 1, previous_max + 4)))
 
     def test_creation_batch_routes_differentes_garde_les_sequences(self):
+        year = fields.Date.today().year
+        routes = (("DSS", "CDG"), ("CDG", "DSS"))
+        previous = {}
+        for origin, destination in routes:
+            prefix = f"AIR-{origin}-{destination}-{year}-"
+            existing = self.env["dally.freight.consolidation"].search(
+                [("name", "like", prefix + "%")]
+            ).mapped("name")
+            previous[(origin, destination)] = max(
+                [int(name.rsplit("-", 1)[1]) for name in existing
+                 if name.rsplit("-", 1)[-1].isdigit()],
+                default=0,
+            )
         records = self.env["dally.freight.consolidation"].create([
             {"transport_mode": "air", "direction": "export", "origin_city": "Dakar", "origin_location": "DSS", "destination_city": "Paris", "destination_location": "CDG"},
             {"transport_mode": "air", "direction": "export", "origin_city": "Paris", "origin_location": "CDG", "destination_city": "Dakar", "destination_location": "DSS"},
         ])
         self.assertNotEqual(records[0].name, records[1].name)
-        self.assertTrue(records[0].name.endswith("-001"))
-        self.assertTrue(records[1].name.endswith("-001"))
+        self.assertEqual(records[0].name.rsplit("-", 1)[0], f"AIR-DSS-CDG-{year}")
+        self.assertEqual(records[1].name.rsplit("-", 1)[0], f"AIR-CDG-DSS-{year}")
+        self.assertEqual(int(records[0].name.rsplit("-", 1)[1]), previous[("DSS", "CDG")] + 1)
+        self.assertEqual(int(records[1].name.rsplit("-", 1)[1]), previous[("CDG", "DSS")] + 1)
 
     def test_ouvrir_puis_cloturer_la_collecte(self):
         consolidation = self._consolidation()

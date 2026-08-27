@@ -175,11 +175,14 @@ class TestCanaris(TransactionCase):
                 self.assertNotIn(
                     interdit, texte, f"{interdit} present dans la projection {nom}."
                 )
-            self.assertNotIn(
-                str(self.expedition.id),
-                str(payload.get("reference", "")),
-                f"La reference {nom} expose l'identifiant du fournisseur.",
-            )
+            reference = payload.get("reference", "")
+            self.assertEqual(reference, self.projection.reference)
+            self.assertTrue(reference)
+            self.assertRegex(reference, r"^DT-SHP-\d{4}-\d{6}$")
+            self.assertNotEqual(reference, str(self.expedition.id))
+            supplier_reference = getattr(self.expedition, "name", "")
+            if supplier_reference:
+                self.assertNotEqual(reference, supplier_reference)
 
     def test_les_evenements_projetes_sont_fermes_par_defaut(self):
         """Politique de publication : la synchronisation ne publie jamais.

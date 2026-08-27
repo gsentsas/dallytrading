@@ -133,6 +133,18 @@ assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1'
 assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}, {dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 11}], []), selectedConflictPattern, 'same source/different shipment accepted');
 assert.doesNotThrow(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1', shipmentId: 10}, {dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1', shipmentId: 10}], []));
 const identityCollisionPattern = /Identité serveur associée à plusieurs namespaces de dossier\./;
+const assertBlankOwnership = (selected, outside) => {
+  const sourceValues = selected.map(row => String(row.source ?? '').trim()).filter(Boolean);
+  const selectedKeys = new Set(sourceValues);
+  if (selectedKeys.size > 1 || (selectedKeys.size && selected.some(row => !String(row.source ?? '').trim()))) throw new Error('partial source');
+  for (const row of outside) if (selectedKeys.has(String(row.source ?? '').trim())) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
+};
+assert.doesNotThrow(() => assertBlankOwnership([{dossier: '', planned: 'C1'}, {dossier: '', planned: 'C1'}], []));
+assert.doesNotThrow(() => assertBlankOwnership([{dossier: '', planned: 'C1', source: 'S-RETRY'}, {dossier: '', planned: 'C1', source: 'S-RETRY'}], []));
+assert.throws(() => assertBlankOwnership([{dossier: '', planned: 'C1', source: 'S-RETRY'}, {dossier: '', planned: 'C1', source: 'S-RETRY'}], [{dossier: 'A009', planned: 'C2', source: 'S-RETRY'}]), identityCollisionPattern, 'blank source owner reused');
+assert.throws(() => assertBlankOwnership([{dossier: '', planned: 'C1', source: 'S-RETRY'}, {dossier: '', planned: 'C1', source: 'S-RETRY'}], [{dossier: '', planned: 'C1', source: 'S-RETRY'}]), identityCollisionPattern, 'blank source owner reused by blank row');
+assert.throws(() => assertBlankOwnership([{dossier: '', planned: 'C1', source: 'S-RETRY'}, {dossier: '', planned: 'C1', source: 'S-RETRY'}], [{dossier: '', planned: 'C2', source: 'S-RETRY'}]), identityCollisionPattern, 'blank source owner reused by other plan');
+assert.throws(() => assertBlankOwnership([{dossier: '', planned: 'C1', source: 'S-RETRY'}, {dossier: '', planned: 'C1'}], []), /partial source/, 'partial blank source accepted');
 assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}], [{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}, {dossier: 'A001', planned: 'C2', source: 'S2', global: 'G1'}]), identityCollisionPattern, 'hidden global collision accepted');
 assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}], [{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}, {dossier: 'A001', planned: 'C2', source: 'S2', shipmentId: 10}]), identityCollisionPattern, 'hidden shipment collision accepted');
 const fs = require('fs');

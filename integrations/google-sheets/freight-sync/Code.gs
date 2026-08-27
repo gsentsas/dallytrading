@@ -631,13 +631,17 @@ function assertNoSelectedIdentityCollision_(sheet, selectedRows) {
     return planned ? planned + '|' + dossier : dossier;
   };
   const selectedNamespace = namespaceOf(selectedRows[0]);
+  const selectedRowNumbers = new Set(selectedRows.map(row => row.row));
+  const selectedIsBlank = selectedRows.every(row => !display_(row, DALLY.columns.dossier));
   const identities = [DALLY.columns.syncSourceKey, DALLY.columns.globalExternalReference, DALLY.columns.shipmentId]
     .map(column => new Set(selectedRows.map(row => display_(row, column)).filter(Boolean)));
   if (identities.some(values => values.size > 1)) throw new Error('La sélection contient des identités de dossier en conflit.');
   const all = sheet.getRange(DALLY.firstDataRow, 1, sheet.getLastRow() - DALLY.firstDataRow + 1, DALLY.maxColumn).getDisplayValues();
-  for (const row of all) {
-    if (!String(row[DALLY.columns.dossier - 1] || '').trim()) continue;
-    if (namespaceOf({display: row}) === selectedNamespace) continue;
+  for (let index = 0; index < all.length; index++) {
+    const row = all[index];
+    if (selectedRowNumbers.has(DALLY.firstDataRow + index)) continue;
+    const rowDossier = String(row[DALLY.columns.dossier - 1] || '').trim();
+    if (!selectedIsBlank && rowDossier && namespaceOf({display: row}) === selectedNamespace) continue;
     for (let i = 0; i < identities.length; i++) {
       const value = String(row[[DALLY.columns.syncSourceKey, DALLY.columns.globalExternalReference, DALLY.columns.shipmentId][i] - 1] || '').trim();
       if (value && identities[i].has(value)) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
@@ -662,6 +666,7 @@ function selectedDossier_() {
     const sourceKeys = rows.map(r=>display_(r,DALLY.columns.syncSourceKey));
     const nonEmptySourceKeys = sourceKeys.filter(Boolean);
     if ((nonEmptySourceKeys.length && nonEmptySourceKeys.length !== sourceKeys.length) || new Set(nonEmptySourceKeys).size > 1 || rows.some(r=>display_(r,DALLY.columns.globalExternalReference) || display_(r,DALLY.columns.shipmentId) || display_(r,DALLY.columns.plannedConsolidation)!==planned || display_(r,DALLY.columns.client)!==client)) throw new Error('Les lignes sélectionnées doivent partager client/consolidation et ne posséder aucune identité conflictuelle.');
+    assertNoSelectedIdentityCollision_(sheet, rows);
     return {sheet, dossier:'', key:logicalDossierKey_(values[0]), rows};
   }
   const logicalKeys = rows.map(r => logicalDossierKey_(r.display));

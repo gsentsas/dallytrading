@@ -214,6 +214,9 @@ function syncDossier_(sheet, dossier, rows, cfg) {
   rows.forEach(row => {
     const key = articleKey_(row);
     const line = lineByKey[String(key || '')];
+    if (Object.prototype.hasOwnProperty.call(data, 'planned_consolidation_ref')) {
+      setCell_(sheet, row.row, DALLY.columns.plannedConsolidation, data.planned_consolidation_ref || '');
+    }
     setCell_(sheet, row.row, DALLY.columns.syncStatus, 'Synchronisé');
     if (data.collection_local_ref) setCell_(sheet, row.row, DALLY.columns.dossier, data.collection_local_ref);
     setCell_(sheet, row.row, DALLY.columns.partnerId, data.partner_id || '');
@@ -437,21 +440,86 @@ function apiPost_(path, propertyName, payload, cfg) {
 
 function dallyRefreshOpenConsolidations() {
   const cfg=readConfig_(); const data=apiGet_('/api/v1/freight/consolidations/open','DALLY_FREIGHT_SYNC_API_KEY',cfg);
+  const bindings = fetchSheetBindings_(cfg);
   const sh=ensureConfigSheet_(); const start=21; const rows=(data.consolidations||[]).map(c=>[c.name,c.transport_mode,c.direction,c.origin_city||c.origin||'',c.destination_city||c.destination||'',c.collection_close_on||'']);
   sh.getRange(start,1,Math.max(1, sh.getMaxRows()-start+1),6).clearContent();
   sh.getRange(20,1,1,6).setValues([['Consolidations ouvertes','Mode','Direction','Origine','Destination','Clôture collecte']]);
   if (rows.length) sh.getRange(start,1,rows.length,6).setValues(rows);
   DALLY.dataSheets.forEach(name => {
     const dataSheet = SpreadsheetApp.getActive().getSheetByName(name); if (!dataSheet) return;
+    applySheetBindings_(dataSheet, bindings);
     dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.plannedConsolidation, dataSheet.getMaxRows()-DALLY.firstDataRow+1, 1).clearDataValidations();
     const route=cfg.routes[name]||{};
     const allowed=(data.consolidations||[]).filter(c => c.transport_mode===route.mode && c.direction===route.direction && (!route.originCountry || c.origin_country_code===route.originCountry) && (!route.originCity || c.origin_city===route.originCity) && (!route.destinationCountry || c.destination_country_code===route.destinationCountry) && (!route.destinationCity || c.destination_city===route.destinationCity)).map(c=>c.name);
+    const assigned = [];
+    if (dataSheet.getLastRow() >= DALLY.firstDataRow) {
+      const shipmentValues = dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.shipmentId, dataSheet.getLastRow() - DALLY.firstDataRow + 1, 1).getDisplayValues();
+      shipmentValues.forEach(value => {
+        const binding = bindings[String(value[0] || '').trim()];
+        if (binding && binding.planned_consolidation_ref && !assigned.includes(binding.planned_consolidation_ref)) assigned.push(binding.planned_consolidation_ref);
+      });
+    }
+    assigned.forEach(value => { if (!allowed.includes(value)) allowed.push(value); });
     if (allowed.length) {
       const validation=SpreadsheetApp.newDataValidation().requireValueInList(allowed,true).setAllowInvalid(false).build();
       dataSheet.getRange(DALLY.firstDataRow,DALLY.columns.plannedConsolidation,dataSheet.getMaxRows()-DALLY.firstDataRow+1,1).setDataValidation(validation);
     }
   });
   SpreadsheetApp.getActive().toast(rows.length+' départ(s) ouvert(s) actualisé(s).','Dally CRM',6);
+}
+
+function fetchSheetBindings_(cfg) {
+  const ids = [];
+  DALLY.dataSheets.forEach(name => {
+    const sheet = SpreadsheetApp.getActive().getSheetByName(name);
+    if (!sheet || sheet.getLastRow() < DALLY.firstDataRow) return;
+    const values = sheet.getRange(DALLY.firstDataRow, DALLY.columns.shipmentId, sheet.getLastRow() - DALLY.firstDataRow + 1, 1).getDisplayValues();
+    values.forEach(row => {
+      const id = Number(String(row[0] || '').trim());
+      if (Number.isInteger(id) && id > 0 && !ids.includes(id)) ids.push(id);
+    });
+  });
+  const bindings = {};
+  for (let start = 0; start < ids.length; start += 200) {
+    const chunk = ids.slice(start, start + 200);
+    const data = apiGet_('/api/v1/freight/sheet-bindings?shipment_ids=' + encodeURIComponent(chunk.join(',')), 'DALLY_FREIGHT_SYNC_API_KEY', cfg);
+    (data.bindings || []).forEach(binding => { bindings[String(binding.shipment_id)] = binding; });
+  }
+  return bindings;
+}
+
+function applySheetBindings_(sheet, bindings) {
+  if (!sheet || sheet.getLastRow() < DALLY.firstDataRow) return;
+  const count = sheet.getLastRow() - DALLY.firstDataRow + 1;
+  const display = sheet.getRange(DALLY.firstDataRow, 1, count, DALLY.maxColumn).getDisplayValues();
+  const grouped = new Map();
+  for (let i = 0; i < display.length; i++) {
+    const shipmentId = String(display[i][DALLY.columns.shipmentId - 1] || '').trim();
+    if (!shipmentId || !bindings[shipmentId]) continue;
+    const dossier = String(display[i][DALLY.columns.dossier - 1] || '').trim();
+    const source = String(display[i][DALLY.columns.syncSourceKey - 1] || '').trim();
+    const global = String(display[i][DALLY.columns.globalExternalReference - 1] || '').trim();
+    const key = source ? 'source|' + source : (global ? 'global|' + global : 'shipment|' + shipmentId + '|' + dossier);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push({index: i, row: display[i], binding: bindings[shipmentId]});
+  }
+  grouped.forEach(members => {
+    const binding = members[0].binding;
+    const crmValue = String(binding.planned_consolidation_ref || '').trim();
+    members.forEach(member => {
+      const sheetValue = String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim();
+      const status = String(member.row[DALLY.columns.syncStatus - 1] || '').trim();
+      if (status === 'À synchroniser' && sheetValue !== crmValue) {
+        setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.syncMessage,
+          'Consolidation en attente : Sheet ' + (sheetValue || '(vide)') + ' / CRM ' + (crmValue || '(vide)') + '. Synchronisez le dossier pour appliquer le changement.');
+        return;
+      }
+      setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.plannedConsolidation, crmValue);
+      if (binding.requires_replan) {
+        setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.syncMessage, 'Replanification requise dans une consolidation ouverte.');
+      }
+    });
+  });
 }
 
 function apiGet_(path, propertyName, cfg) {

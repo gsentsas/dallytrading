@@ -506,14 +506,25 @@ function applySheetBindings_(sheet, bindings) {
   grouped.forEach(members => {
     const binding = members[0].binding;
     const crmValue = String(binding.planned_consolidation_ref || '').trim();
+    const pending = members.filter(member =>
+      String(member.row[DALLY.columns.syncStatus - 1] || '').trim() === 'À synchroniser' &&
+      String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim() !== crmValue
+    );
+    if (pending.length) {
+      const pendingValues = [...new Set(pending.map(member =>
+        String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim()
+      ))];
+      const localValue = pendingValues[0] || '';
+      const message = pendingValues.length > 1
+        ? 'Consolidation en attente : plusieurs valeurs Sheet / CRM ' + (crmValue || '(vide)') + '. Synchronisez le dossier pour appliquer le changement.'
+        : 'Consolidation en attente : Sheet ' + (localValue || '(vide)') + ' / CRM ' + (crmValue || '(vide)') + '. Synchronisez le dossier pour appliquer le changement.';
+      members.forEach(member => {
+        setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.plannedConsolidation, localValue);
+        setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.syncMessage, message);
+      });
+      return;
+    }
     members.forEach(member => {
-      const sheetValue = String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim();
-      const status = String(member.row[DALLY.columns.syncStatus - 1] || '').trim();
-      if (status === 'À synchroniser' && sheetValue !== crmValue) {
-        setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.syncMessage,
-          'Consolidation en attente : Sheet ' + (sheetValue || '(vide)') + ' / CRM ' + (crmValue || '(vide)') + '. Synchronisez le dossier pour appliquer le changement.');
-        return;
-      }
       setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.plannedConsolidation, crmValue);
       if (binding.requires_replan) {
         setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.syncMessage, 'Replanification requise dans une consolidation ouverte.');

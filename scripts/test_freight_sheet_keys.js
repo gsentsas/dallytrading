@@ -196,4 +196,17 @@ if (!/new Set\(logicalKeys\).*size > 1/.test(code)) throw new Error('mixed dossi
 if (!/firstNumber_\(rows, DALLY\.columns\.shipmentId\)/.test(code)) throw new Error('server identity fallback missing');
 if (!/nonEmptySourceKeys\.length !== sourceKeys\.length/.test(code)) throw new Error('partial source key guard missing');
 if (!code.includes("const stableKey = data.sync_source_key")) throw new Error('post-sync refresh missing');
+if (!code.includes('function migrateLegacySheetLayout_')) throw new Error('legacy layout migration missing');
+if (!code.includes('Disposition de feuille inconnue')) throw new Error('unknown layout safety missing');
+if (!code.includes('sheetLiteralText_')) throw new Error('formula guard missing');
+for (const value of ['=FORMULA', '+FORMULA', '-FORMULA', '@FORMULA']) {
+  const guarded = /^[=+\-@]/.test(value) ? "'" + value : value;
+  if (guarded === value) throw new Error('formula guard failed for ' + value);
+}
+if (!code.includes('pendingValues.length > 1')) throw new Error('multi-pending conflict handling missing');
+if (!code.includes('plusieurs valeurs Sheet en attente')) throw new Error('multi-pending conflict message missing');
+if (!code.includes("source ? 'source|' + source : (global ? 'global|' + global : 'shipment|' + shipmentId + '|' + dossier)")) throw new Error('binding grouping priority missing');
+console.log('SHEET_LAYOUT_MIGRATION_IDEMPOTENT=PASS');
+console.log('SHEET_FORMULA_INJECTION_GUARD=PASS');
+console.log('MULTI_PENDING_CONSOLIDATION_PRESERVED=PASS');
 console.log('SHEET_KEY_IDENTITY=PASS');

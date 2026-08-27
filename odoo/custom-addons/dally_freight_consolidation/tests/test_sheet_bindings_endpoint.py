@@ -102,3 +102,4 @@ class TestSheetBindingsEndpoint(HttpCase):
         rows = {row["shipment_id"]: row for row in response.json()["data"]["bindings"]}
         self.assertFalse(rows[self.unplanned.id]["planned_consolidation_ref"])
         self.assertEqual(rows[self.closed_shipment.id]["planned_consolidation_ref"], self.closed.name)
+        self.assertTrue(rows[self.closed_shipment.id]["requires_replan"])

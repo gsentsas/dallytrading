@@ -131,7 +131,7 @@ const sandbox = {console, Date, Map, Set, Object, String, Number, Math, JSON, Re
 vm.createContext(sandbox);
 vm.runInContext(code, sandbox);
 const expose = vm.runInContext(`({
-  migrateLegacySheetLayout_, detectSheetLayout_, assertCanonicalSheetLayout_, ensureSheetLayout_, sheetLiteralText_,
+  migrateLegacySheetLayout_, detectSheetLayout_, assertCanonicalSheetLayout_, ensureSheetLayout_, sheetLiteralText_, applySheetBindings_,
   selectedDossier_, dallyInvoiceSelectedDossier, dallyPaymentsSelectedDossier, dallyRefreshOpenConsolidations, dallyMarkEdited_
 })`, sandbox);
 
@@ -218,6 +218,25 @@ assert.ok(code.includes('pendingValues.length > 1'), 'multi-pending conflict han
 assert.ok(code.includes('plusieurs valeurs Sheet en attente'), 'multi-pending conflict message missing');
 assert.ok(code.includes("source ? 'source|' + source : (global ? 'global|' + global"), 'binding grouping priority missing');
 assert.ok(code.includes("'shipment|' + (shipment || dossier) + '|' + dossier"), 'shipment+dossier grouping fallback missing');
+
+// The live-cell reread must win over the stale snapshot when a user edits B
+// after bindings have been fetched but before refresh writes CRM values.
+const raceSheet = new FakeSheet([headerRow(63), headerRow(63), headerRow(63)], 63);
+raceSheet.rows[2][34] = '42'; raceSheet.rows[2][59] = 'SRC-RACE'; raceSheet.rows[2][2] = 'DOS-RACE'; raceSheet.rows[2][32] = 'Synchronisé';
+let raceInjected = false;
+const originalRaceGetRange = raceSheet.getRange.bind(raceSheet);
+raceSheet.getRange = (row, col, nr, nc) => {
+  const range = originalRaceGetRange(row, col, nr, nc);
+  if (col === 2 && !raceInjected) {
+    const original = range.getDisplayValue.bind(range);
+    range.getDisplayValue = () => { raceInjected = true; raceSheet.setCell(3, 2, 'AIR-USER'); raceSheet.setCell(3, 33, 'À synchroniser'); return original(); };
+  }
+  return range;
+};
+expose.applySheetBindings_(raceSheet, {'42': {shipment_id: 42, planned_consolidation_ref: 'AIR-CRM', requires_replan: false}});
+assert.strictEqual(raceSheet.cell(3, 2), 'AIR-USER');
+assert.match(String(raceSheet.cell(3, 40)), /Consolidation en attente/);
+console.log('CONCURRENT_REFRESH_RACE_PROTECTED=PASS');
 
 console.log('SHEET_LAYOUT_RUNTIME_MIGRATION=PASS');
 console.log('LEGACY58_BEHAVIOR=PASS');

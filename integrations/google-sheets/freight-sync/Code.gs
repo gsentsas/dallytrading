@@ -450,7 +450,7 @@ function dallyRefreshOpenConsolidations() {
   sh.getRange(start,1,Math.max(1, sh.getMaxRows()-start+1),6).clearContent();
   sh.getRange(20,1,1,6).setValues([['Consolidations ouvertes','Mode','Direction','Origine','Destination','Clôture collecte']]);
   if (safeRows.length) sh.getRange(start,1,safeRows.length,6).setValues(safeRows);
-  DALLY.dataSheets.forEach(name => {
+  withScriptLock_(() => DALLY.dataSheets.forEach(name => {
     const dataSheet = SpreadsheetApp.getActive().getSheetByName(name); if (!dataSheet) return;
     applySheetBindings_(dataSheet, bindings);
     dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.plannedConsolidation, dataSheet.getMaxRows()-DALLY.firstDataRow+1, 1).clearDataValidations();
@@ -469,7 +469,7 @@ function dallyRefreshOpenConsolidations() {
       const validation=SpreadsheetApp.newDataValidation().requireValueInList(allowed,true).setAllowInvalid(false).build();
       dataSheet.getRange(DALLY.firstDataRow,DALLY.columns.plannedConsolidation,dataSheet.getMaxRows()-DALLY.firstDataRow+1,1).setDataValidation(validation);
     }
-  });
+  }));
   SpreadsheetApp.getActive().toast(rows.length+' départ(s) ouvert(s) actualisé(s).','Dally CRM',6);
 }
 
@@ -511,6 +511,14 @@ function applySheetBindings_(sheet, bindings) {
   grouped.forEach(members => {
     const binding = members[0].binding;
     const crmValue = String(binding.planned_consolidation_ref || '').trim();
+    // Re-read the conflict-sensitive cells after the snapshot.  This closes the
+    // race with onEdit/sync writes that may occur while CRM bindings are fetched.
+    members.forEach(member => {
+      const live = sheet.getRange(DALLY.firstDataRow + member.index, DALLY.columns.plannedConsolidation, 1, 1).getDisplayValue();
+      const liveStatus = sheet.getRange(DALLY.firstDataRow + member.index, DALLY.columns.syncStatus, 1, 1).getDisplayValue();
+      member.row[DALLY.columns.plannedConsolidation - 1] = live;
+      member.row[DALLY.columns.syncStatus - 1] = liveStatus;
+    });
     const pending = members.filter(member =>
       String(member.row[DALLY.columns.syncStatus - 1] || '').trim() === 'À synchroniser' &&
       String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim() !== crmValue
@@ -770,11 +778,7 @@ function rowsForDossier_(sheet, key) {
 }
 
 function assertNoSelectedIdentityCollision_(sheet, selectedRows) {
-  const namespaceOf = row => {
-    const dossier = display_(row, DALLY.columns.dossier);
-    const planned = display_(row, DALLY.columns.plannedConsolidation);
-    return planned ? planned + '|' + dossier : dossier;
-  };
+  const namespaceOf = row => logicalDossierKey_(row.display);
   const selectedNamespace = namespaceOf(selectedRows[0]);
   const selectedRowNumbers = new Set(selectedRows.map(row => row.row));
   const selectedIsBlank = selectedRows.every(row => !display_(row, DALLY.columns.dossier));
@@ -820,11 +824,7 @@ function selectedDossier_() {
   const key = logicalKeys[0];
   const allRows = rowsForDossier_(sheet, key);
   if (!allRows.length) throw new Error('Dossier sélectionné introuvable.');
-  const namespaces = new Set(allRows.map(row => {
-    const rowDossier = display_(row, DALLY.columns.dossier);
-    const planned = display_(row, DALLY.columns.plannedConsolidation);
-    return planned ? planned + '|' + rowDossier : rowDossier;
-  }));
+  const namespaces = new Set(allRows.map(row => logicalDossierKey_(row.display)));
   if (namespaces.size > 1) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
   assertNoSelectedIdentityCollision_(sheet, allRows);
   return {sheet, dossier, key, rows:allRows};

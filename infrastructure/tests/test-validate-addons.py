@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""Regression tests for the static addon validator (standard library only)."""
+
+from __future__ import annotations
+
+import subprocess
+import tempfile
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[2]
+VALIDATOR = ROOT / "infrastructure/scripts/validate-addons.py"
+
+
+def run_fixture(files: dict[str, str]) -> tuple[int, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        for name, content in files.items():
+            path = base / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+        proc = subprocess.run(
+            ["python3", str(VALIDATOR), str(base)],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        return proc.returncode, proc.stdout + proc.stderr
+
+
+MANIFEST = """{
+    'name': 'X', 'version': '1.0', 'depends': [],
+    'data': ['security/ir.model.access.csv', 'views/test.xml']
+}"""
+INIT = "from . import models\nfrom . import wizard\n"
+MODELS_INIT = "from . import models\n"
+WIZARD_INIT = "from . import example\nfrom . import subpackage\n"
+MODELS = """from odoo import fields, models
+
+class Parent(models.Model):
+    _name = 'x.parent'
+    partner_id = fields.Many2one('res.partner')
+    line_ids = fields.One2many('x.line', 'parent_id')
+    root_extra = fields.Char()
+
+class Line(models.Model):
+    _name = 'x.line'
+    parent_id = fields.Many2one('x.parent')
+    description = fields.Char()
+    billing_method = fields.Char()
+"""
+WIZARD = """from odoo import models
+
+class ExampleWizard(models.TransientModel):
+    _name = 'x.example.wizard'
+"""
+ACL = """id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_x_wizard,x,model_x_example_wizard,base.group_user,1,1,1,1
+access_x_nested,n,model_x_nested_wizard,base.group_user,1,1,1,1
+"""
+
+
+def fixture(view: str, acl: str = ACL) -> dict[str, str]:
+    return {
+        "x_module/__init__.py": INIT,
+        "x_module/__manifest__.py": MANIFEST,
+        "x_module/models/__init__.py": MODELS_INIT,
+        "x_module/models/models.py": MODELS,
+        "x_module/wizard/__init__.py": WIZARD_INIT,
+        "x_module/wizard/example.py": WIZARD,
+        "x_module/wizard/subpackage/__init__.py": "from . import example\n",
+        "x_module/wizard/subpackage/example.py": "from odoo import models\n\nclass NestedWizard(models.TransientModel):\n    _name = 'x.nested.wizard'\n",
+        "x_module/security/ir.model.access.csv": acl,
+        "x_module/views/test.xml": view,
+    }
+
+
+def expect_success(view: str) -> None:
+    rc, output = run_fixture(fixture(view))
+    assert rc == 0, output
+
+
+def expect_failure(view: str, needle: str, acl: str = ACL) -> None:
+    rc, output = run_fixture(fixture(view, acl))
+    assert rc != 0 and needle in output, output
+
+
+def cross_module_fixture(y_acl: str, x_acl: str) -> dict[str, str]:
+    files = fixture(ROOT_VIEW.format(arch=""))
+    files["x_module/__manifest__.py"] = MANIFEST.replace(
+        "'data':", "'data':"
+    )
+    files["x_module/security/ir.model.access.csv"] = x_acl
+    files["x_module/models/models.py"] += "\nclass Shared(models.Model):\n    _name = 'x.shared.model'\n"
+    files.update({
+        "y_module/__init__.py": "from . import models\n",
+        "y_module/__manifest__.py": "{'name':'Y','version':'1.0','depends':['x_module'],'data':['security/ir.model.access.csv']}\n",
+        "y_module/models/__init__.py": "from . import models\n",
+        "y_module/models/models.py": "from odoo import models\n",
+        "y_module/security/ir.model.access.csv": y_acl,
+    })
+    return files
+
+
+ROOT_VIEW = """<odoo><record id="v" model="ir.ui.view"><field name="model">x.parent</field>
+<field name="arch" type="xml">{arch}</field></record></odoo>"""
+
+
+def main() -> None:
+    # Wizard declarations outside models/ produce usable model_* ACL ids.
+    expect_success(ROOT_VIEW.format(arch="<field name='partner_id' position='after'><field name='root_extra'/></field>"))
+    expect_failure(
+        ROOT_VIEW.format(arch="<field name='partner_id' position='after'><field name='root_extra'/></field>"),
+        "model_x_missing_wizard",
+        ACL.replace("model_x_example_wizard", "model_x_missing_wizard"),
+    )
+
+    nested = "<xpath expr=\"//field[@name='line_ids']/list/field[@name='description']\" position='after'><field name='billing_method'/></xpath>"
+    expect_success(ROOT_VIEW.format(arch=nested))
+    expect_failure(
+        ROOT_VIEW.format(arch=nested.replace("billing_method", "billing_methdo")),
+        "x.line",
+    )
+
+    inside = "<xpath expr=\"//field[@name='line_ids']\" position='inside'><list><field name='billing_method'/></list></xpath>"
+    expect_success(ROOT_VIEW.format(arch=inside))
+
+    nested_acl = ACL.replace("model_x_nested_wizard", "model_x_missing_nested_wizard")
+    expect_failure(ROOT_VIEW.format(arch=""), "model_x_missing_nested_wizard", nested_acl)
+
+    tests_only_acl = ACL.replace("model_x_nested_wizard", "model_x_test_only")
+    tests_only = fixture(ROOT_VIEW.format(arch=""), tests_only_acl)
+    tests_only["x_module/tests/fake.py"] = "from odoo import models\nclass TestOnly(models.Model):\n    _name = 'x.test.only'\n"
+    tests_only["x_module/tests/models/fake.py"] = "from odoo import models\nclass TestOnlyModel(models.Model):\n    _name = 'x.test.only.model'\n"
+    tests_only["x_module/tests/wizard/fake.py"] = "from odoo import models\nclass TestOnlyWizard(models.TransientModel):\n    _name = 'x.test.only.wizard'\n"
+    rc, output = run_fixture(tests_only)
+    assert rc != 0 and "model_x_test_only" in output, output
+
+    tests_only_wizard_acl = ACL.replace(
+        "model_x_nested_wizard", "model_x_test_only_wizard"
+    )
+    rc, output = run_fixture(
+        fixture(ROOT_VIEW.format(arch=""), tests_only_wizard_acl)
+    )
+    assert rc != 0 and "model_x_test_only_wizard" in output, output
+
+    own = "id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink\naccess_shared,s,model_x_shared_model,base.group_user,1,1,1,1\n"
+    qualified = own.replace("model_x_shared_model", "x_module.model_x_shared_model")
+    wrong_unqualified = own
+    missing_qualified = own.replace("model_x_shared_model", "x_module.model_nonexistent")
+    rc, output = run_fixture(cross_module_fixture(qualified, own))
+    assert rc == 0, output
+    rc, output = run_fixture(cross_module_fixture(wrong_unqualified, own))
+    assert rc != 0 and "model_x_shared_model" in output, output
+    rc, output = run_fixture(cross_module_fixture(missing_qualified, own))
+    assert rc != 0 and "x_module.model_nonexistent" in output, output
+    print("VALIDATE_ADDONS_TESTS=PASS")
+
+
+if __name__ == "__main__":
+    main()

@@ -131,8 +131,18 @@ def main() -> None:
     tests_only_acl = ACL.replace("model_x_nested_wizard", "model_x_test_only")
     tests_only = fixture(ROOT_VIEW.format(arch=""), tests_only_acl)
     tests_only["x_module/tests/fake.py"] = "from odoo import models\nclass TestOnly(models.Model):\n    _name = 'x.test.only'\n"
+    tests_only["x_module/tests/models/fake.py"] = "from odoo import models\nclass TestOnlyModel(models.Model):\n    _name = 'x.test.only.model'\n"
+    tests_only["x_module/tests/wizard/fake.py"] = "from odoo import models\nclass TestOnlyWizard(models.TransientModel):\n    _name = 'x.test.only.wizard'\n"
     rc, output = run_fixture(tests_only)
     assert rc != 0 and "model_x_test_only" in output, output
+
+    tests_only_wizard_acl = ACL.replace(
+        "model_x_nested_wizard", "model_x_test_only_wizard"
+    )
+    rc, output = run_fixture(
+        fixture(ROOT_VIEW.format(arch=""), tests_only_wizard_acl)
+    )
+    assert rc != 0 and "model_x_test_only_wizard" in output, output
 
     own = "id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink\naccess_shared,s,model_x_shared_model,base.group_user,1,1,1,1\n"
     qualified = own.replace("model_x_shared_model", "x_module.model_x_shared_model")

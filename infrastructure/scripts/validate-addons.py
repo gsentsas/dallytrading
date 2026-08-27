@@ -151,12 +151,13 @@ class ModelIndex:
 def python_source_files(addons: pathlib.Path) -> list[pathlib.Path]:
     """Return production ORM Python sources, including wizard models."""
     paths: set[pathlib.Path] = set()
-    for root in addons.rglob("models"):
-        if root.is_dir():
-            paths.update(root.rglob("*.py"))
-    for root in addons.rglob("wizard"):
-        if root.is_dir():
-            paths.update(root.rglob("*.py"))
+    for module_dir in addons.iterdir():
+        if not module_dir.is_dir():
+            continue
+        for package_name in ("models", "wizard"):
+            root = module_dir / package_name
+            if root.is_dir():
+                paths.update(root.rglob("*.py"))
     return sorted(paths)
 
 

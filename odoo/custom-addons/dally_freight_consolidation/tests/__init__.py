@@ -9,3 +9,4 @@ from . import test_review_findings
 from . import test_intake_sequence
 
 from . import test_open_consolidations_endpoint
+from . import test_sheet_bindings_endpoint

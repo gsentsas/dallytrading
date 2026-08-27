@@ -442,7 +442,10 @@ function apiPost_(path, propertyName, payload, cfg) {
 }
 
 function dallyRefreshOpenConsolidations() {
-  DALLY.dataSheets.forEach(name => assertCanonicalSheetLayout_(SpreadsheetApp.getActive().getSheetByName(name)));
+  DALLY.dataSheets.forEach(name => {
+    const sheet = SpreadsheetApp.getActive().getSheetByName(name);
+    if (sheet) assertCanonicalSheetLayout_(sheet);
+  });
   const cfg=readConfig_(); const data=apiGet_('/api/v1/freight/consolidations/open','DALLY_FREIGHT_SYNC_API_KEY',cfg);
   const bindings = fetchSheetBindings_(cfg);
   const sh=ensureConfigSheet_(); const start=21; const rows=(data.consolidations||[]).map(c=>[c.name,c.transport_mode,c.direction,c.origin_city||c.origin||'',c.destination_city||c.destination||'',c.collection_close_on||'']);
@@ -612,8 +615,18 @@ function readConfig_() {
 
 function ensureSheetLayout_(sheet) {
   if (!sheet) return;
+  const initialLayout = detectSheetLayout_(sheet);
   migrateLegacySheetLayout_(sheet);
   if (sheet.getMaxColumns() < DALLY.maxColumn) sheet.insertColumnsAfter(sheet.getMaxColumns(), DALLY.maxColumn-sheet.getMaxColumns());
+  if (initialLayout === 'empty') {
+    sheet.getRange(DALLY.headerRow, DALLY.columns.depositDate).setValue('Date depot');
+    sheet.getRange(DALLY.headerRow, DALLY.columns.plannedConsolidation).setValue('Consolidation prévue');
+    sheet.getRange(DALLY.headerRow, DALLY.columns.dossier).setValue('N dossier');
+    sheet.getRange(DALLY.headerRow, DALLY.columns.articleKey, 1, 3).setValues([['Clé article facture','Flag règlement facture','Clé règlement facture']]);
+    sheet.getRange(DALLY.headerRow, DALLY.columns.syncSourceKey, 1, 4).setValues([['sync source key','global external reference','intake consolidation ref','collection local ref']]);
+    sheet.hideColumns(DALLY.columns.syncSourceKey, 4);
+    return;
+  }
   const planned = sheet.getRange(DALLY.headerRow, DALLY.columns.plannedConsolidation);
   if (!planned.getValue()) planned.setValue('Consolidation prévue');
   const labels = ['sync source key','global external reference','intake consolidation ref','collection local ref'];

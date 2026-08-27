@@ -30,12 +30,21 @@ class FakeRange {
 }
 
 class FakeSheet {
-  constructor(rows, width) {
+  constructor(rows, width, name = 'Saisie maritime') {
     this.rows = rows.map(row => row.slice());
     this.width = width;
+    this.name = name;
     this.rows.forEach(row => {
       while (row.length < width) row.push('');
     });
+  }
+
+  getName() {
+    return this.name;
+  }
+
+  getMaxColumns() {
+    return this.width;
   }
 
   getLastRow() {
@@ -67,11 +76,17 @@ const sandbox = {
     getUuid: () => 'uuid-test',
     formatDate: () => '2099-01-01',
   },
+  LockService: {
+    getScriptLock: () => ({
+      tryLock: () => true,
+      releaseLock: () => {},
+    }),
+  },
 };
 
 vm.createContext(sandbox);
 vm.runInContext(code, sandbox);
-const expose = vm.runInContext('({DALLY, assertNoSelectedIdentityCollision_})', sandbox);
+const expose = vm.runInContext('({DALLY, assertNoSelectedIdentityCollision_, dallyInvoiceSelectedDossier, dallyPaymentsSelectedDossier})', sandbox);
 const columns = expose.DALLY.columns;
 const width = expose.DALLY.maxColumn;
 
@@ -115,4 +130,33 @@ assert.doesNotThrow(
   'same server identity inside the same logical namespace must remain allowed',
 );
 
+const legacyHeader = blankRow();
+legacyHeader[0] = 'Date depot';
+legacyHeader[1] = 'N dossier';
+legacyHeader[55] = 'Clé article facture';
+legacyHeader[56] = 'Flag règlement facture';
+legacyHeader[57] = 'Clé règlement facture';
+const legacySheet = new FakeSheet([blankRow(), legacyHeader, blankRow()], width);
+let activeRangeReached = false;
+sandbox.SpreadsheetApp = {
+  getActiveSheet: () => legacySheet,
+  getActiveRange: () => {
+    activeRangeReached = true;
+    throw new Error('canonical-index read reached');
+  },
+};
+
+assert.throws(
+  () => expose.dallyInvoiceSelectedDossier(),
+  /Disposition ancienne/,
+  'invoice entry path must reject a legacy layout after acquiring the real script lock',
+);
+assert.throws(
+  () => expose.dallyPaymentsSelectedDossier(),
+  /Disposition ancienne/,
+  'payment entry path must reject a legacy layout after acquiring the real script lock',
+);
+assert.strictEqual(activeRangeReached, false, 'invoice/payment read canonical indexes before the legacy-layout guard');
+
 console.log('IDENTITY_COLLISION_CROSS_SOURCE_GUARD=PASS');
+console.log('INVOICE_PAYMENT_LAYOUT_GUARD_WITH_LOCK=PASS');

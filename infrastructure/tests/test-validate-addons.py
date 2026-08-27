@@ -20,7 +20,7 @@ def run_fixture(files: dict[str, str]) -> tuple[int, str]:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
         proc = subprocess.run(
-            ["python3", str(VALIDATOR), str(base / "x_module")],
+            ["python3", str(VALIDATOR), str(base)],
             text=True,
             capture_output=True,
             check=False,
@@ -34,7 +34,7 @@ MANIFEST = """{
 }"""
 INIT = "from . import models\nfrom . import wizard\n"
 MODELS_INIT = "from . import models\n"
-WIZARD_INIT = "from . import example\n"
+WIZARD_INIT = "from . import example\nfrom . import subpackage\n"
 MODELS = """from odoo import fields, models
 
 class Parent(models.Model):
@@ -56,6 +56,7 @@ class ExampleWizard(models.TransientModel):
 """
 ACL = """id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_x_wizard,x,model_x_example_wizard,base.group_user,1,1,1,1
+access_x_nested,n,model_x_nested_wizard,base.group_user,1,1,1,1
 """
 
 
@@ -67,6 +68,8 @@ def fixture(view: str, acl: str = ACL) -> dict[str, str]:
         "x_module/models/models.py": MODELS,
         "x_module/wizard/__init__.py": WIZARD_INIT,
         "x_module/wizard/example.py": WIZARD,
+        "x_module/wizard/subpackage/__init__.py": "from . import example\n",
+        "x_module/wizard/subpackage/example.py": "from odoo import models\n\nclass NestedWizard(models.TransientModel):\n    _name = 'x.nested.wizard'\n",
         "x_module/security/ir.model.access.csv": acl,
         "x_module/views/test.xml": view,
     }
@@ -80,6 +83,23 @@ def expect_success(view: str) -> None:
 def expect_failure(view: str, needle: str, acl: str = ACL) -> None:
     rc, output = run_fixture(fixture(view, acl))
     assert rc != 0 and needle in output, output
+
+
+def cross_module_fixture(y_acl: str, x_acl: str) -> dict[str, str]:
+    files = fixture(ROOT_VIEW.format(arch=""))
+    files["x_module/__manifest__.py"] = MANIFEST.replace(
+        "'data':", "'data':"
+    )
+    files["x_module/security/ir.model.access.csv"] = x_acl
+    files["x_module/models/models.py"] += "\nclass Shared(models.Model):\n    _name = 'x.shared.model'\n"
+    files.update({
+        "y_module/__init__.py": "from . import models\n",
+        "y_module/__manifest__.py": "{'name':'Y','version':'1.0','depends':['x_module'],'data':['security/ir.model.access.csv']}\n",
+        "y_module/models/__init__.py": "from . import models\n",
+        "y_module/models/models.py": "from odoo import models\n",
+        "y_module/security/ir.model.access.csv": y_acl,
+    })
+    return files
 
 
 ROOT_VIEW = """<odoo><record id="v" model="ir.ui.view"><field name="model">x.parent</field>
@@ -104,6 +124,26 @@ def main() -> None:
 
     inside = "<xpath expr=\"//field[@name='line_ids']\" position='inside'><list><field name='billing_method'/></list></xpath>"
     expect_success(ROOT_VIEW.format(arch=inside))
+
+    nested_acl = ACL.replace("model_x_nested_wizard", "model_x_missing_nested_wizard")
+    expect_failure(ROOT_VIEW.format(arch=""), "model_x_missing_nested_wizard", nested_acl)
+
+    tests_only_acl = ACL.replace("model_x_nested_wizard", "model_x_test_only")
+    tests_only = fixture(ROOT_VIEW.format(arch=""), tests_only_acl)
+    tests_only["x_module/tests/fake.py"] = "from odoo import models\nclass TestOnly(models.Model):\n    _name = 'x.test.only'\n"
+    rc, output = run_fixture(tests_only)
+    assert rc != 0 and "model_x_test_only" in output, output
+
+    own = "id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink\naccess_shared,s,model_x_shared_model,base.group_user,1,1,1,1\n"
+    qualified = own.replace("model_x_shared_model", "x_module.model_x_shared_model")
+    wrong_unqualified = own
+    missing_qualified = own.replace("model_x_shared_model", "x_module.model_nonexistent")
+    rc, output = run_fixture(cross_module_fixture(qualified, own))
+    assert rc == 0, output
+    rc, output = run_fixture(cross_module_fixture(wrong_unqualified, own))
+    assert rc != 0 and "model_x_shared_model" in output, output
+    rc, output = run_fixture(cross_module_fixture(missing_qualified, own))
+    assert rc != 0 and "x_module.model_nonexistent" in output, output
     print("VALIDATE_ADDONS_TESTS=PASS")
 
 

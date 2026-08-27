@@ -94,6 +94,8 @@ class ModelIndex:
         self.owned: set[str] = set()
         #: models declared with _name AND non-abstract (get a model_* external id)
         self.concrete: set[str] = set()
+        #: concrete model -> addon that declares its _name
+        self.declaring_module: dict[str, str] = {}
         self._resolved: dict[str, dict[str, str | None]] = {}
 
     def resolve(self, model: str) -> dict[str, str | None]:
@@ -148,8 +150,13 @@ class ModelIndex:
 
 def python_source_files(addons: pathlib.Path) -> list[pathlib.Path]:
     """Return production ORM Python sources, including wizard models."""
-    paths = set(addons.rglob("models/*.py"))
-    paths.update(addons.rglob("wizard/*.py"))
+    paths: set[pathlib.Path] = set()
+    for root in addons.rglob("models"):
+        if root.is_dir():
+            paths.update(root.rglob("*.py"))
+    for root in addons.rglob("wizard"):
+        if root.is_dir():
+            paths.update(root.rglob("*.py"))
     return sorted(paths)
 
 
@@ -158,6 +165,7 @@ def parse_models(addons: pathlib.Path) -> ModelIndex:
 
     for py_file in python_source_files(addons):
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        declaring_module = py_file.relative_to(addons).parts[0]
 
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef):
@@ -222,6 +230,11 @@ def parse_models(addons: pathlib.Path) -> ModelIndex:
                 index.owned.add(model_name)
                 if not is_abstract:
                     index.concrete.add(model_name)
+                    # ``_name`` combined with ``_inherit`` of the same model is
+                    # an extension, not a new model declaration.  A model may
+                    # legitimately inherit a mixin while still being new.
+                    if model_name not in inherits:
+                        index.declaring_module.setdefault(model_name, declaring_module)
 
     return index
 
@@ -251,18 +264,8 @@ def collect_external_ids(addons: pathlib.Path, index: ModelIndex) -> set[str]:
     # Odoo creates a model_<underscored_name> external id for every concrete
     # model, in the module that declares it. Record rules and ACLs reference
     # those, so they must be considered known.
-    for py_file in python_source_files(addons):
-        module = py_file.relative_to(addons).parts[0]
-        text = py_file.read_text(encoding="utf-8")
-        for match in re.finditer(r'^\s*_name\s*=\s*["\']([^"\']+)["\']', text, re.M):
-            model = match.group(1)
-            if model in index.concrete:
-                ids.add(f"{module}.model_{model.replace('.', '_')}")
-
-    # Same for bare references inside the declaring module.
-    for module in our_modules:
-        for model in index.concrete:
-            ids.add(f"{module}.model_{model.replace('.', '_')}")
+    for model, module in index.declaring_module.items():
+        ids.add(f"{module}.model_{model.replace('.', '_')}")
 
     return ids
 
@@ -364,13 +367,11 @@ def check_view_fields(addons: pathlib.Path, index: ModelIndex) -> None:
 
 
 def check_acls(addons: pathlib.Path, index: ModelIndex, known_ids: set[str]) -> None:
-    expected_models = {
-        f"model_{model.replace('.', '_')}" for model in index.concrete
-    }
     our_modules = {p.name for p in addons.iterdir() if p.is_dir()}
 
     for csv_file in sorted(addons.rglob("security/ir.model.access.csv")):
         rel = csv_file.relative_to(addons)
+        module = rel.parts[0]
         lines = csv_file.read_text(encoding="utf-8").strip().splitlines()
         if not lines:
             error(f"{rel}: file is empty")
@@ -393,10 +394,11 @@ def check_acls(addons: pathlib.Path, index: ModelIndex, known_ids: set[str]) -> 
                     error(f"{rel}:{number}: {len(cells)} columns, expected {len(header)}")
                     continue
 
-                bare = cells[model_index].split(".")[-1]
-                if bare not in expected_models:
+                model_ref = cells[model_index]
+                qualified = model_ref if "." in model_ref else f"{module}.{model_ref}"
+                if qualified not in known_ids and qualified.split(".")[0] in our_modules:
                     error(
-                        f"{rel}:{number}: model_id '{cells[model_index]}' matches no "
+                        f"{rel}:{number}: model_id '{model_ref}' matches no "
                         f"model defined by our modules"
                     )
 

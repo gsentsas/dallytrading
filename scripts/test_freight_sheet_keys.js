@@ -1,4 +1,5 @@
 'use strict';
+const assert = require('assert');
 // Deterministic regression check for the Sheet key contract (no API/Sheet access).
 const source002 = 'sheets:spreadsheet:uuid-002';
 const source003 = 'sheets:spreadsheet:uuid-003';
@@ -126,12 +127,9 @@ const assertSelectedIdentityScope = (selected, all) => {
     if (all.some(row => namespace(row) !== selectedNamespace && identities.has(row[field]))) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
   }
 };
-let hiddenGlobalRejected = false;
-try { assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}], [{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}, {dossier: 'A001', planned: 'C2', source: 'S2', global: 'G1'}]); } catch (e) { hiddenGlobalRejected = true; }
-if (!hiddenGlobalRejected) throw new Error('hidden global collision accepted');
-let hiddenShipmentRejected = false;
-try { assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}], [{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}, {dossier: 'A001', planned: 'C2', source: 'S2', shipmentId: 10}]); } catch (e) { hiddenShipmentRejected = true; }
-if (!hiddenShipmentRejected) throw new Error('hidden shipment collision accepted');
+const identityCollisionPattern = /Identité serveur associée à plusieurs namespaces de dossier\./;
+assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}], [{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}, {dossier: 'A001', planned: 'C2', source: 'S2', global: 'G1'}]), identityCollisionPattern, 'hidden global collision accepted');
+assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}], [{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}, {dossier: 'A001', planned: 'C2', source: 'S2', shipmentId: 10}]), identityCollisionPattern, 'hidden shipment collision accepted');
 const fs = require('fs');
 const code = fs.readFileSync('integrations/google-sheets/freight-sync/Code.gs', 'utf8');
 if (!code.includes('getValues()') || !code.includes('getDisplayValues()')) throw new Error('raw/display snapshot contract missing');

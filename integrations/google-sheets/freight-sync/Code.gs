@@ -113,7 +113,7 @@ function dallyMarkEdited_(e) {
   if (!e || !e.range) return;
   const sheet = e.range.getSheet();
   if (!DALLY.dataSheets.includes(sheet.getName())) return;
-  ensureSheetLayout_(sheet);
+  if (!assertCanonicalSheetLayout_(sheet, true)) return;
   const firstRow = Math.max(e.range.getRow(), DALLY.firstDataRow);
   const lastRow = e.range.getLastRow();
   if (lastRow < DALLY.firstDataRow) return;
@@ -148,7 +148,7 @@ function dallyMarkAllForSync() {
   DALLY.dataSheets.forEach(name => {
     const sh = SpreadsheetApp.getActive().getSheetByName(name);
     if (!sh) return;
-    ensureSheetLayout_(sh);
+    if (!assertCanonicalSheetLayout_(sh, true)) return;
     const last = sh.getLastRow();
     if (last < DALLY.firstDataRow) return;
     const dossiers = sh.getRange(DALLY.firstDataRow, DALLY.columns.dossier, last - DALLY.firstDataRow + 1, 1).getDisplayValues();
@@ -189,7 +189,7 @@ function syncPending_(cfg, manual) {
     if (remaining <= 0) break;
     const sheet = SpreadsheetApp.getActive().getSheetByName(name);
     if (!sheet || !cfg.routes[name] || !cfg.routes[name].active) continue;
-    ensureSheetLayout_(sheet);
+    assertCanonicalSheetLayout_(sheet);
     const dirty = dirtyDossiers_(sheet);
     for (const dossier of dirty) {
       if (remaining-- <= 0) break;
@@ -442,6 +442,7 @@ function apiPost_(path, propertyName, payload, cfg) {
 }
 
 function dallyRefreshOpenConsolidations() {
+  DALLY.dataSheets.forEach(name => assertCanonicalSheetLayout_(SpreadsheetApp.getActive().getSheetByName(name)));
   const cfg=readConfig_(); const data=apiGet_('/api/v1/freight/consolidations/open','DALLY_FREIGHT_SYNC_API_KEY',cfg);
   const bindings = fetchSheetBindings_(cfg);
   const sh=ensureConfigSheet_(); const start=21; const rows=(data.consolidations||[]).map(c=>[c.name,c.transport_mode,c.direction,c.origin_city||c.origin||'',c.destination_city||c.destination||'',c.collection_close_on||'']);
@@ -605,9 +606,32 @@ function migrateLegacySheetLayout_(sheet) {
   if (sheet.getMaxColumns() < DALLY.maxColumn) sheet.insertColumnsAfter(sheet.getMaxColumns(), DALLY.maxColumn - sheet.getMaxColumns());
   sheet.getRange(DALLY.headerRow, 2).setValue('Consolidation prévue');
   sheet.getRange(DALLY.headerRow, 3).setValue('N dossier');
-  sheet.getRange(DALLY.headerRow, 58).setValue('Clé règlement facture');
-  sheet.getRange(DALLY.headerRow, 60, 1, 4).setValues([legacyTechnical]);
+  sheet.getRange(DALLY.headerRow, 57, 1, 7).setValues([['Clé article facture','Flag règlement facture','Clé règlement facture', ...legacyTechnical]]);
   sheet.hideColumns(60, 4);
+}
+
+function detectSheetLayout_(sheet) {
+  if (!sheet) return 'unknown';
+  const max = sheet.getMaxColumns();
+  const header = sheet.getRange(DALLY.headerRow, 1, 1, Math.min(max, DALLY.maxColumn)).getDisplayValues()[0];
+  const value = index => String(header[index - 1] || '').trim();
+  if (!value(1) && !value(2) && !value(3)) return 'empty';
+  if (value(2) === 'Consolidation prévue' && value(3) === 'N dossier' &&
+      value(57) === 'Clé article facture' && value(58) === 'Flag règlement facture' &&
+      value(59) === 'Clé règlement facture' && value(60) === 'sync source key' &&
+      value(61) === 'global external reference' && value(62) === 'intake consolidation ref' && value(63) === 'collection local ref') return 'canonical';
+  if (value(1) === 'Date depot' && value(2) === 'N dossier' && value(59) === 'Consolidation prévue' &&
+      ['sync source key','global external reference','intake consolidation ref','collection local ref'].every((label, i) => value(60 + i) === label)) return 'legacy63';
+  if (value(1) === 'Date depot' && value(2) === 'N dossier' && max <= 60) return 'legacy58';
+  return 'unknown';
+}
+
+function assertCanonicalSheetLayout_(sheet, quiet) {
+  const layout = detectSheetLayout_(sheet);
+  if (layout === 'canonical') return true;
+  if (quiet && (layout === 'legacy58' || layout === 'legacy63')) return false;
+  if (layout === 'legacy58' || layout === 'legacy63' || layout === 'empty') throw new Error('Disposition ancienne détectée. Lancez Dally CRM → Initialiser / installer les déclencheurs avant toute synchronisation.');
+  throw new Error('Disposition de feuille inconnue — opération refusée.');
 }
 
 function ensureConfigSheet_() {
@@ -766,6 +790,7 @@ function assertNoSelectedIdentityCollision_(sheet, selectedRows) {
 
 function selectedDossier_() {
   const sheet=SpreadsheetApp.getActiveSheet(); if (!DALLY.dataSheets.includes(sheet.getName())) throw new Error('Sélectionnez une ligne dans une feuille de saisie.');
+  assertCanonicalSheetLayout_(sheet);
   const range=SpreadsheetApp.getActiveRange(); const first=range.getRow(); const last=first + Math.max(1, range.getNumRows()) - 1;
   if (first < DALLY.firstDataRow) throw new Error('Sélectionnez une ligne de dossier.');
   const values=sheet.getRange(first,1,last-first+1,DALLY.maxColumn).getValues();

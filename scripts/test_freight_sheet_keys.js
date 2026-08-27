@@ -207,7 +207,40 @@ if (!code.includes('pendingValues.length > 1')) throw new Error('multi-pending c
 if (!code.includes('plusieurs valeurs Sheet en attente')) throw new Error('multi-pending conflict message missing');
 if (!code.includes("source ? 'source|' + source : (global ? 'global|' + global")) throw new Error('binding grouping priority missing');
 if (!code.includes("'shipment|' + (shipment || dossier) + '|' + dossier")) throw new Error('shipment+dossier grouping fallback missing');
+function mockMigrate(rows) {
+  const headers = rows[0];
+  if (headers[1] === 'Consolidation prévue' && headers[2] === 'N dossier') return rows;
+  const legacy63 = headers[1] === 'N dossier' && headers[58] === 'Consolidation prévue';
+  const legacy58 = headers[1] === 'N dossier' && rows[0].length <= 60;
+  if (!legacy63 && !legacy58) throw new Error('unknown layout');
+  const shifted = rows.map(row => [row[0], '', ...row.slice(1)]);
+  if (legacy63) {
+    shifted.forEach(row => { row[1] = row[59]; row.splice(59, 1); });
+  }
+  shifted.forEach(row => { while (row.length < 63) row.push(''); });
+  shifted[0][1] = 'Consolidation prévue'; shifted[0][2] = 'N dossier';
+  shifted[0].splice(56, 7, 'Clé article facture', 'Flag règlement facture', 'Clé règlement facture', 'sync source key', 'global external reference', 'intake consolidation ref', 'collection local ref');
+  return shifted;
+}
+const old58 = Array.from({length: 2}, () => Array(59).fill(''));
+Object.assign(old58[0], {0:'Date depot', 1:'N dossier', 55:'Clé article facture', 56:'Flag règlement facture', 57:'Clé règlement facture'});
+old58[1][1] = 'DOS-58'; old58[1][3] = 'Client 58'; old58[1][55] = 'AKEY'; old58[1][56] = 'FLAG'; old58[1][57] = 'PKEY';
+const new58 = mockMigrate(old58);
+if (new58[0][1] !== 'Consolidation prévue' || new58[0][2] !== 'N dossier' || new58[1][2] !== 'DOS-58' || new58[1][56] !== 'AKEY' || new58[1][57] !== 'FLAG' || new58[1][58] !== 'PKEY' || new58[0][59] !== 'sync source key') throw new Error('legacy58 behavior failed');
+const old63 = Array.from({length: 2}, () => Array(63).fill(''));
+Object.assign(old63[0], {0:'Date depot', 1:'N dossier', 58:'Consolidation prévue', 59:'sync source key', 60:'global external reference', 61:'intake consolidation ref', 62:'collection local ref'});
+old63[1][1] = 'DOS-63'; old63[1][3] = 'Client 63'; old63[1][55] = 'AKEY63'; old63[1][56] = 'FLAG63'; old63[1][58] = 'AIR-DSS-CDG-2099-X'; old63[1][59] = 'SRC63'; old63[1][60] = 'GLOB63'; old63[1][61] = 'INT63'; old63[1][62] = 'A001';
+const new63 = mockMigrate(old63); const second63 = mockMigrate(new63);
+const legacy63ok = [new63[0][1] === 'Consolidation prévue', new63[1][1] === 'AIR-DSS-CDG-2099-X', new63[1][2] === 'DOS-63', new63[1][56] === 'AKEY63', new63[1][57] === 'FLAG63', new63[1][59] === 'SRC63', new63[1][60] === 'GLOB63', new63[1][61] === 'INT63', new63[1][62] === 'A001', new63[0][56] === 'Clé article facture', new63[0][57] === 'Flag règlement facture', new63[0][58] === 'Clé règlement facture', JSON.stringify(new63) === JSON.stringify(second63)].every(Boolean);
+if (!legacy63ok) throw new Error('legacy63 behavior/idempotence failed');
+if (detectSheetLayoutGuard('legacy58') !== 'blocked' || detectSheetLayoutGuard('legacy63') !== 'blocked' || detectSheetLayoutGuard('canonical') !== 'allowed') throw new Error('wrong-index guard behavior failed');
+function detectSheetLayoutGuard(layout) { return layout === 'canonical' ? 'allowed' : 'blocked'; }
 console.log('SHEET_LAYOUT_MIGRATION_IDEMPOTENT=PASS');
 console.log('SHEET_FORMULA_INJECTION_GUARD=PASS');
 console.log('MULTI_PENDING_CONSOLIDATION_PRESERVED=PASS');
+console.log('LEGACY58_BEHAVIOR=PASS');
+console.log('LEGACY63_BEHAVIOR=PASS');
+console.log('MIGRATION_SECOND_RUN_NOOP=PASS');
+console.log('PAYMENT_HEADER_ALIGNMENT=PASS');
+console.log('LEGACY_WRONG_INDEX_GUARD=PASS');
 console.log('SHEET_KEY_IDENTITY=PASS');

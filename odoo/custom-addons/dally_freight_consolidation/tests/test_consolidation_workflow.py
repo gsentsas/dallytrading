@@ -7,6 +7,9 @@ de transitions — si demain la matrice change, seule la matrice bouge, ces
 tests décrivent ce qui reste vrai pour l'opérateur.
 """
 
+import re
+
+from odoo import fields
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import tagged
 
@@ -16,6 +19,22 @@ from ..models.consolidation import _CONSOLIDATION_BYPASS_TOKEN, _CONSOLIDATION_S
 
 @tagged("post_install", "-at_install", "dally_freight")
 class TestConsolidationLifecycle(ConsolidationCommon):
+
+    def _route_existing_suffixes(self, origin, destination, year):
+        """Return valid existing suffixes in one allocator namespace."""
+        prefix = f"AIR-{origin}-{destination}-{year}-"
+        records = self.env["dally.freight.consolidation"].with_context(
+            active_test=False
+        ).search([
+            ("company_id", "=", self.env.company.id),
+            ("name", "like", prefix + "%"),
+        ])
+        pattern = rf"AIR-{re.escape(origin)}-{re.escape(destination)}-{year}-(\d{{3}})"
+        return [
+            int(match.group(1))
+            for name in records.mapped("name")
+            if (match := re.fullmatch(pattern, name))
+        ]
 
     def test_creation_automatique_de_la_reference(self):
         """Une consolidation créée sans nom reçoit une référence route + année."""
@@ -32,23 +51,81 @@ class TestConsolidationLifecycle(ConsolidationCommon):
         self.assertRegex(consolidation.name, r"^AIR-DSS-CDG-\d{4}-\d{3}$")
 
     def test_creation_batch_reserve_des_references_uniques(self):
+        model = self.env["dally.freight.consolidation"]
+        year = fields.Date.context_today(model).year
+        prefix = f"AIR-DSS-CDG-{year}-"
+        previous_max = max(self._route_existing_suffixes("DSS", "CDG", year), default=0)
         vals = [{
             "transport_mode": "air", "direction": "export",
             "origin_city": "Dakar", "origin_location": "DSS",
             "destination_city": "Paris", "destination_location": "CDG",
         } for _ in range(3)]
         records = self.env["dally.freight.consolidation"].create(vals)
-        self.assertEqual(len(set(records.mapped("name"))), 3)
-        self.assertEqual([name[-3:] for name in records.mapped("name")], ["001", "002", "003"])
+        names = records.mapped("name")
+        self.assertEqual(len(set(names)), 3)
+        self.assertTrue(all(name.startswith(prefix) for name in names))
+        suffixes = [int(name.rsplit("-", 1)[1]) for name in names]
+        self.assertEqual(suffixes, list(range(previous_max + 1, previous_max + 4)))
 
     def test_creation_batch_routes_differentes_garde_les_sequences(self):
+        model = self.env["dally.freight.consolidation"]
+        year = fields.Date.context_today(model).year
+        routes = (("DSS", "CDG"), ("CDG", "DSS"))
+        previous = {
+            route: max(self._route_existing_suffixes(*route, year), default=0)
+            for route in routes
+        }
         records = self.env["dally.freight.consolidation"].create([
             {"transport_mode": "air", "direction": "export", "origin_city": "Dakar", "origin_location": "DSS", "destination_city": "Paris", "destination_location": "CDG"},
             {"transport_mode": "air", "direction": "export", "origin_city": "Paris", "origin_location": "CDG", "destination_city": "Dakar", "destination_location": "DSS"},
         ])
         self.assertNotEqual(records[0].name, records[1].name)
-        self.assertTrue(records[0].name.endswith("-001"))
-        self.assertTrue(records[1].name.endswith("-001"))
+        self.assertEqual(records[0].name.rsplit("-", 1)[0], f"AIR-DSS-CDG-{year}")
+        self.assertEqual(records[1].name.rsplit("-", 1)[0], f"AIR-CDG-DSS-{year}")
+        self.assertEqual(int(records[0].name.rsplit("-", 1)[1]), previous[("DSS", "CDG")] + 1)
+        self.assertEqual(int(records[1].name.rsplit("-", 1)[1]), previous[("CDG", "DSS")] + 1)
+
+    def test_route_oracle_includes_archived_current_company(self):
+        model = self.env["dally.freight.consolidation"]
+        year = fields.Date.context_today(model).year
+        record = model.create({
+            "name": f"AIR-XXX-YYY-{year}-987",
+            "transport_mode": "air",
+            "direction": "export",
+            "origin_location": "XXX",
+            "destination_location": "YYY",
+            "active": False,
+        })
+        self.assertIn(987, self._route_existing_suffixes("XXX", "YYY", year))
+        record.unlink()
+
+    def test_route_oracle_ignores_other_company(self):
+        model = self.env["dally.freight.consolidation"]
+        year = fields.Date.context_today(model).year
+        other_company = self.env["res.company"].create({
+            "name": f"Oracle company {fields.Datetime.now()}"
+        })
+        model.with_company(other_company).create({
+            "name": f"AIR-XXX-YYY-{year}-998",
+            "company_id": other_company.id,
+            "transport_mode": "air",
+            "direction": "export",
+            "origin_location": "XXX",
+            "destination_location": "YYY",
+        })
+        self.assertNotIn(998, self._route_existing_suffixes("XXX", "YYY", year))
+
+    def test_route_oracle_ignores_malformed_suffix(self):
+        model = self.env["dally.freight.consolidation"]
+        year = fields.Date.context_today(model).year
+        model.create({
+            "name": f"AIR-XXX-YYY-{year}-1000",
+            "transport_mode": "air",
+            "direction": "export",
+            "origin_location": "XXX",
+            "destination_location": "YYY",
+        })
+        self.assertEqual(self._route_existing_suffixes("XXX", "YYY", year), [])
 
     def test_ouvrir_puis_cloturer_la_collecte(self):
         consolidation = self._consolidation()

@@ -508,16 +508,40 @@ function applySheetBindings_(sheet, bindings) {
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key).push({index: i, row: display[i], binding: bindings[shipmentId]});
   }
+  const concurrentMessage = 'Modification Sheet détectée pendant l’actualisation : valeur de consolidation conservée. Synchronisez le dossier puis relancez l’actualisation.';
+  const readState = member => {
+    const row = DALLY.firstDataRow + member.index;
+    return {
+      planned: String(sheet.getRange(row, DALLY.columns.plannedConsolidation, 1, 1).getDisplayValue() || '').trim(),
+      status: String(sheet.getRange(row, DALLY.columns.syncStatus, 1, 1).getDisplayValue() || '').trim(),
+    };
+  };
+  const markConcurrent = members => members.forEach(member => {
+    setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.syncMessage, concurrentMessage);
+  });
   grouped.forEach(members => {
     const binding = members[0].binding;
     const crmValue = String(binding.planned_consolidation_ref || '').trim();
-    // Re-read the conflict-sensitive cells after the snapshot.  This closes the
-    // race with onEdit/sync writes that may occur while CRM bindings are fetched.
+    const changed = [];
     members.forEach(member => {
-      const live = sheet.getRange(DALLY.firstDataRow + member.index, DALLY.columns.plannedConsolidation, 1, 1).getDisplayValue();
-      const liveStatus = sheet.getRange(DALLY.firstDataRow + member.index, DALLY.columns.syncStatus, 1, 1).getDisplayValue();
-      member.row[DALLY.columns.plannedConsolidation - 1] = live;
-      member.row[DALLY.columns.syncStatus - 1] = liveStatus;
+      const snapshotPlanned = String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim();
+      const snapshotStatus = String(member.row[DALLY.columns.syncStatus - 1] || '').trim();
+      const live = readState(member);
+      member._bindingExpected = live;
+      if (live.planned !== snapshotPlanned || live.status !== snapshotStatus) changed.push(member);
+      member.row[DALLY.columns.plannedConsolidation - 1] = live.planned;
+      member.row[DALLY.columns.syncStatus - 1] = live.status;
+    });
+    const unsafeChange = changed.some(member =>
+      member._bindingExpected.status !== 'À synchroniser' || member._bindingExpected.planned === crmValue
+    );
+    if (unsafeChange) {
+      markConcurrent(members);
+      return;
+    }
+    const stillCurrent = () => members.every(member => {
+      const live = readState(member);
+      return live.planned === member._bindingExpected.planned && live.status === member._bindingExpected.status;
     });
     const pending = members.filter(member =>
       String(member.row[DALLY.columns.syncStatus - 1] || '').trim() === 'À synchroniser' &&
@@ -531,10 +555,18 @@ function applySheetBindings_(sheet, bindings) {
       const message = pendingValues.length > 1
         ? 'Conflit de consolidation dans le dossier : plusieurs valeurs Sheet en attente. Harmonisez la colonne B avant synchronisation.'
         : 'Consolidation en attente : Sheet ' + (localValue || '(vide)') + ' / CRM ' + (crmValue || '(vide)') + '. Synchronisez le dossier pour appliquer le changement.';
+      if (!stillCurrent()) {
+        markConcurrent(members);
+        return;
+      }
       members.forEach(member => {
         if (pendingValues.length === 1) setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.plannedConsolidation, sheetLiteralText_(localValue));
         setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.syncMessage, message);
       });
+      return;
+    }
+    if (!stillCurrent()) {
+      markConcurrent(members);
       return;
     }
     members.forEach(member => {

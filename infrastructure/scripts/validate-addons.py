@@ -146,10 +146,17 @@ class ModelIndex:
         return True
 
 
+def python_source_files(addons: pathlib.Path) -> list[pathlib.Path]:
+    """Return production ORM Python sources, including wizard models."""
+    paths = set(addons.rglob("models/*.py"))
+    paths.update(addons.rglob("wizard/*.py"))
+    return sorted(paths)
+
+
 def parse_models(addons: pathlib.Path) -> ModelIndex:
     index = ModelIndex()
 
-    for py_file in sorted(addons.rglob("models/*.py")):
+    for py_file in python_source_files(addons):
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
 
         for node in ast.walk(tree):
@@ -244,7 +251,7 @@ def collect_external_ids(addons: pathlib.Path, index: ModelIndex) -> set[str]:
     # Odoo creates a model_<underscored_name> external id for every concrete
     # model, in the module that declares it. Record rules and ACLs reference
     # those, so they must be considered known.
-    for py_file in sorted(addons.rglob("models/*.py")):
+    for py_file in python_source_files(addons):
         module = py_file.relative_to(addons).parts[0]
         text = py_file.read_text(encoding="utf-8")
         for match in re.finditer(r'^\s*_name\s*=\s*["\']([^"\']+)["\']', text, re.M):
@@ -258,6 +265,28 @@ def collect_external_ids(addons: pathlib.Path, index: ModelIndex) -> set[str]:
             ids.add(f"{module}.model_{model.replace('.', '_')}")
 
     return ids
+
+
+def locator_field_names(expr: str) -> list[str]:
+    """Extract field selectors from an XPath/direct-field inheritance locator."""
+    return re.findall(r"field\s*\[\s*@name\s*=\s*['\"]([^'\"]+)['\"]\s*\]", expr)
+
+
+def insertion_scope(index: ModelIndex, model: str, expr: str, position: str) -> str:
+    """Resolve the model containing nodes inserted by an inheritance locator."""
+    fields = locator_field_names(expr)
+    current = model
+    if not fields:
+        return current
+    for name in fields[:-1]:
+        comodel = index.resolve(current).get(name)
+        if comodel:
+            current = comodel
+    target = fields[-1]
+    comodel = index.resolve(current).get(target)
+    if position == "inside" and comodel:
+        return comodel
+    return current
 
 
 def check_arch_fields(index: ModelIndex, model: str, element: ET.Element,
@@ -278,6 +307,12 @@ def check_arch_fields(index: ModelIndex, model: str, element: ET.Element,
     fully_known = index.is_fully_known(model) if model else False
 
     for child in element:
+        if child.tag == "xpath":
+            scope = insertion_scope(
+                index, model, child.get("expr", ""), child.get("position", "after")
+            )
+            check_arch_fields(index, scope, child, rel, depth + 1)
+            continue
         if child.tag == "field":
             name = child.get("name")
             if name:
@@ -295,10 +330,16 @@ def check_arch_fields(index: ModelIndex, model: str, element: ET.Element,
                     else:
                         info(f"{rel}: {model}.{name} is native — not verifiable")
 
+                position = child.get("position")
                 comodel = known.get(name)
                 if len(child):
                     # Nested arch: validate against the comodel when we know it.
-                    check_arch_fields(index, comodel or "", child, rel, depth + 1)
+                    nested_model = (
+                        comodel
+                        if comodel and (position is None or position == "inside")
+                        else model
+                    )
+                    check_arch_fields(index, nested_model, child, rel, depth + 1)
                 continue
 
         check_arch_fields(index, model, child, rel, depth + 1)

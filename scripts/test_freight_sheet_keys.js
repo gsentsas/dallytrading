@@ -205,7 +205,8 @@ for (const value of ['=FORMULA', '+FORMULA', '-FORMULA', '@FORMULA']) {
 }
 if (!code.includes('pendingValues.length > 1')) throw new Error('multi-pending conflict handling missing');
 if (!code.includes('plusieurs valeurs Sheet en attente')) throw new Error('multi-pending conflict message missing');
-if (!code.includes("source ? 'source|' + source : (global ? 'global|' + global : 'shipment|' + shipmentId + '|' + dossier)")) throw new Error('binding grouping priority missing');
+if (!code.includes("source ? 'source|' + source : (global ? 'global|' + global")) throw new Error('binding grouping priority missing');
+if (!code.includes("'shipment|' + (shipment || dossier) + '|' + dossier")) throw new Error('shipment+dossier grouping fallback missing');
 console.log('SHEET_LAYOUT_MIGRATION_IDEMPOTENT=PASS');
 console.log('SHEET_FORMULA_INJECTION_GUARD=PASS');
 console.log('MULTI_PENDING_CONSOLIDATION_PRESERVED=PASS');

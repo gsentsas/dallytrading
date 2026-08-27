@@ -523,7 +523,7 @@ function applySheetBindings_(sheet, bindings) {
         ? 'Conflit de consolidation dans le dossier : plusieurs valeurs Sheet en attente. Harmonisez la colonne B avant synchronisation.'
         : 'Consolidation en attente : Sheet ' + (localValue || '(vide)') + ' / CRM ' + (crmValue || '(vide)') + '. Synchronisez le dossier pour appliquer le changement.';
       members.forEach(member => {
-        setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.plannedConsolidation, sheetLiteralText_(localValue));
+        if (pendingValues.length === 1) setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.plannedConsolidation, sheetLiteralText_(localValue));
         setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.syncMessage, message);
       });
       return;
@@ -588,6 +588,7 @@ function migrateLegacySheetLayout_(sheet) {
   const b = String(header[1] || '').trim();
   const c = String(header[2] || '').trim();
   if (b === 'Consolidation prévue' && c === 'N dossier') return;
+  if (!date && !b && !c) return;
   const legacyPlanned = String(header[58] || '').trim();
   const legacyTechnical = ['sync source key', 'global external reference', 'intake consolidation ref', 'collection local ref'];
   const hasLegacy63 = date === 'Date depot' && b === 'N dossier' && legacyPlanned === 'Consolidation prévue' &&
@@ -638,7 +639,8 @@ function logicalDossierKey_(row) {
   const planned = String(row[DALLY.columns.plannedConsolidation - 1] || '').trim();
   if (source) return 'source|' + source;
   if (global) return 'global|' + global;
-  return (planned ? planned + '|' : '') + dossier;
+  const shipment = String(row[DALLY.columns.shipmentId - 1] || '').trim();
+  return 'shipment|' + (shipment || dossier) + '|' + dossier;
 }
 
 // Resolve the identity sent to freight/billing endpoints.  A planned dossier
@@ -671,7 +673,8 @@ function dirtyDossiers_(sheet) {
     const dossier = String(row[DALLY.columns.dossier - 1] || '').trim();
     const planned = String(row[DALLY.columns.plannedConsolidation - 1] || '').trim();
     if (!dossier) continue; // blank-B dossiers remain manual-init only.
-    const namespace = (planned ? planned + '|' : '') + dossier;
+    const shipment = String(row[DALLY.columns.shipmentId - 1] || '').trim();
+    const namespace = 'shipment|' + (shipment || dossier) + '|' + dossier;
     if (!groups.has(namespace)) groups.set(namespace, []);
     groups.get(namespace).push({index: i, display: row});
   }

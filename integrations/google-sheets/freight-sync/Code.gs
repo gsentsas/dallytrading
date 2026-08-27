@@ -583,6 +583,13 @@ function ensureSheetLayout_(sheet) {
   sheet.hideColumns(DALLY.columns.syncSourceKey, 4);
 }
 
+function isLegacy58Header_(header) {
+  const value = index => String(header[index - 1] || '').trim();
+  return value(1) === 'Date depot' && value(2) === 'N dossier' &&
+    value(3) !== 'Consolidation prévue' &&
+    [59, 60, 61, 62, 63].every(index => !value(index));
+}
+
 function migrateLegacySheetLayout_(sheet) {
   const header = sheet.getRange(DALLY.headerRow, 1, 1, Math.min(sheet.getMaxColumns(), DALLY.maxColumn)).getDisplayValues()[0];
   const date = String(header[0] || '').trim();
@@ -594,8 +601,7 @@ function migrateLegacySheetLayout_(sheet) {
   const legacyTechnical = ['sync source key', 'global external reference', 'intake consolidation ref', 'collection local ref'];
   const hasLegacy63 = date === 'Date depot' && b === 'N dossier' && legacyPlanned === 'Consolidation prévue' &&
     legacyTechnical.every((label, index) => String(header[59 + index] || '').trim() === label);
-  const hasLegacy58 = date === 'Date depot' && b === 'N dossier' &&
-    (!c || c !== 'Consolidation prévue') && sheet.getMaxColumns() <= 60;
+  const hasLegacy58 = isLegacy58Header_(header);
   if (!hasLegacy63 && !hasLegacy58) throw new Error('Disposition de feuille inconnue — migration automatique refusée.');
   sheet.insertColumnAfter(1);
   const rows = Math.max(0, sheet.getMaxRows() - DALLY.headerRow + 1);
@@ -622,7 +628,7 @@ function detectSheetLayout_(sheet) {
       value(61) === 'global external reference' && value(62) === 'intake consolidation ref' && value(63) === 'collection local ref') return 'canonical';
   if (value(1) === 'Date depot' && value(2) === 'N dossier' && value(59) === 'Consolidation prévue' &&
       ['sync source key','global external reference','intake consolidation ref','collection local ref'].every((label, i) => value(60 + i) === label)) return 'legacy63';
-  if (value(1) === 'Date depot' && value(2) === 'N dossier' && max <= 60) return 'legacy58';
+  if (isLegacy58Header_(header)) return 'legacy58';
   return 'unknown';
 }
 

@@ -633,6 +633,7 @@ function assertNoSelectedIdentityCollision_(sheet, selectedRows) {
   const selectedNamespace = namespaceOf(selectedRows[0]);
   const identities = [DALLY.columns.syncSourceKey, DALLY.columns.globalExternalReference, DALLY.columns.shipmentId]
     .map(column => new Set(selectedRows.map(row => display_(row, column)).filter(Boolean)));
+  if (identities.some(values => values.size > 1)) throw new Error('La sélection contient des identités de dossier en conflit.');
   const all = sheet.getRange(DALLY.firstDataRow, 1, sheet.getLastRow() - DALLY.firstDataRow + 1, DALLY.maxColumn).getDisplayValues();
   for (const row of all) {
     if (!String(row[DALLY.columns.dossier - 1] || '').trim()) continue;

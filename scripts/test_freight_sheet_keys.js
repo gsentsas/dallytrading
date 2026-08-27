@@ -124,9 +124,14 @@ const assertSelectedIdentityScope = (selected, all) => {
   const selectedNamespace = namespace(selected[0]);
   for (const field of ['source', 'global', 'shipmentId']) {
     const identities = new Set(selected.map(row => row[field]).filter(Boolean));
+    if (identities.size > 1) throw new Error('La sélection contient des identités de dossier en conflit.');
     if (all.some(row => namespace(row) !== selectedNamespace && identities.has(row[field]))) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
   }
 };
+const selectedConflictPattern = /La sélection contient des identités de dossier en conflit\./;
+assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}, {dossier: 'A001', planned: 'C1', source: 'S1', global: 'G2'}], []), selectedConflictPattern, 'same source/different global accepted');
+assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}, {dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 11}], []), selectedConflictPattern, 'same source/different shipment accepted');
+assert.doesNotThrow(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1', shipmentId: 10}, {dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1', shipmentId: 10}], []));
 const identityCollisionPattern = /Identité serveur associée à plusieurs namespaces de dossier\./;
 assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}], [{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}, {dossier: 'A001', planned: 'C2', source: 'S2', global: 'G1'}]), identityCollisionPattern, 'hidden global collision accepted');
 assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}], [{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}, {dossier: 'A001', planned: 'C2', source: 'S2', shipmentId: 10}]), identityCollisionPattern, 'hidden shipment collision accepted');

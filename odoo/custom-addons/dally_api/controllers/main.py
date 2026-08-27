@@ -23,6 +23,9 @@ import uuid
 
 from odoo import _, http, SUPERUSER_ID
 from odoo.exceptions import AccessDenied, AccessError, ConcurrencyError, UserError, ValidationError
+from odoo.service.model import PG_CONCURRENCY_EXCEPTIONS_TO_RETRY
+
+DALLY_API_RETRY_EXCEPTIONS = (ConcurrencyError, *PG_CONCURRENCY_EXCEPTIONS_TO_RETRY)
 from odoo.http import Response, request
 
 _logger = logging.getLogger(__name__)
@@ -331,7 +334,9 @@ class DallyApiController(http.Controller):
                              error.message)
             return cls._error(error.status, error.code, error.message, correlation_id)
 
-        except ConcurrencyError:
+        # Retryable PostgreSQL concurrency errors must escape this controller;
+        # Odoo's outer request transaction owns rollback and retry.
+        except DALLY_API_RETRY_EXCEPTIONS:
             raise
 
         except (ValidationError, UserError) as error:

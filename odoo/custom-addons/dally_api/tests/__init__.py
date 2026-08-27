@@ -5,3 +5,4 @@ from . import test_leads_endpoint
 from . import test_quotes_endpoint
 from . import test_sourcing_endpoint
 from . import test_key_usage
+from . import test_http_retry_exceptions

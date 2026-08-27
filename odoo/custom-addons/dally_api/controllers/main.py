@@ -22,7 +22,7 @@ import logging
 import uuid
 
 from odoo import _, http, SUPERUSER_ID
-from odoo.exceptions import AccessDenied, AccessError, UserError, ValidationError
+from odoo.exceptions import AccessDenied, AccessError, ConcurrencyError, UserError, ValidationError
 from odoo.http import Response, request
 
 _logger = logging.getLogger(__name__)
@@ -265,7 +265,7 @@ class DallyApiController(http.Controller):
     # ─── Dispatch ────────────────────────────────────────────────────
 
     @classmethod
-    def _handle(cls, endpoint, required_scope, handler):
+    def _handle(cls, endpoint, required_scope, handler, allow_bodyless_get=False):
         """Run an endpoint with uniform auth, idempotency, logging and errors.
 
         Every endpoint funnels through here so that behaviour cannot drift
@@ -278,11 +278,13 @@ class DallyApiController(http.Controller):
 
         try:
             api_key, env = cls._authenticate(required_scope)
-            payload = cls._read_json_body()
-            request_uuid = cls._validate_uuid(payload.get("request_uuid"))
+            bodyless_get = allow_bodyless_get and request.httprequest.method == "GET"
+            payload = {} if bodyless_get else cls._read_json_body()
+            request_uuid = str(uuid.uuid4()) if bodyless_get else cls._validate_uuid(payload.get("request_uuid"))
 
-            # Replay a previous successful identical call (§41).
-            replay = env["dally.api.request"].find_replay(request_uuid, endpoint)
+            # Replay is required for mutating calls; pure read-only bodyless GETs
+            # receive an internal correlation UUID and are never replayed.
+            replay = False if bodyless_get else env["dally.api.request"].find_replay(request_uuid, endpoint)
             if replay and replay.response:
                 try:
                     stored = json.loads(replay.response)
@@ -328,6 +330,9 @@ class DallyApiController(http.Controller):
             cls._log_failure(endpoint, error.status, api_key, source_ip, payload,
                              error.message)
             return cls._error(error.status, error.code, error.message, correlation_id)
+
+        except ConcurrencyError:
+            raise
 
         except (ValidationError, UserError) as error:
             # Business rule rejected the request: the caller can fix it.

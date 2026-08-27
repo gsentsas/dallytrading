@@ -3,9 +3,15 @@
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
+import re
 
 
 _OVERRIDE_TOKEN = object()
+_INTAKE_IDENTITY_TOKEN = object()
+_INTAKE_IDENTITY_FIELDS = frozenset({
+    "intake_consolidation_id", "collection_sequence", "collection_local_ref",
+    "sync_source_key", "external_reference",
+})
 
 
 def _format_money(currency, amount):
@@ -32,6 +38,15 @@ class DallyShipment(models.Model):
     ready_for_departure = fields.Boolean(compute="_compute_operational_controls", store=True)
     payment_control = fields.Char(compute="_compute_operational_controls", string="Contrôle paiement",
                                   store=True)
+
+    intake_consolidation_id = fields.Many2one("dally.freight.consolidation", string="Consolidation d'entrée", copy=False, index=True, readonly=True)
+    planned_consolidation_id = fields.Many2one("dally.freight.consolidation", string="Consolidation prévue", copy=False, index=True)
+    collection_sequence = fields.Integer(string="N° collecte", copy=False, index=True)
+    collection_local_ref = fields.Char(string="Référence locale", copy=False, index=True)
+    sync_source_key = fields.Char(string="Clé source de synchronisation", copy=False, index=True)
+
+    _intake_sequence_unique = models.Constraint("UNIQUE(company_id, intake_consolidation_id, collection_sequence)", "Le numéro local doit être unique dans la consolidation d'entrée.")
+    _sync_source_key_unique = models.Constraint("UNIQUE(company_id, sync_source, sync_source_key)", "La clé source doit être unique par société et source.")
 
     departure_payment_override_reason = fields.Text(
         string="Raison de dérogation paiement", readonly=True, copy=False,
@@ -63,6 +78,82 @@ class DallyShipment(models.Model):
             shipment.consolidation_ids = consolidations
             shipment.consolidation_id = consolidations.sorted("id", reverse=True)[:1]
 
+    @api.model
+    def _allocate_intake_identity(self, consolidation, *, sync_source_key=False, local_ref=False, source="google_sheets"):
+        if not consolidation or consolidation.company_id != self.env.company:
+            raise ValidationError(_("La consolidation d'entrée est invalide pour cette société."))
+        if consolidation.state != "collecting":
+            raise ValidationError(_("Une nouvelle collecte ne peut être initialisée que sur une consolidation ouverte."))
+        if sync_source_key:
+            existing = self.search([("company_id", "=", consolidation.company_id.id), ("sync_source", "=", source), ("sync_source_key", "=", sync_source_key)], limit=1)
+            if existing:
+                return existing
+        if local_ref:
+            match = re.fullmatch(r"A([0-9]+)", str(local_ref).strip().upper())
+            if not match or int(match.group(1)) <= 0:
+                raise ValidationError(_("collection_local_ref doit respecter le format A001."))
+            sequence = int(match.group(1))
+            local = ("A%03d" % sequence) if sequence < 1000 else ("A%d" % sequence)
+            if self.search_count([("company_id", "=", consolidation.company_id.id), ("intake_consolidation_id", "=", consolidation.id), ("collection_sequence", "=", sequence)]):
+                raise ValidationError(_("Le numéro local %s est déjà utilisé dans cette consolidation.", local))
+        else:
+            if not consolidation.intake_sequence_id:
+                raise ValidationError(_("La séquence de collecte est indisponible."))
+            sequence = int(consolidation.intake_sequence_id.sudo().next_by_id())
+            local = ("A%03d" % sequence) if sequence < 1000 else ("A%d" % sequence)
+        return sequence, local
+
+    def _check_planned_consolidation_compatibility(self, consolidation):
+        self.ensure_one()
+        if consolidation.company_id != self.company_id:
+            raise ValidationError(_("Société incompatible."))
+        if consolidation.state != "collecting":
+            raise UserError(_("La consolidation prévue doit être en collecte."))
+        if self.transport_mode != consolidation.transport_mode:
+            raise ValidationError(_("Le mode de transport de la consolidation prévue est incompatible."))
+        if self.direction != consolidation.direction:
+            raise ValidationError(_("La direction de la consolidation prévue est incompatible."))
+        if self.consolidation_line_ids.filtered(lambda line: line.consolidation_id != consolidation):
+            raise UserError(_("Le dossier est déjà chargé dans une autre consolidation."))
+        for prefix in ("origin", "destination"):
+            for suffix in ("country_id", "city", "location"):
+                current = getattr(self, "%s_%s" % (prefix, suffix))
+                expected = getattr(consolidation, "%s_%s" % (prefix, suffix))
+                if current and expected and current != expected:
+                    raise ValidationError(_("La route de la consolidation prévue est incompatible avec le dossier."))
+        return True
+
+    @api.model
+    def _create_with_intake_identity(self, values):
+        created = self.with_context(_dally_intake_identity_token=_INTAKE_IDENTITY_TOKEN).create(values)
+        return self.browse(created.ids)
+
+    def _bind_sync_source_key(self, source_key):
+        self.ensure_one()
+        self.with_context(_dally_intake_identity_token=_INTAKE_IDENTITY_TOKEN).write({
+            "sync_source_key": source_key,
+        })
+        return self
+
+    def _add_available_packages_to_consolidation(self, consolidation):
+        Line = self.env["dally.freight.consolidation.line"]
+        for shipment in self:
+            if shipment.company_id != consolidation.company_id:
+                raise ValidationError(_("Société incompatible."))
+            if shipment.state not in ("goods_received", "preparing"):
+                raise UserError(_("Le dossier doit être reçu ou en préparation."))
+            if consolidation.state != "collecting":
+                raise UserError(_("La consolidation n'est plus ouverte à la collecte."))
+            if not shipment.package_ids:
+                raise UserError(_("Ce dossier ne contient aucun colis à charger."))
+            for package in shipment.package_ids:
+                Line._check_operational_compatibility(consolidation, package)
+            for package in shipment.package_ids:
+                if package.available_quantity > 0 and not Line.search_count([("consolidation_id", "=", consolidation.id), ("package_id", "=", package.id)]):
+                    Line.create({"consolidation_id": consolidation.id, "package_id": package.id, "quantity_loaded": package.available_quantity})
+            shipment.planned_consolidation_id = consolidation
+        return True
+
     @api.depends(
         # Colis et désignation (préparation).
         "package_ids",
@@ -93,7 +184,47 @@ class DallyShipment(models.Model):
             if shipment.departure_payment_override_reason and not shipment._invoice_is_settled():
                 shipment.payment_control = _("Dérogation Manager")
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        internal = self.env.context.get("_dally_intake_identity_token") is _INTAKE_IDENTITY_TOKEN
+        for vals in vals_list:
+            identity = _INTAKE_IDENTITY_FIELDS.intersection(vals)
+            intake_fields = identity - {"external_reference"}
+            if intake_fields and not internal:
+                raise AccessError(_("Les identifiants de collecte sont réservés au service métier."))
+            if identity:
+                sequence = vals.get("collection_sequence")
+                local = vals.get("collection_local_ref")
+                expected = ("A%03d" % sequence) if sequence and sequence < 1000 else ("A%d" % sequence) if sequence else False
+                if sequence and local != expected:
+                    raise ValidationError(_("collection_sequence et collection_local_ref doivent rester cohérents."))
+        return super().create(vals_list)
+
     def write(self, vals):
+        internal = self.env.context.get("_dally_intake_identity_token") is _INTAKE_IDENTITY_TOKEN
+        identity = _INTAKE_IDENTITY_FIELDS.intersection(vals)
+        for shipment in self:
+            if identity and shipment.intake_consolidation_id and not internal:
+                raise AccessError(_("Les identifiants de collecte sont immuables."))
+            if "collection_sequence" in vals or "collection_local_ref" in vals:
+                sequence = vals.get("collection_sequence", shipment.collection_sequence)
+                local = vals.get("collection_local_ref", shipment.collection_local_ref)
+                expected = ("A%03d" % sequence) if sequence and sequence < 1000 else ("A%d" % sequence) if sequence else False
+                if sequence and local != expected:
+                    raise ValidationError(_("collection_sequence et collection_local_ref doivent rester cohérents."))
+        if "intake_consolidation_id" in vals:
+            target = vals.get("intake_consolidation_id") or False
+            for shipment in self:
+                if shipment.intake_consolidation_id.id != target:
+                    raise ValidationError(_("La consolidation d'entrée est immuable après allocation."))
+        if "planned_consolidation_id" in vals:
+            target = self.env["dally.freight.consolidation"].browse(vals.get("planned_consolidation_id")).exists()
+            for shipment in self:
+                if not target:
+                    raise ValidationError(_("Une consolidation prévue est requise."))
+                shipment._check_planned_consolidation_compatibility(target)
+                if shipment.package_ids:
+                    self.env["dally.freight.consolidation.line"]._check_operational_compatibility(target, shipment.package_ids[:1])
         internal = self.env.context.get("_dally_override_token") is _OVERRIDE_TOKEN
         protected = {
             "departure_payment_override_reason", "departure_payment_override_user_id",
@@ -102,6 +233,10 @@ class DallyShipment(models.Model):
         }
         if protected.intersection(vals) and not internal:
             raise AccessError(_("La trace de dérogation paiement est immuable."))
+        if identity and any(shipment.intake_consolidation_id for shipment in self) and (
+            self.env.context.get("_dally_intake_identity_token") is not _INTAKE_IDENTITY_TOKEN
+        ):
+            raise AccessError(_("Les identifiants de collecte sont immuables."))
         if "invoice_id" in vals and not internal:
             new_invoice_id = vals.get("invoice_id") or False
             changed_invoice = self.filtered(lambda shipment: shipment.invoice_id.id != new_invoice_id)

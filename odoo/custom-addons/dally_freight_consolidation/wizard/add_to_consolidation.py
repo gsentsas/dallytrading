@@ -88,19 +88,8 @@ class DallyAddToConsolidationWizard(models.TransientModel):
                 _("La consolidation choisie n'est pas compatible avec ce "
                   "dossier (société, mode, direction ou route divergents).")
             )
-        created = 0
-        Line = self.env["dally.freight.consolidation.line"]
-        for package in self.shipment_id.package_ids:
-            if package.available_quantity <= 0:
-                continue
-            Line.create({
-                "consolidation_id": self.consolidation_id.id,
-                "package_id": package.id,
-                "quantity_loaded": package.available_quantity,
-            })
-            created += 1
-        if not created:
-            raise UserError(_("Ce dossier ne contient aucun colis disponible à charger."))
+        self.shipment_id._add_available_packages_to_consolidation(self.consolidation_id)
+        created = 1
         self.shipment_id.message_post(
             body=_("Dossier ajouté à la consolidation %s.", self.consolidation_id.display_name)
         )

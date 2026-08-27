@@ -209,3 +209,13 @@ Change the routing table before using the same connector for another corridor.
 The connector never posts an invoice. `/api/v1/freight/invoice` creates or retrieves the native **draft** invoice. Posting remains a Finance action in Odoo.
 
 Payments entered before invoice posting remain visible as pending Freight collections. When a posted invoice and a matching configured payment channel exist, Odoo promotes them to native `account.payment` records.
+
+## Consolidation-scoped intake references
+
+`A001`, `A002`, … are local collection references within the intake consolidation namespace. They are not global identifiers. For a planned consolidation such as `AIR-DSS-CDG-2026-002`, the server allocates `A001` and exposes the immutable global `external_reference` `AIR-DSS-CDG-2026-002-A001`. A legacy payload that already supplies `external_reference=A001` remains supported unchanged.
+
+The new freight columns are appended after the existing workbook columns (BG: `Consolidation prévue`, BH: `sync_source_key`, BI: `global_external_reference`, BJ: `intake_consolidation_ref`, BK: `collection_local_ref`). The source key is stable for retries and is never an API secret. Grouping uses the planned consolidation plus dossier (or the returned global reference), so `001/A001` and `002/A001` are independent groups. Existing article/payment keys are preserved; new keys use the global reference (or stable source key) before the `|A|n` / `|P|n` suffix.
+
+Use **Actualiser les départs ouverts** to refresh the read-only collecting-consolidation table in `Synchronisation CRM`. It returns only company-scoped collecting departures and the route/mode fields needed for selection; no financial or customer data is returned. Editing a cell never performs HTTP. The manual synchronisation action performs allocation and association. A `request_received` or `awaiting_goods` shipment stores its planned departure without physical lines; `goods_received` and `preparing` shipments attach available packages through the same server method as the Odoo wizard. If a departure closes before receipt, the response reports that re-planning is required and does not silently switch to another consolidation. Re-planning is allowed only before physical loading and keeps the intake/local/global identity unchanged.
+
+For a multi-line dossier, all rows share the same stable source key and logical consolidation+dossier group. The first successful response writes the local reference, global reference and intake namespace back to the hidden/technical columns; replaying the same source key returns the same shipment and does not consume another `Axxx`.

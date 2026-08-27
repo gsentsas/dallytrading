@@ -12,7 +12,8 @@ engine.
 import re
 
 from odoo import api, fields, models, _
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import ConcurrencyError, UserError, ValidationError
+from psycopg2 import IntegrityError
 
 
 VALID_MODES = frozenset({"air", "sea"})
@@ -53,44 +54,84 @@ class DallyFreightSyncService(models.AbstractModel):
         data without duplicating it.
         """
         external_reference = self._text(payload.get("external_reference"), 120)
-        if not external_reference:
-            raise ValidationError(_("external_reference is required."))
-
         mode = self._choice(payload.get("transport_mode"), VALID_MODES, "transport_mode")
         direction = self._choice(payload.get("direction"), VALID_DIRECTIONS, "direction")
-        source = self._choice(
-            payload.get("source") or "google_sheets",
-            VALID_SOURCES,
-            "source",
-        )
+        source = self._choice(payload.get("source") or "google_sheets", VALID_SOURCES, "source")
+        sync_source_key = self._text(payload.get("sync_source_key"), 180)
+        planned_ref = self._text(payload.get("planned_consolidation_ref"), 120)
+        local_ref = self._text(payload.get("collection_local_ref"), 40)
         segment = payload.get("customer_segment")
         if segment:
             segment = self._choice(segment, VALID_SEGMENTS, "customer_segment")
-
-        self._lock("freight-dossier", "%s:%s" % (self.env.company.id, external_reference))
-
+        if not external_reference and not (sync_source_key and planned_ref):
+            raise ValidationError(_("external_reference est requis hors flux de collecte planifiée."))
+        if sync_source_key and not planned_ref:
+            self._lock("freight-source-dossier", "%s:%s:%s" % (self.env.company.id, source, sync_source_key))
+        if not planned_ref:
+            self._lock("freight-dossier", "%s:%s" % (self.env.company.id, external_reference or sync_source_key))
         Shipment = self.env["dally.shipment"].with_context(active_test=False)
+        consolidation_fields = "sync_source_key" in Shipment._fields
+        matched_by_source_key = False
+        matched_by_external_reference = False
         shipment = Shipment.search([
             ("company_id", "=", self.env.company.id),
-            ("external_reference", "=", external_reference),
-        ], limit=1)
+            ("sync_source_key", "=", sync_source_key),
+            ("sync_source", "=", source),
+        ], limit=1) if sync_source_key and consolidation_fields else Shipment.browse()
+        matched_by_source_key = bool(shipment)
+        if not shipment and external_reference:
+            shipment = Shipment.search([
+                ("company_id", "=", self.env.company.id),
+                ("external_reference", "=", external_reference),
+            ], limit=1)
+            matched_by_external_reference = bool(shipment)
         shipment_created = not bool(shipment)
-
         if self._is_tk_managed(shipment):
-            raise UserError(
-                _(
-                    "Shipment %(reference)s is linked to the operational freight "
-                    "engine. Sheet synchronisation cannot rewrite its cargo; "
-                    "the tk → Dally bridge is one-way."
-                )
-                % {"reference": shipment.display_name}
-            )
-
+            raise UserError(_("Shipment lié au moteur opérationnel : synchronisation Sheet refusée."))
+        consolidation_installed = "dally.freight.consolidation" in self.env
+        if planned_ref and not consolidation_installed:
+            raise ValidationError(_("Le workflow de consolidation n'est pas installé."))
+        planned = False
+        if planned_ref and consolidation_installed:
+            planned = self.env["dally.freight.consolidation"].search([
+                ("company_id", "=", self.env.company.id), ("name", "=", planned_ref)
+            ], limit=1)
+            if not planned:
+                raise ValidationError(_("La consolidation prévue est introuvable."))
+            if planned.transport_mode != mode or planned.direction != direction:
+                raise ValidationError(_("La consolidation prévue est incompatible avec le dossier."))
+        if shipment and matched_by_source_key and external_reference and external_reference != shipment.external_reference:
+            raise ValidationError(_("La référence globale d'une collecte ne peut pas être forgée."))
+        bind_source_key = bool(
+            shipment and matched_by_external_reference and sync_source_key
+            and consolidation_fields and not shipment.sync_source_key
+        )
+        if shipment and matched_by_external_reference and sync_source_key and consolidation_fields and shipment.sync_source_key and shipment.sync_source_key != sync_source_key:
+            raise ValidationError(_("La clé source appartient déjà à un autre dossier."))
+        if shipment_created and planned:
+            if source == "google_sheets" and local_ref:
+                raise ValidationError(_("collection_local_ref est attribué par le serveur."))
+            identity = Shipment._allocate_intake_identity(planned, sync_source_key=sync_source_key, local_ref=local_ref, source=source)
+            if isinstance(identity, tuple):
+                sequence, local = identity
+                external_reference = "%s-%s" % (planned.name, local)
+            else:
+                shipment = identity
+                shipment_created = False
+                external_reference = shipment.external_reference
+                sequence = shipment.collection_sequence
+                local = shipment.collection_local_ref
+        if shipment and sync_source_key and consolidation_fields and shipment.sync_source_key and shipment.sync_source_key != sync_source_key:
+            raise ValidationError(_("La clé source appartient déjà à un autre dossier."))
+        if shipment and consolidation_fields and shipment.intake_consolidation_id:
+            if external_reference and external_reference != shipment.external_reference:
+                raise ValidationError(_("La référence globale d'une collecte ne peut pas être forgée."))
+            external_reference = shipment.external_reference
+        effective_planned = planned or (shipment.planned_consolidation_id if shipment and consolidation_fields else False)
         state = payload.get("state")
         target_state = self._choice(state, VALID_STATES, "state") if state else ("request_received" if shipment_created else None)
         if shipment and target_state == "draft":
             raise ValidationError(_("Un dossier existant ne peut pas être resynchronisé vers « Brouillon »."))
-
         partner, partner_created = self._resolve_partner(
             payload.get("client") or {},
             existing=shipment.partner_id if shipment else None,
@@ -99,13 +140,25 @@ class DallyFreightSyncService(models.AbstractModel):
 
         values = {
             "partner_id": partner.id,
-            "external_reference": external_reference,
             "transport_mode": mode,
             "direction": direction,
             "sync_source": source,
             "last_sync_at": fields.Datetime.now(),
             "sync_message": False,
         }
+        if shipment_created:
+            values["external_reference"] = external_reference
+        if shipment_created and planned:
+            values.update({"intake_consolidation_id": planned.id, "planned_consolidation_id": planned.id,
+                           "collection_sequence": sequence, "collection_local_ref": local,
+                           "sync_source_key": sync_source_key})
+        elif bind_source_key:
+            values["sync_source_key"] = sync_source_key
+        if shipment and planned and not shipment_created:
+            if shipment.planned_consolidation_id != planned:
+                shipment._check_planned_consolidation_compatibility(planned)
+                values["planned_consolidation_id"] = planned.id
+
         if segment:
             values["customer_segment_snapshot"] = segment
 
@@ -117,11 +170,37 @@ class DallyFreightSyncService(models.AbstractModel):
         # opérationnelle est appliquée après création via le chemin sécurisé.
 
         self._apply_route(values, payload)
+        if planned:
+            for prefix in ("origin", "destination"):
+                for suffix in ("country_id", "city", "location"):
+                    key = "%s_%s" % (prefix, suffix)
+                    requested = values.get(key)
+                    expected = planned[key]
+                    if requested and expected and getattr(expected, "id", expected) != getattr(requested, "id", requested):
+                        raise ValidationError(_("La route de la consolidation prévue est incompatible avec le dossier."))
 
         if shipment:
             shipment.write(values)
+        elif planned:
+            try:
+                with self.env.cr.savepoint():
+                    shipment = Shipment._create_with_intake_identity(values)
+            except IntegrityError as exc:
+                constraint = getattr(exc.diag, "constraint_name", None)
+                server_assigned = bool(
+                    shipment_created and planned and not local_ref
+                    and external_reference.startswith("%s-" % planned.name)
+                )
+                if constraint == "dally_shipment_sync_source_key_unique" or (
+                    constraint == "dally_shipment_external_reference_unique"
+                    and server_assigned
+                ):
+                    raise ConcurrencyError("Concurrent Freight source creation") from exc
+                raise
         else:
             shipment = Shipment.create(values)
+        if shipment_created and sync_source_key and consolidation_fields and not planned:
+            shipment._bind_sync_source_key(sync_source_key)
 
         line_results = []
         descriptions = []
@@ -150,7 +229,17 @@ class DallyFreightSyncService(models.AbstractModel):
             "last_sync_at": fields.Datetime.now(),
             "sync_message": "OK",
         })
+        requires_replan = bool(
+            effective_planned
+            and effective_planned.state != "collecting"
+            and not shipment.consolidation_line_ids.filtered(lambda line: line.consolidation_id == effective_planned)
+        )
+        if effective_planned and shipment.state in ("goods_received", "preparing") and not requires_replan:
+            shipment._add_available_packages_to_consolidation(effective_planned)
 
+        intake = shipment.intake_consolidation_id if consolidation_fields else False
+        planned_record = shipment.planned_consolidation_id if consolidation_fields else False
+        loaded = shipment.consolidation_id if "consolidation_id" in shipment._fields else False
         return {
             "partner_id": partner.id,
             "partner_created": partner_created,
@@ -158,6 +247,17 @@ class DallyFreightSyncService(models.AbstractModel):
             "shipment_created": shipment_created,
             "shipment_reference": shipment.reference,
             "external_reference": shipment.external_reference,
+            "sync_source_key": shipment.sync_source_key if consolidation_fields else False,
+            "collection_local_ref": shipment.collection_local_ref if consolidation_fields else False,
+            "collection_sequence": shipment.collection_sequence if consolidation_fields else False,
+            "intake_consolidation_id": intake.id if intake else False,
+            "intake_consolidation_ref": intake.name if intake else False,
+            "planned_consolidation_id": planned_record.id if planned_record else False,
+            "planned_consolidation_ref": planned_record.name if planned_record else False,
+            "consolidation_status": ("requires_replan" if requires_replan else (loaded.state if loaded else False)),
+            "requires_replan": requires_replan,
+            "sync_message": ("Départ clôturé — replanification requise" if requires_replan else shipment.sync_message),
+            "attached_to_consolidation": bool(loaded),
             "state": shipment.state,
             "lines": line_results,
         }, shipment

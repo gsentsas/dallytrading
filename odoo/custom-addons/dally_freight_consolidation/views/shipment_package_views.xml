@@ -22,8 +22,12 @@
                         invisible="state != 'ready' or payment_control == 'OK'"/>
             </xpath>
             <xpath expr="//field[@name='carrier_tracking_number']" position="after">
+                <field name="collection_local_ref" readonly="1"/>
+                <field name="intake_consolidation_id" readonly="1"/>
+                <field name="planned_consolidation_id"/>
                 <field name="consolidation_id" readonly="1"/>
                 <field name="consolidation_state" readonly="1"/>
+                <field name="sync_source_key" groups="dally_core.group_dally_manager" invisible="1"/>
                 <field name="ready_for_departure" readonly="1"/>
                 <field name="payment_control" readonly="1"/>
             </xpath>

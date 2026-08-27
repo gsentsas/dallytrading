@@ -1,0 +1,311 @@
+# -*- coding: utf-8 -*-
+"""Regression coverage for consolidation-scoped intake identities."""
+
+from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.tests import TransactionCase
+
+
+class TestIntakeSequence(TransactionCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.company = cls.env.company
+        cls.partner = cls.env["res.partner"].create({
+            "name": "Intake Sequence Client",
+            "company_type": "company",
+            "email": "intake-sequence@test.invalid",
+        })
+        cls.service = cls.env["dally.freight.sync.service"]
+
+    def _consolidation(self, name):
+        return self.env["dally.freight.consolidation"].create({
+            "name": name,
+            "company_id": self.company.id,
+            "transport_mode": "air",
+            "direction": "export",
+            "origin_city": "Dakar",
+            "origin_location": "DSS",
+            "destination_city": "Paris",
+            "destination_location": "CDG",
+            "state": "collecting",
+        })
+
+    def _payload(self, key, planned, external=None, state="request_received"):
+        values = {
+            "sync_source_key": key,
+            "planned_consolidation_ref": planned.name,
+            "transport_mode": "air",
+            "direction": "export",
+            "state": state,
+            "client": {"name": self.partner.name, "email": self.partner.email},
+        }
+        if external:
+            values["external_reference"] = external
+        return values
+
+    def test_allocations_restart_per_consolidation_and_retry_is_idempotent(self):
+        second = self._consolidation("AIR-DSS-CDG-2099-002")
+        third = self._consolidation("AIR-DSS-CDG-2099-003")
+
+        result_a, shipment_a = self.service.upsert(
+            self._payload("sheet:002:a", second)
+        )
+        result_b, shipment_b = self.service.upsert(
+            self._payload("sheet:002:b", second)
+        )
+        result_c, shipment_c = self.service.upsert(
+            self._payload("sheet:003:a", third)
+        )
+
+        self.assertEqual(result_a["collection_local_ref"], "A001")
+        self.assertEqual(result_b["collection_local_ref"], "A002")
+        self.assertEqual(result_c["collection_local_ref"], "A001")
+        self.assertEqual(result_a["external_reference"], "AIR-DSS-CDG-2099-002-A001")
+        self.assertEqual(result_c["external_reference"], "AIR-DSS-CDG-2099-003-A001")
+        self.assertNotEqual(shipment_a.external_reference, shipment_c.external_reference)
+
+        retry, retry_shipment = self.service.upsert(
+            self._payload("sheet:002:a", second)
+        )
+        self.assertEqual(retry_shipment, shipment_a)
+        self.assertEqual(retry["collection_local_ref"], "A001")
+        self.assertEqual(
+            self.env["dally.shipment"].search_count([
+                ("sync_source_key", "=", "sheet:002:a"),
+            ]),
+            1,
+        )
+
+    def test_retry_preserves_global_identity_and_forged_external_is_rejected(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-RETRY")
+        payload = self._payload("sheet:retry", consolidation)
+        first, shipment = self.service.upsert(payload)
+        second, retry = self.service.upsert(payload)
+        self.assertEqual(shipment, retry)
+        self.assertEqual(first["external_reference"], second["external_reference"])
+        self.assertEqual(first["collection_local_ref"], "A001")
+        with self.assertRaises(ValidationError):
+            self.service.upsert(dict(payload, external_reference="A999"))
+
+    def test_new_intake_requires_collecting_and_closed_existing_reports_replan(self):
+        closed = self._consolidation("AIR-DSS-CDG-2099-CLOSED")
+        closed.action_close_collection()
+        with self.assertRaises(ValidationError):
+            self.service.upsert(self._payload("sheet:closed:new", closed))
+        collecting = self._consolidation("AIR-DSS-CDG-2099-REPLAN")
+        payload = self._payload("sheet:replan", collecting)
+        first, shipment = self.service.upsert(payload)
+        collecting.action_close_collection()
+        retry, same = self.service.upsert(payload)
+        self.assertEqual(first["external_reference"], retry["external_reference"])
+        self.assertTrue(retry["requires_replan"])
+        self.assertEqual(same.planned_consolidation_id, collecting)
+
+    def test_intake_identity_cannot_be_forged_by_create_or_write(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-GUARD")
+        _, shipment = self.service.upsert(self._payload("sheet:guard", consolidation))
+        with self.assertRaises(AccessError):
+            self.env["dally.shipment"].create({
+                "partner_id": self.partner.id, "external_reference": "FORGED",
+                "intake_consolidation_id": consolidation.id,
+                "collection_sequence": 1, "collection_local_ref": "A001",
+                "sync_source_key": "forged",
+            })
+        for values in ({"collection_sequence": 999}, {"collection_local_ref": "A999"},
+                       {"sync_source_key": "forged"}, {"external_reference": "FORGED"}):
+            with self.assertRaises(AccessError):
+                shipment.write(values)
+
+    def test_intake_sequence_and_namespace_are_protected(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-NAMESPACE")
+        _, shipment = self.service.upsert(self._payload("sheet:namespace", consolidation))
+        other_sequence = self.env["ir.sequence"].sudo().create({
+            "name": "test other", "code": "test.other.%s" % self.id,
+            "implementation": "standard",
+        })
+        with self.assertRaises(AccessError):
+            consolidation.write({"intake_sequence_id": other_sequence.id})
+        with self.assertRaises(UserError):
+            consolidation.write({"name": "AIR-DSS-CDG-2099-RENAMED"})
+        with self.assertRaises(UserError):
+            consolidation.unlink()
+        self.assertEqual(shipment.external_reference, "%s-A001" % consolidation.name)
+
+    def test_consolidation_create_cannot_inject_intake_sequence(self):
+        sequence = self.env["ir.sequence"].sudo().create({
+            "name": "forged intake", "code": "forged.intake.%s" % self.id,
+            "implementation": "standard",
+        })
+        with self.assertRaises(AccessError):
+            self.env["dally.freight.consolidation"].create({
+                "name": "AIR-DSS-CDG-2099-FORGED",
+                "company_id": self.company.id,
+                "transport_mode": "air", "direction": "export",
+                "state": "collecting", "intake_sequence_id": sequence.id,
+            })
+
+    def test_historical_line_without_intake_also_freezes_namespace(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-HISTORICAL")
+        _, shipment = self.service.upsert({
+            "external_reference": "A001-HISTORICAL",
+            "transport_mode": "air", "direction": "export",
+            "state": "request_received",
+            "client": {"name": self.partner.name, "email": self.partner.email},
+            "origin": {"city": "Dakar", "location": "DSS"},
+            "destination": {"city": "Paris", "location": "CDG"},
+        })
+        package = self.env["dally.shipment.package"].create({
+            "shipment_id": shipment.id, "quantity": 1, "unit_weight_kg": 2.0,
+        })
+        self.env["dally.freight.consolidation.line"].create({
+            "consolidation_id": consolidation.id,
+            "package_id": package.id,
+            "quantity_loaded": 1,
+        })
+        self.assertFalse(consolidation.intake_shipment_ids)
+        self.assertTrue(consolidation.line_ids)
+        with self.assertRaises(UserError):
+            consolidation.write({"name": "AIR-DSS-CDG-2099-HISTORICAL-RENAMED"})
+        self.assertEqual(consolidation.name, "AIR-DSS-CDG-2099-HISTORICAL")
+
+    def test_legacy_external_reference_remains_supported(self):
+        result, shipment = self.service.upsert({
+            "external_reference": "A001",
+            "transport_mode": "air",
+            "direction": "export",
+            "client": {"name": self.partner.name, "email": self.partner.email},
+        })
+        self.assertEqual(shipment.external_reference, "A001")
+        self.assertEqual(result["external_reference"], "A001")
+
+    def test_google_sheets_local_reference_is_server_assigned(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-004")
+        with self.assertRaises(ValidationError):
+            self.service.upsert(
+                self._payload("sheet:004:a", consolidation, state="request_received") | {
+                    "collection_local_ref": "A001",
+                }
+            )
+
+    def test_request_received_stores_plan_without_physical_lines(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-006")
+        _, shipment = self.service.upsert(self._payload("sheet:006:a", consolidation))
+        self.assertEqual(shipment.planned_consolidation_id, consolidation)
+        self.assertFalse(shipment.consolidation_line_ids)
+
+    def test_route_mismatch_is_rejected(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-ROUTE")
+        with self.assertRaises(ValidationError):
+            self.service.upsert({
+                "sync_source_key": "sheet:route:a",
+                "planned_consolidation_ref": consolidation.name,
+                "transport_mode": "air",
+                "direction": "export",
+                "origin": {"city": "Paris"},
+                "destination": {"city": "Dakar"},
+                "client": {"name": self.partner.name},
+            })
+
+    def test_incompatible_mode_is_rejected(self):
+        consolidation = self._consolidation("SEA-DKR-PAR-2099-001")
+        with self.assertRaises(ValidationError):
+            self.service.upsert({
+                "sync_source_key": "sheet:sea:a",
+                "planned_consolidation_ref": consolidation.name,
+                "transport_mode": "sea",
+                "direction": "export",
+                "client": {"name": self.partner.name},
+            })
+
+    def test_existing_air_shipment_cannot_plan_sea_without_packages(self):
+        sea = self._consolidation("SEA-DKR-PAR-2099-MISMATCH")
+        sea.write({"transport_mode": "sea"})
+        _, shipment = self.service.upsert({
+            "external_reference": "AIR-REQUEST-NO-PACKAGE",
+            "transport_mode": "air", "direction": "export",
+            "state": "request_received",
+            "client": {"name": self.partner.name},
+        })
+        with self.assertRaises(ValidationError):
+            shipment.write({"planned_consolidation_id": sea.id})
+
+    def test_existing_export_shipment_cannot_plan_import_without_packages(self):
+        imported = self._consolidation("AIR-DSS-CDG-2099-IMPORT")
+        imported.write({"direction": "import"})
+        _, shipment = self.service.upsert({
+            "external_reference": "AIR-EXPORT-NO-PACKAGE",
+            "transport_mode": "air", "direction": "export",
+            "state": "request_received",
+            "client": {"name": self.partner.name},
+        })
+        with self.assertRaises(ValidationError):
+            shipment.write({"planned_consolidation_id": imported.id})
+
+    def test_external_reference_match_binds_empty_source_key(self):
+        result, shipment = self.service.upsert({
+            "external_reference": "LEGACY-BIND-001",
+            "transport_mode": "air", "direction": "export",
+            "client": {"name": self.partner.name},
+        })
+        self.assertFalse(shipment.sync_source_key)
+        result, rebound = self.service.upsert({
+            "external_reference": "LEGACY-BIND-001",
+            "sync_source_key": "sheet:bind:001",
+            "transport_mode": "air", "direction": "export",
+            "client": {"name": self.partner.name},
+        })
+        self.assertEqual(rebound, shipment)
+        self.assertEqual(rebound.sync_source_key, "sheet:bind:001")
+
+    def test_legacy_bind_and_planned_consolidation_in_same_sync(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-BIND-PLAN")
+        _, shipment = self.service.upsert({
+            "external_reference": "LEGACY-BIND-PLAN",
+            "transport_mode": "air", "direction": "export",
+            "client": {"name": self.partner.name},
+        })
+        result, rebound = self.service.upsert({
+            "external_reference": "LEGACY-BIND-PLAN",
+            "sync_source_key": "sheet:bind:plan",
+            "planned_consolidation_ref": consolidation.name,
+            "transport_mode": "air", "direction": "export",
+            "client": {"name": self.partner.name},
+        })
+        self.assertEqual(rebound, shipment)
+        self.assertEqual(rebound.sync_source_key, "sheet:bind:plan")
+        self.assertEqual(rebound.planned_consolidation_id, consolidation)
+        self.assertFalse(result["shipment_created"])
+
+    def test_existing_bound_source_without_external_preserves_identity(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-PRESERVE")
+        _, shipment = self.service.upsert({
+            "external_reference": "LEGACY-PRESERVE",
+            "sync_source_key": "sheet:preserve",
+            "transport_mode": "air", "direction": "export",
+            "client": {"name": self.partner.name},
+        })
+        result, rebound = self.service.upsert({
+            "sync_source_key": "sheet:preserve",
+            "planned_consolidation_ref": consolidation.name,
+            "transport_mode": "air", "direction": "export",
+            "client": {"name": self.partner.name},
+        })
+        self.assertEqual(rebound, shipment)
+        self.assertEqual(rebound.external_reference, "LEGACY-PRESERVE")
+        self.assertEqual(result["external_reference"], "LEGACY-PRESERVE")
+
+    def test_external_reference_match_rejects_conflicting_source_key(self):
+        self.service.upsert({
+            "external_reference": "LEGACY-BIND-002",
+            "sync_source_key": "sheet:bind:old",
+            "transport_mode": "air", "direction": "export",
+            "client": {"name": self.partner.name},
+        })
+        with self.assertRaises(ValidationError):
+            self.service.upsert({
+                "external_reference": "LEGACY-BIND-002",
+                "sync_source_key": "sheet:bind:new",
+                "transport_mode": "air", "direction": "export",
+                "client": {"name": self.partner.name},
+            })

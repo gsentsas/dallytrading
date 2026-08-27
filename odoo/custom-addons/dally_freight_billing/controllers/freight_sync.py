@@ -9,6 +9,9 @@ from odoo.addons.dally_api.controllers.main import DallyApiController, DallyApiE
 TOP_LEVEL_FIELDS = frozenset({
     "request_uuid",
     "external_reference",
+    "sync_source_key",
+    "planned_consolidation_ref",
+    "collection_local_ref",
     "partner_id",
     "transport_mode",
     "direction",
@@ -82,7 +85,9 @@ class DallyFreightSyncController(DallyApiController):
             )
 
         clean = self._clean_freight_payload(payload)
-        self._require(clean, "external_reference", "transport_mode", "direction")
+        self._require(clean, "transport_mode", "direction")
+        if not clean.get("external_reference") and not (clean.get("sync_source_key") and clean.get("planned_consolidation_ref")):
+            raise DallyApiError(422, "missing_identity", _("external_reference ou sync_source_key + planned_consolidation_ref est requis."))
 
         data, shipment = env["dally.freight.sync.service"].upsert(clean)
         status = 201 if data.get("shipment_created") else 200
@@ -110,6 +115,9 @@ class DallyFreightSyncController(DallyApiController):
         for name in (
             "request_uuid",
             "external_reference",
+            "sync_source_key",
+            "planned_consolidation_ref",
+            "collection_local_ref",
             "transport_mode",
             "direction",
             "source",

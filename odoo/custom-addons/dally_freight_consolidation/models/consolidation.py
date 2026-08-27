@@ -31,6 +31,7 @@ CONSOLIDATION_TRANSITIONS = {
 
 _CONSOLIDATION_BYPASS_TOKEN = object()
 _CONSOLIDATION_STATE_WRITE_TOKEN = object()
+_INTAKE_SEQUENCE_SETUP_TOKEN = object()
 
 def _route_text(value):
     return re.sub(r"\s+", " ", (value or "").strip().casefold())
@@ -79,6 +80,10 @@ class DallyFreightConsolidation(models.Model):
     company_id = fields.Many2one(
         "res.company", required=True, default=lambda self: self.env.company,
         index=True,
+    )
+    intake_sequence_id = fields.Many2one(
+        "ir.sequence", string="Séquence collecte", readonly=True,
+        copy=False, ondelete="restrict",
     )
     active = fields.Boolean(default=True)
     state = fields.Selection(
@@ -138,6 +143,10 @@ class DallyFreightConsolidation(models.Model):
     )
     shipment_ids = fields.Many2many(
         "dally.shipment", compute="_compute_totals", string="Dossiers"
+    )
+    intake_shipment_ids = fields.One2many(
+        "dally.shipment", "intake_consolidation_id", string="Dossiers d'entrée",
+        readonly=True,
     )
     shipment_count = fields.Integer(compute="_compute_totals", string="Nb dossiers")
     package_line_count = fields.Integer(compute="_compute_totals", string="Lignes colis")
@@ -208,6 +217,8 @@ class DallyFreightConsolidation(models.Model):
     def create(self, vals_list):
         reserved_names = set()
         for vals in vals_list:
+            if "intake_sequence_id" in vals:
+                raise AccessError(_("La séquence de collecte est attribuée uniquement par le serveur."))
             initial_state = vals.get("state", "draft")
             if initial_state not in {"draft", "collecting"}:
                 raise UserError(_("Une consolidation doit être créée à l’état « Brouillon » ou « Collecte ouverte »."))
@@ -219,7 +230,20 @@ class DallyFreightConsolidation(models.Model):
             if not placeholder or placeholder in (_("Nouveau"), "Nouveau", "New"):
                 vals["name"] = self._next_route_reference(vals, reserved_names)
                 reserved_names.add(vals["name"])
-        return super().create(vals_list)
+        records = super().create(vals_list)
+        Sequence = self.env["ir.sequence"].sudo()
+        for record in records.filtered(lambda rec: not rec.intake_sequence_id):
+            sequence = Sequence.create({
+                "name": "Dally Intake - %s" % record.name,
+                "code": "dally.freight.intake.%s" % record.id,
+                "company_id": record.company_id.id,
+                "implementation": "standard",
+                "number_next": 1,
+                "number_increment": 1,
+                "padding": 1,
+            })
+            record.with_context(_dally_intake_sequence_setup=_INTAKE_SEQUENCE_SETUP_TOKEN).write({"intake_sequence_id": sequence.id})
+        return records
 
     @api.model
     def _next_route_reference(self, vals, reserved_names=None):
@@ -246,6 +270,8 @@ class DallyFreightConsolidation(models.Model):
         return "%s%03d" % (prefix, (max(numbers) if numbers else 0) + 1)
 
     def write(self, vals):
+        if "intake_sequence_id" in vals and self.env.context.get("_dally_intake_sequence_setup") is not _INTAKE_SEQUENCE_SETUP_TOKEN:
+            raise AccessError(_("La séquence de collecte est gérée uniquement par le serveur."))
         internal_state = (
             self.env.context.get("_dally_consolidation_state_write")
             is _CONSOLIDATION_STATE_WRITE_TOKEN
@@ -263,6 +289,12 @@ class DallyFreightConsolidation(models.Model):
                         _("Transition de consolidation impossible : %(current)s → %(target)s.",
                           current=record.state, target=vals["state"])
                     )
+        if "name" in vals:
+            linked = self.filtered(
+                lambda rec: bool(rec.intake_shipment_ids or rec.line_ids)
+            )
+            if linked:
+                raise UserError(_("La référence est immuable après attribution d'un dossier de collecte."))
         immutable = {"transport_mode", "direction", "origin_country_id", "origin_city",
                      "origin_location", "destination_country_id", "destination_city",
                      "destination_location", "mawb_number", "line_ids"}
@@ -271,6 +303,14 @@ class DallyFreightConsolidation(models.Model):
             if blocked:
                 raise UserError(_("La composition et le dossier maître sont figés après le départ."))
         return super().write(vals)
+
+    def unlink(self):
+        if self.filtered(lambda rec: rec.intake_shipment_ids or rec.line_ids or rec.state not in ("draft", "cancelled")):
+            raise UserError(_("Cette consolidation ne peut pas être supprimée après utilisation."))
+        sequences = self.mapped("intake_sequence_id")
+        result = super().unlink()
+        sequences.sudo().unlink()
+        return result
 
     def _historical_mark_departed(self):
         if not self.env.user.has_group("dally_core.group_dally_manager"):

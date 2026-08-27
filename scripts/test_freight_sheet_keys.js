@@ -119,13 +119,14 @@ try {
 } catch (e) { reloadRejected = true; }
 if (!reloadRejected) throw new Error('reloaded namespace collision accepted');
 if (reloadedNamespace([{dossier: 'A001', planned: 'C1', collectionLocalRef: 'A001'}, {dossier: 'A001', planned: 'C2', collectionLocalRef: 'A001'}]).size !== 2) throw new Error('local ref reuse across namespaces rejected');
+const normalizeIdentity = value => String(value ?? '').trim();
 const assertSelectedIdentityScope = (selected, all) => {
   const namespace = row => row.planned ? `${row.planned}|${row.dossier}` : row.dossier;
   const selectedNamespace = namespace(selected[0]);
   for (const field of ['source', 'global', 'shipmentId']) {
-    const identities = new Set(selected.map(row => row[field]).filter(Boolean));
+    const identities = new Set(selected.map(row => normalizeIdentity(row[field])).filter(Boolean));
     if (identities.size > 1) throw new Error('La sélection contient des identités de dossier en conflit.');
-    if (all.some(row => namespace(row) !== selectedNamespace && identities.has(row[field]))) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
+    if (all.some(row => namespace(row) !== selectedNamespace && identities.has(normalizeIdentity(row[field])))) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
   }
 };
 const selectedConflictPattern = /La sélection contient des identités de dossier en conflit\./;
@@ -147,6 +148,9 @@ assert.throws(() => assertBlankOwnership([{dossier: '', planned: 'C1', source: '
 assert.throws(() => assertBlankOwnership([{dossier: '', planned: 'C1', source: 'S-RETRY'}, {dossier: '', planned: 'C1'}], []), /partial source/, 'partial blank source accepted');
 assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}], [{dossier: 'A001', planned: 'C1', source: 'S1', global: 'G1'}, {dossier: 'A001', planned: 'C2', source: 'S2', global: 'G1'}]), identityCollisionPattern, 'hidden global collision accepted');
 assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}], [{dossier: 'A001', planned: 'C1', source: 'S1', shipmentId: 10}, {dossier: 'A001', planned: 'C2', source: 'S2', shipmentId: 10}]), identityCollisionPattern, 'hidden shipment collision accepted');
+assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', shipmentId: 10}], [{dossier: 'A001', planned: 'C2', shipmentId: '10'}]), identityCollisionPattern, 'numeric/string shipment collision accepted');
+assert.throws(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', source: ' S1 '}], [{dossier: 'A001', planned: 'C2', source: 'S1'}]), identityCollisionPattern, 'whitespace source collision accepted');
+assert.doesNotThrow(() => assertSelectedIdentityScope([{dossier: 'A001', planned: 'C1', shipmentId: 10}], [{dossier: 'A001', planned: 'C1', shipmentId: '10'}]));
 const fs = require('fs');
 const code = fs.readFileSync('integrations/google-sheets/freight-sync/Code.gs', 'utf8');
 if (!code.includes('getValues()') || !code.includes('getDisplayValues()')) throw new Error('raw/display snapshot contract missing');

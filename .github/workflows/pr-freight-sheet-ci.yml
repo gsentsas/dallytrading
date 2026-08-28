@@ -38,7 +38,9 @@ jobs:
         run: git diff --check origin/main...HEAD
 
       - name: Apps Script syntax check
-        run: node --check integrations/google-sheets/freight-sync/Code.gs
+        run: |
+          cp integrations/google-sheets/freight-sync/Code.gs /tmp/dally-freight-code.js
+          node --check /tmp/dally-freight-code.js
 
       - name: Freight Sheet regression suite
         shell: bash

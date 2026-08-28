@@ -220,6 +220,7 @@ function syncDossier_(sheet, dossier, rows, cfg) {
   (data.lines || []).forEach(line => lineByKey[String(line.external_line_key)] = line);
   const now = new Date();
   rows.forEach(row => {
+    const previousMessage = display_(row, DALLY.columns.syncMessage);
     const key = articleKey_(row);
     const line = lineByKey[String(key || '')];
     if (Object.prototype.hasOwnProperty.call(data, 'planned_consolidation_ref')) {
@@ -237,7 +238,7 @@ function syncDossier_(sheet, dossier, rows, cfg) {
     const msg = data.requires_replan
       ? String(data.sync_message || 'Départ clôturé — replanification requise') + ' • ' + normalMessage
       : normalMessage;
-    setCell_(sheet, row.row, DALLY.columns.syncMessage, msg);
+    setCell_(sheet, row.row, DALLY.columns.syncMessage, preserveUserCorrectionMessage_(previousMessage, msg));
   });
   rows.forEach(row => setCell_(sheet, row.row, DALLY.columns.syncStatus, 'Synchronisé'));
 
@@ -259,6 +260,23 @@ function syncDossier_(sheet, dossier, rows, cfg) {
     appendMessage_(sheet, rows, 'Paiements non synchronisés : option globale désactivée');
   }
   return {sync: data, invoice: invoiceData};
+}
+
+function preserveUserCorrectionMessage_(previousMessage, nextMessage) {
+  const previous = String(previousMessage || '').trim();
+  const next = String(nextMessage || '').trim();
+
+  if (!/^Correction utilisateur\b/i.test(previous)) return next;
+  if (!next) return previous;
+
+  const parts = previous
+    .split(' | ')
+    .map(part => part.trim())
+    .filter(Boolean);
+
+  if (parts.includes(next)) return previous;
+
+  return previous + ' | ' + next;
 }
 
 function sheetShipmentState_(row) {

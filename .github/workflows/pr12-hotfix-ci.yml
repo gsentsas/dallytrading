@@ -1,0 +1,51 @@
+name: PR12 Hotfix CI
+
+on:
+  push:
+    branches:
+      - fix/freight-sheet-preserve-legacy-planned-20260828
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'integrations/google-sheets/freight-sync/**'
+      - 'scripts/test_freight_sheet_*.js'
+      - '.github/workflows/pr12-hotfix-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  freight-sheet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Diff check
+        run: git diff --check origin/${{ github.base_ref || 'main' }}...HEAD || git diff --check HEAD^...HEAD
+
+      - name: Apps Script syntax
+        run: |
+          cp integrations/google-sheets/freight-sync/Code.gs /tmp/Code.js
+          cp integrations/google-sheets/freight-sync/Cash.gs /tmp/Cash.js
+          cp integrations/google-sheets/freight-sync/Pdf.gs /tmp/Pdf.js
+          node --check /tmp/Code.js
+          node --check /tmp/Cash.js
+          node --check /tmp/Pdf.js
+
+      - name: Freight Sheet regressions
+        run: |
+          set -euo pipefail
+          for T in \
+            scripts/test_freight_sheet_keys.js \
+            scripts/test_freight_sheet_identity_collision.js \
+            scripts/test_freight_sheet_layout_edges.js \
+            scripts/test_freight_sheet_refresh_concurrency.js \
+            scripts/test_freight_sheet_replan_intent.js \
+            scripts/test_freight_sheet_final_guards.js \
+            scripts/test_freight_sheet_walkthrough_risks.js \
+            scripts/test_freight_sheet_legacy_planned_guard.js
+          do
+            echo "--- $T"
+            node "$T"
+          done

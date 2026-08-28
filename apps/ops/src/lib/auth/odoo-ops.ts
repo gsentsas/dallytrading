@@ -54,6 +54,7 @@ export class OpsGatewayError extends Error {
     /** Odoo a refusé la *forme* de la demande. Jamais son contenu. */
     | 'invalid_request'
     /** La demande est bien formée, mais la base dit autre chose. */
+    | 'not_found'
     | 'conflict';
 
   /**
@@ -283,6 +284,14 @@ export async function opsPost<T>(
 
   if (reponse.status === 403) throw new OpsGatewayError('forbidden');
   if (reponse.status >= 300 && reponse.status < 400) throw new OpsGatewayError('forbidden');
+  if (reponse.status === 404) {
+    const charge = (await reponse.json().catch(() => null)) as
+      | { error?: { code?: string } }
+      | null;
+    throw new OpsGatewayError(
+      'not_found', 'introuvable', charge?.error?.code,
+    );
+  }
   if (reponse.status === 400) throw new OpsGatewayError('invalid_request');
   if (reponse.status === 409) {
     // Le code du conflit est relayé ; son message, non : il vient d'Odoo et

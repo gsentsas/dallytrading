@@ -23,6 +23,8 @@ from odoo.exceptions import AccessError, UserError
 from odoo.tests import HttpCase, tagged
 
 
+from .common import MODELES_TECHNIQUES_LISIBLES, modeles_lisibles
+
 def code_seul(module):
     """Le code exécutable d'un module, sans commentaires ni docstrings."""
     arbre = ast.parse(inspect.getsource(module))
@@ -119,17 +121,10 @@ class TestOpsCustomers(HttpCase):
     def test_le_logisticien_garde_zero_modele_metier_accessible(self):
         self.assertFalse(
             self.env["res.partner"].with_user(self.logisticien).has_access("read"))
-        lisibles = []
-        for nom in self.env.registry:
-            modele = self.env[nom]
-            if modele._abstract or modele._transient:
-                continue
-            try:
-                if modele.with_user(self.logisticien).has_access("read"):
-                    lisibles.append(nom)
-            except Exception:  # pragma: no cover
-                continue
-        self.assertFalse(lisibles, "modèles lisibles : %s" % ", ".join(sorted(lisibles)))
+        self.assertEqual(
+            modeles_lisibles(self.env, self.logisticien),
+            set(MODELES_TECHNIQUES_LISIBLES),
+            "la liste blanche technique a changé")
 
     # ─── Qui a le droit de chercher ──────────────────────────────────
 
@@ -219,6 +214,24 @@ class TestOpsCustomers(HttpCase):
         charge = self._charge({"phone": "771234567"})
         self.assertEqual(charge["status"], "match")
         self.assertEqual(charge["customer"]["name"], "Aissatou Kandji")
+
+    def test_un_email_corrige_dans_la_meme_transaction_est_vu(self):
+        partenaire = self._client(
+            "Aissatou Kandji", email="ancienne@example.com",
+        )
+        partenaire.email = "nouvelle@example.com"
+        charge = self._charge({"email": "nouvelle@example.com"})
+        self.assertEqual(charge["status"], "match")
+        self.assertEqual(
+            charge["customer"]["name"], "Aissatou Kandji",
+        )
+
+    def test_le_flush_sql_est_cible_sur_res_partner(self):
+        from odoo.addons.dally_ops_mobile.models import ops_customer_service
+
+        source = code_seul(ops_customer_service)
+        self.assertNotIn("flush_all", source)
+        self.assertIn("flush_model", source)
 
     def test_un_joker_sql_ne_ramene_pas_tout_un_domaine(self):
         self._client("Aissatou Kandji", email="client@example.com")

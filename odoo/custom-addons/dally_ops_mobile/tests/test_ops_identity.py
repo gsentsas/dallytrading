@@ -17,6 +17,12 @@ from odoo.exceptions import AccessError, UserError
 from odoo.tests import HttpCase, tagged
 
 
+from .common import (
+    MODELES_METIER_FERMES,
+    MODELES_TECHNIQUES_LISIBLES,
+    modeles_lisibles,
+)
+
 @tagged("post_install", "-at_install", "dally")
 class TestOpsIdentity(HttpCase):
 
@@ -65,17 +71,10 @@ class TestOpsIdentity(HttpCase):
     def test_un_compte_non_interne_ne_lit_aucun_modele(self):
         """186 modèles pour un compte interne, zéro ici. C'est la raison d'être
         de ce montage."""
-        lisibles = []
-        for nom in self.env.registry:
-            modele = self.env[nom]
-            if modele._abstract or modele._transient:
-                continue
-            try:
-                if modele.with_user(self.logisticien).has_access("read"):
-                    lisibles.append(nom)
-            except Exception:  # pragma: no cover
-                continue
-        self.assertFalse(lisibles, "modèles lisibles : %s" % ", ".join(sorted(lisibles)))
+        self.assertEqual(
+            modeles_lisibles(self.env, self.logisticien),
+            set(MODELES_TECHNIQUES_LISIBLES),
+            "la liste blanche technique a changé")
 
     def test_le_logisticien_obtient_son_identite(self):
         reponse = self._appel("ops.logi")
@@ -129,6 +128,60 @@ class TestOpsIdentity(HttpCase):
         # sur l'identité.
         suivie = self.url_open("/api/v1/ops/me")
         self.assertNotIn("cash_actor", suivie.text)
+
+    # ─── L'exception technique, sur le compte non interne ────────────
+
+    def test_l_exception_technique_est_exactement_res_currency(self):
+        """L'invariant, énoncé sur le sujet qui compte.
+
+        Ce fichier est le seul dont l'utilisateur est **non interne** : sans
+        `base.group_user`, sans groupe de lecture. C'est donc ici que
+        l'affirmation « zéro modèle métier, une seule exception technique »
+        se vérifie sur le bon compte.
+        """
+        self.assertTrue(self.logisticien.share)
+        self.assertEqual(
+            modeles_lisibles(self.env, self.logisticien),
+            set(MODELES_TECHNIQUES_LISIBLES))
+
+    def test_res_currency_est_lisible_et_rien_de_plus(self):
+        """La seule exception, et sa portée exacte."""
+        Devise = self.env["res.currency"].with_user(self.logisticien)
+        self.assertTrue(Devise.has_access("read"))
+        for operation in ("write", "create", "unlink"):
+            self.assertFalse(
+                Devise.has_access(operation),
+                "res.currency ne doit être accessible qu'en lecture (%s)" % operation)
+
+    def test_res_currency_ne_peut_pas_etre_mutee(self):
+        """Le droit de lire l'arrondi n'est pas celui de le changer."""
+        devise = self.env["res.currency"].search([], limit=1)
+        vue_par_ops = devise.with_user(self.logisticien)
+        self.assertTrue(vue_par_ops.name)
+
+        with self.assertRaises(AccessError):
+            vue_par_ops.write({"rounding": 0.5})
+        with self.assertRaises(AccessError):
+            self.env["res.currency"].with_user(self.logisticien).create(
+                {"name": "XXT", "symbol": "X"})
+        with self.assertRaises(AccessError):
+            vue_par_ops.unlink()
+
+    def test_les_modeles_metier_restent_fermes(self):
+        """Ce que l'exception technique n'a surtout pas ouvert."""
+        for nom in MODELES_METIER_FERMES:
+            if nom not in self.env.registry:
+                continue
+            with self.subTest(modele=nom):
+                self.assertFalse(
+                    self.env[nom].with_user(self.logisticien).has_access("read"),
+                    "%s est devenu lisible" % nom)
+
+    def test_les_taux_de_change_restent_fermes(self):
+        """`res.currency.rate` est une donnée commerciale ; l'arrondi non."""
+        self.assertNotIn("res.currency.rate", MODELES_TECHNIQUES_LISIBLES)
+        self.assertFalse(
+            self.env["res.currency.rate"].with_user(self.logisticien).has_access("read"))
 
     # ─── L'acteur de caisse ──────────────────────────────────────────
 

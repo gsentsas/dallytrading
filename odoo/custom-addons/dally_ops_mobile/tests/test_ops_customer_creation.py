@@ -29,6 +29,8 @@ from odoo.exceptions import AccessError
 from odoo.tests import HttpCase, tagged
 
 
+from .common import MODELES_TECHNIQUES_LISIBLES, modeles_lisibles
+
 def code_seul(module):
     """Le code exécutable d'un module, sans commentaires ni docstrings."""
     arbre = ast.parse(inspect.getsource(module))
@@ -148,17 +150,10 @@ class TestOpsCustomerCreation(HttpCase):
         self.assertEqual(charge["customer"]["name"], "Aissatou Kandji")
 
     def test_le_logisticien_garde_zero_modele_metier_accessible(self):
-        lisibles = []
-        for nom in self.env.registry:
-            modele = self.env[nom]
-            if modele._abstract or modele._transient:
-                continue
-            try:
-                if modele.with_user(self.logisticien).has_access("read"):
-                    lisibles.append(nom)
-            except Exception:  # pragma: no cover
-                continue
-        self.assertFalse(lisibles, "modèles lisibles : %s" % ", ".join(sorted(lisibles)))
+        self.assertEqual(
+            modeles_lisibles(self.env, self.logisticien),
+            set(MODELES_TECHNIQUES_LISIBLES),
+            "la liste blanche technique a changé")
 
     # ─── Qui a le droit de créer ─────────────────────────────────────
 

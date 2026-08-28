@@ -57,7 +57,7 @@ test('un numéro connu identifie le client et mène à l’étape suivante', asy
   await expect(page.getByText('207 rue Saint-Charles, 75015 Paris, France')).toBeVisible();
 
   await page.getByRole('button', { name: 'Utiliser ce client' }).click();
-  await expect(page.getByRole('heading', { name: 'Détail du colis' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'DOSSIER EN COURS' })).toBeVisible();
   await expect(page.getByTestId('consolidation-selectionnee')).toHaveText(DEPART);
 });
 
@@ -65,7 +65,7 @@ test('seule une référence opaque voyage dans l’URL', async ({ page }) => {
   await ouvrirLIdentification(page);
   await chercher(page, UNIQUE);
   await page.getByRole('button', { name: 'Utiliser ce client' }).click();
-  await expect(page.getByRole('heading', { name: 'Détail du colis' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'DOSSIER EN COURS' })).toBeVisible();
 
   const url = page.url();
   // Ni nom, ni téléphone, ni adresse, ni identifiant Odoo.

@@ -20,8 +20,10 @@ refusée. Un repli sur `display_name` imputerait une dépense au mauvais
 collègue, silencieusement.
 """
 
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 from odoo.tests import TransactionCase, tagged
+
+from .common import MODELES_TECHNIQUES_LISIBLES
 
 
 @tagged("post_install", "-at_install", "dally")
@@ -113,9 +115,11 @@ class TestOpsRoles(TransactionCase):
         en interrogeant `has_access` sur tout le registre, et exige que le rôle
         Ops n'en ajoute **aucun** par rapport au même utilisateur sans lui.
 
-        Le jour où une ACL Ops sera nécessaire, ce test échouera. Ce sera le
-        bon moment pour décider si elle est justifiée, plutôt que de la
-        découvrir installée.
+        Une exception technique existe désormais — `res.currency`, en lecture,
+        pour que l'ORM puisse arrondir un montant lors d'un vidage de tampon.
+        Elle est nommée dans la liste blanche, et rien d'autre ne peut s'y
+        glisser : la comparaison porte sur l'ensemble, pas sur une
+        appartenance.
         """
         temoin = self.env["res.users"].create({
             "name": "Ops témoin", "login": "ops.temoin@dallytrading.invalid",
@@ -136,10 +140,11 @@ class TestOpsRoles(TransactionCase):
             return trouves
 
         ajoutes = lisibles(self.logisticien) - lisibles(temoin)
-        self.assertFalse(
-            ajoutes,
-            "Le rôle Ops ouvre %d modèle(s) de plus : %s"
-            % (len(ajoutes), ", ".join(sorted(ajoutes))))
+        self.assertTrue(
+            ajoutes <= set(MODELES_TECHNIQUES_LISIBLES),
+            "Le rôle Ops ouvre hors liste blanche : %s"
+            % ", ".join(sorted(ajoutes - set(MODELES_TECHNIQUES_LISIBLES))))
+
 
     # ─── L'acteur de caisse ──────────────────────────────────────────
 

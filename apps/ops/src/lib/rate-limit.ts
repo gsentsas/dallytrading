@@ -231,6 +231,43 @@ export function cleDemandeComptee(requestUuid: string): string {
   return `ops:customers:create:uuid:${empreinte}`;
 }
 
+/** Budgets des réceptions et de la liste de familles tarifaires. */
+export const OPS_INTAKE_SESSION = {
+  limite: 60,
+  fenetreMs: 10 * 60_000,
+} as const;
+export const OPS_INTAKE_IP = {
+  limite: 300,
+  fenetreMs: 10 * 60_000,
+} as const;
+
+function empreinteCourte(namespace: string, valeur: string): string {
+  return createHash('sha256')
+    .update(`ops:${namespace}:${valeur}`, 'utf8')
+    .digest('hex')
+    .slice(0, 32);
+}
+
+export function cleIntakeSession(
+  identifiantSession: string,
+): string {
+  return `ops:intakes:session:${empreinteCourte(
+    'intake', identifiantSession,
+  )}`;
+}
+
+export function cleIntakeIp(ip: string): string {
+  return `ops:intakes:ip:${ip}`;
+}
+
+export function cleIntakeDemande(
+  requestUuid: string,
+): string {
+  return `ops:intakes:uuid:${empreinteCourte(
+    'intake-request', requestUuid,
+  )}`;
+}
+
 /** Remet les compteurs à zéro. Réservé aux tests. */
 export function resetRateLimits(): void {
   compteurs.clear();

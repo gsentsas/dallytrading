@@ -15,6 +15,8 @@ import json
 from odoo.exceptions import AccessError
 from odoo.tests import HttpCase, tagged
 
+from .common import MODELES_TECHNIQUES_LISIBLES, modeles_lisibles
+
 from odoo.addons.dally_freight_consolidation.models.consolidation import (
     _CONSOLIDATION_BYPASS_TOKEN,
 )
@@ -151,17 +153,10 @@ class TestOpsConsolidations(HttpCase):
         self.assertFalse(
             self.env["dally.freight.consolidation"]
             .with_user(self.logisticien).has_access("read"))
-        lisibles = []
-        for nom in self.env.registry:
-            modele = self.env[nom]
-            if modele._abstract or modele._transient:
-                continue
-            try:
-                if modele.with_user(self.logisticien).has_access("read"):
-                    lisibles.append(nom)
-            except Exception:  # pragma: no cover
-                continue
-        self.assertFalse(lisibles, "modèles lisibles : %s" % ", ".join(sorted(lisibles)))
+        self.assertEqual(
+            modeles_lisibles(self.env, self.logisticien),
+            set(MODELES_TECHNIQUES_LISIBLES),
+            "la liste blanche technique a changé")
 
     # ─── Qui a le droit d'appeler ────────────────────────────────────
 

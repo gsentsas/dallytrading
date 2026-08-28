@@ -99,7 +99,7 @@ test('un client neuf est créé et mène aux colis', async ({ page }) => {
   await expect(page.getByText('Nouvelle Cliente E2E')).toBeVisible();
 
   await page.getByRole('button', { name: 'Continuer vers les colis' }).click();
-  await expect(page.getByRole('heading', { name: 'Détail du colis' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'DOSSIER EN COURS' })).toBeVisible();
   await expect(page.getByTestId('consolidation-selectionnee')).toHaveText(DEPART);
   expect(page.url()).toMatch(
     /customer=[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/);
@@ -121,7 +121,7 @@ test('une fiche apparue depuis la recherche est retrouvée, pas dupliquée', asy
   await expect(page.getByText('La fiche existante a été retrouvée.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Utiliser ce client' }).click();
-  await expect(page.getByRole('heading', { name: 'Détail du colis' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'DOSSIER EN COURS' })).toBeVisible();
 });
 
 test('une tentative rejouée porte le même identifiant de demande', async ({ page }) => {
@@ -170,7 +170,7 @@ test('aucune donnée personnelle ne voyage dans une URL', async ({ page }) => {
   await page.getByRole('button', { name: 'Enregistrer le client' }).click();
   await expect(page.getByTestId('client-cree')).toBeVisible();
   await page.getByRole('button', { name: 'Continuer vers les colis' }).click();
-  await expect(page.getByRole('heading', { name: 'Détail du colis' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'DOSSIER EN COURS' })).toBeVisible();
 
   const chiffres = numero.replace(/\D/g, '');
   for (const url of [...urls, page.url()]) {

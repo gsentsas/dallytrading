@@ -201,7 +201,12 @@ class DallyOpsCustomerService(models.AbstractModel):
         #
         # Ce service n'écrit jamais sur `res.partner` ; la ligne protège contre
         # ce qu'un appelant aura fait avant lui.
-        self.env.flush_all()
+        # Le SQL ne lit que quatre colonnes de res.partner. Les vider
+        # explicitement évite qu'une écriture sans rapport soit envoyée à la
+        # base par un flush global.
+        self.env["res.partner"].flush_model([
+            "phone", "dally_whatsapp", "active", "company_id",
+        ])
         self.env.cr.execute(
             """
             SELECT id
@@ -240,7 +245,7 @@ class DallyOpsCustomerService(models.AbstractModel):
         #
         # Ce service n'écrit jamais sur `res.partner` ; la ligne protège contre
         # ce qu'un appelant aura fait avant lui.
-        self.env.flush_all()
+        self.env["res.partner"].flush_model(["email", "active", "company_id"])
         self.env.cr.execute(
             """
             SELECT id

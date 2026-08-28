@@ -159,3 +159,49 @@ a.carte-lien {
   color: var(--ops-accent);
   font-size: 0.95rem;
 }
+
+select {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.9rem 0.85rem;
+  font-size: 1.05rem;
+  color: var(--ops-texte);
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-bordure);
+  border-radius: 0.6rem;
+}
+
+.dimensions {
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+  color: var(--ops-attenue);
+  font-size: 0.95rem;
+}
+
+.grille-trois {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.grille-trois label {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.succes {
+  display: block;
+  color: #86efac;
+  font-weight: 800;
+}
+
+.alerte {
+  padding: 0.65rem;
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.35);
+  border: 1px solid #fbbf24;
+  border-radius: 0.5rem;
+  font-weight: 800;
+}

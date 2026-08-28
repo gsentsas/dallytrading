@@ -1,6 +1,13 @@
 name: PR Freight Sheet CI
 
 on:
+  push:
+    branches:
+      - 'feat/freight-consolidation-bidirectional-sync-20260827'
+    paths:
+      - 'integrations/google-sheets/freight-sync/**'
+      - 'scripts/test_freight_sheet_*.js'
+      - '.github/workflows/pr-freight-sheet-ci.yml'
   pull_request:
     branches: [main]
     paths:
@@ -28,7 +35,7 @@ jobs:
           node-version: '22'
 
       - name: Diff whitespace check
-        run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+        run: git diff --check origin/main...HEAD
 
       - name: Apps Script syntax check
         run: node --check integrations/google-sheets/freight-sync/Code.gs

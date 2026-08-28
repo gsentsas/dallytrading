@@ -165,12 +165,18 @@ class TestOpsRoles(TransactionCase):
         with self.assertRaises(UserError):
             autre._dally_ops_actor()
 
-    def test_les_espaces_sont_ignores(self):
+    def test_les_espaces_sont_retires_a_l_ecriture(self):
+        """Le refus arrive au plus tôt : à l'enregistrement, pas à l'usage.
+
+        Une valeur qui n'est que des espaces ferait paraître le champ rempli,
+        et l'imputation échouerait bien plus tard, loin de la saisie.
+        """
         self.logisticien.dally_ops_cash_actor = "  Gilles  "
+        self.assertEqual(self.logisticien.dally_ops_cash_actor, "Gilles")
         self.assertEqual(self.logisticien._dally_ops_actor(), "Gilles")
-        self.logisticien.dally_ops_cash_actor = "   "
+
         with self.assertRaises(UserError):
-            self.logisticien._dally_ops_actor()
+            self.logisticien.dally_ops_cash_actor = "   "
 
     # ─── Le rôle courant ─────────────────────────────────────────────
 

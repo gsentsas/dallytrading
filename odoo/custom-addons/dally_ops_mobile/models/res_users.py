@@ -27,8 +27,22 @@ enregistrer de caisse — c'est bruyant, immédiat, et corrigé en une minute.
 L'inverse produirait des écritures fausses que personne ne remarquerait.
 """
 
-from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo import SUPERUSER_ID, _, api, fields, models
+from odoo.exceptions import AccessError, UserError
+
+#: Ce que l'application a le droit de faire, exprimé en verbes métier.
+#:
+#: Le frontend demande « puis-je créer une réception », jamais « suis-je dans
+#: tel groupe ». Sans cette indirection, chaque page connaîtrait les noms des
+#: groupes Odoo, et ajouter un droit obligerait à rouvrir toutes les pages.
+CAPACITES = (
+    "intake_create",
+    "payment_create",
+    "expense_create",
+    "transfer_create",
+    "appointment_manage",
+    "supervise",
+)
 
 
 class ResUsers(models.Model):
@@ -57,6 +71,106 @@ class ResUsers(models.Model):
                 self.display_name,
             ))
         return actor
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if "dally_ops_cash_actor" in vals:
+                vals["dally_ops_cash_actor"] = self._dally_ops_normalise_actor(
+                    vals["dally_ops_cash_actor"])
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if "dally_ops_cash_actor" in vals:
+            self._dally_ops_check_actor_write()
+            vals["dally_ops_cash_actor"] = self._dally_ops_normalise_actor(
+                vals["dally_ops_cash_actor"])
+        return super().write(vals)
+
+    @api.model
+    def _dally_ops_normalise_actor(self, valeur):
+        """Espaces retirés ; une valeur qui n'est que des espaces est refusée.
+
+        Vider le champ est légitime — on retire son acteur à quelqu'un qui
+        quitte le poste. Enregistrer « ` ` » ne l'est pas : le champ paraîtrait
+        rempli et l'imputation échouerait plus tard, loin de la saisie.
+        """
+        if valeur in (False, None, ""):
+            return False
+        nettoye = str(valeur).strip()
+        if not nettoye:
+            raise UserError(_(
+                "L'acteur de caisse ne peut pas être une suite d'espaces. "
+                "Laissez le champ vide pour retirer l'acteur."))
+        return nettoye
+
+    def _dally_ops_check_actor_write(self):
+        """Seconde barrière sur l'imputation de caisse d'un collègue.
+
+        La première est l'ORM lui-même : mesuré, un compte Ops — logisticien
+        comme responsable — n'a **aucun** droit d'écriture sur `res.users`,
+        n'étant pas interne. Configurer l'acteur est donc, dans les faits, une
+        tâche d'administration back-office et non une action du terrain.
+
+        Ce contrôle existe quand même, et pour une raison précise : le jour où
+        quelqu'un accordera un droit d'écriture sur `res.users` à un rôle Ops —
+        pour changer un mot de passe, une langue, une photo — l'imputation de
+        caisse ne doit pas suivre dans la foulée. Un logisticien qui peut
+        choisir son propre acteur peut imputer ses dépenses à un collègue.
+        """
+        if self.env.su or self.env.uid == SUPERUSER_ID:
+            return True
+        if self.env.user.has_group("dally_ops_mobile.group_dally_ops_supervisor"):
+            return True
+        if self.env.user.has_group("base.group_erp_manager"):
+            return True
+        raise AccessError(_(
+            "Seul un responsable des opérations peut définir l'acteur de "
+            "caisse d'un utilisateur."))
+
+    @api.model
+    def _dally_ops_capabilities(self):
+        """Ce que l'utilisateur courant a le droit de faire, en verbes métier.
+
+        Statique par rôle à ce stade, et centralisé exprès : quand les droits
+        se préciseront — un logisticien qui n'encaisse pas, un remplaçant qui
+        ne fait que consulter — c'est cette méthode qui changera, pas les
+        écrans.
+        """
+        role = self._dally_ops_role()
+        capacites = dict.fromkeys(CAPACITES, False)
+        if not role:
+            return capacites
+        # Phase 1 : réception et encaissement. Caisse et agenda viendront avec
+        # leurs écrans, en Phase 2 ; les annoncer maintenant ferait promettre à
+        # l'application des actions que le serveur refuserait.
+        capacites["intake_create"] = True
+        capacites["payment_create"] = True
+        if role == "supervisor":
+            capacites["supervise"] = True
+        return capacites
+
+    @api.model
+    def _dally_ops_identity(self):
+        """La charge utile de `/api/v1/ops/me`.
+
+        Volontairement pauvre. N'y figurent ni groupes Odoo, ni identifiant de
+        session, ni portée d'API : ce sont des détails d'implémentation du
+        serveur, et les publier inviterait le frontend à raisonner dessus.
+        """
+        utilisateur = self.env.user
+        acteur = (utilisateur.dally_ops_cash_actor or "").strip() or None
+        return {
+            "user": {
+                "id": utilisateur.id,
+                "name": utilisateur.name,
+                "login": utilisateur.login,
+            },
+            "role": self._dally_ops_role() or None,
+            "cash_actor": acteur,
+            "cash_actor_configured": bool(acteur),
+            "capabilities": self._dally_ops_capabilities(),
+        }
 
     @api.model
     def _dally_ops_role(self):

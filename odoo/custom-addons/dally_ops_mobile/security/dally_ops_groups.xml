@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Les deux rôles de l'application terrain.
+
+        ## Ce qu'ils accordent, et surtout ce qu'ils n'accordent pas
+
+        Un logisticien saisit des réceptions, une caisse, des rendez-vous. Il
+        n'administre rien. Aucun des deux rôles n'implique
+        `group_dally_freight_sync_api` ni `group_dally_freight_billing_api` :
+        ces groupes-là servent une **clé d'API**, pas une personne. Le
+        connecteur tableur est un automate de confiance qui écrit en masse ;
+        confondre son identité avec celle d'un téléphone reviendrait à donner à
+        chaque logisticien les pouvoirs de l'automate.
+
+        C'est aussi ce qui rend tenable la règle « aucun secret dans le
+        navigateur » : l'application terrain n'a jamais besoin d'une clé
+        Freight, puisque son utilisateur a ses propres droits.
+
+        ## Pourquoi le logisticien implique la lecture Dally
+
+        `group_dally_readonly` lui donne de quoi lire les consolidations, les
+        dossiers et les clients qu'il manipule. Sans cela, il saisirait à
+        l'aveugle. Rien de plus n'est impliqué : ni commercial, ni finance, ni
+        logistique interne.
+
+        ## Le responsable
+
+        Il implique le logisticien : ce qu'il corrige, il doit d'abord pouvoir
+        le voir et le saisir. Il n'implique pas `group_dally_manager` — corriger
+        un poids n'exige pas d'accéder aux marges.
+    -->
+    <record id="group_dally_ops_logistician" model="res.groups">
+        <field name="name">Ops — Logisticien</field>
+        <field name="privilege_id" ref="dally_core.privilege_dallytrading"/>
+        <field name="implied_ids" eval="[(4, ref('dally_core.group_dally_readonly'))]"/>
+        <field name="comment">Saisie terrain : réceptions, articles, paiements
+            encaissés, caisse et rendez-vous. Aucun accès à la comptabilité, aux
+            tarifs de référence ni à l'administration.</field>
+    </record>
+
+    <record id="group_dally_ops_supervisor" model="res.groups">
+        <field name="name">Ops — Responsable opérations</field>
+        <field name="privilege_id" ref="dally_core.privilege_dallytrading"/>
+        <field name="implied_ids" eval="[(4, ref('group_dally_ops_logistician'))]"/>
+        <field name="comment">Corrige les saisies terrain et rouvre ce qui doit
+            l'être. Ne donne accès ni aux marges, ni à la facturation
+            comptabilisée, ni aux identités techniques de synchronisation.</field>
+    </record>
+
+</odoo>

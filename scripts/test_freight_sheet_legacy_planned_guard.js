@@ -48,6 +48,33 @@ applySheetBindings_(explicit, {'679': {shipment_id: 679, planned_consolidation_r
 assert.match(String(explicit.cell(3, DALLY.columns.syncMessage)), /Replanification demandée depuis la feuille\./, 'explicit replan intent must remain visible');
 assert.match(String(explicit.cell(3, DALLY.columns.syncMessage)), /Consolidation en attente/, 'explicit replan must still surface the pending CRM mismatch');
 
+// Mixed blank/nonblank rows must not be mistaken for one coherent legacy assignment.
+// The existing pending logic must harmonize the dossier instead of returning early.
+const mixed = new FakeSheet([
+  blank(),
+  blank(),
+  row('AIR-DSS-CDG-2026-001', 'À synchroniser', 680, 'Message opérationnel'),
+  row('', 'À synchroniser', 680, '')
+], DALLY.maxColumn);
+
+applySheetBindings_(mixed, {
+  '680': {
+    shipment_id: 680,
+    planned_consolidation_ref: false,
+    requires_replan: false
+  }
+});
+
+assert.strictEqual(
+  mixed.cell(3, DALLY.columns.plannedConsolidation),
+  'AIR-DSS-CDG-2026-001'
+);
+assert.strictEqual(
+  mixed.cell(4, DALLY.columns.plannedConsolidation),
+  'AIR-DSS-CDG-2026-001',
+  'mixed blank/nonblank dossier must be harmonized by pending logic'
+);
+
 const authoritative = new FakeSheet([blank(), blank(), row('AIR-OLD', 'Synchronisé', 999)], DALLY.maxColumn);
 applySheetBindings_(authoritative, {'999': {shipment_id: 999, planned_consolidation_ref: 'AIR-CRM', requires_replan: false}});
 assert.strictEqual(authoritative.cell(3, DALLY.columns.plannedConsolidation), 'AIR-CRM');

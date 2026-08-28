@@ -575,10 +575,11 @@ function applySheetBindings_(sheet, bindings) {
     // go through the pending/conflict flow below.
     const localPlannedValues = [...new Set(members.map(member =>
       String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim()
-    ).filter(Boolean))];
+    ))];
     const preserveHistoricalPlanned = (
       !crmValue &&
       localPlannedValues.length === 1 &&
+      Boolean(localPlannedValues[0]) &&
       !replanRequested
     );
     if (preserveHistoricalPlanned) {

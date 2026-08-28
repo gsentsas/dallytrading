@@ -340,8 +340,43 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
   return payload;
 }
 
+function normalizeTariffFamilyLabel_(value) {
+  return String(value || '')
+    .replace(/[\u00A0\u202F]/g, ' ')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s*\/\s*/g, ' / ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function tariffFamilyCode_(value) {
+  const raw = String(value || '').replace(/[\u00A0\u202F]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!raw) return '';
+
+  const direct = DALLY.familyCodes[raw];
+  if (direct) return direct;
+
+  if (['food', 'seafood', 'honey', 'clothing', 'non_food'].includes(raw.toLowerCase())) {
+    return raw.toLowerCase();
+  }
+
+  const aliases = {
+    'alimentaire standard': 'food',
+    'halieutiques': 'seafood',
+    'miel': 'honey',
+    'habits / vetements': 'clothing',
+    'non alimentaire': 'non_food',
+  };
+  const code = aliases[normalizeTariffFamilyLabel_(raw)];
+  if (!code) throw new Error('Famille tarifaire non mappée: ' + raw);
+  return code;
+}
+
 function buildLine_(row) {
   const family = display_(row, DALLY.columns.tariffFamily);
+  const familyCode = tariffFamilyCode_(family);
   const pricingType = display_(row, DALLY.columns.pricingType);
   const out = {
     external_line_key: articleKey_(row),
@@ -357,7 +392,7 @@ function buildLine_(row) {
     unit_volume_cbm: numberOrNull_(value_(row, DALLY.columns.unitVolume)),
     total_volume_cbm: numberOrNull_(value_(row, DALLY.columns.totalVolume)),
     billing_method: DALLY.billingCodes[display_(row, DALLY.columns.billingMethod)] || 'real',
-    tariff_family_code: DALLY.familyCodes[family],
+    tariff_family_code: familyCode || undefined,
     manual_unit_price_eur: numberOrNull_(value_(row, DALLY.columns.manualPrice)),
     pricing_type: DALLY.pricingCodes[pricingType] || 'standard',
     pricing_reason: display_(row, DALLY.columns.pricingReason),

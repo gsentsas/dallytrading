@@ -82,7 +82,7 @@ nécessaire pour un banc local — et seulement pour lui.
 ## 4. Les tests
 
 ```bash
-npm run verify        # types, lint, 225 tests unitaires
+npm run verify        # types, lint, 287 tests unitaires
 ```
 
 Les tests de bout en bout ont besoin d'un navigateur ; les bibliothèques
@@ -112,9 +112,16 @@ Trois fiches, choisies pour couvrir les trois issues de la recherche :
 | Aissatou Kandji | `+221 77 123 45 67` | la correspondance unique |
 | Mamadou Konaté | `+221 76 000 00 00` | l'ambiguïté… |
 | Mariama Konaté | `00221760000000` | …écrite autrement, et pourtant le même numéro |
+| Ousmane Ba | `+221 76 555 44 33` | une fiche que la recherche précédente n'a pas vue |
 
 `+221 77 999 88 77` ne correspond à personne : c'est le cas « aucun client
-trouvé ».
+trouvé ». `Ousmane Ba` sert au scénario de création : l'écran vient d'annoncer
+« aucun client » pour un autre numéro, et le serveur retrouve pourtant cette
+fiche au moment d'écrire.
+
+Les essais de création laissent des fiches dans la base du banc — c'est voulu,
+et les scénarios tirent un numéro neuf à chaque exécution pour rester
+rejouables.
 
 ## 7. Ce que le banc a servi à établir
 
@@ -133,3 +140,5 @@ trouvé ».
   numéro — et se voit refuser deux fiches plutôt que d'en montrer une.
 - Ni numéro, ni adresse électronique n'apparaissent dans une URL : la recherche
   passe par un corps de requête.
+- Une création rejouée après une coupure réseau porte le même identifiant de
+  demande et ne produit qu'une fiche.

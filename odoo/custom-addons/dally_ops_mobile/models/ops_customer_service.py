@@ -40,9 +40,13 @@ qu'on cherche `client@example.com`, on la trouve et on ne la corrige pas :
 du fichier clients par un téléphone.
 """
 
+import hashlib
+import json
 import logging
+import re
+import uuid as uuid_module
 
-from odoo import _, api, models
+from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
 from odoo.addons.dally_crm.models.res_partner import (
@@ -55,6 +59,38 @@ _logger = logging.getLogger(__name__)
 
 #: Les seuls critères acceptés. Tout autre champ fait échouer la requête.
 CRITERES = ("phone", "email")
+
+#: Les seuls champs acceptés à la création. Tout autre fait échouer la demande.
+CHAMPS_CREATION = ("request_uuid", "customer_type", "name", "phone", "email", "address")
+
+#: Ceux dont l'absence rend la fiche inutilisable au comptoir.
+CHAMPS_OBLIGATOIRES = ("request_uuid", "customer_type", "name", "phone", "address")
+
+TYPES_CLIENT = {"individual": False, "business": True}
+
+#: L'opération inscrite au registre d'idempotence.
+OPERATION_CREATION = "customer.create"
+
+#: Validation d'adresse volontairement modeste : on refuse « client », pas on
+#: ne prétend pas décider si une adresse existe.
+EMAIL_ACCEPTABLE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+LONGUEUR_NOM = 200
+LONGUEUR_ADRESSE = 500
+
+
+class DallyOpsInvalide(UserError):
+    """La *forme* de la demande est refusée. Jamais son contenu."""
+
+    code = "invalid_request"
+
+
+class DallyOpsConflit(UserError):
+    """Deux vérités incompatibles : on refuse plutôt que de trancher."""
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
 
 
 class DallyOpsCustomerService(models.AbstractModel):
@@ -103,33 +139,33 @@ class DallyOpsCustomerService(models.AbstractModel):
         qu'il a cherché par nom, alors qu'il aurait cherché sur rien.
         """
         if not isinstance(criteres, dict):
-            raise UserError(_("Requête de recherche invalide."))
+            raise DallyOpsInvalide(_("Requête de recherche invalide."))
 
         inconnus = set(criteres) - set(CRITERES)
         if inconnus:
-            raise UserError(_("Critère de recherche non pris en charge."))
+            raise DallyOpsInvalide(_("Critère de recherche non pris en charge."))
 
         fournis = [champ for champ in CRITERES if criteres.get(champ)]
         if len(fournis) != 1:
-            raise UserError(_("Fournissez exactement un critère de recherche."))
+            raise DallyOpsInvalide(_("Fournissez exactement un critère de recherche."))
 
         champ = fournis[0]
         brut = criteres[champ]
         if not isinstance(brut, str):
-            raise UserError(_("Critère de recherche invalide."))
+            raise DallyOpsInvalide(_("Critère de recherche invalide."))
 
         if champ == "phone":
             valeur = normalize_phone(brut)
             if not valeur:
                 # Moins de neuf chiffres : « 77 » rapprocherait la moitié du
                 # fichier. Mieux vaut refuser que répondre n'importe quoi.
-                raise UserError(
+                raise DallyOpsInvalide(
                     _("Numéro de téléphone incomplet : %(n)s chiffres au minimum.",
                       n=PHONE_SIGNIFICANT_DIGITS))
         else:
             valeur = normalize_email(brut)
             if not valeur or "@" not in valeur:
-                raise UserError(_("Adresse électronique invalide."))
+                raise DallyOpsInvalide(_("Adresse électronique invalide."))
 
         return champ, valeur
 
@@ -156,6 +192,16 @@ class DallyOpsCustomerService(models.AbstractModel):
         plusieurs. Ramener davantage ne servirait qu'à charger en mémoire des
         fiches qu'on a justement décidé de ne pas montrer.
         """
+        # Vider le tampon de l'ORM avant de lire la table.
+        #
+        # Mesuré sur Odoo 19 : un `create` atteint la table tout de suite, mais
+        # un `write` reste en attente. Un numéro corrigé plus tôt dans la même
+        # transaction serait donc invisible au SQL brut, qui ne connaît que la
+        # base — et la recherche conclurait « aucun client » à tort.
+        #
+        # Ce service n'écrit jamais sur `res.partner` ; la ligne protège contre
+        # ce qu'un appelant aura fait avant lui.
+        self.env.flush_all()
         self.env.cr.execute(
             """
             SELECT id
@@ -185,6 +231,16 @@ class DallyOpsCustomerService(models.AbstractModel):
         `a%@example.com` ramènerait tout un domaine. Une comparaison d'égalité
         n'a pas de jokers à échapper.
         """
+        # Vider le tampon de l'ORM avant de lire la table.
+        #
+        # Mesuré sur Odoo 19 : un `create` atteint la table tout de suite, mais
+        # un `write` reste en attente. Un numéro corrigé plus tôt dans la même
+        # transaction serait donc invisible au SQL brut, qui ne connaît que la
+        # base — et la recherche conclurait « aucun client » à tort.
+        #
+        # Ce service n'écrit jamais sur `res.partner` ; la ligne protège contre
+        # ce qu'un appelant aura fait avant lui.
+        self.env.flush_all()
         self.env.cr.execute(
             """
             SELECT id
@@ -236,7 +292,7 @@ class DallyOpsCustomerService(models.AbstractModel):
         rattrapage = Handle.search(
             [("partner_id", "=", partenaire.id), ("company_id", "=", societe.id)], limit=1)
         if not rattrapage:
-            raise UserError(_("Impossible de préparer la référence client."))
+            raise DallyOpsInvalide(_("Impossible de préparer la référence client."))
         return rattrapage.token
 
     # ------------------------------------------------------------------
@@ -272,3 +328,300 @@ class DallyOpsCustomerService(models.AbstractModel):
         ville = " ".join(part for part in (partenaire.zip, partenaire.city) if part)
         pays = partenaire.country_id.name or ""
         return ", ".join(part for part in (rue, ville, pays) if part)
+
+    # ------------------------------------------------------------------
+    # Création
+    # ------------------------------------------------------------------
+
+    @api.model
+    def create_customer(self, charge):
+        """Crée un client, ou retrouve celui qui existait déjà.
+
+        L'ordre des étapes est la sécurité de cette méthode :
+
+        1. valider la forme, sans toucher à la base ;
+        2. verrouiller la demande, puis les identités, **triées** ;
+        3. relire le registre d'idempotence ;
+        4. **refaire la recherche** ;
+        5. créer seulement si personne ne correspond.
+
+        L'étape 4 n'est pas une redite de l'écran précédent. Entre le moment où
+        le logisticien a lu « aucun client trouvé » et celui où il appuie sur
+        « enregistrer », un collègue à deux mètres a pu créer la même fiche.
+        Le `not_found` d'il y a trente secondes ne prouve rien ; seule une
+        recherche faite **après** le verrou prouve quelque chose.
+        """
+        self._exiger_role_ops()
+        donnees = self._valider_creation(charge)
+
+        # Le verrou de la demande d'abord : il sérialise les tentatives d'un
+        # même téléphone. Les verrous d'identité ensuite, triés. Deux
+        # transactions portant des identifiants différents ne se disputent
+        # jamais le premier, et prennent les seconds dans le même ordre : il
+        # n'existe donc pas de cycle d'attente.
+        self._verrouiller([self._cle_demande(donnees["request_uuid"])])
+        self._verrouiller(self._cles_identite(donnees))
+
+        rejeu = self._rejeu(donnees)
+        if rejeu is not None:
+            return rejeu
+
+        existant = self._resoudre_avant_creation(donnees)
+        if existant:
+            # Aucune écriture. Le logisticien vient peut-être de saisir une
+            # nouvelle adresse ou une autre orthographe : corriger la fiche au
+            # passage serait une modification silencieuse du fichier clients,
+            # décidée par personne. La correction est un geste à part.
+            return self._conclure(donnees, existant, "existing")
+
+        partenaire = self._creer_partenaire(donnees)
+        return self._conclure(donnees, partenaire, "created")
+
+    # ------------------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------------------
+
+    @api.model
+    def _valider_creation(self, charge):
+        """La charge, réduite à sa forme canonique.
+
+        Rien de ce que le navigateur envoie n'atteint `res.partner`
+        directement : cette méthode reconstruit un dictionnaire à partir de
+        champs nommés un par un. `is_company`, `company_id`, `partner_id` ne
+        sont pas seulement refusés — ils n'ont aucun chemin jusqu'à l'écriture.
+        """
+        if not isinstance(charge, dict):
+            raise DallyOpsInvalide(_("Demande de création invalide."))
+
+        inconnus = set(charge) - set(CHAMPS_CREATION)
+        if inconnus:
+            raise DallyOpsInvalide(_("Champ non pris en charge dans la demande."))
+
+        for champ in CHAMPS_OBLIGATOIRES:
+            valeur = charge.get(champ)
+            if not isinstance(valeur, str) or not valeur.strip():
+                raise DallyOpsInvalide(_("Champ obligatoire manquant : %(champ)s.", champ=champ))
+
+        identifiant = charge["request_uuid"].strip()
+        try:
+            # La version n'est pas imposée : un UUID v7 est aussi unique qu'un
+            # v4, et le refuser coupleraient l'API à la bibliothèque du client.
+            uuid_module.UUID(identifiant)
+        except ValueError:
+            raise DallyOpsInvalide(_("Identifiant de demande invalide."))
+
+        type_client = charge["customer_type"].strip()
+        if type_client not in TYPES_CLIENT:
+            raise DallyOpsInvalide(_("Type de client inconnu."))
+
+        nom = charge["name"].strip()[:LONGUEUR_NOM]
+        adresse = charge["address"].strip()[:LONGUEUR_ADRESSE]
+
+        telephone = charge["phone"].strip()
+        empreinte = normalize_phone(telephone)
+        if not empreinte:
+            raise DallyOpsInvalide(
+                _("Numéro de téléphone incomplet : %(n)s chiffres au minimum.",
+                  n=PHONE_SIGNIFICANT_DIGITS))
+
+        brut_email = charge.get("email")
+        email = normalize_email(brut_email) if isinstance(brut_email, str) else None
+        if email and not EMAIL_ACCEPTABLE.match(email):
+            raise DallyOpsInvalide(_("Adresse électronique invalide."))
+
+        return {
+            "request_uuid": identifiant,
+            "customer_type": type_client,
+            "name": nom,
+            # Conservé tel que saisi : transformer « 06… » en « +33… » sans
+            # information fiable inventerait une donnée.
+            "phone": telephone,
+            "phone_tail": empreinte,
+            "email": brut_email.strip() if isinstance(brut_email, str) and email else "",
+            "email_normalise": email or "",
+            "address": adresse,
+        }
+
+    @staticmethod
+    def _empreinte(donnees):
+        """SHA-256 de l'intention, jamais de la charge brute.
+
+        Les valeurs entrent sous leur forme normalisée : c'est elle qui décide
+        du résultat, et deux écritures qui aboutissent à la même fiche ne
+        doivent pas être vues comme deux intentions différentes.
+        """
+        canonique = json.dumps({
+            "customer_type": donnees["customer_type"],
+            "name": donnees["name"],
+            "phone": donnees["phone_tail"],
+            "email": donnees["email_normalise"],
+            "address": donnees["address"],
+        }, sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(canonique.encode("utf-8")).hexdigest()
+
+    # ------------------------------------------------------------------
+    # Verrous
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _cle_demande(identifiant):
+        return "ops-customer-request:%s" % identifiant
+
+    @staticmethod
+    def _cles_identite(donnees):
+        cles = ["ops-customer-phone:%s" % donnees["phone_tail"]]
+        if donnees["email_normalise"]:
+            cles.append("ops-customer-email:%s" % donnees["email_normalise"])
+        return cles
+
+    @api.model
+    def _verrouiller(self, cles):
+        """Verrous consultatifs, pris dans un ordre total.
+
+        `sorted` n'est pas cosmétique. Deux transactions qui prendraient le
+        verrou du téléphone et celui de l'adresse dans des ordres opposés
+        s'attendraient mutuellement, et PostgreSQL en tuerait une. Trier donne
+        à tout le monde le même ordre, donc aucun cycle possible.
+
+        `xact` : les verrous tombent avec la transaction, réussie ou non. Rien
+        à libérer à la main, rien à oublier dans un chemin d'erreur.
+        """
+        for cle in sorted(set(cles)):
+            self.env.cr.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", [cle])
+
+    # ------------------------------------------------------------------
+    # Idempotence
+    # ------------------------------------------------------------------
+
+    @api.model
+    def _rejeu(self, donnees):
+        """Le résultat déjà obtenu, si cette demande a déjà été traitée."""
+        Registre = self.env["dally.ops.customer.request"].sudo()
+        ligne = Registre.search([
+            ("company_id", "=", self.env.company.id),
+            ("operation", "=", OPERATION_CREATION),
+            ("request_uuid", "=", donnees["request_uuid"]),
+        ], limit=1)
+        if not ligne:
+            return None
+
+        if ligne.payload_hash != self._empreinte(donnees):
+            # Même identifiant, autre intention. Renvoyer le premier résultat
+            # ferait croire à l'opérateur qu'il a enregistré ce qu'il vient de
+            # taper.
+            raise DallyOpsConflit(
+                "idempotency_conflict",
+                _("Cette demande a déjà été traitée avec des informations différentes."))
+
+        self._journaliser("customer_request_replayed", ligne.partner_id, donnees["request_uuid"])
+        return {
+            "status": ligne.state,
+            "customer": self._en_dto(ligne.partner_id),
+        }
+
+    # ------------------------------------------------------------------
+    # Résolution et création
+    # ------------------------------------------------------------------
+
+    @api.model
+    def _resoudre_avant_creation(self, donnees):
+        """Qui correspond à ces coordonnées, une fois les verrous tenus.
+
+        Deux identités, deux réponses possibles, et un refus quand elles se
+        contredisent : un téléphone qui désigne une fiche et une adresse qui en
+        désigne une autre ne se tranche pas automatiquement. Fusionner serait
+        exposer les données d'un client à un autre.
+        """
+        par_telephone = self._chercher_par_telephone(donnees["phone_tail"])
+        par_email = (
+            self._chercher_par_email(donnees["email_normalise"])
+            if donnees["email_normalise"] else self.env["res.partner"].sudo().browse()
+        )
+
+        if len(par_telephone) > 1 or len(par_email) > 1:
+            raise DallyOpsConflit("customer_identity_conflict", self._message_conflit())
+        if par_telephone and par_email and par_telephone.id != par_email.id:
+            raise DallyOpsConflit("customer_identity_conflict", self._message_conflit())
+
+        return par_telephone or par_email
+
+    @staticmethod
+    def _message_conflit():
+        """Le même message pour toutes les contradictions d'identité.
+
+        Il ne dit ni combien de fiches, ni lesquelles, ni ce qui a divergé du
+        téléphone ou de l'adresse : décrire le conflit reviendrait à décrire
+        des fiches qu'on a justement décidé de ne pas montrer.
+        """
+        return _("Ces coordonnées correspondent à plusieurs fiches clients. "
+                 "Demandez une vérification au responsable.")
+
+    @api.model
+    def _creer_partenaire(self, donnees):
+        """Un contact, et rien de plus.
+
+        Les valeurs sont construites champ par champ. Passer la charge reçue à
+        `create` laisserait le navigateur écrire n'importe quelle colonne de
+        `res.partner` — un utilisateur portail, un compte bancaire, une limite
+        de crédit.
+
+        `company_id` vient du serveur : une fiche créée depuis le terrain
+        appartient à la société de l'opérateur, jamais à celle qu'un corps de
+        requête aurait nommée.
+        """
+        valeurs = {
+            "name": donnees["name"],
+            "phone": donnees["phone"],
+            "email": donnees["email"] or False,
+            "street": donnees["address"],
+            "is_company": TYPES_CLIENT[donnees["customer_type"]],
+            "company_id": self.env.company.id,
+        }
+        # L'ORM et non un INSERT : contraintes, champs calculés et hooks du
+        # modèle doivent s'appliquer comme pour n'importe quelle fiche.
+        return self.env["res.partner"].sudo().create(valeurs)
+
+    @api.model
+    def _conclure(self, donnees, partenaire, etat):
+        """Inscrit la demande au registre, journalise, et rend le DTO."""
+        dto = self._en_dto(partenaire)
+        Handle = self.env["dally.ops.customer.handle"].sudo()
+        handle = Handle.search([
+            ("partner_id", "=", partenaire.id),
+            ("company_id", "=", self.env.company.id),
+        ], limit=1)
+
+        self.env["dally.ops.customer.request"].sudo().create({
+            "request_uuid": donnees["request_uuid"],
+            "company_id": self.env.company.id,
+            "operation": OPERATION_CREATION,
+            "payload_hash": self._empreinte(donnees),
+            "state": etat,
+            "partner_id": partenaire.id,
+            "customer_handle_id": handle.id or False,
+            "operator_user_id": self.env.uid,
+        })
+
+        self._journaliser(
+            "customer_created" if etat == "created" else "customer_existing_resolved",
+            partenaire, donnees["request_uuid"])
+        return {"status": etat, "customer": dto}
+
+    @api.model
+    def _journaliser(self, action, partenaire, request_uuid):
+        """Le geste, son auteur, son horodatage. Aucune donnée personnelle.
+
+        `create_uid` porterait le superutilisateur, puisque l'écriture passe
+        par un privilège : sans ce journal, la question « qui a créé cette
+        fiche ? » n'aurait pas de réponse.
+        """
+        self.env["dally.ops.audit.event"].sudo().create({
+            "company_id": self.env.company.id,
+            "operator_user_id": self.env.uid,
+            "action": action,
+            "entity_model": "res.partner",
+            "entity_res_id": partenaire.id,
+            "request_uuid": request_uuid,
+            "created_at": fields.Datetime.now(),
+        })

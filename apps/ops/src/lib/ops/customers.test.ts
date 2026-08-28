@@ -5,8 +5,18 @@ vi.mock('@/lib/auth/odoo-ops', async (importOriginal) => {
   return { ...original, opsPost: vi.fn() };
 });
 
+const DEMANDE = {
+  request_uuid: '11111111-2222-4333-8444-555555555555',
+  customer_type: 'individual' as const,
+  name: 'Aissatou Kandji',
+  phone: '+221 77 123 45 67',
+  email: 'client@example.com',
+  address: '207 rue Saint-Charles, 75015 Paris',
+};
+
 const { opsPost } = await import('@/lib/auth/odoo-ops');
-const { critereRecherche, searchCustomer } = await import('@/lib/ops/customers');
+const { critereRecherche, demandeCreation, searchCustomer, createCustomer } =
+  await import('@/lib/ops/customers');
 
 const CLIENT = {
   reference: 'b9c8c46f-1f2e-4a3b-9c8d-7e6f5a4b3c2d',
@@ -131,5 +141,76 @@ describe('le contrat se referme ici', () => {
       status: 'match', customer: { ...CLIENT, customer_type: 'prospect' },
     });
     await expect(searchCustomer({ phone: '7' }, 's', 'corr')).rejects.toThrow();
+  });
+});
+
+
+describe('ce que le navigateur a le droit de faire créer', () => {
+  it('accepte une demande complète', () => {
+    expect(demandeCreation.safeParse(DEMANDE).success).toBe(true);
+  });
+
+  it('accepte une demande sans adresse électronique', () => {
+    const { email: _email, ...sansEmail } = DEMANDE;
+    expect(demandeCreation.safeParse(sansEmail).success).toBe(true);
+  });
+
+  it.each(['request_uuid', 'customer_type', 'name', 'phone', 'address'])(
+    'refuse une demande sans %s', (champ) => {
+      const partiel: Record<string, unknown> = { ...DEMANDE };
+      delete partiel[champ];
+      expect(demandeCreation.safeParse(partiel).success).toBe(false);
+    });
+
+  it.each(['partner_id', 'is_company', 'company_id', 'credit_limit'])(
+    'refuse la clé %s', (cle) => {
+      expect(demandeCreation.safeParse({ ...DEMANDE, [cle]: 1 }).success).toBe(false);
+    });
+
+  it('exige un identifiant de demande en forme d’UUID', () => {
+    expect(demandeCreation.safeParse({ ...DEMANDE, request_uuid: 'x' }).success).toBe(false);
+  });
+
+  it('refuse un type de client inconnu', () => {
+    expect(demandeCreation.safeParse({
+      ...DEMANDE, customer_type: 'prospect',
+    }).success).toBe(false);
+  });
+
+  it('refuse un nom vide', () => {
+    expect(demandeCreation.safeParse({ ...DEMANDE, name: '   ' }).success).toBe(false);
+  });
+});
+
+describe('résultat de la création', () => {
+  it('rend la fiche créée', async () => {
+    vi.mocked(opsPost).mockResolvedValue({ status: 'created', customer: CLIENT });
+    await expect(createCustomer(DEMANDE, 's', 'corr')).resolves.toEqual({
+      status: 'created', customer: CLIENT,
+    });
+  });
+
+  it('rend la fiche retrouvée', async () => {
+    vi.mocked(opsPost).mockResolvedValue({ status: 'existing', customer: CLIENT });
+    const resultat = await createCustomer(DEMANDE, 's', 'corr');
+    expect(resultat.status).toBe('existing');
+  });
+
+  it('vise la ressource « customers »', async () => {
+    vi.mocked(opsPost).mockResolvedValue({ status: 'created', customer: CLIENT });
+    await createCustomer(DEMANDE, 'session-abc', 'corr');
+    expect(opsPost).toHaveBeenCalledWith('customers', DEMANDE, 'session-abc', 'corr');
+  });
+
+  it('refuse un statut inconnu', async () => {
+    vi.mocked(opsPost).mockResolvedValue({ status: 'updated', customer: CLIENT });
+    await expect(createCustomer(DEMANDE, 's', 'corr')).rejects.toThrow();
+  });
+
+  it('refuse une réponse qui porterait un identifiant Odoo', async () => {
+    vi.mocked(opsPost).mockResolvedValue({
+      status: 'created', customer: { ...CLIENT, partner_id: 3728 },
+    });
+    await expect(createCustomer(DEMANDE, 's', 'corr')).rejects.toThrow();
   });
 });

@@ -189,6 +189,48 @@ export function cleRechercheIp(ip: string): string {
   return `ops:customers:ip:${ip}`;
 }
 
+/**
+ * Les budgets de la création de client.
+ *
+ * Beaucoup plus bas que ceux de la recherche : créer un client est un geste
+ * rare, une fois par nouveau client, tandis qu'on cherche à chaque réception.
+ * Une limite basse coûte donc peu au terrain et ferme la porte à qui voudrait
+ * peupler le fichier clients depuis un téléphone.
+ */
+export const OPS_CREATION_SESSION = { limite: 20, fenetreMs: 10 * 60_000 } as const;
+export const OPS_CREATION_IP = { limite: 100, fenetreMs: 10 * 60_000 } as const;
+
+export function cleCreationSession(identifiantSession: string): string {
+  const empreinte = createHash('sha256')
+    .update(`ops:creation:${identifiantSession}`, 'utf8')
+    .digest('hex')
+    .slice(0, 32);
+  return `ops:customers:create:session:${empreinte}`;
+}
+
+export function cleCreationIp(ip: string): string {
+  return `ops:customers:create:ip:${ip}`;
+}
+
+/**
+ * La clé qui marque une demande comme déjà comptée.
+ *
+ * Une 4G capricieuse fait renvoyer la même demande plusieurs fois. Ces
+ * tentatives portent le même `request_uuid` et ne produiront qu'une seule
+ * fiche : les compter comme vingt créations distinctes punirait l'opérateur
+ * pour la qualité du réseau de son entrepôt.
+ *
+ * L'identifiant est haché ici aussi. Ce n'est pas un secret, mais il n'a rien
+ * à faire en clair dans une structure qu'on inspecte au débogage.
+ */
+export function cleDemandeComptee(requestUuid: string): string {
+  const empreinte = createHash('sha256')
+    .update(`ops:creation:demande:${requestUuid}`, 'utf8')
+    .digest('hex')
+    .slice(0, 32);
+  return `ops:customers:create:uuid:${empreinte}`;
+}
+
 /** Remet les compteurs à zéro. Réservé aux tests. */
 export function resetRateLimits(): void {
   compteurs.clear();

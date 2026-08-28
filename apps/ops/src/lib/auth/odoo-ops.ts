@@ -52,12 +52,24 @@ export class OpsGatewayError extends Error {
     | 'unavailable'
     | 'invalid_path'
     /** Odoo a refusé la *forme* de la demande. Jamais son contenu. */
-    | 'invalid_request';
+    | 'invalid_request'
+    /** La demande est bien formée, mais la base dit autre chose. */
+    | 'conflict';
 
-  constructor(code: OpsGatewayError['code'], message?: string) {
+  /**
+   * Le code stable d'un conflit, tel qu'Odoo l'a nommé.
+   *
+   * Il voyage jusqu'à l'interface parce que les deux conflits appellent des
+   * gestes différents : « demandez une vérification au responsable » d'un
+   * côté, « recommencez la saisie » de l'autre.
+   */
+  readonly conflictCode?: string;
+
+  constructor(code: OpsGatewayError['code'], message?: string, conflictCode?: string) {
     super(message ?? code);
     this.name = 'OpsGatewayError';
     this.code = code;
+    if (conflictCode !== undefined) this.conflictCode = conflictCode;
   }
 }
 
@@ -272,6 +284,14 @@ export async function opsPost<T>(
   if (reponse.status === 403) throw new OpsGatewayError('forbidden');
   if (reponse.status >= 300 && reponse.status < 400) throw new OpsGatewayError('forbidden');
   if (reponse.status === 400) throw new OpsGatewayError('invalid_request');
+  if (reponse.status === 409) {
+    // Le code du conflit est relayé ; son message, non : il vient d'Odoo et
+    // c'est le BFF qui décide de ce que l'opérateur lit.
+    const charge = (await reponse.json().catch(() => null)) as
+      | { error?: { code?: string } }
+      | null;
+    throw new OpsGatewayError('conflict', 'conflit', charge?.error?.code);
+  }
   if (!reponse.ok) throw new OpsGatewayError('unavailable', `statut ${reponse.status}`);
 
   const charge = (await reponse.json()) as { success?: boolean; data?: unknown };

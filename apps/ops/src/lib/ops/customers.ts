@@ -72,3 +72,50 @@ export async function searchCustomer(
   const brut = await opsPost<unknown>('customers/search', critere, sessionId, correlationId);
   return resultat.parse(brut);
 }
+
+/**
+ * Ce que le navigateur a le droit de faire créer.
+ *
+ * `strict()` de nouveau, et cette fois l'enjeu est plus lourd qu'une recherche :
+ * une clé acceptée ici deviendrait une colonne de `res.partner` écrite par le
+ * navigateur. `is_company`, `company_id`, `partner_id` ne sont pas listés — ils
+ * n'ont donc aucun chemin.
+ *
+ * `request_uuid` est obligatoire dès le contrat : c'est lui qui fait qu'une 4G
+ * capricieuse ne crée pas deux fiches.
+ */
+export const demandeCreation = z
+  .object({
+    request_uuid: z.string().uuid(),
+    customer_type: z.enum(['individual', 'business']),
+    name: z.string().trim().min(1).max(200),
+    phone: z.string().trim().min(1).max(40),
+    email: z.string().trim().max(254).optional(),
+    address: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export type DemandeCreation = z.infer<typeof demandeCreation>;
+
+/**
+ * Le résultat d'une création.
+ *
+ * « Existe déjà » est une issue normale, pas une erreur : le logisticien a un
+ * client devant lui, et lui renvoyer un refus l'obligerait à recommencer une
+ * recherche qu'il vient de faire.
+ */
+const resultatCreation = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('created'), customer: client }).strict(),
+  z.object({ status: z.literal('existing'), customer: client }).strict(),
+]);
+
+export type ResultatCreation = z.infer<typeof resultatCreation>;
+
+export async function createCustomer(
+  demande: DemandeCreation,
+  sessionId: string,
+  correlationId: string,
+): Promise<ResultatCreation> {
+  const brut = await opsPost<unknown>('customers', demande, sessionId, correlationId);
+  return resultatCreation.parse(brut);
+}

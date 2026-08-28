@@ -207,6 +207,19 @@ class TestOpsCustomers(HttpCase):
                 else:
                     self.assertEqual(reponse.status_code, 400)
 
+    def test_un_numero_corrige_dans_la_meme_transaction_est_vu(self):
+        """Le SQL brut ne connaît que la base, et l'ORM diffère ses écritures.
+
+        Mesuré : un `create` atteint la table immédiatement, un `write` non.
+        Sans vidage du tampon, un numéro corrigé quelques lignes plus haut
+        serait invisible et la recherche conclurait « aucun client » à tort.
+        """
+        partenaire = self._client("Aissatou Kandji", phone="+221 70 000 00 00")
+        partenaire.phone = "+221 77 123 45 67"
+        charge = self._charge({"phone": "771234567"})
+        self.assertEqual(charge["status"], "match")
+        self.assertEqual(charge["customer"]["name"], "Aissatou Kandji")
+
     def test_un_joker_sql_ne_ramene_pas_tout_un_domaine(self):
         self._client("Aissatou Kandji", email="client@example.com")
         self._client("Mamadou Diallo", email="autre@example.com")
@@ -470,25 +483,33 @@ class TestOpsCustomers(HttpCase):
         from odoo.addons.dally_ops_mobile.controllers import ops_customers
         self.assertNotIn("sudo", code_seul(ops_customers))
 
-    def test_le_service_n_expose_que_ses_deux_operations(self):
+    def test_le_service_n_expose_que_ses_operations_declarees(self):
         from odoo.addons.dally_ops_mobile.models.ops_customer_service import (
             DallyOpsCustomerService,
         )
         publiques = sorted(
             nom for nom, valeur in vars(DallyOpsCustomerService).items()
             if not nom.startswith("_") and callable(valeur))
-        self.assertEqual(publiques, ["get_or_create_handle", "search_unique"])
+        self.assertEqual(
+            publiques, ["create_customer", "get_or_create_handle", "search_unique"])
 
-    def test_le_service_ne_privilegie_que_deux_modeles(self):
+    def test_le_service_ne_privilegie_que_les_modeles_declares(self):
         from odoo.addons.dally_ops_mobile.models import ops_customer_service
 
         # `ast.unparse` normalise les guillemets : on compare sans eux.
         code = code_seul(ops_customer_service).replace("'", '"')
-        # Un `sudo` par lecture privilégiée : les deux recherches sur
-        # res.partner, et le porte-jeton.
-        self.assertEqual(code.count(".sudo()"), 3)
-        for autorise in ('"res.partner"', '"dally.ops.customer.handle"'):
-            self.assertIn(autorise, code)
+
+        # La liste, et rien qu'elle : le fichier client sous privilège, la
+        # référence opaque, le registre d'idempotence et le journal d'audit.
+        # Un modèle de plus ici, c'est une surface de plus qu'aucune ACL ne
+        # borne.
+        prives = set(re.findall(r'self\.env\["([^"]+)"\]\.sudo\(\)', code))
+        self.assertEqual(prives, {
+            "res.partner",
+            "dally.ops.customer.handle",
+            "dally.ops.customer.request",
+            "dally.ops.audit.event",
+        })
 
         # Le SQL brut est un privilège plus large qu'un `sudo` : il ne doit
         # toucher qu'une seule table, et jamais une jointure ouverte.

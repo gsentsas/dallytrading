@@ -3,10 +3,18 @@ import { redirect } from 'next/navigation';
 
 import { currentIdentity } from '@/lib/auth/auth';
 import { newCorrelationId } from '@/lib/logger';
+import { FormulaireClient } from '@/features/reception/FormulaireClient';
 
 export const dynamic = 'force-dynamic';
 
-/** La création d'un client, à l'étape suivante. */
+/**
+ * Créer un client.
+ *
+ * La consolidation n'entre pas dans la création : un contact CRM n'a rien à
+ * voir avec un départ. Elle est seulement portée à travers l'écran pour que
+ * l'opérateur retrouve son fil ensuite. Le futur enregistrement du dossier
+ * revalidera l'ensemble côté serveur.
+ */
 export default async function PageNouveauClient({
   searchParams,
 }: {
@@ -28,7 +36,7 @@ export default async function PageNouveauClient({
         ← Rechercher à nouveau
       </Link>
       <h1>Nouveau client</h1>
-      <p className="attenue">Cette étape n’est pas encore disponible.</p>
+      <FormulaireClient consolidation={consolidation} />
     </main>
   );
 }

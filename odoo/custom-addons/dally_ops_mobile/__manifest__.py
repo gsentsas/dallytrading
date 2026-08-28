@@ -32,7 +32,7 @@ les droits techniques du connecteur tableur, ni ceux de la facturation : ces
 identités-là servent une clé d'API, pas une personne, et les confondre
 donnerait à un téléphone les pouvoirs d'un automate.
 """,
-    "version": "19.0.1.2.0",
+    "version": "19.0.1.3.0",
     "category": "Inventory/Delivery",
     "author": "DallyTrading",
     "website": "https://dallytrading.com",

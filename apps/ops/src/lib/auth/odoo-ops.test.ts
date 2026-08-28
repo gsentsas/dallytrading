@@ -122,13 +122,23 @@ describe('lecture d’une ressource Ops', () => {
     ['un hôte complet', 'https://ailleurs.test/x'],
     ['une ressource vide', ''],
     ['un point', 'consolidations/.'],
-    ['une majuscule inattendue', 'Consolidations'],
+    ['un espace', 'intakes/AIR 001'],
+    ['une chaîne de requête', 'intakes?x=1'],
   ])('refuse %s avant toute émission', async (_cas, ressource) => {
     const faux = espionner(reponseJson({ success: true, data: {} }));
     await expect(opsGet(ressource, 'session-abc', 'corr')).rejects.toMatchObject({
       code: 'invalid_path',
     });
     expect(faux).not.toHaveBeenCalled();
+  });
+
+  it('accepte une référence de dossier en majuscules', async () => {
+    espionner(reponseJson({ success: true, data: {} }));
+    await opsGet('intakes/AIR-DSS-CDG-2026-002', 'session-abc', 'corr');
+    // Les références métier sont en majuscules depuis l'étape 8 ; ce qui reste
+    // exclu, c'est le point, l'espace et la chaîne de requête.
+    expect(appelsFetch[0]?.url).toBe(
+      'https://odoo.example.test/api/v1/ops/intakes/AIR-DSS-CDG-2026-002');
   });
 
   it('renvoie la charge « data » et rien d’autre', async () => {

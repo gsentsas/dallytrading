@@ -175,6 +175,24 @@ class DallyOpsIntakeService(models.AbstractModel):
         line = payload.get("line")
         if not isinstance(line, dict):
             raise DallyOpsError(_("Ligne de colis invalide."))
+        ligne_validee = self.valider_ligne(line)
+
+        return {
+            "request_uuid": request_uuid,
+            "consolidation_reference": consolidation_reference,
+            "customer_reference": customer_reference,
+            "received_on": received_on.isoformat(),
+            "line": ligne_validee,
+        }
+
+    @api.model
+    def valider_ligne(self, line):
+        """Les règles d'un article, appliquées partout de la même façon.
+
+        Extraite de la validation de la première ligne pour que l'ajout et la
+        correction d'un article ne puissent pas dériver : une règle changée ici
+        vaut pour les trois chemins.
+        """
         inconnus_ligne = set(line) - CHAMPS_LIGNE
         if inconnus_ligne:
             if inconnus_ligne & CHAMPS_INTERDITS:
@@ -228,33 +246,25 @@ class DallyOpsIntakeService(models.AbstractModel):
             )
 
         return {
-            "request_uuid": request_uuid,
-            "consolidation_reference": consolidation_reference,
-            "customer_reference": customer_reference,
-            "received_on": received_on.isoformat(),
-            "line": {
-                "line_uuid": self._uuid(
-                    line.get("line_uuid"), "line_uuid",
-                ),
-                "package_type": package_type,
-                "goods_category": self._texte(
-                    line.get("goods_category"), "goods_category", 200,
-                ),
-                "description": self._texte(
-                    line.get("description"), "description", 500,
-                ),
-                "quantity": quantity,
-                "announced_weight_kg": announced,
-                "exact_weight_kg": exact,
-                **dimensions,
-                "billing_method": billing_method,
-                "tariff_family_code": self._texte(
-                    line.get("tariff_family_code"),
-                    "tariff_family_code", 80,
-                ).lower(),
-                "customs_value_xof": customs,
-            },
+            "line_uuid": self._uuid(line.get("line_uuid"), "line_uuid"),
+            "package_type": package_type,
+            "goods_category": self._texte(
+                line.get("goods_category"), "goods_category", 200,
+            ),
+            "description": self._texte(
+                line.get("description"), "description", 500,
+            ),
+            "quantity": quantity,
+            "announced_weight_kg": announced,
+            "exact_weight_kg": exact,
+            **dimensions,
+            "billing_method": billing_method,
+            "tariff_family_code": self._texte(
+                line.get("tariff_family_code"), "tariff_family_code", 80,
+            ).lower(),
+            "customs_value_xof": customs,
         }
+
 
     @staticmethod
     def _uuid(value, field_name):

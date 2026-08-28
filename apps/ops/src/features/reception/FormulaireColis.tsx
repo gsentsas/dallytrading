@@ -57,14 +57,40 @@ function argent(
   }).format(valeur);
 }
 
+/** Ce qu'une soumission déléguée renvoie au formulaire. */
+export interface IssueSoumission {
+  readonly ok: boolean;
+  readonly message?: string;
+  readonly code?: string;
+}
+
+/**
+ * Le formulaire d'article, en trois emplois.
+ *
+ * Sans `soumettre`, il crée le dossier — c'est le comportement de l'étape 7.
+ * Avec, il délègue l'envoi : l'ajout d'un article et la correction d'un
+ * article existant réutilisent ainsi les mêmes champs et les mêmes règles de
+ * validation, au lieu d'en entretenir trois copies.
+ */
 export function FormulaireColis({
   consolidation,
   customer,
   familles,
+  valeursInitiales,
+  libelleBouton,
+  onAnnuler,
+  soumettre,
 }: {
   consolidation: string;
   customer: string;
   familles: FamilleTarifaire[];
+  valeursInitiales?: Partial<Saisie>;
+  libelleBouton?: string;
+  onAnnuler?: () => void;
+  soumettre?: (
+    ligne: Record<string, unknown>,
+    requestUuid: string,
+  ) => Promise<IssueSoumission>;
 }) {
   const router = useRouter();
   const [saisie, setSaisie] = useState<Saisie>({
@@ -80,6 +106,7 @@ export function FormulaireColis({
     billingMethod: 'real',
     tariffFamilyCode: familles[0]?.code ?? '',
     customsValue: '',
+    ...valeursInitiales,
   });
   const [etat, setEtat] = useState<Etat>({ nom: 'saisie' });
   const requestUuid = useRef<string | null>(null);
@@ -153,6 +180,25 @@ export function FormulaireColis({
     return null;
   }
 
+  /** La ligne telle que l'API l'attend, quelle que soit la route visée. */
+  function ligneSaisie(): Record<string, unknown> {
+    return {
+      line_uuid: lineUuid.current,
+      package_type: saisie.packageType,
+      goods_category: saisie.goodsCategory.trim(),
+      description: saisie.description.trim(),
+      quantity: Number(saisie.quantity),
+      announced_weight_kg: nombre(saisie.announcedWeight, true),
+      exact_weight_kg: nombre(saisie.exactWeight),
+      length_cm: nombre(saisie.length, true),
+      width_cm: nombre(saisie.width, true),
+      height_cm: nombre(saisie.height, true),
+      billing_method: saisie.billingMethod,
+      tariff_family_code: saisie.tariffFamilyCode,
+      customs_value_xof: nombre(saisie.customsValue),
+    };
+  }
+
   async function enregistrer(
     evenement: FormEvent<HTMLFormElement>,
   ) {
@@ -165,6 +211,33 @@ export function FormulaireColis({
     requestUuid.current ??= crypto.randomUUID();
     lineUuid.current ??= crypto.randomUUID();
     setEtat({ nom: 'envoi' });
+
+    if (soumettre) {
+      // Ajout ou correction : l'appelant sait à quelle route s'adresser, le
+      // formulaire garde la saisie et les identifiants stables entre deux
+      // tentatives.
+      try {
+        const issue = await soumettre(
+          ligneSaisie(), requestUuid.current,
+        );
+        if (!issue.ok) {
+          if (issue.code === 'idempotency_conflict') {
+            requestUuid.current = null;
+          }
+          setEtat({
+            nom: 'erreur',
+            message: issue.message ?? 'Enregistrement impossible.',
+          });
+          return;
+        }
+      } catch {
+        setEtat({
+          nom: 'erreur',
+          message: 'Service momentanément indisponible.',
+        });
+      }
+      return;
+    }
 
     try {
       const reponse = await fetch('/api/intakes', {
@@ -270,6 +343,11 @@ export function FormulaireColis({
           type="button"
           className="secondaire"
           style={{ marginTop: '0.75rem' }}
+          onClick={() => router.push(
+            `/reception/dossier/${encodeURIComponent(
+              intake.reference,
+            )}`,
+          )}
         >
           + Ajouter un autre article
         </button>
@@ -460,8 +538,18 @@ export function FormulaireColis({
       >
         {etat.nom === 'envoi'
           ? 'Enregistrement…'
-          : 'ENREGISTRER LA RÉCEPTION'}
+            : (libelleBouton ?? 'ENREGISTRER LA RÉCEPTION')}
       </button>
+        {onAnnuler ? (
+          <button
+            type="button"
+            className="secondaire"
+            style={{ marginTop: '0.6rem' }}
+            onClick={onAnnuler}
+          >
+            ANNULER
+          </button>
+        ) : null}
     </form>
   );
 }

@@ -42,8 +42,14 @@ const PREFIXE_OPS = '/api/v1/ops/';
  * `/api/v1/ops/consolidations`. Le préfixe est ajouté ici, ce qui rend la
  * sortie du périmètre Ops impossible à écrire plutôt qu'interdite par un
  * contrôle. Le motif exclut le point, donc `../freight/...` ne passe pas.
+ *
+ * Les majuscules sont admises depuis que les références de dossier
+ * (`AIR-DSS-CDG-2026-002`) composent un segment. Le point, l'espace, le `%` et
+ * le `?` restent exclus : ni remontée de répertoire, ni chaîne de requête
+ * glissée dans un segment.
  */
-const RESSOURCE_OPS = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
+const RESSOURCE_OPS =
+  /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*(?:\/[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)*$/;
 
 export class OpsGatewayError extends Error {
   readonly code:
@@ -104,7 +110,7 @@ function sessionIdSur(sessionId: string): string {
 
 interface OptionsAppel {
   readonly chemin: string;
-  readonly methode: 'GET' | 'POST';
+  readonly methode: 'GET' | 'POST' | 'PUT';
   readonly corps?: unknown;
   /** Session de l'opérateur, quand il y en a une. */
   readonly sessionId?: string;
@@ -218,6 +224,41 @@ export async function authenticate(
 }
 
 /**
+ * La réponse d'Odoo, traduite en une erreur ou une charge utile.
+ *
+ * Un seul endroit pour cette traduction : trois copies divergeraient au premier
+ * code d'erreur ajouté, et c'est ici que se décide ce que l'opérateur finit
+ * par lire.
+ */
+async function lireReponse<T>(reponse: Response): Promise<T> {
+  if (reponse.status === 403) throw new OpsGatewayError('forbidden');
+  // 3xx : Odoo redirige vers /web/login, donc la session n'est plus valide.
+  if (reponse.status >= 300 && reponse.status < 400) throw new OpsGatewayError('forbidden');
+  if (reponse.status === 404) {
+    const charge = (await reponse.json().catch(() => null)) as
+      | { error?: { code?: string } }
+      | null;
+    throw new OpsGatewayError('not_found', 'introuvable', charge?.error?.code);
+  }
+  if (reponse.status === 400) throw new OpsGatewayError('invalid_request');
+  if (reponse.status === 409) {
+    // Le code du conflit est relayé ; son message, non : il vient d'Odoo et
+    // c'est le BFF qui décide de ce que l'opérateur lit.
+    const charge = (await reponse.json().catch(() => null)) as
+      | { error?: { code?: string } }
+      | null;
+    throw new OpsGatewayError('conflict', 'conflit', charge?.error?.code);
+  }
+  if (!reponse.ok) throw new OpsGatewayError('unavailable', `statut ${reponse.status}`);
+
+  const charge = (await reponse.json()) as { success?: boolean; data?: unknown };
+  if (!charge.success || charge.data === undefined) {
+    throw new OpsGatewayError('unavailable', 'réponse illisible');
+  }
+  return charge.data as T;
+}
+
+/**
  * Lit une ressource Ops.
  *
  * L'appelant nomme la ressource, jamais le chemin. `403` signifie « ce compte
@@ -282,32 +323,33 @@ export async function opsPost<T>(
     correlationId,
   });
 
-  if (reponse.status === 403) throw new OpsGatewayError('forbidden');
-  if (reponse.status >= 300 && reponse.status < 400) throw new OpsGatewayError('forbidden');
-  if (reponse.status === 404) {
-    const charge = (await reponse.json().catch(() => null)) as
-      | { error?: { code?: string } }
-      | null;
-    throw new OpsGatewayError(
-      'not_found', 'introuvable', charge?.error?.code,
-    );
-  }
-  if (reponse.status === 400) throw new OpsGatewayError('invalid_request');
-  if (reponse.status === 409) {
-    // Le code du conflit est relayé ; son message, non : il vient d'Odoo et
-    // c'est le BFF qui décide de ce que l'opérateur lit.
-    const charge = (await reponse.json().catch(() => null)) as
-      | { error?: { code?: string } }
-      | null;
-    throw new OpsGatewayError('conflict', 'conflit', charge?.error?.code);
-  }
-  if (!reponse.ok) throw new OpsGatewayError('unavailable', `statut ${reponse.status}`);
+  return lireReponse<T>(reponse);
+}
 
-  const charge = (await reponse.json()) as { success?: boolean; data?: unknown };
-  if (!charge.success || charge.data === undefined) {
-    throw new OpsGatewayError('unavailable', 'réponse illisible');
+/**
+ * Remplace une ressource Ops.
+ *
+ * `PUT` parce que le corps décrit l'article entier, pas un delta : deux envois
+ * identiques laissent le même état.
+ */
+export async function opsPut<T>(
+  ressource: string,
+  corps: unknown,
+  sessionId: string,
+  correlationId: string,
+): Promise<T> {
+  if (!RESSOURCE_OPS.test(ressource)) {
+    throw new OpsGatewayError('invalid_path', `ressource non autorisée : ${ressource}`);
   }
-  return charge.data as T;
+
+  const reponse = await appel({
+    chemin: `${PREFIXE_OPS}${ressource}`,
+    methode: 'PUT',
+    corps,
+    sessionId,
+    correlationId,
+  });
+  return lireReponse<T>(reponse);
 }
 
 /** L'identité de l'opérateur connecté. */

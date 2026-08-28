@@ -568,6 +568,25 @@ function applySheetBindings_(sheet, bindings) {
       return live.planned === member._bindingExpected.planned && live.status === member._bindingExpected.status && live.message === member._bindingExpected.message;
     });
     const replanRequested = members.some(member => hasReplanIntentText_(member.row[DALLY.columns.syncMessage - 1]));
+
+    // Historical rollout guard must run before the generic pending branch.
+    // A CRM blank is not an instruction to erase an existing legacy Sheet
+    // assignment or its operational message. Explicit column-B replans still
+    // go through the pending/conflict flow below.
+    const localPlannedValues = [...new Set(members.map(member =>
+      String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim()
+    ))];
+    const preserveHistoricalPlanned = (
+      !crmValue &&
+      localPlannedValues.length === 1 &&
+      Boolean(localPlannedValues[0]) &&
+      !replanRequested
+    );
+    if (preserveHistoricalPlanned) {
+      if (!stillCurrent()) markConcurrent(members);
+      return;
+    }
+
     const pending = members.filter(member =>
       String(member.row[DALLY.columns.syncStatus - 1] || '').trim() === 'À synchroniser' &&
       String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim() !== crmValue
@@ -588,18 +607,6 @@ function applySheetBindings_(sheet, bindings) {
         if (pendingValues.length === 1) setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.plannedConsolidation, sheetLiteralText_(localValue));
         setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.syncMessage, replanRequested ? DALLY.replanIntentMarker + ' ' + message : message);
       });
-      return;
-    }
-
-    // Historical rollout guard: an empty CRM assignment must not erase a
-    // pre-existing planned consolidation from the Sheet. Odoo cannot silently
-    // unassign a shipment once it has a planned departure, so CRM=false here
-    // may mean the legacy Sheet assignment has not yet been backfilled.
-    const localPlannedValues = [...new Set(members.map(member =>
-      String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim()
-    ).filter(Boolean))];
-    if (!crmValue && localPlannedValues.length) {
-      if (!stillCurrent()) markConcurrent(members);
       return;
     }
 

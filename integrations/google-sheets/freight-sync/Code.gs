@@ -590,6 +590,19 @@ function applySheetBindings_(sheet, bindings) {
       });
       return;
     }
+
+    // Historical rollout guard: an empty CRM assignment must not erase a
+    // pre-existing planned consolidation from the Sheet. Odoo cannot silently
+    // unassign a shipment once it has a planned departure, so CRM=false here
+    // may mean the legacy Sheet assignment has not yet been backfilled.
+    const localPlannedValues = [...new Set(members.map(member =>
+      String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim()
+    ).filter(Boolean))];
+    if (!crmValue && localPlannedValues.length) {
+      if (!stillCurrent()) markConcurrent(members);
+      return;
+    }
+
     if (!stillCurrent()) {
       markConcurrent(members);
       return;

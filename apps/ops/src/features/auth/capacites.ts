@@ -11,13 +11,16 @@ export interface EntreeAccueil {
   readonly capacite: string;
   readonly titre: string;
   readonly description: string;
+  /** Écran ouvert par l'entrée. Absent tant qu'elle n'en a pas. */
+  readonly href?: string;
 }
 
 export const ENTREES_ACCUEIL: readonly EntreeAccueil[] = [
   {
     capacite: 'intake_create',
-    titre: 'Réception de colis',
-    description: 'Enregistrer un colis dans la consolidation en cours.',
+    titre: 'Réceptionner un colis',
+    description: 'Enregistrer un colis sur un départ ouvert.',
+    href: '/reception',
   },
   {
     capacite: 'payment_create',

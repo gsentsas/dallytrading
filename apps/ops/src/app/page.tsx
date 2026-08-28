@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { currentIdentity } from '@/lib/auth/auth';
@@ -30,14 +31,25 @@ export default async function PageAccueil() {
           : 'Aucun acteur de caisse configuré.'}
       </p>
 
-      {entrees.map((entree) => (
-        <section className="carte" key={entree.capacite}>
-          <strong>{entree.titre}</strong>
-          <p className="attenue" style={{ margin: '0.25rem 0 0' }}>
-            {entree.description}
-          </p>
-        </section>
-      ))}
+      {entrees.map((entree) => {
+        const contenu = (
+          <>
+            <strong>{entree.titre}</strong>
+            <p className="attenue" style={{ margin: '0.25rem 0 0' }}>
+              {entree.description}
+            </p>
+          </>
+        );
+        // Une entrée sans écran reste une carte inerte : mieux vaut annoncer
+        // ce qui existe que masquer ce qui viendra.
+        return entree.href ? (
+          <Link className="carte carte-lien" href={entree.href} key={entree.capacite}>
+            {contenu}
+          </Link>
+        ) : (
+          <section className="carte" key={entree.capacite}>{contenu}</section>
+        );
+      })}
 
       {entrees.length === 0 ? (
         <p className="attenue">Aucune opération ne vous est ouverte pour le moment.</p>

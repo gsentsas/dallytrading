@@ -54,6 +54,16 @@ s'appelle `group_ids` sur `res.users` — `groups_id` lève
 cd apps/ops && npm ci
 ```
 
+`npm ci` part du lockfile et est déterministe. `npm install` à partir de rien,
+lui, plantait sur `Cannot read properties of null (reading 'edgesOut')` : c'est
+un défaut d'`arborist` (npm 10.8.2) déclenché par
+`@vitest/browser-playwright@4.1.11`, qui exige `vitest` **exactement** en
+4.1.11 alors que le paquet était épinglé en 4.1.10. Le contournement
+`legacy-peer-deps` a été retiré au profit de l'alignement de version, qui
+supprime le conflit au lieu de le masquer. `apps/web` présente le même
+symptôme, masqué par son propre lockfile : il l'aura tant que son `vitest`
+restera en 4.1.10.
+
 Puis, en pointant vers le banc :
 
 ```bash
@@ -70,7 +80,7 @@ nécessaire pour un banc local — et seulement pour lui.
 ## 4. Les tests
 
 ```bash
-npm run verify        # types, lint, 104 tests unitaires
+npm run verify        # types, lint, 152 tests unitaires
 ```
 
 Les tests de bout en bout ont besoin d'un navigateur ; les bibliothèques
@@ -83,7 +93,15 @@ docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp \
   mcr.microsoft.com/playwright:v1.62.1-noble npx playwright test
 ```
 
-## 5. Ce que le banc a servi à établir
+## 5. Les départs de banc
+
+Quatre consolidations existent dans `dally_ops`, choisies pour couvrir le
+filtre : `AIR-DSS-CDG-TEST-001` (aérien, collecte ouverte, départ prévu),
+`SEA-DKR-LEH-TEST-001` (maritime, collecte ouverte, sans départ prévu),
+`ROAD-DKR-BKO-TEST-001` (routier — hors phase 1) et `AIR-DSS-CDG-TEST-DRAFT`
+(brouillon). Seules les deux premières doivent apparaître à l'écran.
+
+## 6. Ce que le banc a servi à établir
 
 - Un compte **non interne**, sans aucun droit de lecture métier, se connecte et
   obtient son identité : l'architecture de référence tient en conditions
@@ -93,3 +111,6 @@ docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp \
 - Le cookie `dt_ops_session` est `httpOnly` : `document.cookie` ne le voit pas.
 - Ni session Odoo, ni secret, ni mot de passe n'apparaissent dans le HTML servi
   ni dans le journal du serveur.
+- Un logisticien à qui `dally.freight.consolidation` est refusé par l'ORM
+  obtient malgré tout la liste de ses départs : le privilège vit dans le
+  service, jamais dans le compte.

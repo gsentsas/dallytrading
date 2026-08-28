@@ -59,7 +59,7 @@ test('un opérateur habilité arrive sur « Bonjour Gilles »', async ({ page })
 test('l’accueil n’ouvre que les opérations autorisées', async ({ page }) => {
   await seConnecter(page, OPERATEUR);
   // Le rôle « logisticien » accorde la réception et l'encaissement, rien de plus.
-  await expect(page.getByText('Réception de colis')).toBeVisible();
+  await expect(page.getByText('Réceptionner un colis')).toBeVisible();
   await expect(page.getByText('Encaissement')).toBeVisible();
   await expect(page.getByText('Supervision')).toHaveCount(0);
   await expect(page.getByText('Transfert de caisse')).toHaveCount(0);

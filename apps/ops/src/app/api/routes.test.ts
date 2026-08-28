@@ -8,18 +8,20 @@ vi.mock('@/lib/auth/odoo-ops', async (importOriginal) => {
     ...original,
     authenticate: vi.fn(),
     fetchIdentity: vi.fn(),
+    opsGet: vi.fn(),
     destroySession: vi.fn(async () => undefined),
   };
 });
 
 const { OPS_COOKIE, sealSession } = await import('@/lib/auth/session');
-const { authenticate, destroySession, fetchIdentity, OpsGatewayError } = await import(
+const { authenticate, destroySession, fetchIdentity, opsGet, OpsGatewayError } = await import(
   '@/lib/auth/odoo-ops'
 );
 const { resetRateLimits } = await import('@/lib/rate-limit');
 const { POST: postLogin } = await import('@/app/api/auth/login/route');
 const { POST: postLogout } = await import('@/app/api/auth/logout/route');
 const { GET: getMe } = await import('@/app/api/me/route');
+const { GET: getConsolidations } = await import('@/app/api/consolidations/route');
 
 const IDENTITE = {
   user: { id: 7, name: 'Gilles', login: 'gilles' },
@@ -44,6 +46,99 @@ beforeEach(() => {
   vi.mocked(fetchIdentity).mockReset();
   vi.mocked(destroySession).mockReset();
   vi.mocked(destroySession).mockResolvedValue(undefined);
+  vi.mocked(opsGet).mockReset();
+});
+
+const DEPART = {
+  reference: 'AIR-DSS-CDG-2026-002',
+  transport_mode: 'air',
+  direction: 'export',
+  origin: { country_code: 'SN', city: 'Dakar', location: 'DSS' },
+  destination: { country_code: 'FR', city: 'Paris', location: 'CDG' },
+  collection_close_on: '2026-09-03',
+  scheduled_departure: '2026-09-05T10:00:00Z',
+};
+
+function avecSession() {
+  magasinCookies.set(OPS_COOKIE, sealSession({ odooSessionId: 'sX', issuedAt: Date.now() }));
+}
+
+describe('GET /api/consolidations', () => {
+  it('relaie la liste renvoyée par Odoo', async () => {
+    avecSession();
+    vi.mocked(opsGet).mockResolvedValue({ consolidations: [DEPART] });
+
+    const reponse = await getConsolidations();
+    expect(reponse.status).toBe(200);
+    await expect(reponse.json()).resolves.toEqual({
+      success: true,
+      data: { consolidations: [DEPART] },
+    });
+  });
+
+  it('présente la session de l’opérateur et aucun autre justificatif', async () => {
+    avecSession();
+    vi.mocked(opsGet).mockResolvedValue({ consolidations: [] });
+    await getConsolidations();
+    expect(opsGet).toHaveBeenCalledWith('consolidations', 'sX', expect.any(String));
+  });
+
+  it('renvoie une liste vide sans en faire une erreur', async () => {
+    avecSession();
+    vi.mocked(opsGet).mockResolvedValue({ consolidations: [] });
+    const reponse = await getConsolidations();
+    expect(reponse.status).toBe(200);
+    await expect(reponse.json()).resolves.toEqual({
+      success: true,
+      data: { consolidations: [] },
+    });
+  });
+
+  it('renvoie 401 sans cookie, sans interroger Odoo', async () => {
+    const reponse = await getConsolidations();
+    expect(reponse.status).toBe(401);
+    expect(opsGet).not.toHaveBeenCalled();
+  });
+
+  it('renvoie 401 quand Odoo ne reconnaît plus la session', async () => {
+    avecSession();
+    vi.mocked(opsGet).mockRejectedValue(new OpsGatewayError('forbidden'));
+    // Une session morte n'est pas une panne : l'opérateur doit repasser par la
+    // connexion, pas voir un bouton « réessayer ».
+    expect((await getConsolidations()).status).toBe(401);
+  });
+
+  it('renvoie 503 quand Odoo est indisponible', async () => {
+    avecSession();
+    vi.mocked(opsGet).mockRejectedValue(new OpsGatewayError('unavailable'));
+    const reponse = await getConsolidations();
+    expect(reponse.status).toBe(503);
+    await expect(reponse.json()).resolves.toEqual({
+      success: false,
+      error: 'Service momentanément indisponible.',
+    });
+  });
+
+  it('renvoie 503 plutôt qu’une charge hors contrat', async () => {
+    avecSession();
+    vi.mocked(opsGet).mockResolvedValue({ consolidations: [{ reference: 'AIR-1' }] });
+    expect((await getConsolidations()).status).toBe(503);
+  });
+
+  it('ne laisse fuir aucun détail technique dans l’erreur', async () => {
+    avecSession();
+    vi.mocked(opsGet).mockRejectedValue(new OpsGatewayError('unavailable', 'statut 500'));
+    const texte = await (await getConsolidations()).text();
+    for (const indice of ['statut 500', 'dally.freight', 'AccessError', 'odoo']) {
+      expect(texte.toLowerCase()).not.toContain(indice.toLowerCase());
+    }
+  });
+
+  it('n’est jamais mis en cache', async () => {
+    avecSession();
+    vi.mocked(opsGet).mockResolvedValue({ consolidations: [] });
+    expect((await getConsolidations()).headers.get('cache-control')).toBe('no-store');
+  });
 });
 
 describe('POST /api/auth/login', () => {

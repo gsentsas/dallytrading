@@ -8,6 +8,7 @@ import {
   authenticate,
   destroySession,
   fetchIdentity,
+  opsGet,
 } from '@/lib/auth/odoo-ops';
 
 const SOURCE = readFileSync(fileURLToPath(new URL('./odoo-ops.ts', import.meta.url)), 'utf8');
@@ -103,6 +104,45 @@ describe('liste blanche des chemins', () => {
   it('n’expose aucune fonction visant la famille /api/v1/freight', () => {
     const code = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     expect(code).not.toContain('/api/v1/freight');
+  });
+});
+
+describe('lecture d’une ressource Ops', () => {
+  it('ajoute elle-même le préfixe du périmètre', async () => {
+    espionner(reponseJson({ success: true, data: { consolidations: [] } }));
+    await opsGet('consolidations', 'session-abc', 'corr');
+    // L'appelant nomme la ressource, jamais le chemin : sortir du périmètre
+    // devient impossible à écrire, et pas seulement interdit.
+    expect(appelsFetch[0]?.url).toBe('https://odoo.example.test/api/v1/ops/consolidations');
+  });
+
+  it.each([
+    ['une remontée de répertoire', '../freight/consolidations/open'],
+    ['un chemin absolu', '/api/v1/freight/consolidations/open'],
+    ['un hôte complet', 'https://ailleurs.test/x'],
+    ['une ressource vide', ''],
+    ['un point', 'consolidations/.'],
+    ['une majuscule inattendue', 'Consolidations'],
+  ])('refuse %s avant toute émission', async (_cas, ressource) => {
+    const faux = espionner(reponseJson({ success: true, data: {} }));
+    await expect(opsGet(ressource, 'session-abc', 'corr')).rejects.toMatchObject({
+      code: 'invalid_path',
+    });
+    expect(faux).not.toHaveBeenCalled();
+  });
+
+  it('renvoie la charge « data » et rien d’autre', async () => {
+    espionner(reponseJson({ success: true, data: { consolidations: [1, 2] } }));
+    await expect(opsGet('consolidations', 'session-abc', 'corr')).resolves.toEqual({
+      consolidations: [1, 2],
+    });
+  });
+
+  it('traduit un 403 en refus', async () => {
+    espionner(new Response('{}', { status: 403 }));
+    await expect(opsGet('consolidations', 'session-abc', 'corr')).rejects.toMatchObject({
+      code: 'forbidden',
+    });
   });
 });
 

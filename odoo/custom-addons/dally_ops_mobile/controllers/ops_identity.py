@@ -29,35 +29,13 @@ demande « puis-je créer une réception », pas « suis-je dans tel groupe » :
 sans cette indirection, ajouter un droit obligerait à rouvrir chaque écran.
 """
 
-import json
-import logging
-
-from odoo import _, http
+from odoo import http
 from odoo.http import request
 
-_logger = logging.getLogger(__name__)
+from .ops_base import DallyOpsController
 
 
-class DallyOpsIdentityController(http.Controller):
-
-    @staticmethod
-    def _json(charge, status=200):
-        """Réponse JSON, jamais mise en cache.
-
-        `private, no-store` : l'identité et les droits d'un opérateur ne
-        doivent pas séjourner dans un intermédiaire, qui les servirait au
-        suivant. C'est la même règle que le portail applique déjà.
-        """
-        return request.make_response(
-            json.dumps(charge),
-            headers=[
-                ("Content-Type", "application/json; charset=utf-8"),
-                ("Cache-Control", "private, no-store, max-age=0"),
-                ("X-Content-Type-Options", "nosniff"),
-                ("Referrer-Policy", "no-referrer"),
-            ],
-            status=status,
-        )
+class DallyOpsIdentityController(DallyOpsController):
 
     @http.route(
         "/api/v1/ops/me",
@@ -76,16 +54,8 @@ class DallyOpsIdentityController(http.Controller):
         message ne dit pas quel groupe lui manquerait — un refus n'a pas à
         renseigner sur la structure des droits.
         """
-        if not request.env["res.users"]._dally_ops_role():
-            _logger.info(
-                "ops/me refuse a l'utilisateur %s : aucun role Ops.",
-                request.env.uid)
-            return self._json(
-                {"success": False,
-                 "error": {"code": "forbidden",
-                           "message": _("Accès réservé aux opérateurs terrain.")}},
-                status=403,
-            )
+        if not self._a_un_role_ops():
+            return self._refus_ops("ops/me")
 
         return self._json({
             "success": True,

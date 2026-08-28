@@ -32,6 +32,19 @@ const CHEMINS_AUTORISES = [
   '/api/v1/ops/',
 ] as const;
 
+/** Préfixe des ressources métier. Il n'est jamais fourni par l'appelant. */
+const PREFIXE_OPS = '/api/v1/ops/';
+
+/**
+ * Forme d'un nom de ressource.
+ *
+ * `opsGet` ne prend pas un chemin mais un nom — `consolidations`, et non
+ * `/api/v1/ops/consolidations`. Le préfixe est ajouté ici, ce qui rend la
+ * sortie du périmètre Ops impossible à écrire plutôt qu'interdite par un
+ * contrôle. Le motif exclut le point, donc `../freight/...` ne passe pas.
+ */
+const RESSOURCE_OPS = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
+
 export class OpsGatewayError extends Error {
   readonly code: 'invalid_credentials' | 'forbidden' | 'unavailable' | 'invalid_path';
 
@@ -186,30 +199,43 @@ export async function authenticate(
 }
 
 /**
- * Lit l'identité de l'opérateur.
+ * Lit une ressource Ops.
  *
- * `403` signifie « ce compte existe mais n'est pas un compte Ops » : c'est le
- * verdict d'Odoo, et la seule autorité sur la question.
+ * L'appelant nomme la ressource, jamais le chemin. `403` signifie « ce compte
+ * existe mais n'est pas un compte Ops » : c'est le verdict d'Odoo, et la seule
+ * autorité sur la question. Une redirection dit la même chose autrement — la
+ * session n'est plus valide.
  */
-export async function fetchIdentity(
+export async function opsGet<T>(
+  ressource: string,
   sessionId: string,
   correlationId: string,
-): Promise<OpsIdentity> {
+): Promise<T> {
+  if (!RESSOURCE_OPS.test(ressource)) {
+    throw new OpsGatewayError('invalid_path', `ressource non autorisée : ${ressource}`);
+  }
+
   const reponse = await appel({
-    chemin: '/api/v1/ops/me',
+    chemin: `${PREFIXE_OPS}${ressource}`,
     methode: 'GET',
     sessionId,
     correlationId,
   });
 
   if (reponse.status === 403) throw new OpsGatewayError('forbidden');
-  // 3xx : Odoo redirige vers /web/login, donc la session n'est plus valide.
   if (reponse.status >= 300 && reponse.status < 400) throw new OpsGatewayError('forbidden');
   if (!reponse.ok) throw new OpsGatewayError('unavailable', `statut ${reponse.status}`);
 
-  const charge = (await reponse.json()) as { success?: boolean; data?: OpsIdentity };
-  if (!charge.success || !charge.data) throw new OpsGatewayError('unavailable', 'réponse illisible');
-  return charge.data;
+  const charge = (await reponse.json()) as { success?: boolean; data?: unknown };
+  if (!charge.success || charge.data === undefined) {
+    throw new OpsGatewayError('unavailable', 'réponse illisible');
+  }
+  return charge.data as T;
+}
+
+/** L'identité de l'opérateur connecté. */
+export function fetchIdentity(sessionId: string, correlationId: string): Promise<OpsIdentity> {
+  return opsGet<OpsIdentity>('me', sessionId, correlationId);
 }
 
 /**

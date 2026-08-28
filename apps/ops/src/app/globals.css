@@ -102,3 +102,60 @@ button.secondaire {
   color: var(--ops-attenue);
   font-size: 0.95rem;
 }
+
+/* Une carte cliquable reste une carte : même surface, même cible tactile. */
+a.carte-lien {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  border-color: var(--ops-accent);
+}
+
+/* Le bouton de sélection d'un départ, dimensionné pour un doigt ganté. */
+.bouton-lien {
+  display: block;
+  width: 100%;
+  min-height: 3.25rem;
+  margin-top: 0.9rem;
+  padding: 0.95rem 1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  color: var(--ops-fond);
+  background: var(--ops-accent);
+  border-radius: 0.6rem;
+}
+
+/* L'étiquette de mode : ce que l'œil cherche en premier sur un quai. */
+.mode {
+  display: inline-block;
+  margin-bottom: 0.4rem;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ops-fond);
+  background: var(--ops-accent);
+  border-radius: 0.35rem;
+}
+
+.route {
+  margin: 0.15rem 0 0.6rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.reference {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem;
+  color: var(--ops-attenue);
+}
+
+.retour {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: var(--ops-accent);
+  font-size: 0.95rem;
+}

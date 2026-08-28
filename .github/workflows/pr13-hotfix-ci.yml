@@ -1,0 +1,50 @@
+name: PR13 Hotfix CI
+
+on:
+  push:
+    branches:
+      - fix/freight-sheet-preserve-sync-message-20260828
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'integrations/google-sheets/freight-sync/**'
+      - 'scripts/test_freight_sheet_*.js'
+
+permissions:
+  contents: read
+
+jobs:
+  freight-sheet:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Diff check
+        run: git diff --check origin/main...HEAD
+      - name: Apps Script syntax
+        run: |
+          cp integrations/google-sheets/freight-sync/Code.gs /tmp/Code.js
+          cp integrations/google-sheets/freight-sync/Cash.gs /tmp/Cash.js
+          cp integrations/google-sheets/freight-sync/Pdf.gs /tmp/Pdf.js
+          node --check /tmp/Code.js
+          node --check /tmp/Cash.js
+          node --check /tmp/Pdf.js
+      - name: Freight Sheet regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for T in \
+            scripts/test_freight_sheet_keys.js \
+            scripts/test_freight_sheet_identity_collision.js \
+            scripts/test_freight_sheet_layout_edges.js \
+            scripts/test_freight_sheet_refresh_concurrency.js \
+            scripts/test_freight_sheet_replan_intent.js \
+            scripts/test_freight_sheet_final_guards.js \
+            scripts/test_freight_sheet_walkthrough_risks.js \
+            scripts/test_freight_sheet_legacy_planned_guard.js
+          do
+            echo "--- $T"
+            node "$T"
+          done

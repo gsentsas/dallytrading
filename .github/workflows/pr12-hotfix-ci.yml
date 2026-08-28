@@ -20,9 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Diff check
-        run: git diff --check origin/${{ github.base_ref || 'main' }}...HEAD || git diff --check HEAD^...HEAD
+        run: git diff --check origin/main...HEAD
 
       - name: Apps Script syntax
         run: |

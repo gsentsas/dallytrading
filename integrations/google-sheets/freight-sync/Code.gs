@@ -225,7 +225,6 @@ function syncDossier_(sheet, dossier, rows, cfg) {
     if (Object.prototype.hasOwnProperty.call(data, 'planned_consolidation_ref')) {
       setCell_(sheet, row.row, DALLY.columns.plannedConsolidation, sheetLiteralText_(data.planned_consolidation_ref));
     }
-    setCell_(sheet, row.row, DALLY.columns.syncStatus, 'Synchronisé');
     if (data.collection_local_ref) setCell_(sheet, row.row, DALLY.columns.dossier, data.collection_local_ref);
     setCell_(sheet, row.row, DALLY.columns.partnerId, data.partner_id || '');
     setCell_(sheet, row.row, DALLY.columns.shipmentId, data.shipment_id || '');
@@ -234,9 +233,13 @@ function syncDossier_(sheet, dossier, rows, cfg) {
     setCell_(sheet, row.row, DALLY.columns.intakeConsolidationRef, data.intake_consolidation_ref || '');
     setCell_(sheet, row.row, DALLY.columns.syncSourceKey, data.sync_source_key || sourceKey_(sheet.getName(), dossier, rows));
     setCell_(sheet, row.row, DALLY.columns.lastSync, now);
-    const msg = line ? ('CRM OK • tarif ' + line.pricing_status) : 'CRM OK • ligne paiement/administrative';
+    const normalMessage = line ? ('CRM OK • tarif ' + line.pricing_status) : 'CRM OK • ligne paiement/administrative';
+    const msg = data.requires_replan
+      ? String(data.sync_message || 'Départ clôturé — replanification requise') + ' • ' + normalMessage
+      : normalMessage;
     setCell_(sheet, row.row, DALLY.columns.syncMessage, msg);
   });
+  rows.forEach(row => setCell_(sheet, row.row, DALLY.columns.syncStatus, 'Synchronisé'));
 
   // The writes above make the in-memory snapshot stale. Reload by the
   // server-issued source identity before invoice/payment calls.
@@ -279,7 +282,12 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
   const source = cfg.migrationMode ? 'legacy_xlsx' : 'google_sheets';
   const plannedRef = firstText_(rows, DALLY.columns.plannedConsolidation);
   const sourceKey = sourceKey_(sheetName, dossier, rows);
-  const sendPlannedRef = !!plannedRef && (!isServerIdentifiedDossier_(rows) || hasExplicitReplanIntent_(rows));
+  const serverIdentified = isServerIdentifiedDossier_(rows);
+  const explicitReplan = hasExplicitReplanIntent_(rows);
+  if (serverIdentified && explicitReplan && !plannedRef) {
+    throw new Error('Une replanification doit sélectionner une consolidation ouverte ; vider la colonne B n’est pas une désaffectation valide.');
+  }
+  const sendPlannedRef = !!plannedRef && (!serverIdentified || explicitReplan);
   const payload = {
     external_reference: payloadExternalReference_(rows, dossier),
     sync_source_key: sourceKey,

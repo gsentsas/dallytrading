@@ -464,7 +464,7 @@ function dallyRefreshOpenConsolidations() {
     applySheetBindings_(dataSheet, bindings);
     dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.plannedConsolidation, dataSheet.getMaxRows()-DALLY.firstDataRow+1, 1).clearDataValidations();
     const route=cfg.routes[name]||{};
-    const allowed=(data.consolidations||[]).filter(c => c.transport_mode===route.mode && c.direction===route.direction && (!route.originCountry || c.origin_country_code===route.originCountry) && (!route.originCity || c.origin_city===route.originCity && (!route.destinationCountry || c.destination_country_code===route.destinationCountry) && (!route.destinationCity || c.destination_city===route.destinationCity))).map(c=>c.name);
+    const allowed=(data.consolidations||[]).filter(c => c.transport_mode===route.mode && c.direction===route.direction && (!route.originCountry || c.origin_country_code===route.originCountry) && (!route.originCity || c.origin_city===route.originCity) && (!route.destinationCountry || c.destination_country_code===route.destinationCountry) && (!route.destinationCity || c.destination_city===route.destinationCity)).map(c=>c.name);
     const assigned = [];
     if (dataSheet.getLastRow() >= DALLY.firstDataRow) {
       const shipmentValues = dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.shipmentId, dataSheet.getLastRow() - DALLY.firstDataRow + 1, 1).getDisplayValues();

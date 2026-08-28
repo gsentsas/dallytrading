@@ -1,0 +1,48 @@
+name: Publish GitHub Wiki
+
+on:
+  push:
+    branches:
+      - main
+      - docs/github-wiki-20260828
+    paths:
+      - 'docs/wiki/**'
+      - '.github/workflows/publish-wiki.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Publish docs/wiki to GitHub Wiki
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          workdir="$(mktemp -d)"
+          wiki_dir="$workdir/wiki"
+
+          git clone --quiet "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" "$wiki_dir"
+          wiki_branch="$(git -C "$wiki_dir" branch --show-current)"
+
+          find "$wiki_dir" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp docs/wiki/*.md "$wiki_dir"/
+
+          git -C "$wiki_dir" add -A
+          if git -C "$wiki_dir" diff --cached --quiet; then
+            echo 'Wiki already up to date.'
+            exit 0
+          fi
+
+          git -C "$wiki_dir" commit -m 'docs: publish DallyTrading wiki'
+          git -C "$wiki_dir" push origin "HEAD:${wiki_branch}"

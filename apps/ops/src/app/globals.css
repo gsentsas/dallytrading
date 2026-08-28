@@ -1,0 +1,104 @@
+/*
+ * Feuille de style minimale.
+ *
+ * L'application se tient dans une main, souvent gantée, souvent au soleil :
+ * cibles tactiles larges, contraste élevé, aucune animation. Elle grandira
+ * quand il y aura des écrans métier à habiller ; à ce stade il n'y en a pas.
+ */
+
+:root {
+  --ops-fond: #0f172a;
+  --ops-surface: #1e293b;
+  --ops-texte: #f8fafc;
+  --ops-attenue: #94a3b8;
+  --ops-accent: #38bdf8;
+  --ops-erreur: #fca5a5;
+  --ops-bordure: #334155;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ops-fond);
+  color: var(--ops-texte);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+h1 {
+  font-size: 1.6rem;
+  margin: 0 0 0.25rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 1rem;
+  color: var(--ops-attenue);
+  font-size: 0.95rem;
+}
+
+input {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.9rem 0.85rem;
+  font-size: 1.05rem;
+  color: var(--ops-texte);
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-bordure);
+  border-radius: 0.6rem;
+}
+
+button {
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.9rem 1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ops-fond);
+  background: var(--ops-accent);
+  border: 0;
+  border-radius: 0.6rem;
+}
+
+button[disabled] {
+  opacity: 0.6;
+}
+
+button.secondaire {
+  color: var(--ops-attenue);
+  background: transparent;
+  border: 1px solid var(--ops-bordure);
+}
+
+.erreur {
+  margin: 0 0 1rem;
+  padding: 0.8rem 0.9rem;
+  color: var(--ops-erreur);
+  background: rgba(127, 29, 29, 0.35);
+  border: 1px solid var(--ops-erreur);
+  border-radius: 0.6rem;
+}
+
+.carte {
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-bordure);
+  border-radius: 0.75rem;
+}
+
+.attenue {
+  color: var(--ops-attenue);
+  font-size: 0.95rem;
+}

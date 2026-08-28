@@ -1,0 +1,52 @@
+name: PR Freight Sheet CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'integrations/google-sheets/freight-sync/**'
+      - 'scripts/test_freight_sheet_*.js'
+      - '.github/workflows/pr-freight-sheet-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sheet-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Diff whitespace check
+        run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+
+      - name: Apps Script syntax check
+        run: node --check integrations/google-sheets/freight-sync/Code.gs
+
+      - name: Freight Sheet regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests=(
+            scripts/test_freight_sheet_keys.js
+            scripts/test_freight_sheet_identity_collision.js
+            scripts/test_freight_sheet_layout_edges.js
+            scripts/test_freight_sheet_refresh_concurrency.js
+            scripts/test_freight_sheet_replan_intent.js
+            scripts/test_freight_sheet_final_guards.js
+            scripts/test_freight_sheet_walkthrough_risks.js
+          )
+          for test_file in "${tests[@]}"; do
+            echo "=== $test_file ==="
+            node "$test_file"
+          done

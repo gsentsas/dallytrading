@@ -223,9 +223,7 @@ function syncDossier_(sheet, dossier, rows, cfg) {
     const previousMessage = display_(row, DALLY.columns.syncMessage);
     const key = articleKey_(row);
     const line = lineByKey[String(key || '')];
-    if (Object.prototype.hasOwnProperty.call(data, 'planned_consolidation_ref')) {
-      setCell_(sheet, row.row, DALLY.columns.plannedConsolidation, sheetLiteralText_(data.planned_consolidation_ref));
-    }
+    applyReturnedPlannedRef_(sheet, row.row, data);
     if (data.collection_local_ref) setCell_(sheet, row.row, DALLY.columns.dossier, data.collection_local_ref);
     setCell_(sheet, row.row, DALLY.columns.partnerId, data.partner_id || '');
     setCell_(sheet, row.row, DALLY.columns.shipmentId, data.shipment_id || '');
@@ -260,6 +258,13 @@ function syncDossier_(sheet, dossier, rows, cfg) {
     appendMessage_(sheet, rows, 'Paiements non synchronisés : option globale désactivée');
   }
   return {sync: data, invoice: invoiceData};
+}
+
+function applyReturnedPlannedRef_(sheet, row, data) {
+  if (!data || !Object.prototype.hasOwnProperty.call(data, 'planned_consolidation_ref')) return;
+  const planned = String(data.planned_consolidation_ref || '').trim();
+  if (!planned) return;
+  setCell_(sheet, row, DALLY.columns.plannedConsolidation, sheetLiteralText_(planned));
 }
 
 function preserveUserCorrectionMessage_(previousMessage, nextMessage) {
@@ -585,6 +590,27 @@ function applySheetBindings_(sheet, bindings) {
       const live = readState(member);
       return live.planned === member._bindingExpected.planned && live.status === member._bindingExpected.status && live.message === member._bindingExpected.message;
     });
+    const bindingGlobal = String(binding.external_reference || '').trim();
+    if (bindingGlobal) {
+      const currentGlobals = members.map(member => String(
+        sheet.getRange(DALLY.firstDataRow + member.index, DALLY.columns.globalExternalReference, 1, 1).getDisplayValue() || ''
+      ).trim());
+      if (currentGlobals.some(value => value && value !== bindingGlobal)) {
+        members.forEach(member => {
+          const row = DALLY.firstDataRow + member.index;
+          const currentMessage = String(sheet.getRange(row, DALLY.columns.syncMessage, 1, 1).getDisplayValue() || '').trim();
+          setCell_(sheet, row, DALLY.columns.syncStatus, 'Erreur');
+          setCell_(sheet, row, DALLY.columns.syncMessage, preserveUserCorrectionMessage_(currentMessage, 'Conflit identité CRM/Sheet : external_reference différente. Synchronisation bloquée.'));
+        });
+        return;
+      }
+      members.forEach((member, index) => {
+        if (currentGlobals[index]) return;
+        const row = DALLY.firstDataRow + member.index;
+        setCell_(sheet, row, DALLY.columns.globalExternalReference, sheetLiteralText_(bindingGlobal));
+        member.row[DALLY.columns.globalExternalReference - 1] = bindingGlobal;
+      });
+    }
     const replanRequested = members.some(member => hasReplanIntentText_(member.row[DALLY.columns.syncMessage - 1]));
 
     // Historical rollout guard must run before the generic pending branch.

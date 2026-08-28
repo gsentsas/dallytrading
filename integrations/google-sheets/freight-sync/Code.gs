@@ -253,7 +253,7 @@ function syncDossier_(sheet, dossier, rows, cfg) {
     try { syncPayments_(sheet, rows, cfg, false); }
     catch (err) { appendMessage_(sheet, rows, 'Paiement: ' + errorText_(err)); }
   } else if (dossierHasPayments_(rows)) {
-    appendMessage_(sheet, rows, 'Paiements non synchronisés : option globale désactivée');
+    appendMessage_(sheet, rows.slice(0, 1), 'Paiements non synchronisés : option globale désactivée');
   }
   return {sync: data, invoice: invoiceData};
 }
@@ -452,34 +452,37 @@ function dallyRefreshOpenConsolidations() {
     const sheet = SpreadsheetApp.getActive().getSheetByName(name);
     if (sheet) assertCanonicalSheetLayout_(sheet);
   });
-  const cfg=readConfig_(); const data=apiGet_('/api/v1/freight/consolidations/open','DALLY_FREIGHT_SYNC_API_KEY',cfg);
-  const bindings = fetchSheetBindings_(cfg);
-  const sh=ensureConfigSheet_(); const start=21; const rows=(data.consolidations||[]).map(c=>[c.name,c.transport_mode,c.direction,c.origin_city||c.origin||'',c.destination_city||c.destination||'',c.collection_close_on||'']);
-  const safeRows = rows.map(row => row.map(sheetLiteralText_));
-  sh.getRange(start,1,Math.max(1, sh.getMaxRows()-start+1),6).clearContent();
-  sh.getRange(20,1,1,6).setValues([['Consolidations ouvertes','Mode','Direction','Origine','Destination','Clôture collecte']]);
-  if (safeRows.length) sh.getRange(start,1,safeRows.length,6).setValues(safeRows);
-  withScriptLock_(() => DALLY.dataSheets.forEach(name => {
-    const dataSheet = SpreadsheetApp.getActive().getSheetByName(name); if (!dataSheet) return;
-    applySheetBindings_(dataSheet, bindings);
-    dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.plannedConsolidation, dataSheet.getMaxRows()-DALLY.firstDataRow+1, 1).clearDataValidations();
-    const route=cfg.routes[name]||{};
-    const allowed=(data.consolidations||[]).filter(c => c.transport_mode===route.mode && c.direction===route.direction && (!route.originCountry || c.origin_country_code===route.originCountry) && (!route.originCity || c.origin_city===route.originCity) && (!route.destinationCountry || c.destination_country_code===route.destinationCountry) && (!route.destinationCity || c.destination_city===route.destinationCity)).map(c=>c.name);
-    const assigned = [];
-    if (dataSheet.getLastRow() >= DALLY.firstDataRow) {
-      const shipmentValues = dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.shipmentId, dataSheet.getLastRow() - DALLY.firstDataRow + 1, 1).getDisplayValues();
-      shipmentValues.forEach(value => {
-        const binding = bindings[String(value[0] || '').trim()];
-        if (binding && binding.planned_consolidation_ref && !assigned.includes(binding.planned_consolidation_ref)) assigned.push(binding.planned_consolidation_ref);
-      });
-    }
-    assigned.forEach(value => { if (!allowed.includes(value)) allowed.push(value); });
-    if (allowed.length) {
-      const validation=SpreadsheetApp.newDataValidation().requireValueInList(allowed,true).setAllowInvalid(false).build();
-      dataSheet.getRange(DALLY.firstDataRow,DALLY.columns.plannedConsolidation,dataSheet.getMaxRows()-DALLY.firstDataRow+1,1).setDataValidation(validation);
-    }
-  }));
-  SpreadsheetApp.getActive().toast(rows.length+' départ(s) ouvert(s) actualisé(s).','Dally CRM',6);
+  const refreshedCount = withScriptLock_(() => {
+    const cfg=readConfig_(); const data=apiGet_('/api/v1/freight/consolidations/open','DALLY_FREIGHT_SYNC_API_KEY',cfg);
+    const bindings = fetchSheetBindings_(cfg);
+    const sh=ensureConfigSheet_(); const start=21; const rows=(data.consolidations||[]).map(c=>[c.name,c.transport_mode,c.direction,c.origin_city||c.origin||'',c.destination_city||c.destination||'',c.collection_close_on||'']);
+    const safeRows = rows.map(row => row.map(sheetLiteralText_));
+    sh.getRange(start,1,Math.max(1, sh.getMaxRows()-start+1),6).clearContent();
+    sh.getRange(20,1,1,6).setValues([['Consolidations ouvertes','Mode','Direction','Origine','Destination','Clôture collecte']]);
+    if (safeRows.length) sh.getRange(start,1,safeRows.length,6).setValues(safeRows);
+    DALLY.dataSheets.forEach(name => {
+      const dataSheet = SpreadsheetApp.getActive().getSheetByName(name); if (!dataSheet) return;
+      applySheetBindings_(dataSheet, bindings);
+      dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.plannedConsolidation, dataSheet.getMaxRows()-DALLY.firstDataRow+1, 1).clearDataValidations();
+      const route=cfg.routes[name]||{};
+      const allowed=(data.consolidations||[]).filter(c => c.transport_mode===route.mode && c.direction===route.direction && (!route.originCountry || c.origin_country_code===route.originCountry) && (!route.originCity || c.origin_city===route.originCity) && (!route.destinationCountry || c.destination_country_code===route.destinationCountry) && (!route.destinationCity || c.destination_city===route.destinationCity)).map(c=>c.name);
+      const assigned = [];
+      if (dataSheet.getLastRow() >= DALLY.firstDataRow) {
+        const shipmentValues = dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.shipmentId, dataSheet.getLastRow() - DALLY.firstDataRow + 1, 1).getDisplayValues();
+        shipmentValues.forEach(value => {
+          const binding = bindings[String(value[0] || '').trim()];
+          if (binding && binding.planned_consolidation_ref && !assigned.includes(binding.planned_consolidation_ref)) assigned.push(binding.planned_consolidation_ref);
+        });
+      }
+      assigned.forEach(value => { if (!allowed.includes(value)) allowed.push(value); });
+      if (allowed.length) {
+        const validation=SpreadsheetApp.newDataValidation().requireValueInList(allowed,true).setAllowInvalid(false).build();
+        dataSheet.getRange(DALLY.firstDataRow,DALLY.columns.plannedConsolidation,dataSheet.getMaxRows()-DALLY.firstDataRow+1,1).setDataValidation(validation);
+      }
+    });
+    return rows.length;
+  });
+  SpreadsheetApp.getActive().toast(refreshedCount+' départ(s) ouvert(s) actualisé(s).','Dally CRM',6);
 }
 
 function fetchSheetBindings_(cfg) {
@@ -903,6 +906,8 @@ function selectedDossier_() {
   const key = logicalKeys[0];
   const allRows = rowsForDossier_(sheet, key);
   if (!allRows.length) throw new Error('Dossier sélectionné introuvable.');
+  const plannedRefs = new Set(allRows.map(row => display_(row, DALLY.columns.plannedConsolidation)));
+  if (plannedRefs.size > 1) throw new Error('Les lignes du dossier ont des consolidations prévues différentes.');
   const namespaces = new Set(allRows.map(row => logicalDossierKey_(row.display)));
   if (namespaces.size > 1) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
   assertNoSelectedIdentityCollision_(sheet, allRows);

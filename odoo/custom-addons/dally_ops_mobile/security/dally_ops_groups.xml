@@ -17,12 +17,22 @@
         navigateur » : l'application terrain n'a jamais besoin d'une clé
         Freight, puisque son utilisateur a ses propres droits.
 
-        ## Pourquoi le logisticien implique la lecture Dally
+        ## Pourquoi il n'implique aucun rôle métier
 
-        `group_dally_readonly` lui donne de quoi lire les consolidations, les
-        dossiers et les clients qu'il manipule. Sans cela, il saisirait à
-        l'aveugle. Rien de plus n'est impliqué : ni commercial, ni finance, ni
-        logistique interne.
+        Il impliquait `dally_core.group_dally_readonly`. L'audit l'a écarté :
+        mesuré modèle par modèle, ce rôle ouvrait **21 modèles** en lecture,
+        dont sept sans rapport avec la réception de colis — le pipeline de
+        négoce (`dally.trade.opportunity`, `.line`), celui du sourcing
+        (`dally.sourcing.request`, `.proposal`), les documents publiés aux
+        clients, les notifications envoyées et la politique de publication.
+
+        Un logisticien qui reçoit des colis n'a besoin d'aucun des sept. Le
+        risque n'est pas théorique : ces comptes vivent sur des téléphones
+        d'entrepôt, souvent partagés dans les faits.
+
+        Le rôle n'implique donc **rien**. Chaque droit dont l'application aura
+        besoin sera accordé explicitement, une ligne à la fois, et chaque ligne
+        sera une décision plutôt qu'un héritage.
 
         ## Le responsable
 
@@ -33,7 +43,17 @@
     <record id="group_dally_ops_logistician" model="res.groups">
         <field name="name">Ops — Logisticien</field>
         <field name="privilege_id" ref="dally_core.privilege_dallytrading"/>
-        <field name="implied_ids" eval="[(4, ref('dally_core.group_dally_readonly'))]"/>
+        <!--
+            `(6, 0, [])` et non l'absence de champ : retirer une ligne
+            `(4, ref(...))` du XML **ne défait rien**. Cet ordre-là *ajoute* une
+            implication ; ne plus l'écrire laisse simplement en place celle que
+            la mise à jour précédente a posée. Mesuré : après avoir supprimé la
+            ligne, le rôle ouvrait toujours ses 21 modèles.
+
+            Seule une écriture autoritaire — remplacement complet — exprime
+            « ce rôle n'implique rien ».
+        -->
+        <field name="implied_ids" eval="[(6, 0, [])]"/>
         <field name="comment">Saisie terrain : réceptions, articles, paiements
             encaissés, caisse et rendez-vous. Aucun accès à la comptabilité, aux
             tarifs de référence ni à l'administration.</field>
@@ -42,7 +62,7 @@
     <record id="group_dally_ops_supervisor" model="res.groups">
         <field name="name">Ops — Responsable opérations</field>
         <field name="privilege_id" ref="dally_core.privilege_dallytrading"/>
-        <field name="implied_ids" eval="[(4, ref('group_dally_ops_logistician'))]"/>
+        <field name="implied_ids" eval="[(6, 0, [ref('group_dally_ops_logistician')])]"/>
         <field name="comment">Corrige les saisies terrain et rouvre ce qui doit
             l'être. Ne donne accès ni aux marges, ni à la facturation
             comptabilisée, ni aux identités techniques de synchronisation.</field>

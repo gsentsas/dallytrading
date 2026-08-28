@@ -57,10 +57,21 @@ class TestOpsRoles(TransactionCase):
             groupe = self.env.ref("dally_ops_mobile.%s" % xmlid)
             self.assertTrue(groupe.name)
 
-    def test_le_logisticien_peut_lire_le_perimetre_dally(self):
-        """Sans lecture, il saisirait à l'aveugle."""
-        self.assertTrue(
-            self.logisticien.has_group("dally_core.group_dally_readonly"))
+    def test_le_role_ops_n_implique_aucun_role_metier(self):
+        """Il impliquait `group_dally_readonly` ; l'audit l'a écarté.
+
+        Mesuré modèle par modèle, ce rôle ouvrait 21 modèles en lecture, dont
+        le pipeline de négoce, celui du sourcing, les documents publiés aux
+        clients et les notifications. Rien de cela ne sert à réceptionner un
+        colis, et ces comptes vivent sur des téléphones d'entrepôt.
+        """
+        for role in ("dally_core.group_dally_readonly",
+                     "dally_core.group_dally_commercial",
+                     "dally_core.group_dally_logistics",
+                     "dally_core.group_dally_sourcing"):
+            for utilisateur in (self.logisticien, self.responsable):
+                self.assertFalse(utilisateur.has_group(role),
+                                 "%s hérite de %s" % (utilisateur.name, role))
 
     def test_le_responsable_est_aussi_logisticien(self):
         """Ce qu'il corrige, il doit d'abord pouvoir le saisir."""
@@ -93,6 +104,42 @@ class TestOpsRoles(TransactionCase):
         """Contrôle concret plutôt que déclaratif : on tente la lecture."""
         self.assertFalse(
             self.env["dally.trade.cost"].with_user(self.logisticien).has_access("read"))
+
+    def test_le_role_ops_n_ajoute_aucune_surface_de_lecture(self):
+        """Le garde-fou contre la dérive silencieuse.
+
+        Ce test ne compare pas des `implied_ids` — un héritage indirect y
+        échapperait. Il mesure ce qui compte : les modèles réellement lisibles,
+        en interrogeant `has_access` sur tout le registre, et exige que le rôle
+        Ops n'en ajoute **aucun** par rapport au même utilisateur sans lui.
+
+        Le jour où une ACL Ops sera nécessaire, ce test échouera. Ce sera le
+        bon moment pour décider si elle est justifiée, plutôt que de la
+        découvrir installée.
+        """
+        temoin = self.env["res.users"].create({
+            "name": "Ops témoin", "login": "ops.temoin@dallytrading.invalid",
+            "group_ids": [(6, 0, [self.env.ref("base.group_user").id])],
+        })
+
+        def lisibles(utilisateur):
+            trouves = set()
+            for nom in self.env.registry:
+                modele = self.env[nom]
+                if modele._abstract or modele._transient:
+                    continue
+                try:
+                    if modele.with_user(utilisateur).has_access("read"):
+                        trouves.add(nom)
+                except Exception:  # pragma: no cover - modèle non interrogeable
+                    continue
+            return trouves
+
+        ajoutes = lisibles(self.logisticien) - lisibles(temoin)
+        self.assertFalse(
+            ajoutes,
+            "Le rôle Ops ouvre %d modèle(s) de plus : %s"
+            % (len(ajoutes), ", ".join(sorted(ajoutes))))
 
     # ─── L'acteur de caisse ──────────────────────────────────────────
 

@@ -11,24 +11,25 @@
 const DALLY = Object.freeze({
   configSheet: 'Synchronisation CRM',
   dryRunSheet: 'Migration CRM dry-run',
+  replanIntentMarker: 'Replanification demandée depuis la feuille.',
   dataSheets: ['Saisie maritime', 'Saisie aérien'],
   headerRow: 2,
   firstDataRow: 3,
   maxColumn: 63,
   columns: Object.freeze({
-    depositDate: 1, dossier: 2, client: 3, phone: 4, clientType: 5,
-    goodsCategory: 6, description: 7, quantity: 8, length: 9, width: 10,
-    height: 11, unitVolume: 12, totalVolume: 13, announcedWeight: 14,
-    exactWeight: 15, billingMethod: 18, billableWeight: 19, manualPrice: 20,
-    appliedPrice: 21, dossierFee: 22, otherFees: 23, totalEur: 25,
-    parcelState: 30, notes: 31,
-    syncStatus: 32, partnerId: 33, shipmentId: 34, lastSync: 35,
-    saleOrderId: 36, invoiceId: 37, invoiceNumber: 38, syncMessage: 39,
-    responsible: 40, pricingType: 41, pricingReason: 42, customsValue: 43,
-    transportMode: 45, tariffFamily: 46, address: 47, email: 48,
-    paymentEur: 49, paymentXof: 50, paymentMethod: 54, collectedBy: 55,
-    articleKey: 56, paymentFlag: 57, paymentKey: 58,
-    plannedConsolidation: 59, syncSourceKey: 60, globalExternalReference: 61,
+    depositDate: 1, plannedConsolidation: 2, dossier: 3, client: 4, phone: 5, clientType: 6,
+    goodsCategory: 7, description: 8, quantity: 9, length: 10, width: 11,
+    height: 12, unitVolume: 13, totalVolume: 14, announcedWeight: 15,
+    exactWeight: 16, billingMethod: 19, billableWeight: 20, manualPrice: 21,
+    appliedPrice: 22, dossierFee: 23, otherFees: 24, totalEur: 26,
+    parcelState: 31, notes: 32,
+    syncStatus: 33, partnerId: 34, shipmentId: 35, lastSync: 36,
+    saleOrderId: 37, invoiceId: 38, invoiceNumber: 39, syncMessage: 40,
+    responsible: 41, pricingType: 42, pricingReason: 43, customsValue: 44,
+    transportMode: 46, tariffFamily: 47, address: 48, email: 49,
+    paymentEur: 50, paymentXof: 51, paymentMethod: 55, collectedBy: 56,
+    articleKey: 57, paymentFlag: 58, paymentKey: 59,
+    syncSourceKey: 60, globalExternalReference: 61,
     intakeConsolidationRef: 62, collectionLocalRef: 63,
   }),
   familyCodes: Object.freeze({
@@ -113,11 +114,13 @@ function dallyMarkEdited_(e) {
   if (!e || !e.range) return;
   const sheet = e.range.getSheet();
   if (!DALLY.dataSheets.includes(sheet.getName())) return;
+  if (!assertCanonicalSheetLayout_(sheet, true)) return;
   const firstRow = Math.max(e.range.getRow(), DALLY.firstDataRow);
   const lastRow = e.range.getLastRow();
   if (lastRow < DALLY.firstDataRow) return;
   const firstCol = e.range.getColumn();
   const lastCol = e.range.getLastColumn();
+  const plannedEdited = firstCol <= DALLY.columns.plannedConsolidation && lastCol >= DALLY.columns.plannedConsolidation;
   // API output columns must not create an edit loop.
   if (firstCol >= DALLY.columns.syncStatus && lastCol <= DALLY.columns.syncMessage) return;
   for (let r = firstRow; r <= lastRow; r++) {
@@ -125,7 +128,10 @@ function dallyMarkEdited_(e) {
     const planned = String(sheet.getRange(r, DALLY.columns.plannedConsolidation).getDisplayValue() || '').trim();
     if (dossier) {
       sheet.getRange(r, DALLY.columns.syncStatus).setValue('À synchroniser');
-      sheet.getRange(r, DALLY.columns.syncMessage).clearContent();
+      const messageCell = sheet.getRange(r, DALLY.columns.syncMessage);
+      const currentMessage = String(messageCell.getDisplayValue() || '').trim();
+      if (plannedEdited) messageCell.setValue(DALLY.replanIntentMarker);
+      else if (!hasReplanIntentText_(currentMessage)) messageCell.clearContent();
     } else if (planned) {
       sheet.getRange(r, DALLY.columns.syncStatus).setValue('À initialiser manuellement');
       sheet.getRange(r, DALLY.columns.syncMessage).setValue('Sélectionnez toutes les lignes du nouveau dossier puis utilisez « Synchroniser le dossier sélectionné ».');
@@ -147,6 +153,7 @@ function dallyMarkAllForSync() {
   DALLY.dataSheets.forEach(name => {
     const sh = SpreadsheetApp.getActive().getSheetByName(name);
     if (!sh) return;
+    if (!assertCanonicalSheetLayout_(sh, true)) return;
     const last = sh.getLastRow();
     if (last < DALLY.firstDataRow) return;
     const dossiers = sh.getRange(DALLY.firstDataRow, DALLY.columns.dossier, last - DALLY.firstDataRow + 1, 1).getDisplayValues();
@@ -187,6 +194,7 @@ function syncPending_(cfg, manual) {
     if (remaining <= 0) break;
     const sheet = SpreadsheetApp.getActive().getSheetByName(name);
     if (!sheet || !cfg.routes[name] || !cfg.routes[name].active) continue;
+    assertCanonicalSheetLayout_(sheet);
     const dirty = dirtyDossiers_(sheet);
     for (const dossier of dirty) {
       if (remaining-- <= 0) break;
@@ -214,7 +222,9 @@ function syncDossier_(sheet, dossier, rows, cfg) {
   rows.forEach(row => {
     const key = articleKey_(row);
     const line = lineByKey[String(key || '')];
-    setCell_(sheet, row.row, DALLY.columns.syncStatus, 'Synchronisé');
+    if (Object.prototype.hasOwnProperty.call(data, 'planned_consolidation_ref')) {
+      setCell_(sheet, row.row, DALLY.columns.plannedConsolidation, sheetLiteralText_(data.planned_consolidation_ref));
+    }
     if (data.collection_local_ref) setCell_(sheet, row.row, DALLY.columns.dossier, data.collection_local_ref);
     setCell_(sheet, row.row, DALLY.columns.partnerId, data.partner_id || '');
     setCell_(sheet, row.row, DALLY.columns.shipmentId, data.shipment_id || '');
@@ -223,9 +233,13 @@ function syncDossier_(sheet, dossier, rows, cfg) {
     setCell_(sheet, row.row, DALLY.columns.intakeConsolidationRef, data.intake_consolidation_ref || '');
     setCell_(sheet, row.row, DALLY.columns.syncSourceKey, data.sync_source_key || sourceKey_(sheet.getName(), dossier, rows));
     setCell_(sheet, row.row, DALLY.columns.lastSync, now);
-    const msg = line ? ('CRM OK • tarif ' + line.pricing_status) : 'CRM OK • ligne paiement/administrative';
+    const normalMessage = line ? ('CRM OK • tarif ' + line.pricing_status) : 'CRM OK • ligne paiement/administrative';
+    const msg = data.requires_replan
+      ? String(data.sync_message || 'Départ clôturé — replanification requise') + ' • ' + normalMessage
+      : normalMessage;
     setCell_(sheet, row.row, DALLY.columns.syncMessage, msg);
   });
+  rows.forEach(row => setCell_(sheet, row.row, DALLY.columns.syncStatus, 'Synchronisé'));
 
   // The writes above make the in-memory snapshot stale. Reload by the
   // server-issued source identity before invoice/payment calls.
@@ -268,6 +282,12 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
   const source = cfg.migrationMode ? 'legacy_xlsx' : 'google_sheets';
   const plannedRef = firstText_(rows, DALLY.columns.plannedConsolidation);
   const sourceKey = sourceKey_(sheetName, dossier, rows);
+  const serverIdentified = isServerIdentifiedDossier_(rows);
+  const explicitReplan = hasExplicitReplanIntent_(rows);
+  if (serverIdentified && explicitReplan && !plannedRef) {
+    throw new Error('Une replanification doit sélectionner une consolidation ouverte ; vider la colonne B n’est pas une désaffectation valide.');
+  }
+  const sendPlannedRef = !!plannedRef && (!serverIdentified || explicitReplan);
   const payload = {
     external_reference: payloadExternalReference_(rows, dossier),
     sync_source_key: sourceKey,
@@ -277,7 +297,7 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
     goods_received_on: dateIso_(value_(first, DALLY.columns.depositDate)),
     customer_segment: DALLY.segmentCodes[display_(first, DALLY.columns.clientType)] || 'individual',
     state: sheetShipmentState_(first),
-    planned_consolidation_ref: plannedRef || undefined,
+    planned_consolidation_ref: sendPlannedRef ? plannedRef : undefined,
     collection_local_ref: plannedRef ? undefined : (firstText_(rows, DALLY.columns.collectionLocalRef) || undefined),
     dossier_fee_eur: firstNumber_(rows, DALLY.columns.dossierFee) || 0,
     other_fees_eur: sum_(articleRows, DALLY.columns.otherFees),
@@ -436,22 +456,153 @@ function apiPost_(path, propertyName, payload, cfg) {
 }
 
 function dallyRefreshOpenConsolidations() {
-  const cfg=readConfig_(); const data=apiGet_('/api/v1/freight/consolidations/open','DALLY_FREIGHT_SYNC_API_KEY',cfg);
-  const sh=ensureConfigSheet_(); const start=21; const rows=(data.consolidations||[]).map(c=>[c.name,c.transport_mode,c.direction,c.origin_city||c.origin||'',c.destination_city||c.destination||'',c.collection_close_on||'']);
-  sh.getRange(start,1,Math.max(1, sh.getMaxRows()-start+1),6).clearContent();
-  sh.getRange(20,1,1,6).setValues([['Consolidations ouvertes','Mode','Direction','Origine','Destination','Clôture collecte']]);
-  if (rows.length) sh.getRange(start,1,rows.length,6).setValues(rows);
   DALLY.dataSheets.forEach(name => {
-    const dataSheet = SpreadsheetApp.getActive().getSheetByName(name); if (!dataSheet) return;
-    dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.plannedConsolidation, dataSheet.getMaxRows()-DALLY.firstDataRow+1, 1).clearDataValidations();
-    const route=cfg.routes[name]||{};
-    const allowed=(data.consolidations||[]).filter(c => c.transport_mode===route.mode && c.direction===route.direction && (!route.originCountry || c.origin_country_code===route.originCountry) && (!route.originCity || c.origin_city===route.originCity) && (!route.destinationCountry || c.destination_country_code===route.destinationCountry) && (!route.destinationCity || c.destination_city===route.destinationCity)).map(c=>c.name);
-    if (allowed.length) {
-      const validation=SpreadsheetApp.newDataValidation().requireValueInList(allowed,true).setAllowInvalid(false).build();
-      dataSheet.getRange(DALLY.firstDataRow,DALLY.columns.plannedConsolidation,dataSheet.getMaxRows()-DALLY.firstDataRow+1,1).setDataValidation(validation);
-    }
+    const sheet = SpreadsheetApp.getActive().getSheetByName(name);
+    if (sheet) assertCanonicalSheetLayout_(sheet);
   });
-  SpreadsheetApp.getActive().toast(rows.length+' départ(s) ouvert(s) actualisé(s).','Dally CRM',6);
+  const refreshedCount = withScriptLock_(() => {
+    const cfg=readConfig_(); const data=apiGet_('/api/v1/freight/consolidations/open','DALLY_FREIGHT_SYNC_API_KEY',cfg);
+    const bindings = fetchSheetBindings_(cfg);
+    const sh=ensureConfigSheet_(); const start=21; const rows=(data.consolidations||[]).map(c=>[c.name,c.transport_mode,c.direction,c.origin_city||c.origin||'',c.destination_city||c.destination||'',c.collection_close_on||'']);
+    const safeRows = rows.map(row => row.map(sheetLiteralText_));
+    sh.getRange(start,1,Math.max(1, sh.getMaxRows()-start+1),6).clearContent();
+    sh.getRange(20,1,1,6).setValues([['Consolidations ouvertes','Mode','Direction','Origine','Destination','Clôture collecte']]);
+    if (safeRows.length) sh.getRange(start,1,safeRows.length,6).setValues(safeRows);
+    DALLY.dataSheets.forEach(name => {
+      const dataSheet = SpreadsheetApp.getActive().getSheetByName(name); if (!dataSheet) return;
+      applySheetBindings_(dataSheet, bindings);
+      dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.plannedConsolidation, dataSheet.getMaxRows()-DALLY.firstDataRow+1, 1).clearDataValidations();
+      const route=cfg.routes[name]||{};
+      const allowed=(data.consolidations||[]).filter(c => c.transport_mode===route.mode && c.direction===route.direction && (!route.originCountry || c.origin_country_code===route.originCountry) && (!route.originCity || c.origin_city===route.originCity) && (!route.destinationCountry || c.destination_country_code===route.destinationCountry) && (!route.destinationCity || c.destination_city===route.destinationCity)).map(c=>c.name);
+      const assigned = [];
+      if (dataSheet.getLastRow() >= DALLY.firstDataRow) {
+        const shipmentValues = dataSheet.getRange(DALLY.firstDataRow, DALLY.columns.shipmentId, dataSheet.getLastRow() - DALLY.firstDataRow + 1, 1).getDisplayValues();
+        shipmentValues.forEach(value => {
+          const binding = bindings[String(value[0] || '').trim()];
+          if (binding && binding.planned_consolidation_ref && !assigned.includes(binding.planned_consolidation_ref)) assigned.push(binding.planned_consolidation_ref);
+        });
+      }
+      assigned.forEach(value => { if (!allowed.includes(value)) allowed.push(value); });
+      if (allowed.length) {
+        const validation=SpreadsheetApp.newDataValidation().requireValueInList(allowed,true).setAllowInvalid(false).build();
+        dataSheet.getRange(DALLY.firstDataRow,DALLY.columns.plannedConsolidation,dataSheet.getMaxRows()-DALLY.firstDataRow+1,1).setDataValidation(validation);
+      }
+    });
+    return rows.length;
+  });
+  SpreadsheetApp.getActive().toast(refreshedCount+' départ(s) ouvert(s) actualisé(s).','Dally CRM',6);
+}
+
+function fetchSheetBindings_(cfg) {
+  const ids = [];
+  DALLY.dataSheets.forEach(name => {
+    const sheet = SpreadsheetApp.getActive().getSheetByName(name);
+    if (!sheet || sheet.getLastRow() < DALLY.firstDataRow) return;
+    const values = sheet.getRange(DALLY.firstDataRow, DALLY.columns.shipmentId, sheet.getLastRow() - DALLY.firstDataRow + 1, 1).getDisplayValues();
+    values.forEach(row => {
+      const id = Number(String(row[0] || '').trim());
+      if (Number.isInteger(id) && id > 0 && !ids.includes(id)) ids.push(id);
+    });
+  });
+  const bindings = {};
+  for (let start = 0; start < ids.length; start += 200) {
+    const chunk = ids.slice(start, start + 200);
+    const data = apiGet_('/api/v1/freight/sheet-bindings?shipment_ids=' + encodeURIComponent(chunk.join(',')), 'DALLY_FREIGHT_SYNC_API_KEY', cfg);
+    (data.bindings || []).forEach(binding => { bindings[String(binding.shipment_id)] = binding; });
+  }
+  return bindings;
+}
+
+function applySheetBindings_(sheet, bindings) {
+  if (!sheet || sheet.getLastRow() < DALLY.firstDataRow) return;
+  const count = sheet.getLastRow() - DALLY.firstDataRow + 1;
+  const display = sheet.getRange(DALLY.firstDataRow, 1, count, DALLY.maxColumn).getDisplayValues();
+  const grouped = new Map();
+  for (let i = 0; i < display.length; i++) {
+    const shipmentId = String(display[i][DALLY.columns.shipmentId - 1] || '').trim();
+    if (!shipmentId || !bindings[shipmentId]) continue;
+    const dossier = String(display[i][DALLY.columns.dossier - 1] || '').trim();
+    const source = String(display[i][DALLY.columns.syncSourceKey - 1] || '').trim();
+    const global = String(display[i][DALLY.columns.globalExternalReference - 1] || '').trim();
+    const key = source ? 'source|' + source : (global ? 'global|' + global : 'shipment|' + shipmentId + '|' + dossier);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push({index: i, row: display[i], binding: bindings[shipmentId]});
+  }
+  const concurrentMessage = 'Modification Sheet détectée pendant l’actualisation : valeur de consolidation conservée. Synchronisez le dossier puis relancez l’actualisation.';
+  const readState = member => {
+    const row = DALLY.firstDataRow + member.index;
+    return {
+      planned: String(sheet.getRange(row, DALLY.columns.plannedConsolidation, 1, 1).getDisplayValue() || '').trim(),
+      status: String(sheet.getRange(row, DALLY.columns.syncStatus, 1, 1).getDisplayValue() || '').trim(),
+      message: String(sheet.getRange(row, DALLY.columns.syncMessage, 1, 1).getDisplayValue() || '').trim(),
+    };
+  };
+  const markConcurrent = members => members.forEach(member => {
+    const row = DALLY.firstDataRow + member.index;
+    const currentMessage = String(sheet.getRange(row, DALLY.columns.syncMessage, 1, 1).getDisplayValue() || '').trim();
+    setCell_(sheet, row, DALLY.columns.syncMessage, preserveReplanIntentMessage_(currentMessage, concurrentMessage));
+  });
+  grouped.forEach(members => {
+    const binding = members[0].binding;
+    const crmValue = String(binding.planned_consolidation_ref || '').trim();
+    const changed = [];
+    members.forEach(member => {
+      const snapshotPlanned = String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim();
+      const snapshotStatus = String(member.row[DALLY.columns.syncStatus - 1] || '').trim();
+      const live = readState(member);
+      member._bindingExpected = live;
+      if (live.planned !== snapshotPlanned || live.status !== snapshotStatus) changed.push(member);
+      member.row[DALLY.columns.plannedConsolidation - 1] = live.planned;
+      member.row[DALLY.columns.syncStatus - 1] = live.status;
+      member.row[DALLY.columns.syncMessage - 1] = live.message;
+    });
+    const unsafeChange = changed.some(member =>
+      member._bindingExpected.status !== 'À synchroniser' || member._bindingExpected.planned === crmValue
+    );
+    if (unsafeChange) {
+      markConcurrent(members);
+      return;
+    }
+    const stillCurrent = () => members.every(member => {
+      const live = readState(member);
+      return live.planned === member._bindingExpected.planned && live.status === member._bindingExpected.status && live.message === member._bindingExpected.message;
+    });
+    const replanRequested = members.some(member => hasReplanIntentText_(member.row[DALLY.columns.syncMessage - 1]));
+    const pending = members.filter(member =>
+      String(member.row[DALLY.columns.syncStatus - 1] || '').trim() === 'À synchroniser' &&
+      String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim() !== crmValue
+    );
+    if (pending.length) {
+      const pendingValues = [...new Set(pending.map(member =>
+        String(member.row[DALLY.columns.plannedConsolidation - 1] || '').trim()
+      ))];
+      const localValue = pendingValues[0] || '';
+      const message = pendingValues.length > 1
+        ? 'Conflit de consolidation dans le dossier : plusieurs valeurs Sheet en attente. Harmonisez la colonne B avant synchronisation.'
+        : 'Consolidation en attente : Sheet ' + (localValue || '(vide)') + ' / CRM ' + (crmValue || '(vide)') + '. Synchronisez le dossier pour appliquer le changement.';
+      if (!stillCurrent()) {
+        markConcurrent(members);
+        return;
+      }
+      members.forEach(member => {
+        if (pendingValues.length === 1) setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.plannedConsolidation, sheetLiteralText_(localValue));
+        setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.syncMessage, replanRequested ? DALLY.replanIntentMarker + ' ' + message : message);
+      });
+      return;
+    }
+    if (!stillCurrent()) {
+      markConcurrent(members);
+      return;
+    }
+    members.forEach(member => {
+      setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.plannedConsolidation, sheetLiteralText_(crmValue));
+      if (binding.requires_replan) {
+        setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.syncMessage, 'Replanification requise dans une consolidation ouverte.');
+      } else if (hasReplanIntentText_(member.row[DALLY.columns.syncMessage - 1])) {
+        setCell_(sheet, DALLY.firstDataRow + member.index, DALLY.columns.syncMessage, '');
+      }
+    });
+  });
 }
 
 function apiGet_(path, propertyName, cfg) {
@@ -488,13 +639,82 @@ function readConfig_() {
 
 function ensureSheetLayout_(sheet) {
   if (!sheet) return;
+  const initialLayout = detectSheetLayout_(sheet);
+  migrateLegacySheetLayout_(sheet);
   if (sheet.getMaxColumns() < DALLY.maxColumn) sheet.insertColumnsAfter(sheet.getMaxColumns(), DALLY.maxColumn-sheet.getMaxColumns());
-  const headers = [['Consolidation prévue','sync source key','global external reference','intake consolidation ref','collection local ref']];
-  const range = sheet.getRange(DALLY.headerRow, DALLY.columns.plannedConsolidation, 1, 5);
+  if (initialLayout === 'empty') {
+    sheet.getRange(DALLY.headerRow, DALLY.columns.depositDate).setValue('Date depot');
+    sheet.getRange(DALLY.headerRow, DALLY.columns.plannedConsolidation).setValue('Consolidation prévue');
+    sheet.getRange(DALLY.headerRow, DALLY.columns.dossier).setValue('N dossier');
+    sheet.getRange(DALLY.headerRow, DALLY.columns.articleKey, 1, 3).setValues([['Clé article facture','Flag règlement facture','Clé règlement facture']]);
+    sheet.getRange(DALLY.headerRow, DALLY.columns.syncSourceKey, 1, 4).setValues([['sync source key','global external reference','intake consolidation ref','collection local ref']]);
+    sheet.hideColumns(DALLY.columns.syncSourceKey, 4);
+    return;
+  }
+  const planned = sheet.getRange(DALLY.headerRow, DALLY.columns.plannedConsolidation);
+  if (!planned.getValue()) planned.setValue('Consolidation prévue');
+  const labels = ['sync source key','global external reference','intake consolidation ref','collection local ref'];
+  const range = sheet.getRange(DALLY.headerRow, DALLY.columns.syncSourceKey, 1, labels.length);
   const current = range.getValues()[0];
-  const labels = headers[0];
   labels.forEach((label,i) => { if (!current[i]) range.getCell(1,i+1).setValue(label); });
   sheet.hideColumns(DALLY.columns.syncSourceKey, 4);
+}
+
+function isLegacy58Header_(header) {
+  const value = index => String(header[index - 1] || '').trim();
+  return value(1) === 'Date depot' && value(2) === 'N dossier' &&
+    value(3) !== 'Consolidation prévue' &&
+    [59, 60, 61, 62, 63].every(index => !value(index));
+}
+
+function migrateLegacySheetLayout_(sheet) {
+  const header = sheet.getRange(DALLY.headerRow, 1, 1, Math.min(sheet.getMaxColumns(), DALLY.maxColumn)).getDisplayValues()[0];
+  const date = String(header[0] || '').trim();
+  const b = String(header[1] || '').trim();
+  const c = String(header[2] || '').trim();
+  if (b === 'Consolidation prévue' && c === 'N dossier') return;
+  if (!date && !b && !c) return;
+  const legacyPlanned = String(header[58] || '').trim();
+  const legacyTechnical = ['sync source key', 'global external reference', 'intake consolidation ref', 'collection local ref'];
+  const hasLegacy63 = date === 'Date depot' && b === 'N dossier' && legacyPlanned === 'Consolidation prévue' &&
+    legacyTechnical.every((label, index) => String(header[59 + index] || '').trim() === label);
+  const hasLegacy58 = isLegacy58Header_(header);
+  if (!hasLegacy63 && !hasLegacy58) throw new Error('Disposition de feuille inconnue — migration automatique refusée.');
+  sheet.insertColumnAfter(1);
+  const rows = Math.max(0, sheet.getMaxRows() - DALLY.headerRow + 1);
+  if (hasLegacy63 && rows) {
+    sheet.getRange(DALLY.headerRow, 60, rows, 1).copyTo(sheet.getRange(DALLY.headerRow, 2, rows, 1), {contentsOnly: false});
+    sheet.deleteColumn(60);
+  }
+  if (sheet.getMaxColumns() < DALLY.maxColumn) sheet.insertColumnsAfter(sheet.getMaxColumns(), DALLY.maxColumn - sheet.getMaxColumns());
+  sheet.getRange(DALLY.headerRow, 2).setValue('Consolidation prévue');
+  sheet.getRange(DALLY.headerRow, 3).setValue('N dossier');
+  sheet.getRange(DALLY.headerRow, 57, 1, 7).setValues([['Clé article facture','Flag règlement facture','Clé règlement facture', ...legacyTechnical]]);
+  sheet.hideColumns(60, 4);
+}
+
+function detectSheetLayout_(sheet) {
+  if (!sheet) return 'unknown';
+  const max = sheet.getMaxColumns();
+  const header = sheet.getRange(DALLY.headerRow, 1, 1, Math.min(max, DALLY.maxColumn)).getDisplayValues()[0];
+  const value = index => String(header[index - 1] || '').trim();
+  if (!value(1) && !value(2) && !value(3)) return 'empty';
+  if (value(2) === 'Consolidation prévue' && value(3) === 'N dossier' &&
+      value(57) === 'Clé article facture' && value(58) === 'Flag règlement facture' &&
+      value(59) === 'Clé règlement facture' && value(60) === 'sync source key' &&
+      value(61) === 'global external reference' && value(62) === 'intake consolidation ref' && value(63) === 'collection local ref') return 'canonical';
+  if (value(1) === 'Date depot' && value(2) === 'N dossier' && value(59) === 'Consolidation prévue' &&
+      ['sync source key','global external reference','intake consolidation ref','collection local ref'].every((label, i) => value(60 + i) === label)) return 'legacy63';
+  if (isLegacy58Header_(header)) return 'legacy58';
+  return 'unknown';
+}
+
+function assertCanonicalSheetLayout_(sheet, quiet) {
+  const layout = detectSheetLayout_(sheet);
+  if (layout === 'canonical') return true;
+  if (quiet && (layout === 'legacy58' || layout === 'legacy63')) return false;
+  if (layout === 'legacy58' || layout === 'legacy63' || layout === 'empty') throw new Error('Disposition ancienne détectée. Lancez Dally CRM → Initialiser / installer les déclencheurs avant toute synchronisation.');
+  throw new Error('Disposition de feuille inconnue — opération refusée.');
 }
 
 function ensureConfigSheet_() {
@@ -526,7 +746,8 @@ function logicalDossierKey_(row) {
   const planned = String(row[DALLY.columns.plannedConsolidation - 1] || '').trim();
   if (source) return 'source|' + source;
   if (global) return 'global|' + global;
-  return (planned ? planned + '|' : '') + dossier;
+  const shipment = String(row[DALLY.columns.shipmentId - 1] || '').trim();
+  return 'shipment|' + (shipment || dossier) + '|' + dossier;
 }
 
 // Resolve the identity sent to freight/billing endpoints.  A planned dossier
@@ -546,6 +767,27 @@ function payloadExternalReference_(rows, dossier) {
   return serverIdentified ? '' : dossier;
 }
 
+function isServerIdentifiedDossier_(rows) {
+  return !!(
+    firstNumber_(rows, DALLY.columns.shipmentId) ||
+    firstText_(rows, DALLY.columns.globalExternalReference) ||
+    firstText_(rows, DALLY.columns.intakeConsolidationRef) ||
+    firstText_(rows, DALLY.columns.collectionLocalRef)
+  );
+}
+
+function hasReplanIntentText_(value) {
+  return String(value || '').trim().startsWith(DALLY.replanIntentMarker);
+}
+
+function hasExplicitReplanIntent_(rows) {
+  return rows.some(row => hasReplanIntentText_(display_(row, DALLY.columns.syncMessage)));
+}
+
+function preserveReplanIntentMessage_(current, message) {
+  return hasReplanIntentText_(current) ? DALLY.replanIntentMarker + (message ? ' ' + message : '') : message;
+}
+
 function dirtyDossiers_(sheet) {
   const last = sheet.getLastRow();
   if (last < DALLY.firstDataRow) return [];
@@ -559,7 +801,8 @@ function dirtyDossiers_(sheet) {
     const dossier = String(row[DALLY.columns.dossier - 1] || '').trim();
     const planned = String(row[DALLY.columns.plannedConsolidation - 1] || '').trim();
     if (!dossier) continue; // blank-B dossiers remain manual-init only.
-    const namespace = (planned ? planned + '|' : '') + dossier;
+    const shipment = String(row[DALLY.columns.shipmentId - 1] || '').trim();
+    const namespace = 'shipment|' + (shipment || dossier) + '|' + dossier;
     if (!groups.has(namespace)) groups.set(namespace, []);
     groups.get(namespace).push({index: i, display: row});
   }
@@ -625,11 +868,7 @@ function rowsForDossier_(sheet, key) {
 }
 
 function assertNoSelectedIdentityCollision_(sheet, selectedRows) {
-  const namespaceOf = row => {
-    const dossier = display_(row, DALLY.columns.dossier);
-    const planned = display_(row, DALLY.columns.plannedConsolidation);
-    return planned ? planned + '|' + dossier : dossier;
-  };
+  const namespaceOf = row => logicalDossierKey_(row.display);
   const selectedNamespace = namespaceOf(selectedRows[0]);
   const selectedRowNumbers = new Set(selectedRows.map(row => row.row));
   const selectedIsBlank = selectedRows.every(row => !display_(row, DALLY.columns.dossier));
@@ -651,6 +890,7 @@ function assertNoSelectedIdentityCollision_(sheet, selectedRows) {
 
 function selectedDossier_() {
   const sheet=SpreadsheetApp.getActiveSheet(); if (!DALLY.dataSheets.includes(sheet.getName())) throw new Error('Sélectionnez une ligne dans une feuille de saisie.');
+  assertCanonicalSheetLayout_(sheet);
   const range=SpreadsheetApp.getActiveRange(); const first=range.getRow(); const last=first + Math.max(1, range.getNumRows()) - 1;
   if (first < DALLY.firstDataRow) throw new Error('Sélectionnez une ligne de dossier.');
   const values=sheet.getRange(first,1,last-first+1,DALLY.maxColumn).getValues();
@@ -674,11 +914,9 @@ function selectedDossier_() {
   const key = logicalKeys[0];
   const allRows = rowsForDossier_(sheet, key);
   if (!allRows.length) throw new Error('Dossier sélectionné introuvable.');
-  const namespaces = new Set(allRows.map(row => {
-    const rowDossier = display_(row, DALLY.columns.dossier);
-    const planned = display_(row, DALLY.columns.plannedConsolidation);
-    return planned ? planned + '|' + rowDossier : rowDossier;
-  }));
+  const plannedRefs = new Set(allRows.map(row => display_(row, DALLY.columns.plannedConsolidation)));
+  if (plannedRefs.size > 1) throw new Error('Les lignes du dossier ont des consolidations prévues différentes.');
+  const namespaces = new Set(allRows.map(row => logicalDossierKey_(row.display)));
   if (namespaces.size > 1) throw new Error('Identité serveur associée à plusieurs namespaces de dossier.');
   assertNoSelectedIdentityCollision_(sheet, allRows);
   return {sheet, dossier, key, rows:allRows};
@@ -756,7 +994,8 @@ function markDossierError_(sheet, dossier, err) {
   rowsForDossier_(sheet, dossier).forEach(row => {
     setCell_(sheet, row.row, DALLY.columns.syncStatus, 'Erreur');
     setCell_(sheet, row.row, DALLY.columns.lastSync, new Date());
-    setCell_(sheet, row.row, DALLY.columns.syncMessage, msg);
+    const currentMessage = String(sheet.getRange(row.row, DALLY.columns.syncMessage).getDisplayValue() || '').trim();
+    setCell_(sheet, row.row, DALLY.columns.syncMessage, preserveReplanIntentMessage_(currentMessage, msg));
   });
 }
 
@@ -769,6 +1008,12 @@ function appendMessage_(sheet, rows, message) {
 }
 
 function setCell_(sheet, row, column, value) { sheet.getRange(row, column).setValue(value); }
+
+function sheetLiteralText_(value) {
+  if (value === null || value === false || value === undefined || value === '') return '';
+  const text = String(value);
+  return /^[=+\-@]/.test(text) ? "'" + text : text;
+}
 function value_(row, column) { return row.values[column - 1]; }
 function display_(row, column) { return String(row.display[column - 1] == null ? '' : row.display[column - 1]).trim(); }
 function firstText_(rows, column) { for (const r of rows) { const v = display_(r, column); if (v) return v; } return ''; }

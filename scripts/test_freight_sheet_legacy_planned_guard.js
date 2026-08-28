@@ -27,13 +27,26 @@ vm.createContext(sandbox);
 vm.runInContext(code, sandbox);
 const {DALLY, applySheetBindings_} = vm.runInContext('({DALLY, applySheetBindings_})', sandbox);
 const blank = () => Array(DALLY.maxColumn).fill('');
-const row = (planned, status, shipment) => { const value = blank(); value[DALLY.columns.plannedConsolidation - 1] = planned; value[DALLY.columns.syncStatus - 1] = status; value[DALLY.columns.shipmentId - 1] = String(shipment); value[DALLY.columns.dossier - 1] = 'A002'; return value; };
+const row = (planned, status, shipment, message = '') => {
+  const value = blank();
+  value[DALLY.columns.plannedConsolidation - 1] = planned;
+  value[DALLY.columns.syncStatus - 1] = status;
+  value[DALLY.columns.shipmentId - 1] = String(shipment);
+  value[DALLY.columns.dossier - 1] = 'A002';
+  value[DALLY.columns.syncMessage - 1] = message;
+  return value;
+};
 
-const sheet = new FakeSheet([blank(), blank(), row('AIR-DSS-CDG-2026-001', 'Synchronisé', 678)], DALLY.maxColumn);
-sheet.rows[2][DALLY.columns.syncMessage - 1] = 'CRM OK • tarif automatic';
+const operationalMessage = 'Correction utilisateur 22/08/2026 : paiement à synchroniser CRM.';
+const sheet = new FakeSheet([blank(), blank(), row('AIR-DSS-CDG-2026-001', 'À synchroniser', 678, operationalMessage)], DALLY.maxColumn);
 applySheetBindings_(sheet, {'678': {shipment_id: 678, planned_consolidation_ref: false, requires_replan: false}});
 assert.strictEqual(sheet.cell(3, DALLY.columns.plannedConsolidation), 'AIR-DSS-CDG-2026-001');
-assert.strictEqual(sheet.cell(3, DALLY.columns.syncMessage), 'CRM OK • tarif automatic');
+assert.strictEqual(sheet.cell(3, DALLY.columns.syncMessage), operationalMessage, 'historical refresh must preserve an operational sync message when CRM planned assignment is blank');
+
+const explicit = new FakeSheet([blank(), blank(), row('AIR-NEW', 'À synchroniser', 679, DALLY.replanIntentMarker)], DALLY.maxColumn);
+applySheetBindings_(explicit, {'679': {shipment_id: 679, planned_consolidation_ref: false, requires_replan: false}});
+assert.match(String(explicit.cell(3, DALLY.columns.syncMessage)), /Replanification demandée depuis la feuille\./, 'explicit replan intent must remain visible');
+assert.match(String(explicit.cell(3, DALLY.columns.syncMessage)), /Consolidation en attente/, 'explicit replan must still surface the pending CRM mismatch');
 
 const authoritative = new FakeSheet([blank(), blank(), row('AIR-OLD', 'Synchronisé', 999)], DALLY.maxColumn);
 applySheetBindings_(authoritative, {'999': {shipment_id: 999, planned_consolidation_ref: 'AIR-CRM', requires_replan: false}});

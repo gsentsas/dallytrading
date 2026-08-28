@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   OPS_LOGIN_IP,
+  OPS_RECHERCHE_IP,
+  OPS_RECHERCHE_SESSION,
+  cleRechercheIp,
+  cleRechercheSession,
   OPS_LOGIN_UTILISATEUR,
   checkRateLimit,
   cleLoginIp,
@@ -79,6 +83,44 @@ describe('forme des clés', () => {
   it('normalise la casse et les espaces du compte', () => {
     // Sans cela, la limite par compte se contourne en changeant la casse.
     expect(cleLoginUtilisateur('  GiLLes ')).toBe(cleLoginUtilisateur('gilles'));
+  });
+});
+
+describe('budgets de la recherche client', () => {
+  it('sépare la session de l’adresse', () => {
+    expect(cleRechercheSession('sX').startsWith('ops:customers:session:')).toBe(true);
+    expect(cleRechercheIp('10.0.0.1')).toBe('ops:customers:ip:10.0.0.1');
+  });
+
+  it('ne recopie jamais l’identifiant de session dans la clé', () => {
+    // Un identifiant de session vaut un mot de passe : il ne doit apparaître
+    // ni dans une table en mémoire, ni dans un message de journal.
+    const cle = cleRechercheSession('session-odoo-tres-reconnaissable');
+    expect(cle).not.toContain('session-odoo-tres-reconnaissable');
+    expect(cle).toMatch(/^ops:customers:session:[0-9a-f]{32}$/);
+  });
+
+  it('donne la même clé pour la même session', () => {
+    expect(cleRechercheSession('sX')).toBe(cleRechercheSession('sX'));
+  });
+
+  it('donne des clés différentes pour deux sessions', () => {
+    expect(cleRechercheSession('sX')).not.toBe(cleRechercheSession('sY'));
+  });
+
+  it('borne la session plus serré que l’adresse', () => {
+    // Tout un entrepôt sort par la même adresse : une limite qui ne
+    // connaîtrait que l'IP frapperait l'équipe pour l'imprudence d'un poste.
+    expect(OPS_RECHERCHE_SESSION.limite).toBeLessThan(OPS_RECHERCHE_IP.limite);
+  });
+
+  it('ne gêne pas une réception normale', () => {
+    // Une réception, c'est une recherche, parfois deux.
+    expect(OPS_RECHERCHE_SESSION.limite).toBeGreaterThanOrEqual(60);
+  });
+
+  it('ne partage aucune clé avec la connexion', () => {
+    expect(cleRechercheIp('10.0.0.1')).not.toBe(cleLoginIp('10.0.0.1'));
   });
 });
 

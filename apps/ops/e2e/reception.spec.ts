@@ -69,8 +69,8 @@ test('sélectionner un départ mène à l’étape suivante en le portant', asyn
     .getByRole('link', { name: 'Sélectionner' }).click();
 
   await expect(page).toHaveURL(new RegExp(`/reception/client\\?consolidation=${AERIEN}$`));
-  await expect(page.getByRole('heading', { name: 'Rechercher le client' })).toBeVisible();
-  await expect(page.getByTestId('consolidation-selectionnee')).toHaveText(AERIEN);
+  await expect(page.getByRole('heading', { name: 'Identifier le client' })).toBeVisible();
+  await expect(page.getByText(AERIEN)).toBeVisible();
 });
 
 test('l’écran n’offre aucun moyen de créer ou fermer une collecte', async ({ page }) => {

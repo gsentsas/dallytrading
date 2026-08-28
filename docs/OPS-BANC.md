@@ -62,7 +62,9 @@ un défaut d'`arborist` (npm 10.8.2) déclenché par
 `legacy-peer-deps` a été retiré au profit de l'alignement de version, qui
 supprime le conflit au lieu de le masquer. `apps/web` présente le même
 symptôme, masqué par son propre lockfile : il l'aura tant que son `vitest`
-restera en 4.1.10.
+restera en 4.1.10. Sa correction est volontairement laissée à un chantier
+séparé — l'aligner en même temps qu'un travail métier mêlerait un changement de
+dépendances de production à une revue fonctionnelle.
 
 Puis, en pointant vers le banc :
 
@@ -80,7 +82,7 @@ nécessaire pour un banc local — et seulement pour lui.
 ## 4. Les tests
 
 ```bash
-npm run verify        # types, lint, 152 tests unitaires
+npm run verify        # types, lint, 225 tests unitaires
 ```
 
 Les tests de bout en bout ont besoin d'un navigateur ; les bibliothèques
@@ -101,7 +103,20 @@ filtre : `AIR-DSS-CDG-TEST-001` (aérien, collecte ouverte, départ prévu),
 `ROAD-DKR-BKO-TEST-001` (routier — hors phase 1) et `AIR-DSS-CDG-TEST-DRAFT`
 (brouillon). Seules les deux premières doivent apparaître à l'écran.
 
-## 6. Ce que le banc a servi à établir
+## 6. Les clients de banc
+
+Trois fiches, choisies pour couvrir les trois issues de la recherche :
+
+| Fiche | Numéro | Sert à prouver |
+| --- | --- | --- |
+| Aissatou Kandji | `+221 77 123 45 67` | la correspondance unique |
+| Mamadou Konaté | `+221 76 000 00 00` | l'ambiguïté… |
+| Mariama Konaté | `00221760000000` | …écrite autrement, et pourtant le même numéro |
+
+`+221 77 999 88 77` ne correspond à personne : c'est le cas « aucun client
+trouvé ».
+
+## 7. Ce que le banc a servi à établir
 
 - Un compte **non interne**, sans aucun droit de lecture métier, se connecte et
   obtient son identité : l'architecture de référence tient en conditions
@@ -114,3 +129,7 @@ filtre : `AIR-DSS-CDG-TEST-001` (aérien, collecte ouverte, départ prévu),
 - Un logisticien à qui `dally.freight.consolidation` est refusé par l'ORM
   obtient malgré tout la liste de ses départs : le privilège vit dans le
   service, jamais dans le compte.
+- Le même compte, à qui `res.partner` est refusé, retrouve un client par son
+  numéro — et se voit refuser deux fiches plutôt que d'en montrer une.
+- Ni numéro, ni adresse électronique n'apparaissent dans une URL : la recherche
+  passe par un corps de requête.

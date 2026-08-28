@@ -13,6 +13,8 @@
  * appartient au proxy inverse.
  */
 
+import { createHash } from 'node:crypto';
+
 interface Compteur {
   nombre: number;
   /** Horodatage (ms) de réouverture de la fenêtre. */
@@ -142,6 +144,49 @@ export function cleLoginIp(ip: string): string {
  */
 export function cleLoginUtilisateur(login: string): string {
   return `ops:login:user:${login.trim().toLowerCase()}`;
+}
+
+/**
+ * Les budgets de la recherche client.
+ *
+ * Ils protègent d'une chose précise : l'énumération automatisée du fichier
+ * clients. Un script qui essaierait les numéros les uns après les autres
+ * finirait par cartographier la clientèle, un « aucun client trouvé » à la
+ * fois.
+ *
+ * Deux clés, et la session d'abord. Tous les téléphones d'un entrepôt sortent
+ * par la même adresse publique : une limite qui ne connaîtrait que l'IP
+ * frapperait l'équipe entière pour l'imprudence d'un seul poste. La session
+ * cible le poste ; l'adresse reste un plafond large, contre celui qui
+ * ouvrirait vingt sessions.
+ *
+ * Les seuils sont hors d'atteinte d'une réception normale : une réception,
+ * c'est une recherche, parfois deux quand le client donne d'abord un mauvais
+ * numéro. Soixante en cinq minutes, c'est déjà un poste qui ne réceptionne
+ * plus rien.
+ */
+export const OPS_RECHERCHE_SESSION = { limite: 60, fenetreMs: 5 * 60_000 } as const;
+export const OPS_RECHERCHE_IP = { limite: 300, fenetreMs: 5 * 60_000 } as const;
+
+/**
+ * La clé d'une session, dérivée et non recopiée.
+ *
+ * L'identifiant de session Odoo vaut un mot de passe : il ne doit apparaître
+ * ni dans une table en mémoire, ni dans un message de journal. On n'en garde
+ * qu'une empreinte, tronquée — assez longue pour qu'aucune collision ne
+ * survienne à cette échelle, trop courte pour servir à quoi que ce soit
+ * d'autre.
+ */
+export function cleRechercheSession(identifiantSession: string): string {
+  const empreinte = createHash('sha256')
+    .update(`ops:recherche:${identifiantSession}`, 'utf8')
+    .digest('hex')
+    .slice(0, 32);
+  return `ops:customers:session:${empreinte}`;
+}
+
+export function cleRechercheIp(ip: string): string {
+  return `ops:customers:ip:${ip}`;
 }
 
 /** Remet les compteurs à zéro. Réservé aux tests. */

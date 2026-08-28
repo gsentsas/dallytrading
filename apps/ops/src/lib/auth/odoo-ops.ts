@@ -46,7 +46,13 @@ const PREFIXE_OPS = '/api/v1/ops/';
 const RESSOURCE_OPS = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
 
 export class OpsGatewayError extends Error {
-  readonly code: 'invalid_credentials' | 'forbidden' | 'unavailable' | 'invalid_path';
+  readonly code:
+    | 'invalid_credentials'
+    | 'forbidden'
+    | 'unavailable'
+    | 'invalid_path'
+    /** Odoo a refusé la *forme* de la demande. Jamais son contenu. */
+    | 'invalid_request';
 
   constructor(code: OpsGatewayError['code'], message?: string) {
     super(message ?? code);
@@ -224,6 +230,48 @@ export async function opsGet<T>(
 
   if (reponse.status === 403) throw new OpsGatewayError('forbidden');
   if (reponse.status >= 300 && reponse.status < 400) throw new OpsGatewayError('forbidden');
+  if (!reponse.ok) throw new OpsGatewayError('unavailable', `statut ${reponse.status}`);
+
+  const charge = (await reponse.json()) as { success?: boolean; data?: unknown };
+  if (!charge.success || charge.data === undefined) {
+    throw new OpsGatewayError('unavailable', 'réponse illisible');
+  }
+  return charge.data as T;
+}
+
+/**
+ * Soumet une demande à une ressource Ops.
+ *
+ * Existe pour une seule raison : certains arguments de lecture ne doivent pas
+ * voyager dans une URL. Un numéro de téléphone placé en chaîne de requête se
+ * retrouve dans l'historique du navigateur, dans les journaux du proxy et dans
+ * les en-têtes `Referer` — des endroits qui n'ont ni le chiffrement ni la
+ * discipline de la base. Le corps d'une requête ne va nulle part de tout cela.
+ *
+ * Le nom de ressource obéit à la même règle que `opsGet` : c'est un nom, pas
+ * un chemin.
+ */
+export async function opsPost<T>(
+  ressource: string,
+  corps: unknown,
+  sessionId: string,
+  correlationId: string,
+): Promise<T> {
+  if (!RESSOURCE_OPS.test(ressource)) {
+    throw new OpsGatewayError('invalid_path', `ressource non autorisée : ${ressource}`);
+  }
+
+  const reponse = await appel({
+    chemin: `${PREFIXE_OPS}${ressource}`,
+    methode: 'POST',
+    corps,
+    sessionId,
+    correlationId,
+  });
+
+  if (reponse.status === 403) throw new OpsGatewayError('forbidden');
+  if (reponse.status >= 300 && reponse.status < 400) throw new OpsGatewayError('forbidden');
+  if (reponse.status === 400) throw new OpsGatewayError('invalid_request');
   if (!reponse.ok) throw new OpsGatewayError('unavailable', `statut ${reponse.status}`);
 
   const charge = (await reponse.json()) as { success?: boolean; data?: unknown };

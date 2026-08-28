@@ -253,7 +253,7 @@ function syncDossier_(sheet, dossier, rows, cfg) {
     try { syncPayments_(sheet, rows, cfg, false); }
     catch (err) { appendMessage_(sheet, rows, 'Paiement: ' + errorText_(err)); }
   } else if (dossierHasPayments_(rows)) {
-    appendMessage_(sheet, rows.slice(0, 1), 'Paiements non synchronisés : option globale désactivée');
+    appendMessage_(sheet, rows, 'Paiements non synchronisés : option globale désactivée');
   }
   return {sync: data, invoice: invoiceData};
 }

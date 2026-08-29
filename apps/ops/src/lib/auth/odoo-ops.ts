@@ -61,14 +61,23 @@ export class OpsGatewayError extends Error {
     | 'invalid_request'
     /** La demande est bien formée, mais la base dit autre chose. */
     | 'not_found'
-    | 'conflict';
+    | 'conflict'
+    /**
+     * La demande est bien formée et le contenu est refusé : une date future,
+     * une devise absente, un fichier qui n'est pas une photo. Distinct de
+     * `invalid_request`, qui dit que la *forme* ne va pas, et distinct de
+     * `unavailable`, qui laisserait croire à une panne alors que la saisie est
+     * simplement à corriger.
+     */
+    | 'unprocessable';
 
   /**
-   * Le code stable d'un conflit, tel qu'Odoo l'a nommé.
+   * Le code stable du refus, tel qu'Odoo l'a nommé.
    *
-   * Il voyage jusqu'à l'interface parce que les deux conflits appellent des
-   * gestes différents : « demandez une vérification au responsable » d'un
-   * côté, « recommencez la saisie » de l'autre.
+   * Il voyage jusqu'à l'interface parce que chaque refus appelle un geste
+   * différent : « demandez une vérification au responsable » d'un côté,
+   * « reprenez la photo » de l'autre. Porté par les conflits comme par les
+   * contenus refusés.
    */
   readonly conflictCode?: string;
 
@@ -112,6 +121,14 @@ interface OptionsAppel {
   readonly chemin: string;
   readonly methode: 'GET' | 'POST' | 'PUT';
   readonly corps?: unknown;
+  /**
+   * Un envoi de fichier, quand il y en a un.
+   *
+   * Séparé de `corps` parce qu'il change le type de contenu : c'est `fetch`
+   * qui pose l'en-tête `multipart/form-data`, avec la frontière qu'il a
+   * choisie. L'écrire nous-mêmes produirait un corps illisible.
+   */
+  readonly formulaire?: FormData;
   /** Session de l'opérateur, quand il y en a une. */
   readonly sessionId?: string;
   readonly correlationId: string;
@@ -125,16 +142,14 @@ interface OptionsAppel {
  * traçable sans être rejouable.
  */
 async function appel(options: OptionsAppel): Promise<Response> {
-  const { chemin, methode, corps, sessionId, correlationId } = options;
+  const { chemin, methode, corps, formulaire, sessionId, correlationId } = options;
   if (!cheminAutorise(chemin)) {
     throw new OpsGatewayError('invalid_path', `chemin non autorisé : ${chemin}`);
   }
 
   const env = opsEnv();
-  const enTetes: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-Request-ID': correlationId,
-  };
+  const enTetes: Record<string, string> = { 'X-Request-ID': correlationId };
+  if (formulaire === undefined) enTetes['Content-Type'] = 'application/json';
   if (sessionId) {
     enTetes.Cookie = `session_id=${sessionIdSur(sessionId)}`;
   }
@@ -152,7 +167,8 @@ async function appel(options: OptionsAppel): Promise<Response> {
     redirect: 'manual',
     signal: minuteur.signal,
   };
-  if (corps !== undefined) init.body = JSON.stringify(corps);
+  if (formulaire !== undefined) init.body = formulaire;
+  else if (corps !== undefined) init.body = JSON.stringify(corps);
 
   try {
     const reponse = await fetch(`${env.ODOO_URL}${chemin}`, init);
@@ -241,6 +257,15 @@ async function lireReponse<T>(reponse: Response): Promise<T> {
     throw new OpsGatewayError('not_found', 'introuvable', charge?.error?.code);
   }
   if (reponse.status === 400) throw new OpsGatewayError('invalid_request');
+  if (reponse.status === 422) {
+    // Le contenu est refusé, pas la forme. Sans ce cas, une date future ou une
+    // photo illisible remontait en « service indisponible » : l'opérateur
+    // aurait attendu au lieu de corriger.
+    const charge = (await reponse.json().catch(() => null)) as
+      | { error?: { code?: string } }
+      | null;
+    throw new OpsGatewayError('unprocessable', 'contenu refusé', charge?.error?.code);
+  }
   if (reponse.status === 409) {
     // Le code du conflit est relayé ; son message, non : il vient d'Odoo et
     // c'est le BFF qui décide de ce que l'opérateur lit.
@@ -346,6 +371,50 @@ export async function opsPut<T>(
     chemin: `${PREFIXE_OPS}${ressource}`,
     methode: 'PUT',
     corps,
+    sessionId,
+    correlationId,
+  });
+  return lireReponse<T>(reponse);
+}
+
+/**
+ * Dépose un fichier sur une ressource Ops.
+ *
+ * ## Pourquoi le fichier ne devient pas du JSON
+ *
+ * Encoder une photo en base64 la fait grossir d'un tiers et oblige les deux
+ * bouts à en tenir une copie entière en mémoire. Sur un téléphone au bord du
+ * réseau, ce tiers se paie en secondes et parfois en coupure.
+ *
+ * ## Ce que l'appelant peut et ne peut pas décider
+ *
+ * Il fournit des octets, un nom, un type annoncé et des champs de texte. Il ne
+ * fournit ni en-tête, ni chemin : le nom de ressource obéit à la même règle
+ * que partout ailleurs dans ce module. Le type annoncé est transmis tel quel
+ * *et n'est pas cru* — c'est Odoo qui tranche, à partir des octets.
+ */
+export async function opsPostFichier<T>(
+  ressource: string,
+  fichier: { readonly nom: string; readonly type: string; readonly contenu: Blob },
+  champs: Readonly<Record<string, string>>,
+  sessionId: string,
+  correlationId: string,
+): Promise<T> {
+  if (!RESSOURCE_OPS.test(ressource)) {
+    throw new OpsGatewayError('invalid_path', `ressource non autorisée : ${ressource}`);
+  }
+
+  const formulaire = new FormData();
+  for (const [cle, valeur] of Object.entries(champs)) formulaire.append(cle, valeur);
+  formulaire.append(
+    'receipt',
+    new File([fichier.contenu], fichier.nom, { type: fichier.type }),
+  );
+
+  const reponse = await appel({
+    chemin: `${PREFIXE_OPS}${ressource}`,
+    methode: 'POST',
+    formulaire,
     sessionId,
     correlationId,
   });

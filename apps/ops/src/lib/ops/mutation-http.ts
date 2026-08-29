@@ -104,6 +104,11 @@ export async function reponseMutation<T extends z.ZodTypeAny>(
     if (code === 'forbidden') return erreur(401, 'Session expirée.');
     if (code === 'not_found') return erreur(404, 'Dossier ou article introuvable.');
     if (code === 'invalid_request') return erreur(400, 'Vérifiez les informations saisies.');
+    if (code === 'unprocessable') {
+      const refus = (e as OpsGatewayError).conflictCode ?? 'default';
+      logger.warn(`${evenement}.rejected`, { correlationId, code: refus });
+      return erreur(422, MESSAGES_REFUS[refus] ?? MESSAGES_REFUS['default'] ?? '', refus);
+    }
     if (code === 'conflict') {
       const conflit = (e as OpsGatewayError).conflictCode ?? 'conflict';
       logger.warn(`${evenement}.conflict`, { correlationId, code: conflit });
@@ -122,6 +127,21 @@ export async function reponseMutation<T extends z.ZodTypeAny>(
  * ou simplement constater que la collecte est close. Un message unique
  * laisserait le terrain sans savoir quoi faire.
  */
+const MESSAGES_REFUS: Record<string, string> = {
+  invalid_payment_date: 'La date du paiement n’est pas valide.',
+  invalid_expense_date:
+    'La date de la dépense n’est pas valide : elle ne peut pas être dans le futur.',
+  payment_channel_not_available: 'Ce moyen de paiement n’est pas disponible.',
+  payment_method_not_allowed: 'Ce mode de paiement n’est pas accepté.',
+  currency_not_available: 'Cette devise n’est pas disponible.',
+  receipt_missing: 'Aucune photo n’a été reçue.',
+  receipt_empty: 'La photo reçue est vide. Reprenez-la.',
+  receipt_too_large: 'La photo dépasse 10 Mo. Reprenez-la en qualité réduite.',
+  receipt_type_not_allowed:
+    'Seules les photos JPEG, PNG, WebP ou HEIC sont acceptées comme justificatif.',
+  default: 'Vérifiez les informations saisies.',
+};
+
 const MESSAGES_CONFLIT: Record<string, string> = {
   stale_line:
     'Cet article a été modifié depuis son affichage. Rechargez le dossier avant de poursuivre.',
@@ -132,5 +152,9 @@ const MESSAGES_CONFLIT: Record<string, string> = {
   line_reference_conflict: 'Cet article existe déjà dans ce dossier.',
   idempotency_conflict:
     'Cette demande a déjà été traitée avec d’autres informations.',
+  cash_actor_not_configured:
+    'Votre compte n’est pas encore configuré pour la caisse. Demandez à un responsable.',
+  receipt_already_attached:
+    'Cette dépense a déjà un justificatif. Il ne peut pas être remplacé depuis le terrain.',
   default: 'Cette opération n’est plus possible.',
 };

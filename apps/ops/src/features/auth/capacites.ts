@@ -31,6 +31,7 @@ export const ENTREES_ACCUEIL: readonly EntreeAccueil[] = [
     capacite: 'expense_create',
     titre: 'Dépense de caisse',
     description: 'Déclarer une dépense engagée sur le terrain.',
+    href: '/depenses',
   },
   {
     capacite: 'transfer_create',

@@ -9,6 +9,8 @@ import {
   destroySession,
   fetchIdentity,
   opsGet,
+  opsPost,
+  opsPostFichier,
 } from '@/lib/auth/odoo-ops';
 
 const SOURCE = readFileSync(fileURLToPath(new URL('./odoo-ops.ts', import.meta.url)), 'utf8');
@@ -266,5 +268,95 @@ describe('fermeture de session', () => {
     expect((appelsFetch[0]?.init.headers as Record<string, string>).Cookie).toBe(
       'session_id=session-abc',
     );
+  });
+});
+
+
+describe('un contenu refusé n’est pas une panne', () => {
+  it('distingue le 422 d’Odoo d’un service indisponible', async () => {
+    espionner(reponseJson(
+      { success: false, error: { code: 'invalid_expense_date', message: 'x' } },
+      { status: 422 },
+    ));
+    // Sans ce cas, une date future remontait en « service momentanément
+    // indisponible » : l'opérateur aurait attendu au lieu de corriger.
+    await expect(opsPost('expenses', {}, 'session-abc', 'corr')).rejects.toMatchObject({
+      code: 'unprocessable',
+      conflictCode: 'invalid_expense_date',
+    });
+  });
+
+  it('ne relaie pas le message d’Odoo, seulement son code', async () => {
+    espionner(reponseJson(
+      { success: false,
+        error: { code: 'currency_not_available', message: 'XOF inactive on company 3' } },
+      { status: 422 },
+    ));
+    const erreur = await opsPost('expenses', {}, 'session-abc', 'corr')
+      .then(() => null, (e: unknown) => e as OpsGatewayError);
+    expect(erreur).toBeInstanceOf(OpsGatewayError);
+    expect(erreur?.message).not.toContain('company 3');
+    expect(erreur?.conflictCode).toBe('currency_not_available');
+  });
+});
+
+describe('dépôt d’un fichier sur une ressource Ops', () => {
+  function fichier() {
+    return {
+      nom: 'ticket.jpg',
+      type: 'image/jpeg',
+      contenu: new Blob([new Uint8Array([0xff, 0xd8, 0xff])], { type: 'image/jpeg' }),
+    };
+  }
+
+  it('ajoute lui-même le préfixe du périmètre', async () => {
+    espionner(reponseJson({ success: true, data: { status: 'attached' } }));
+    await opsPostFichier('expenses/ref-1/receipt', fichier(), {}, 'session-abc', 'corr');
+    expect(appelsFetch[0]?.url).toContain('/api/v1/ops/expenses/ref-1/receipt');
+  });
+
+  it('refuse une ressource hors du périmètre avant toute émission', async () => {
+    const faux = espionner(reponseJson({}));
+    await expect(opsPostFichier(
+      '../freight/sync', fichier(), {}, 'session-abc', 'corr',
+    )).rejects.toThrow(OpsGatewayError);
+    expect(faux).not.toHaveBeenCalled();
+  });
+
+  it('laisse le navigateur poser le type multipart et sa frontière', async () => {
+    espionner(reponseJson({ success: true, data: { status: 'attached' } }));
+    await opsPostFichier('expenses/ref-1/receipt', fichier(), {}, 'session-abc', 'corr');
+    const enTetes = appelsFetch[0]?.init.headers as Record<string, string>;
+    // Écrire `Content-Type` nous-mêmes produirait un corps sans frontière,
+    // donc illisible pour Odoo.
+    expect(Object.keys(enTetes).sort()).toEqual(['Cookie', 'X-Request-ID']);
+    expect(appelsFetch[0]?.init.body).toBeInstanceOf(FormData);
+  });
+
+  it('transporte les champs de texte et le fichier sous le nom attendu', async () => {
+    espionner(reponseJson({ success: true, data: { status: 'attached' } }));
+    await opsPostFichier(
+      'expenses/ref-1/receipt', fichier(), { request_uuid: 'abc' }, 'session-abc', 'corr');
+    const corps = appelsFetch[0]?.init.body as FormData;
+    expect(corps.get('request_uuid')).toBe('abc');
+    expect(corps.get('receipt')).toBeInstanceOf(File);
+  });
+
+  it('n’emprunte aucune clé : seul le cookie de session voyage', async () => {
+    espionner(reponseJson({ success: true, data: { status: 'attached' } }));
+    await opsPostFichier('expenses/ref-1/receipt', fichier(), {}, 'session-abc', 'corr');
+    const enTetes = appelsFetch[0]?.init.headers as Record<string, string>;
+    expect(enTetes.Cookie).toBe('session_id=session-abc');
+    expect(enTetes.Authorization).toBeUndefined();
+  });
+
+  it('traduit un justificatif déjà présent en conflit nommé', async () => {
+    espionner(reponseJson(
+      { success: false, error: { code: 'receipt_already_attached', message: 'x' } },
+      { status: 409 },
+    ));
+    await expect(opsPostFichier(
+      'expenses/ref-1/receipt', fichier(), {}, 'session-abc', 'corr',
+    )).rejects.toMatchObject({ code: 'conflict', conflictCode: 'receipt_already_attached' });
   });
 });

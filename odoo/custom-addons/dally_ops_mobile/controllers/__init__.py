@@ -5,3 +5,4 @@ from . import ops_consolidations
 from . import ops_customers
 from . import ops_intakes
 from . import ops_payments
+from . import ops_expenses

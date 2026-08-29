@@ -37,11 +37,20 @@ export const LIBELLE_MODE: Readonly<Record<string, string>> = {
  * forcément CDG. Le code sert de repli quand la ville manque, et la référence
  * complète reste affichée juste au-dessus.
  */
-export function enRoute(
-  origine: { city: string; location: string; country_code: string },
-  destination: { city: string; location: string; country_code: string },
-): string {
-  const nom = (lieu: { city: string; location: string; country_code: string }) =>
-    lieu.city || lieu.location || lieu.country_code || '—';
+export function enRoute(origine: Lieu, destination: Lieu): string {
+  const nom = (lieu: Lieu) => lieu.city || lieu.location || lieu.country_code || '—';
   return `${nom(origine)} → ${nom(destination)}`;
+}
+
+/**
+ * Un lieu, tel que les écrans le reçoivent.
+ *
+ * Le code pays est facultatif : la liste des réceptions le demande à Odoo, la
+ * liste des dépenses non — elle n'en a pas besoin pour reconnaître un départ,
+ * et ce qui n'est pas demandé ne voyage pas.
+ */
+interface Lieu {
+  readonly city: string;
+  readonly location: string;
+  readonly country_code?: string;
 }

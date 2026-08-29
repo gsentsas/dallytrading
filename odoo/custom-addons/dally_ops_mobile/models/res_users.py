@@ -141,11 +141,13 @@ class ResUsers(models.Model):
         capacites = dict.fromkeys(CAPACITES, False)
         if not role:
             return capacites
-        # Phase 1 : réception et encaissement. Caisse et agenda viendront avec
-        # leurs écrans, en Phase 2 ; les annoncer maintenant ferait promettre à
-        # l'application des actions que le serveur refuserait.
+        # Une capacité s'ouvre le jour où son écran existe, pas avant :
+        # l'annoncer plus tôt ferait promettre à l'application une action que
+        # le serveur refuserait. Transferts et agenda attendent encore les
+        # leurs.
         capacites["intake_create"] = True
         capacites["payment_create"] = True
+        capacites["expense_create"] = True
         if role == "supervisor":
             capacites["supervise"] = True
         return capacites

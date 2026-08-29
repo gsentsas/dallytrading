@@ -268,6 +268,36 @@ export function cleIntakeDemande(
   )}`;
 }
 
+/**
+ * Budgets des envois de justificatifs.
+ *
+ * Plus serrés que les écritures de texte, et pour une raison matérielle : une
+ * photo pèse mille fois plus qu'une ligne de saisie. Un terminal qui en envoie
+ * cent à la minute ne travaille pas, il sature. La fenêtre reste large pour
+ * qu'une journée de tournée normale — quelques dizaines de tickets — passe
+ * sans jamais toucher la limite.
+ */
+export const OPS_JUSTIFICATIF_SESSION = {
+  limite: 40,
+  fenetreMs: 10 * 60_000,
+} as const;
+export const OPS_JUSTIFICATIF_IP = {
+  limite: 200,
+  fenetreMs: 10 * 60_000,
+} as const;
+
+export function cleJustificatifSession(identifiantSession: string): string {
+  return `ops:receipts:session:${empreinteCourte('receipt', identifiantSession)}`;
+}
+
+export function cleJustificatifIp(ip: string): string {
+  return `ops:receipts:ip:${ip}`;
+}
+
+export function cleJustificatifDemande(requestUuid: string): string {
+  return `ops:receipts:uuid:${empreinteCourte('receipt-request', requestUuid)}`;
+}
+
 /** Remet les compteurs à zéro. Réservé aux tests. */
 export function resetRateLimits(): void {
   compteurs.clear();

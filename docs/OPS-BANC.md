@@ -123,7 +123,26 @@ Les essais de création laissent des fiches dans la base du banc — c'est voulu
 et les scénarios tirent un numéro neuf à chaque exécution pour rester
 rejouables.
 
-## 7. Ce que le banc a servi à établir
+## 7. Les dépenses de banc
+
+Les dépenses s'imputent sur un départ, et le filtre est plus large que celui
+des réceptions : `collecting`, `collection_closed`, `ready`, `departed`,
+`arrived`. On paie une manutention pendant la collecte, un dédouanement après
+le départ, un stockage à l'arrivée. `AIR-DSS-CDG-TEST-001` sert de départ de
+référence ; `AIR-DSS-CDG-TEST-DRAFT` doit rester absent de la liste.
+
+Les scénarios laissent des dépenses dans la base — c'est voulu, et chacun tire
+un libellé neuf à chaque exécution pour rester rejouable.
+
+Deux fichiers suffisent à couvrir la détection de type, parce qu'elle se fait
+sur les **octets** et non sur le nom :
+
+| Contenu | Nom annoncé | Type annoncé | Attendu |
+| --- | --- | --- | --- |
+| `FF D8 FF E0 …` | `ticket.jpg` | `image/jpeg` | accepté |
+| `<html><script>…` | `ticket.jpg` | `image/jpeg` | refusé, dépense intacte |
+
+## 8. Ce que le banc a servi à établir
 
 - Un compte **non interne**, sans aucun droit de lecture métier, se connecte et
   obtient son identité : l'architecture de référence tient en conditions
@@ -142,3 +161,15 @@ rejouables.
   passe par un corps de requête.
 - Une création rejouée après une coupure réseau porte le même identifiant de
   demande et ne produit qu'une fiche.
+- Un logisticien sans aucun droit sur `dally.cash.expense` enregistre une
+  dépense : `.sudo()` suffit, et c'est un test HTTP réel qui l'a établi. Les
+  encaissements avaient exigé un environnement superutilisateur explicite ; les
+  dépenses non, et l'exception n'a donc pas été généralisée.
+- Une photo refusée — trop lourde, ou déguisée en JPEG alors que ses octets
+  disent HTML — laisse la dépense enregistrée. L'argent sorti de la caisse ne
+  dépend jamais de la réussite d'un envoi d'image.
+- Deux devises se lisent côte à côte, sans total unique : aucune conversion
+  n'est faite nulle part dans la chaîne.
+- Une dépense historique venue du tableur, sans départ, continue de
+  fonctionner : `consolidation_id` reste facultatif au niveau du modèle, et
+  c'est Dally Ops seul qui l'exige.

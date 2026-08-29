@@ -5,6 +5,7 @@ import { currentIdentity } from '@/lib/auth/auth';
 import { newCorrelationId } from '@/lib/logger';
 import { entreesAutorisees } from '@/features/auth/capacites';
 import { LogoutButton } from '@/features/auth/LogoutButton';
+import { IndicateurSync } from '@/features/offline/IndicateurSync';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,9 @@ export default async function PageAccueil() {
   return (
     <main>
       <h1>Bonjour {identite.user.name}</h1>
+
+      {/* Ce que l'appareil doit encore au CRM, avant toute autre chose. */}
+      <IndicateurSync login={identite.user.login} />
       <p className="attenue">
         {identite.cash_actor_configured
           ? `Caisse : ${identite.cash_actor}`

@@ -28,8 +28,21 @@ import { describe, expect, it } from 'vitest';
  * pas un effet de bord.
  */
 
-/** Les modules de `lib` sans aucune dépendance serveur. */
-const MODULES_SURS = new Set(['@/lib/ops/expenses-vocabulaire']);
+/**
+ * Les modules de `lib` sans aucune dépendance serveur.
+ *
+ * Élargir cette liste est une décision, jamais un effet de bord. Les modules
+ * `offline` y figurent parce qu'ils n'existent que pour le navigateur : la
+ * file hors connexion vit dans IndexedDB, qui n'a aucun sens côté serveur.
+ * Le test ci-dessous vérifie qu'ils le restent.
+ */
+const MODULES_SURS = new Set([
+  '@/lib/ops/expenses-vocabulaire',
+  '@/lib/offline/client',
+  '@/lib/offline/queue',
+  '@/lib/offline/sync',
+  '@/lib/offline/types',
+]);
 
 const RACINE = fileURLToPath(new URL('.', import.meta.url));
 
@@ -71,6 +84,21 @@ describe('les composants client n’embarquent aucun module serveur', () => {
   it('en trouve au moins un à contrôler', () => {
     // Sans quoi ce test passerait en n'inspectant rien.
     expect(clients.length).toBeGreaterThan(0);
+  });
+
+  it('les modules offline ne remontent jamais vers la configuration serveur', () => {
+    // C'est ce qui autorise leur présence dans MODULES_SURS. Le jour où l'un
+    // d'eux importerait `lib/env` ou la passerelle, l'exemption deviendrait
+    // fausse et ce test tomberait avant que la page ne casse.
+    const dossier = join(RACINE, '..', 'lib', 'offline');
+    const sources = fichiers(dossier).map((chemin) => readFileSync(chemin, 'utf8'));
+    expect(sources.length).toBeGreaterThan(0);
+    for (const source of sources) {
+      for (const interdit of ['@/lib/env', '@/lib/auth/', '@/lib/logger',
+                              '@/lib/http/']) {
+        expect(source).not.toContain(interdit);
+      }
+    }
   });
 
   it.each(clients)('%s ne prend que des types dans @/lib', (chemin) => {

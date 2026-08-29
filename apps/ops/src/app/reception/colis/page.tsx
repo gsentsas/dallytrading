@@ -110,6 +110,7 @@ export default async function PageColis({
         consolidation={consolidation}
         customer={customer}
         familles={familles}
+        login={identite.user.login}
       />
     </main>
   );

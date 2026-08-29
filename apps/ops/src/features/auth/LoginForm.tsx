@@ -10,6 +10,8 @@
  */
 
 import { useRouter } from 'next/navigation';
+
+import { cleProprietaire } from '@/lib/offline/client';
 import { useState, type FormEvent } from 'react';
 
 export function LoginForm() {
@@ -39,6 +41,11 @@ export function LoginForm() {
         setPassword('');
         return;
       }
+      // L'opérateur de cet appareil est établi ici, à la connexion — et non
+      // incidemment par un écran d'accueil. L'écran de synchronisation doit
+      // pouvoir savoir à qui appartient la file **sans réseau**, y compris
+      // juste après un changement d'utilisateur.
+      await cleProprietaire(login).catch(() => undefined);
       router.replace('/');
       router.refresh();
     } catch {

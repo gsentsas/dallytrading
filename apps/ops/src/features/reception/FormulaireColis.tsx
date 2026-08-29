@@ -1,6 +1,8 @@
 'use client';
 
 import { useRef, useState, type FormEvent } from 'react';
+
+import { enfilerPuisSynchroniser } from '@/lib/offline/client';
 import { useRouter } from 'next/navigation';
 
 import type {
@@ -27,7 +29,14 @@ type Etat =
   | { nom: 'saisie' }
   | { nom: 'envoi' }
   | { nom: 'erreur'; message: string }
-  | { nom: 'abouti'; resultat: ResultatIntake };
+  | { nom: 'abouti'; resultat: ResultatIntake }
+  /**
+   * Enregistré ici, pas encore au CRM.
+   *
+   * Un état à part entière, et non une variante d'erreur : la saisie n'est pas
+   * perdue, et l'opérateur peut passer au colis suivant.
+   */
+  | { nom: 'en_file' };
 
 const TYPES = [
   ['parcel', 'Colis'],
@@ -80,10 +89,18 @@ export function FormulaireColis({
   libelleBouton,
   onAnnuler,
   soumettre,
+  login,
 }: {
   consolidation: string;
   customer: string;
   familles: FamilleTarifaire[];
+  /**
+   * L'opérateur, pour la file hors connexion.
+   *
+   * Absent dans les emplois délégués — ajout et correction d'article — dont
+   * l'appelant possède déjà sa propre voie d'envoi.
+   */
+  login?: string;
   valeursInitiales?: Partial<Saisie>;
   libelleBouton?: string;
   onAnnuler?: () => void;
@@ -239,32 +256,37 @@ export function FormulaireColis({
       return;
     }
 
+    // Le corps est construit une fois : l'envoi direct et la mise en file
+    // doivent porter exactement la même chose, sans quoi un rejeu serait rejeté
+    // comme « déjà traité avec d'autres informations ».
+    const corpsReception = () => ({
+      consolidation_reference: consolidation,
+      customer_reference: customer,
+      received_on: new Date().toISOString().slice(0, 10),
+      line: {
+        line_uuid: lineUuid.current,
+        package_type: saisie.packageType,
+        goods_category: saisie.goodsCategory.trim(),
+        description: saisie.description.trim(),
+        quantity: Number(saisie.quantity),
+        announced_weight_kg: nombre(saisie.announcedWeight, true),
+        exact_weight_kg: nombre(saisie.exactWeight),
+        length_cm: nombre(saisie.length, true),
+        width_cm: nombre(saisie.width, true),
+        height_cm: nombre(saisie.height, true),
+        billing_method: saisie.billingMethod,
+        tariff_family_code: saisie.tariffFamilyCode,
+        customs_value_xof: nombre(saisie.customsValue),
+      },
+    });
+
     try {
       const reponse = await fetch('/api/intakes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           request_uuid: requestUuid.current,
-          consolidation_reference: consolidation,
-          customer_reference: customer,
-          received_on: new Date().toISOString().slice(0, 10),
-          line: {
-            line_uuid: lineUuid.current,
-            package_type: saisie.packageType,
-            goods_category: saisie.goodsCategory.trim(),
-            description: saisie.description.trim(),
-            quantity: Number(saisie.quantity),
-            announced_weight_kg: nombre(
-              saisie.announcedWeight, true,
-            ),
-            exact_weight_kg: nombre(saisie.exactWeight),
-            length_cm: nombre(saisie.length, true),
-            width_cm: nombre(saisie.width, true),
-            height_cm: nombre(saisie.height, true),
-            billing_method: saisie.billingMethod,
-            tariff_family_code: saisie.tariffFamilyCode,
-            customs_value_xof: nombre(saisie.customsValue),
-          },
+          ...corpsReception(),
         }),
       });
       if (reponse.status === 401) {
@@ -299,11 +321,65 @@ export function FormulaireColis({
       }
       setEtat({ nom: 'abouti', resultat: charge.data });
     } catch {
-      setEtat({
-        nom: 'erreur',
-        message: 'Service momentanément indisponible.',
-      });
+      // Réseau absent ou silence du serveur : on ne perd pas la saisie et on
+      // ne prétend pas qu'elle est arrivée. Elle entre en file **avec le même
+      // identifiant de demande**, celui tiré avant le premier envoi — sans
+      // quoi une reprise deviendrait une seconde réception.
+      if (!login) {
+        setEtat({
+          nom: 'erreur',
+          message: 'Service momentanément indisponible.',
+        });
+        return;
+      }
+      try {
+        await enfilerPuisSynchroniser(login, {
+          operation_type: 'intake_create',
+          payload: corpsReception(),
+          resume: `${saisie.quantity} × ${saisie.description.trim()}`,
+          // Toujours présent ici : il a été tiré avant la première tentative.
+          ...(requestUuid.current ? { request_uuid: requestUuid.current } : {}),
+        });
+        setEtat({ nom: 'en_file' });
+      } catch {
+        setEtat({
+          nom: 'erreur',
+          message: 'Service momentanément indisponible.',
+        });
+      }
     }
+  }
+
+  if (etat.nom === 'en_file') {
+    return (
+      <section className="carte" data-testid="reception-en-file">
+        <span className="succes">✓ ENREGISTRÉ SUR CET APPAREIL</span>
+        {/* Jamais « enregistré dans Odoo » : le CRM n'a rien confirmé, et le
+            numéro de dossier n'existe pas encore. Il est attribué par le
+            serveur, au moment de la synchronisation. */}
+        <p style={{ margin: '0.4rem 0 0' }}>
+          Synchronisation avec le CRM en attente.
+        </p>
+        <p className="attenue" style={{ margin: '0.2rem 0 0' }}>
+          Le numéro de dossier sera attribué par le CRM.
+        </p>
+        <button
+          type="button"
+          style={{ marginTop: '1rem' }}
+          onClick={() => router.push('/synchronisation')}
+        >
+          VOIR LES OPÉRATIONS EN ATTENTE
+        </button>
+        <button
+          type="button"
+          className="secondaire"
+          style={{ marginTop: '0.6rem' }}
+          onClick={() => router.push('/')}
+        >
+          TERMINER
+        </button>
+      </section>
+    );
   }
 
   if (etat.nom === 'abouti') {

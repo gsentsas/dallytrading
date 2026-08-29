@@ -7,13 +7,16 @@ import type { Dossier, LigneLue } from '@/lib/ops/intake-lines';
 import type { FamilleTarifaire } from '@/lib/ops/intakes';
 import type { CanalPaiement } from '@/lib/ops/payments';
 import { FormulairePaiement } from '@/features/reception/FormulairePaiement';
+import { FormulaireWave } from '@/features/reception/FormulaireWave';
+import type { ContexteWave } from '@/lib/ops/wave-payments';
 import { FormulaireColis, type IssueSoumission } from '@/features/reception/FormulaireColis';
 
 type Vue =
   | { nom: 'liste' }
   | { nom: 'ajout' }
   | { nom: 'correction'; ligne: LigneLue }
-  | { nom: 'paiement' };
+  | { nom: 'paiement' }
+  | { nom: 'wave'; contexte: ContexteWave };
 
 /** « 13,50 kg » — la virgule décimale que lit le terrain. */
 function poids(valeur: number): string {
@@ -65,6 +68,7 @@ export function DossierArticles({
 }) {
   const router = useRouter();
   const [vue, setVue] = useState<Vue>({ nom: 'liste' });
+  const [erreurWave, setErreurWave] = useState<string | null>(null);
 
   async function envoyer(
     url: string,
@@ -93,6 +97,45 @@ export function DossierArticles({
     setVue({ nom: 'liste' });
     router.refresh();
     return { ok: true };
+  }
+
+  /**
+   * Ouvre l'encaissement Wave.
+   *
+   * Le contexte — bénéficiaire, client, devises disponibles — est relu au
+   * serveur à l'ouverture plutôt que déduit ici : l'écran ne doit pas annoncer
+   * un bénéficiaire que le serveur ne créditerait pas.
+   */
+  async function ouvrirWave() {
+    const reponse = await fetch(
+      `/api/shipments/${encodeURIComponent(dossier.reference)}/wave-context`);
+    if (reponse.status === 401) {
+      router.replace('/connexion');
+      return;
+    }
+    const charge = (await reponse.json().catch(() => null)) as
+      | { success?: boolean; data?: ContexteWave; error?: string }
+      | null;
+    if (!reponse.ok || !charge?.success || !charge.data) {
+      setErreurWave(charge?.error ?? 'Service momentanément indisponible.');
+      return;
+    }
+    setErreurWave(null);
+    setVue({ nom: 'wave', contexte: charge.data });
+  }
+
+  if (vue.nom === 'wave') {
+    return (
+      <FormulaireWave
+        contexte={vue.contexte}
+        onAnnuler={() => setVue({ nom: 'liste' })}
+        soumettre={(demande) => envoyer(
+          `/api/shipments/${encodeURIComponent(dossier.reference)}/payments`,
+          'POST',
+          demande,
+        )}
+      />
+    );
   }
 
   if (vue.nom === 'paiement') {
@@ -249,10 +292,22 @@ export function DossierArticles({
         </section>
       ) : null}
 
+      {erreurWave ? (
+        <p className="erreur" role="alert">{erreurWave}</p>
+      ) : null}
+
+      <button
+        type="button"
+        style={{ marginTop: '0.75rem' }}
+        onClick={() => { void ouvrirWave(); }}
+      >
+        PAIEMENT WAVE
+      </button>
+
       <button
         type="button"
         className="secondaire"
-        style={{ marginTop: '0.75rem' }}
+        style={{ marginTop: '0.6rem' }}
         onClick={() => setVue({ nom: 'paiement' })}
       >
         + ENREGISTRER UN PAIEMENT

@@ -129,6 +129,26 @@ class DallyOpsCashActorService(models.AbstractModel):
         return sorted(acteurs, key=canonique)
 
     @api.model
+    def resolve_actor_user(self, valeur):
+        """Le compte unique qui porte cet acteur, ou un refus.
+
+        Même règle que `resolve_recipient`, mais on rend aussi l'utilisateur :
+        les encaissements Wave doivent pouvoir vérifier que le bénéficiaire
+        configuré est bien une personne, et non le superutilisateur.
+        """
+        if not isinstance(valeur, str) or not canonique(valeur):
+            raise DallyOpsError(
+                _("Ce bénéficiaire n'est pas disponible."),
+                code="cash_actor_not_configured", status=422)
+        porteurs = self._index_par_acteur().get(canonique(valeur), [])
+        if len(porteurs) != 1:
+            raise DallyOpsConflict(
+                _("La configuration du bénéficiaire de caisse est ambiguë."),
+                code="cash_actor_configuration_conflict")
+        compte = porteurs[0]
+        return (compte.dally_ops_cash_actor or "").strip(), compte
+
+    @api.model
     def resolve_recipient(self, valeur):
         """Le nom exact d'un destinataire, ou un refus.
 

@@ -8,3 +8,4 @@ from . import ops_payments
 from . import ops_expenses
 from . import ops_transfers
 from . import ops_appointments
+from . import ops_wave_payments

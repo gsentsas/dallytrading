@@ -131,6 +131,10 @@ const MESSAGES_REFUS: Record<string, string> = {
   invalid_payment_date: 'La date du paiement n’est pas valide.',
   invalid_expense_date:
     'La date de la dépense n’est pas valide : elle ne peut pas être dans le futur.',
+  invalid_paid_at:
+    'La date d’encaissement n’est pas valide : elle ne peut pas être dans le futur.',
+  invalid_wave_reference:
+    'Cette référence Wave n’a pas un format valide. Recopiez-la depuis Wave, ou laissez le champ vide.',
   payment_channel_not_available: 'Ce moyen de paiement n’est pas disponible.',
   payment_method_not_allowed: 'Ce mode de paiement n’est pas accepté.',
   currency_not_available: 'Cette devise n’est pas disponible.',
@@ -154,6 +158,13 @@ const MESSAGES_CONFLIT: Record<string, string> = {
     'Cette demande a déjà été traitée avec d’autres informations.',
   cash_actor_not_configured:
     'Votre compte n’est pas encore configuré pour la caisse. Demandez à un responsable.',
+  cash_actor_configuration_conflict:
+    'La configuration des acteurs de caisse est ambiguë. Un responsable doit la corriger.',
+  wave_beneficiary_not_configured:
+    'Le bénéficiaire des encaissements Wave n’est pas configuré. Demandez à un responsable.',
+  wave_reference_already_used:
+    'Cette référence Wave a déjà été enregistrée sur un autre encaissement. Vérifiez le numéro.',
+  intake_cancelled: 'Ce dossier est annulé : il ne peut plus être encaissé.',
   receipt_already_attached:
     'Cette dépense a déjà un justificatif. Il ne peut pas être remplacé depuis le terrain.',
   default: 'Cette opération n’est plus possible.',

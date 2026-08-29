@@ -16,3 +16,4 @@ from . import cash_operations
 from . import freight_invoice_report
 from . import cash_expense_receipt
 from . import cash_transfer_acknowledgement
+from . import collection_wave_reference

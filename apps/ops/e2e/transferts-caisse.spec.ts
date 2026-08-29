@@ -1,0 +1,8 @@
+import { expect, test, type Page } from '@playwright/test';
+
+const gilles={login:process.env.OPS_E2E_LOGIN??'gilles.banc',password:process.env.OPS_E2E_PASSWORD??'banc-ops-2026'};
+const dalanda={login:process.env.OPS_E2E_DALANDA_LOGIN??'dalanda.banc',password:process.env.OPS_E2E_DALANDA_PASSWORD??'banc-dalanda-2026'};
+async function login(page:Page,c:{login:string;password:string}){await page.goto('/connexion');await page.getByLabel('Identifiant').fill(c.login);await page.getByLabel('Mot de passe').fill(c.password);await page.getByRole('button',{name:'Se connecter'}).click();}
+test('Gilles crée une remise et Dalanda la reçoit',async({page})=>{
+ await login(page,gilles); await page.getByRole('link',{name:/Transfert de caisse/}).click(); await page.getByRole('button',{name:'+ NOUVEAU TRANSFERT'}).click(); await page.getByLabel('Reçu par').selectOption({label:'Dalanda'}); await page.getByLabel('Montant').fill('100000'); await page.getByLabel('Motif').fill('Remise caisse du soir'); await page.getByRole('button',{name:'CONFIRMER LA REMISE'}).click(); await page.getByRole('button',{name:'CONFIRMER',exact:true}).click(); await expect(page.getByText('✓ TRANSFERT ENREGISTRÉ')).toBeVisible(); await page.goto('/'); await page.getByRole('button',{name:'Se déconnecter'}).click(); await login(page,dalanda); await page.getByRole('link',{name:/Transfert de caisse/}).click(); await expect(page.getByText('Gilles vous remet').first()).toBeVisible(); await page.getByRole('button',{name:"J'AI REÇU LES FONDS"}).first().click(); await expect(page.getByText('✓ RÉCEPTION CONFIRMÉE')).toBeVisible();
+});

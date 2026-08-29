@@ -62,7 +62,7 @@ test('l’accueil n’ouvre que les opérations autorisées', async ({ page }) =
   await expect(page.getByText('Réceptionner un colis')).toBeVisible();
   await expect(page.getByText('Encaissement')).toBeVisible();
   await expect(page.getByText('Supervision')).toHaveCount(0);
-  await expect(page.getByText('Transfert de caisse')).toHaveCount(0);
+  await expect(page.getByText('Transfert de caisse')).toBeVisible();
 });
 
 test('un compte Odoo valide mais sans rôle Ops est refusé', async ({ page }) => {

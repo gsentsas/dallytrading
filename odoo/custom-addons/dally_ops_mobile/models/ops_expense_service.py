@@ -35,6 +35,7 @@ import re
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
+from .ops_cash_vocabulary import MODES_PAIEMENT
 from .ops_errors import DallyOpsConflict, DallyOpsError, DallyOpsInternal, DallyOpsNotFound
 
 #: Les seules clés acceptées dans une demande de dépense.
@@ -52,8 +53,8 @@ CHAMPS_INTERDITS = frozenset({
     "receipt_attachment_id", "res_model", "res_id", "expense_id",
 })
 
-#: Les modes de paiement qu'une dépense de terrain peut porter.
-MODES_PAIEMENT = ("cash", "wave", "bank", "other")
+#: Les modes de paiement se partagent avec les transferts : voir
+#: `ops_cash_vocabulary`. Deux listes finiraient par diverger.
 
 #: Les états d'un départ sur lequel une dépense peut survenir.
 #:

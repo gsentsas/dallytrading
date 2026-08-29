@@ -37,6 +37,7 @@ export const ENTREES_ACCUEIL: readonly EntreeAccueil[] = [
     capacite: 'transfer_create',
     titre: 'Transfert de caisse',
     description: 'Transmettre des espèces à un autre opérateur.',
+    href: '/caisse/transferts',
   },
   {
     capacite: 'appointment_manage',

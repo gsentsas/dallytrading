@@ -15,3 +15,4 @@ from . import payment_collection_guard
 from . import cash_operations
 from . import freight_invoice_report
 from . import cash_expense_receipt
+from . import cash_transfer_acknowledgement

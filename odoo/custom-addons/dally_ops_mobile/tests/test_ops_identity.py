@@ -279,9 +279,9 @@ class TestOpsIdentity(HttpCase):
         self.assertTrue(capacites["intake_create"])
         self.assertTrue(capacites["payment_create"])
         self.assertTrue(capacites["expense_create"])
-        # Transferts et agenda attendent leurs écrans : les annoncer
-        # maintenant ferait promettre ce que le serveur refuserait.
-        self.assertFalse(capacites["transfer_create"])
+        self.assertTrue(capacites["transfer_create"])
+        # L'agenda attend son écran : l'annoncer maintenant ferait promettre
+        # ce que le serveur refuserait.
         self.assertFalse(capacites["appointment_manage"])
         self.assertFalse(capacites["supervise"])
 

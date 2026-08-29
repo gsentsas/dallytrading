@@ -143,11 +143,11 @@ class ResUsers(models.Model):
             return capacites
         # Une capacité s'ouvre le jour où son écran existe, pas avant :
         # l'annoncer plus tôt ferait promettre à l'application une action que
-        # le serveur refuserait. Transferts et agenda attendent encore les
-        # leurs.
+        # le serveur refuserait. L'agenda attend encore le sien.
         capacites["intake_create"] = True
         capacites["payment_create"] = True
         capacites["expense_create"] = True
+        capacites["transfer_create"] = True
         if role == "supervisor":
             capacites["supervise"] = True
         return capacites

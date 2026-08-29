@@ -10,6 +10,7 @@
 import { z } from 'zod';
 
 import { opsGet, opsPost, opsPut } from '@/lib/auth/odoo-ops';
+import { paiementLu } from '@/lib/ops/payments';
 
 const dimension = z.number().positive().nullable();
 
@@ -100,6 +101,12 @@ const dossier = z
         pricing_complete: z.boolean(),
       })
       .strict(),
+    payments: z.array(paiementLu),
+    // Un total par devise. Additionner des euros et des francs demanderait un
+    // taux, et un taux choisi ici serait faux la moitié du temps.
+    payment_summary: z.array(
+      z.object({ currency_code: z.string(), amount: z.number() }).strict(),
+    ),
   })
   .strict();
 

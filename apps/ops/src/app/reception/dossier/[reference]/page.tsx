@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { currentIdentity, readOpsSession } from '@/lib/auth/auth';
 import { fetchIntake } from '@/lib/ops/intake-lines';
 import { fetchTariffFamilies } from '@/lib/ops/intakes';
+import { fetchPaymentChannels } from '@/lib/ops/payments';
 import { newCorrelationId } from '@/lib/logger';
 import { DossierArticles } from '@/features/reception/DossierArticles';
 
@@ -38,6 +39,9 @@ export default async function PageDossier({
   const familles = await fetchTariffFamilies(
     session.odooSessionId, correlationId,
   ).catch(() => []);
+  const canaux = await fetchPaymentChannels(
+    session.odooSessionId, correlationId,
+  ).catch(() => []);
 
   return (
     <main>
@@ -51,7 +55,13 @@ export default async function PageDossier({
         </p>
       </section>
 
-      <DossierArticles dossier={dossier} familles={familles} />
+      {/* Le collecteur vient de l'identité serveur, jamais d'une saisie. */}
+      <DossierArticles
+        dossier={dossier}
+        familles={familles}
+        canaux={canaux}
+        collecteur={identite.cash_actor ?? ''}
+      />
     </main>
   );
 }

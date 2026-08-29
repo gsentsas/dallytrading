@@ -5,12 +5,15 @@ import { useState } from 'react';
 
 import type { Dossier, LigneLue } from '@/lib/ops/intake-lines';
 import type { FamilleTarifaire } from '@/lib/ops/intakes';
+import type { CanalPaiement } from '@/lib/ops/payments';
+import { FormulairePaiement } from '@/features/reception/FormulairePaiement';
 import { FormulaireColis, type IssueSoumission } from '@/features/reception/FormulaireColis';
 
 type Vue =
   | { nom: 'liste' }
   | { nom: 'ajout' }
-  | { nom: 'correction'; ligne: LigneLue };
+  | { nom: 'correction'; ligne: LigneLue }
+  | { nom: 'paiement' };
 
 /** « 13,50 kg » — la virgule décimale que lit le terrain. */
 function poids(valeur: number): string {
@@ -18,6 +21,20 @@ function poids(valeur: number): string {
     minimumFractionDigits: 2, maximumFractionDigits: 3,
   }).format(valeur)} kg`;
 }
+
+/** « 44 280 FCFA » ou « 67,50 € », selon la devise réellement encaissée. */
+function montantDevise(valeur: number, devise: string): string {
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency', currency: devise,
+    maximumFractionDigits: devise === 'XOF' ? 0 : 2,
+  }).format(valeur);
+}
+
+const LIBELLE_COMPTABLE: Record<string, string> = {
+  registered: 'Comptabilisé',
+  pending: 'En attente de facturation',
+  needs_review: 'Comptabilisation à vérifier par un responsable',
+};
 
 function argent(valeur: number | null): string {
   // « À définir » et non « 0 € » : un montant absent n'est pas un montant nul.
@@ -38,9 +55,13 @@ function argent(valeur: number | null): string {
 export function DossierArticles({
   dossier,
   familles,
+  canaux,
+  collecteur,
 }: {
   dossier: Dossier;
   familles: FamilleTarifaire[];
+  canaux: CanalPaiement[];
+  collecteur: string;
 }) {
   const router = useRouter();
   const [vue, setVue] = useState<Vue>({ nom: 'liste' });
@@ -72,6 +93,21 @@ export function DossierArticles({
     setVue({ nom: 'liste' });
     router.refresh();
     return { ok: true };
+  }
+
+  if (vue.nom === 'paiement') {
+    return (
+      <FormulairePaiement
+        canaux={canaux}
+        collecteur={collecteur}
+        onAnnuler={() => setVue({ nom: 'liste' })}
+        soumettre={(demande) => envoyer(
+          `/api/intakes/${encodeURIComponent(dossier.reference)}/payments`,
+          'POST',
+          demande,
+        )}
+      />
+    );
   }
 
   if (vue.nom === 'ajout') {
@@ -172,6 +208,55 @@ export function DossierArticles({
           Total transport : {argent(dossier.totals.transport_amount_eur)}
         </p>
       </section>
+
+      <h2 style={{ fontSize: '1.1rem', margin: '1.25rem 0 0.5rem' }}>PAIEMENTS</h2>
+
+      {dossier.payments.length === 0 ? (
+        <p className="attenue" data-testid="aucun-paiement">
+          Aucun paiement enregistré
+        </p>
+      ) : (
+        dossier.payments.map((paiement) => (
+          <section className="carte" key={paiement.reference} data-testid="paiement">
+            <strong>
+              {montantDevise(paiement.amount, paiement.currency_code)}
+            </strong>
+            <p className="attenue" style={{ margin: '0.2rem 0 0' }}>
+              {paiement.payment_method.name} · {paiement.collector}
+              {' · '}
+              {paiement.payment_date}
+            </p>
+            <p
+              className={paiement.accounting_status === 'needs_review'
+                ? 'alerte' : 'attenue'}
+              style={{ margin: '0.25rem 0 0' }}
+            >
+              {paiement.accounting_status === 'needs_review' ? '⚠ ' : ''}
+              {LIBELLE_COMPTABLE[paiement.accounting_status]}
+            </p>
+          </section>
+        ))
+      )}
+
+      {dossier.payment_summary.length > 1 ? (
+        <section className="carte" data-testid="resume-paiements">
+          {/* Un total par devise : aucune conversion n'est faite ici. */}
+          {dossier.payment_summary.map((ligne) => (
+            <p key={ligne.currency_code} style={{ margin: 0 }}>
+              {montantDevise(ligne.amount, ligne.currency_code)}
+            </p>
+          ))}
+        </section>
+      ) : null}
+
+      <button
+        type="button"
+        className="secondaire"
+        style={{ marginTop: '0.75rem' }}
+        onClick={() => setVue({ nom: 'paiement' })}
+      >
+        + ENREGISTRER UN PAIEMENT
+      </button>
 
       {dossier.editable ? (
         <button

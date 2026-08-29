@@ -51,6 +51,8 @@ const DOSSIER = {
     lines_count: 1, weight_kg: 13.5, volume_cbm: 0,
     transport_amount_eur: 67.5, pricing_complete: true,
   },
+  payments: [],
+  payment_summary: [],
 };
 
 beforeEach(() => {

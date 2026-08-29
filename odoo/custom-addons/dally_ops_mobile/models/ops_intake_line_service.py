@@ -619,6 +619,9 @@ class DallyOpsIntakeLineService(models.AbstractModel):
             ligne["pricing_status"] == "automatic" for ligne in lignes
         ) and bool(lignes)
         motif = self._motif_de_blocage(shipment)
+        # Les encaissements du dossier : le comptoir doit les voir pour ne pas
+        # encaisser deux fois.
+        paiements = self.env["dally.ops.payment.service"].payments_for(shipment)
         return {
             "reference": shipment.external_reference,
             "local_reference": shipment.collection_local_ref,
@@ -644,4 +647,10 @@ class DallyOpsIntakeLineService(models.AbstractModel):
                 ),
                 "pricing_complete": complet,
             },
+            "payments": paiements,
+            # Un total par devise, jamais une conversion : additionner des
+            # euros et des francs demanderait un taux, et un taux choisi ici
+            # serait faux la moitié du temps.
+            "payment_summary": self.env[
+                "dally.ops.payment.service"].payment_summary(paiements),
         }

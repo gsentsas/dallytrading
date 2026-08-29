@@ -6,3 +6,4 @@ from . import test_ops_customers
 from . import test_ops_customer_creation
 from . import test_ops_intakes
 from . import test_ops_intake_lines
+from . import test_ops_payments

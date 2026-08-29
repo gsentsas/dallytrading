@@ -59,6 +59,19 @@ input {
   border-radius: 0.6rem;
 }
 
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 6rem;
+  margin-top: 0.35rem;
+  padding: 0.9rem 0.85rem;
+  font: inherit;
+  color: var(--ops-texte);
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-bordure);
+  border-radius: 0.6rem;
+}
+
 button {
   width: 100%;
   min-height: 3.25rem;
@@ -204,4 +217,41 @@ select {
   border: 1px solid #fbbf24;
   border-radius: 0.5rem;
   font-weight: 800;
+}
+
+.actions-deux {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 0.8rem 0;
+}
+
+.actions-deux .bouton-lien {
+  margin-top: 0;
+}
+
+.carte-rdv {
+  display: grid;
+  grid-template-columns: 4.25rem 1fr;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  color: var(--ops-texte);
+  background: var(--ops-surface);
+}
+
+.carte-rdv time {
+  color: var(--ops-accent);
+  font-weight: 800;
+}
+
+.carte-rdv span,
+.carte-rdv small {
+  display: block;
+}
+
+.carte-rdv small {
+  margin-top: 0.25rem;
+  color: var(--ops-attenue);
+  font-size: 0.85rem;
 }

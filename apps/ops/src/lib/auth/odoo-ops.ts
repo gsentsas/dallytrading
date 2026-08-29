@@ -318,6 +318,32 @@ export async function opsGet<T>(
   return charge.data as T;
 }
 
+/** Lecture Ops avec paramètres encodés, sans permettre à l'appelant d'écrire un chemin. */
+export async function opsGetQuery<T>(
+  ressource: string,
+  query: Readonly<Record<string, string>>,
+  sessionId: string,
+  correlationId: string,
+): Promise<T> {
+  if (!RESSOURCE_OPS.test(ressource)) {
+    throw new OpsGatewayError('invalid_path', `ressource non autorisée : ${ressource}`);
+  }
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (!/^[a-z][a-z0-9_-]{0,31}$/.test(key)) {
+      throw new OpsGatewayError('invalid_path', 'paramètre non autorisé');
+    }
+    params.set(key, value);
+  }
+  const reponse = await appel({
+    chemin: `${PREFIXE_OPS}${ressource}?${params.toString()}`,
+    methode: 'GET',
+    sessionId,
+    correlationId,
+  });
+  return lireReponse<T>(reponse);
+}
+
 /**
  * Soumet une demande à une ressource Ops.
  *

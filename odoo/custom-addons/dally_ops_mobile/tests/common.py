@@ -39,6 +39,9 @@ MODELES_METIER_FERMES = (
     "res.company",
     "ir.model",
     "ir.attachment",
+    "calendar.event",
+    "calendar.attendee",
+    "dally.ops.appointment.request",
 )
 
 

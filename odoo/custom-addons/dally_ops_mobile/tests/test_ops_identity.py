@@ -280,9 +280,10 @@ class TestOpsIdentity(HttpCase):
         self.assertTrue(capacites["payment_create"])
         self.assertTrue(capacites["expense_create"])
         self.assertTrue(capacites["transfer_create"])
-        # L'agenda attend son écran : l'annoncer maintenant ferait promettre
-        # ce que le serveur refuserait.
-        self.assertFalse(capacites["appointment_manage"])
+        self.assertTrue(capacites["appointment_manage"])
+        # La supervision, elle, ne dépend pas d'un écran mais du rôle : un
+        # logisticien ne la reçoit jamais, quel que soit le nombre d'écrans
+        # ouverts.
         self.assertFalse(capacites["supervise"])
 
     def test_la_reponse_n_est_jamais_mise_en_cache(self):

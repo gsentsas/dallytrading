@@ -41,8 +41,9 @@ export const ENTREES_ACCUEIL: readonly EntreeAccueil[] = [
   },
   {
     capacite: 'appointment_manage',
-    titre: 'Rendez-vous',
+    titre: 'Agenda',
     description: 'Organiser les passages de la journée.',
+    href: '/agenda',
   },
   {
     capacite: 'supervise',

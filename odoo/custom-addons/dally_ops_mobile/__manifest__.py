@@ -32,12 +32,13 @@ les droits techniques du connecteur tableur, ni ceux de la facturation : ces
 identités-là servent une clé d'API, pas une personne, et les confondre
 donnerait à un téléphone les pouvoirs d'un automate.
 """,
-    "version": "19.0.1.8.0",
+    "version": "19.0.1.9.0",
     "category": "Inventory/Delivery",
     "author": "DallyTrading",
     "website": "https://dallytrading.com",
     "license": "LGPL-3",
     "depends": [
+        "calendar",
         "dally_core",
         "dally_crm",
         "dally_freight",

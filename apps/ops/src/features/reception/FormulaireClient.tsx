@@ -30,7 +30,12 @@ const CHAMPS_VIDES = { name: '', phone: '', email: '', address: '' };
  * à juste titre, puisque l'opérateur croirait avoir enregistré ce qu'il vient
  * de corriger.
  */
-export function FormulaireClient({ consolidation }: { consolidation: string }) {
+export function FormulaireClient({
+  consolidation = '', onCustomer,
+}: {
+  consolidation?: string;
+  onCustomer?: (customer: Client) => void;
+}) {
   const router = useRouter();
   const [type, setType] = useState<TypeClient>('individual');
   const [champs, setChamps] = useState(CHAMPS_VIDES);
@@ -131,6 +136,10 @@ export function FormulaireClient({ consolidation }: { consolidation: string }) {
           type="button"
           style={{ marginTop: '1rem' }}
           onClick={() => {
+            if (onCustomer) {
+              onCustomer(etat.client);
+              return;
+            }
             const cible = new URLSearchParams({
               consolidation, customer: etat.client.reference,
             });

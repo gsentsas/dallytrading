@@ -35,7 +35,13 @@ type Etat =
  * ensemble : les homonymes sont courants, et une recherche par nom est un
  * moyen de feuilleter le fichier clients.
  */
-export function RechercheClient({ consolidation }: { consolidation: string }) {
+export function RechercheClient({
+  consolidation = '', onCustomer, onCreateRequested,
+}: {
+  consolidation?: string;
+  onCustomer?: (customer: Client) => void;
+  onCreateRequested?: () => void;
+}) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('phone');
   const [valeur, setValeur] = useState('');
@@ -107,6 +113,10 @@ export function RechercheClient({ consolidation }: { consolidation: string }) {
           type="button"
           style={{ marginTop: '1rem' }}
           onClick={() => {
+            if (onCustomer) {
+              onCustomer(client);
+              return;
+            }
             // Seule la référence opaque voyage. Ni nom, ni téléphone, ni
             // adresse ne doivent apparaître dans une barre d'adresse.
             const cible = new URLSearchParams({
@@ -201,6 +211,10 @@ export function RechercheClient({ consolidation }: { consolidation: string }) {
             type="button"
             style={{ marginTop: '0.9rem' }}
             onClick={() => {
+              if (onCreateRequested) {
+                onCreateRequested();
+                return;
+              }
               const cible = new URLSearchParams({ consolidation });
               router.push(`/reception/client/nouveau?${cible.toString()}`);
             }}

@@ -7,3 +7,4 @@ from . import ops_intakes
 from . import ops_payments
 from . import ops_expenses
 from . import ops_transfers
+from . import ops_appointments

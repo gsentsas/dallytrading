@@ -21,15 +21,31 @@ function fauxOnglet(nom, colonnes, onWrite) {
   const cellules = new Map();
   const cle = (row, col) => row + ':' + col;
   let dernier = 0;
+  let lecturesUnitaires = 0;
+  let lecturesBloc = 0;
+
   return {
     nom,
     colonnes,
     getLastRow: () => dernier,
-    getRange(row, col) {
+    getRange(row, col, numRows, numCols) {
+      const height = numRows == null ? 1 : Number(numRows);
+      const width = numCols == null ? 1 : Number(numCols);
+
       return {
         getDisplayValue() {
+          lecturesUnitaires++;
           const v = cellules.get(cle(row, col));
           return v == null ? '' : String(v);
+        },
+        getDisplayValues() {
+          lecturesBloc++;
+          return Array.from({length: height}, (_, r) =>
+            Array.from({length: width}, (_, c) => {
+              const v = cellules.get(cle(row + r, col + c));
+              return v == null ? '' : String(v);
+            })
+          );
         },
         setValue(value) {
           cellules.set(cle(row, col), value);
@@ -46,6 +62,13 @@ function fauxOnglet(nom, colonnes, onWrite) {
     valeur(row, col) {
       const v = cellules.get(cle(row, col));
       return v == null ? '' : v;
+    },
+
+    statistiques() {
+      return {
+        singleDisplayReads: lecturesUnitaires,
+        bulkDisplayReads: lecturesBloc,
+      };
     },
   };
 }
@@ -538,6 +561,34 @@ function nouveauClasseur(onWrite) {
       'un transfert doit réutiliser une ligne modèle, pas viser 1003'
     );
   }
+}
+
+
+/* --- 10 ter. Une grille preformatee est lue en un seul bloc ------- */
+{
+  const onglets = nouveauClasseur();
+  const aerien = onglets['Saisie aérien'];
+
+  aerien.getRange(1004, C.transportMode).setValue('Aérien');
+
+  const avant = aerien.statistiques();
+  const classeur = fauxClasseur(onglets);
+
+  ctx.applyDossierProjection_(classeur, projectionDossier());
+
+  const apres = aerien.statistiques();
+
+  assert.strictEqual(
+    apres.bulkDisplayReads - avant.bulkDisplayReads,
+    1,
+    'la grille doit etre chargee par une seule lecture bloc'
+  );
+
+  assert.strictEqual(
+    apres.singleDisplayReads - avant.singleDisplayReads,
+    0,
+    'aucune recherche ne doit relire les cellules une par une'
+  );
 }
 
 /* --- 11. Les formules restent neutralisées ------------------------ */

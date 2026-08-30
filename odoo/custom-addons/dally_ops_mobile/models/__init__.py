@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
+from . import ops_format
 from . import res_users
 from . import res_company
 from . import calendar_event
 from . import ops_customer_handle
 from . import ops_request_ledger
 from . import ops_audit_event
+from . import ops_activity_service
 from . import ops_sheet_outbox
 from . import ops_intake_request
 from . import ops_intake_line_request

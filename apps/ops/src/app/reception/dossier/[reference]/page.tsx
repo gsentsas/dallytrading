@@ -5,7 +5,9 @@ import { currentIdentity, readOpsSession } from '@/lib/auth/auth';
 import { fetchIntake } from '@/lib/ops/intake-lines';
 import { fetchTariffFamilies } from '@/lib/ops/intakes';
 import { fetchPaymentChannels } from '@/lib/ops/payments';
+import { fetchIntakeActivity } from '@/lib/ops/activity';
 import { newCorrelationId } from '@/lib/logger';
+import { ActivityTimeline } from '@/features/activity/ActivityTimeline';
 import { DossierArticles } from '@/features/reception/DossierArticles';
 
 export const dynamic = 'force-dynamic';
@@ -42,6 +44,9 @@ export default async function PageDossier({
   const canaux = await fetchPaymentChannels(
     session.odooSessionId, correlationId,
   ).catch(() => []);
+  const activite = await fetchIntakeActivity(
+    dossier.reference, { limit: 10 }, session.odooSessionId, correlationId,
+  ).catch(() => null);
 
   return (
     <main>
@@ -71,6 +76,18 @@ export default async function PageDossier({
         canaux={canaux}
         collecteur={identite.cash_actor ?? ''}
       />
+
+      <section aria-labelledby="activite-dossier-titre">
+        <h2 id="activite-dossier-titre">ACTIVITÉ</h2>
+        {activite ? (
+          <>
+            <ActivityTimeline events={activite.events} timezone={activite.timezone} />
+            {activite.next_cursor ? (
+              <Link className="retour" href="/activite">VOIR PLUS D’ACTIVITÉ</Link>
+            ) : null}
+          </>
+        ) : <p className="attenue">Activité momentanément indisponible.</p>}
+      </section>
     </main>
   );
 }

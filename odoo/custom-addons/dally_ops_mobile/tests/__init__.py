@@ -13,3 +13,4 @@ from . import test_ops_appointments
 from . import test_ops_wave_payments
 from . import test_ops_sheet_outbox
 from . import test_ops_receipts
+from . import test_ops_activity

@@ -88,7 +88,10 @@ test('un second article rejoint le même dossier', async ({ page }) => {
   await page.getByRole('button', { name: 'ENREGISTRER L’ARTICLE' }).click();
 
   await expect(page.getByTestId('article')).toHaveCount(2);
-  await expect(page.getByText('Bissap')).toBeVisible();
+  // La désignation est cherchée dans la liste des articles : depuis que le
+  // dossier affiche aussi son journal, elle apparaît deux fois sur la page.
+  await expect(page.getByTestId('article').filter({ hasText: 'Bissap' }))
+    .toHaveCount(1);
   // Le dossier n'a pas changé de numéro : aucun A002 créé.
   await expect(page.getByTestId('totaux')).toContainText('2 article(s)');
   await expect(page.getByTestId('totaux')).toContainText('21,50 kg');

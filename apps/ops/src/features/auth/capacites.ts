@@ -49,6 +49,7 @@ export const ENTREES_ACCUEIL: readonly EntreeAccueil[] = [
     capacite: 'supervise',
     titre: 'Supervision',
     description: 'Suivre l’activité de l’équipe.',
+    href: '/activite',
   },
 ];
 

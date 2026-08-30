@@ -52,6 +52,16 @@ CHAMPS_AJOUT = frozenset({"request_uuid", "line"})
 #: Idem pour une correction, qui annonce en plus la version qu'elle a lue.
 CHAMPS_CORRECTION = frozenset({"request_uuid", "expected_revision", "line"})
 
+# Les valeurs qu'une correction métier doit conserver. Les champs calculés de
+# tarification et les identités techniques sont volontairement exclus : le
+# journal raconte ce que l'opérateur a corrigé, pas les effets internes du
+# moteur.
+CHAMPS_AUDIT_CORRECTION = (
+    "description", "goods_category", "package_type", "quantity",
+    "announced_weight_kg", "exact_weight_kg", "length_cm", "width_cm",
+    "height_cm", "billing_method", "tariff_family_code", "customs_value_xof",
+)
+
 
 class DallyOpsIntakeLineService(models.AbstractModel):
     _name = "dally.ops.intake.line.service"
@@ -181,6 +191,8 @@ class DallyOpsIntakeLineService(models.AbstractModel):
                     code="stale_line",
                 )
 
+            avant = self._ligne(colis, line_uuid)
+
             physique = self._change_le_physique(colis, ligne)
             projection = self.env["dally.freight.consolidation.line"].sudo().search([
                 ("consolidation_id", "=", consolidation.id),
@@ -200,11 +212,14 @@ class DallyOpsIntakeLineService(models.AbstractModel):
                 shipment.sudo()._add_available_packages_to_consolidation(consolidation)
             self._verifier_projection(colis, consolidation)
 
+            apres = self._ligne(colis, line_uuid)
             dto = {"status": "updated", "intake": self._detail(shipment),
-                   "line": self._ligne(colis, line_uuid)}
+                   "line": apres}
             self._inscrire(request_uuid, "update", empreinte, shipment, colis,
                            line_uuid, dto)
-            self._journaliser("intake_line_updated", colis, request_uuid)
+            self._journaliser(
+                "intake_line_updated", colis, request_uuid,
+                changes=self._changements(avant, apres))
             self.env["dally.ops.sheet.outbox"].enqueue_dossier(colis.shipment_id)
             return dto
 
@@ -533,7 +548,7 @@ class DallyOpsIntakeLineService(models.AbstractModel):
         return allege
 
     @api.model
-    def _journaliser(self, action, colis, request_uuid):
+    def _journaliser(self, action, colis, request_uuid, changes=None):
         self.env["dally.ops.audit.event"].sudo().create({
             "company_id": self.env.company.id,
             "operator_user_id": self.env.uid,
@@ -541,8 +556,19 @@ class DallyOpsIntakeLineService(models.AbstractModel):
             "entity_model": "dally.shipment.package",
             "entity_res_id": colis.id if colis else False,
             "request_uuid": request_uuid,
+            "changes_json": changes or [],
             "created_at": fields.Datetime.now(),
         })
+
+    @staticmethod
+    def _changements(avant, apres):
+        """Les anciennes et nouvelles valeurs réellement modifiées."""
+        return [
+            {"field": champ, "old_value": avant.get(champ),
+             "new_value": apres.get(champ)}
+            for champ in CHAMPS_AUDIT_CORRECTION
+            if avant.get(champ) != apres.get(champ)
+        ]
 
     # ------------------------------------------------------------------
     # Mise en forme

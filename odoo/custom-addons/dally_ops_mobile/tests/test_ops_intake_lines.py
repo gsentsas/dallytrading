@@ -656,6 +656,11 @@ class TestOpsIntakeLines(TransactionCase):
         self.assertTrue(evenement)
         self.assertEqual(evenement.operator_user_id, self.logisticien)
         self.assertEqual(evenement.entity_model, "dally.shipment.package")
+        self.assertEqual(evenement.shipment_id.external_reference, reference)
+        self.assertIn({
+            "field": "description", "old_value": "Savon",
+            "new_value": "Corrigé",
+        }, evenement.changes_json)
 
     def test_le_client_n_est_jamais_modifie(self):
         reference, saisie, revision = self._preparer_correction()

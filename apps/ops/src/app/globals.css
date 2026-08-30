@@ -40,6 +40,12 @@ h1 {
   margin: 0 0 0.25rem;
 }
 
+h2 {
+  margin: 1.5rem 0 0.75rem;
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+}
+
 label {
   display: block;
   margin-bottom: 1rem;
@@ -248,6 +254,56 @@ select {
 .carte-rdv span,
 .carte-rdv small {
   display: block;
+}
+
+.timeline-activite {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activite {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.activite time,
+.acteur,
+.dossier-activite {
+  display: block;
+}
+
+.activite time {
+  color: var(--ops-accent);
+  font-weight: 800;
+}
+
+.acteur {
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ops-attenue);
+}
+
+.dossier-activite {
+  color: var(--ops-accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-decoration: none;
+}
+
+.libelle-activite {
+  margin: 0.25rem 0 0;
+  font-weight: 750;
+}
+
+.resume-activite,
+.correction-activite {
+  margin: 0.2rem 0 0;
+}
+
+.correction-activite span {
+  color: var(--ops-attenue);
 }
 
 .carte-rdv small {

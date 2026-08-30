@@ -34,6 +34,7 @@ from odoo import _, api, models
 from odoo.exceptions import AccessError
 
 from .ops_errors import DallyOpsError, DallyOpsNotFound
+from .ops_format import montant, poids
 
 #: Le rapport natif. Odoo sait déjà produire un PDF propre et paginé ; en
 #: écrire un à la main reviendrait à réapprendre la pagination, les polices et
@@ -58,50 +59,6 @@ LIBELLES_PAIEMENT = {
     "cash": "Espèces", "wave": "Wave", "bank_transfer": "Virement",
     "bank": "Virement", "other": "Autre",
 }
-
-#: Le franc CFA ne se divise pas : écrire « 100 000,00 FCFA » annoncerait une
-#: précision que la monnaie n'a pas. L'euro garde ses centimes — un reçu de
-#: 67 € pour 67,50 € dus serait une erreur de caisse. Même règle que l'écran
-#: (`features/depenses/format.ts`).
-DECIMALES = {"XOF": 0}
-
-SYMBOLES = {"EUR": "€", "XOF": "FCFA"}
-
-
-def montant(valeur, devise):
-    """Un montant tel qu'il se lit sur le reçu.
-
-    Le séparateur de milliers est une espace, comme en français. Les chaînes
-    sont construites ici plutôt que dans le gabarit : le PDF et l'écran doivent
-    afficher les mêmes caractères, et deux formateurs finiraient par diverger
-    sur un arrondi que le client, lui, remarquerait.
-    """
-    if valeur is None:
-        return ""
-    decimales = DECIMALES.get(devise, 2)
-    entier, _, fraction = ("%.*f" % (decimales, valeur)).partition(".")
-    signe, chiffres = ("-", entier[1:]) if entier.startswith("-") else ("", entier)
-    groupes = []
-    while len(chiffres) > 3:
-        groupes.insert(0, chiffres[-3:])
-        chiffres = chiffres[:-3]
-    groupes.insert(0, chiffres)
-    nombre = signe + " ".join(groupes)
-    if fraction:
-        nombre = "%s,%s" % (nombre, fraction)
-    return "%s %s" % (nombre, SYMBOLES.get(devise, devise))
-
-
-def poids(valeur):
-    """Un poids tel qu'il se lit sur le reçu — « 13,5 kg ».
-
-    Écrit ici pour la même raison que les montants : le papier affichait
-    « 13.5 kg » quand l'écran affichait « 13,5 kg ». Personne n'aurait relu le
-    reçu du client pour vérifier un point décimal.
-    """
-    entier, _, fraction = ("%.3f" % (valeur or 0.0)).partition(".")
-    fraction = fraction.rstrip("0")
-    return "%s,%s kg" % (entier, fraction) if fraction else "%s kg" % entier
 
 
 class DallyOpsReceiptService(models.AbstractModel):

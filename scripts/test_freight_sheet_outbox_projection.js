@@ -312,7 +312,235 @@ function nouveauClasseur(onWrite) {
   assert.strictEqual(aerien.lignes().length, 2);
 }
 
-/* --- 10. Les formules restent neutralisées ------------------------ */
+/* --- 10. Un article et deux paiements gardent deux lignes --------- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const p = projectionDossier();
+
+  // Un seul colis, mais deux encaissements partiels : le second paiement
+  // doit vivre sur une ligne administrative distincte, sans article_key.
+  p.payments = [
+    {
+      payment_key:
+        'AIR-DSS-CDG-2026-002-A001|P|11111111-1111-4111-8111-111111111111',
+      amount_eur: 0,
+      amount_xof: 100000,
+      currency_code: 'XOF',
+      payment_method: 'wave',
+      collected_by: 'Gilles',
+      wave_reference: 'TW1',
+      payment_date: '2026-08-29',
+    },
+    {
+      payment_key:
+        'AIR-DSS-CDG-2026-002-A001|P|22222222-2222-4222-8222-222222222222',
+      amount_eur: 0,
+      amount_xof: 50000,
+      currency_code: 'XOF',
+      payment_method: 'wave',
+      collected_by: 'Gilles',
+      wave_reference: 'TW2',
+      payment_date: '2026-08-29',
+    },
+  ];
+
+  const lignes = ctx.applyDossierProjection_(classeur, p);
+  const aerien = onglets['Saisie aérien'];
+
+  assert.strictEqual(
+    lignes.length,
+    2,
+    'un article + deux paiements doit produire deux lignes'
+  );
+
+  assert.strictEqual(
+    aerien.lignes().length,
+    2,
+    'le deuxième paiement doit disposer de sa ligne administrative'
+  );
+
+  assert.strictEqual(
+    aerien.valeur(lignes[0], C.articleKey),
+    p.articles[0].article_key,
+    'la première ligne reste la ligne article'
+  );
+
+  assert.strictEqual(
+    aerien.valeur(lignes[1], C.articleKey),
+    '',
+    'la deuxième ligne est une ligne paiement sans article'
+  );
+
+  assert.strictEqual(
+    aerien.valeur(lignes[0], C.paymentKey),
+    p.payments[0].payment_key,
+    'la première identité paiement doit être conservée exactement'
+  );
+
+  assert.strictEqual(
+    aerien.valeur(lignes[1], C.paymentKey),
+    p.payments[1].payment_key,
+    'la deuxième identité paiement doit être conservée exactement'
+  );
+
+  assert.strictEqual(
+    aerien.valeur(lignes[0], C.paymentXof),
+    100000
+  );
+
+  assert.strictEqual(
+    aerien.valeur(lignes[1], C.paymentXof),
+    50000
+  );
+
+  // Le rejeu doit retrouver les deux mêmes lignes par leurs identités.
+  ctx.applyDossierProjection_(classeur, p);
+
+  assert.strictEqual(
+    aerien.lignes().length,
+    2,
+    'le rejeu ne doit jamais créer une troisième ligne'
+  );
+
+  const firstPaymentKey = p.payments[0].payment_key;
+  const secondPaymentKey = p.payments[1].payment_key;
+
+  // L'ordre du payload n'est pas une identité.
+  p.payments = [p.payments[1], p.payments[0]];
+
+  ctx.applyDossierProjection_(classeur, p);
+
+  assert.strictEqual(
+    aerien.lignes().length,
+    2,
+    'inverser les paiements ne doit créer aucune ligne'
+  );
+
+  assert.strictEqual(
+    aerien.valeur(lignes[0], C.paymentKey),
+    firstPaymentKey,
+    'le premier paiement doit rester sur sa ligne'
+  );
+
+  assert.strictEqual(
+    aerien.valeur(lignes[1], C.paymentKey),
+    secondPaymentKey,
+    'le second paiement doit rester sur sa ligne'
+  );
+
+  assert.strictEqual(
+    aerien.valeur(lignes[0], C.paymentXof),
+    100000
+  );
+
+  assert.strictEqual(
+    aerien.valeur(lignes[1], C.paymentXof),
+    50000
+  );
+}
+
+/* --- 10 bis. Les lignes modèles préformatées sont réutilisées ----- */
+{
+  // Le classeur réel contient des formules jusqu'à sa dernière ligne.
+  // getLastRow() pointe donc sur la fin du modèle, pas sur la dernière
+  // opération métier réellement saisie.
+
+  // Fret : le modèle aérien réel va jusqu'à 1004.
+  {
+    const onglets = nouveauClasseur();
+    const aerien = onglets['Saisie aérien'];
+
+    // Simule une formule de modèle à la dernière ligne.
+    aerien.getRange(1004, C.transportMode).setValue('Aérien');
+
+    const classeur = fauxClasseur(onglets);
+    const p = projectionDossier();
+
+    const lignes = ctx.applyDossierProjection_(classeur, p);
+
+    assert.ok(
+      lignes[0] <= 1004,
+      'un nouveau dossier doit réutiliser une ligne modèle, pas viser 1005'
+    );
+  }
+
+  // Dépenses : modèle réel jusqu'à 1004.
+  {
+    const onglets = nouveauClasseur();
+    const depenses = onglets['Dépenses'];
+
+    depenses.getRange(1004, 26).setValue('FORMULE_MODELE');
+
+    const classeur = fauxClasseur(onglets);
+
+    const projection = {
+      projection_type: 'cash_expense',
+      outbox_id: 200,
+      sheet: 'Dépenses',
+      expense: {
+        external_expense_key: 'ops:dep-template-test',
+        date: '2026-08-30',
+        category: 'Manutention',
+        description: 'Test modèle',
+        beneficiary: 'Équipe',
+        allocations: [{actor: 'Gilles', amount: 1000}],
+        total_amount: 1000,
+        currency_code: 'XOF',
+        payment_method: 'cash',
+        reference: '',
+        state: 'review',
+        comment: '',
+        odoo_id: 9200,
+      },
+    };
+
+    const ligne = ctx.applyExpenseProjection_(classeur, projection);
+
+    assert.ok(
+      ligne <= 1004,
+      'une dépense doit réutiliser une ligne modèle, pas viser 1005'
+    );
+  }
+
+  // Transferts : modèle réel jusqu'à 1002.
+  {
+    const onglets = nouveauClasseur();
+    const transferts = onglets['Transferts caisse'];
+
+    transferts.getRange(1002, 26).setValue('FORMULE_MODELE');
+
+    const classeur = fauxClasseur(onglets);
+
+    const projection = {
+      projection_type: 'cash_transfer',
+      outbox_id: 201,
+      sheet: 'Transferts caisse',
+      transfer: {
+        external_transfer_key: 'ops:trf-template-test',
+        date: '2026-08-30',
+        from_actor: 'Gilles',
+        to_actor: 'Dalanda',
+        amount: 1000,
+        currency_code: 'XOF',
+        reason: 'Test modèle',
+        payment_method: 'cash',
+        state: 'review',
+        comment: '',
+        odoo_id: 9300,
+      },
+    };
+
+    const ligne = ctx.applyTransferProjection_(classeur, projection);
+
+    assert.ok(
+      ligne <= 1002,
+      'un transfert doit réutiliser une ligne modèle, pas viser 1003'
+    );
+  }
+}
+
+/* --- 11. Les formules restent neutralisées ------------------------ */
 {
   const onglets = nouveauClasseur();
   const classeur = fauxClasseur(onglets);

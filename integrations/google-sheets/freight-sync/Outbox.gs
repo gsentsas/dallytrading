@@ -30,12 +30,12 @@ const DALLY_OUTBOX = Object.freeze({
     clothing: 'Habits / Vêtements', non_food: 'Non alimentaire',
   }),
   stateLabels: Object.freeze({
-    request_received: 'Annonce', goods_received: 'Déposé', preparing: 'Pesé',
-    ready: 'Chargé', in_transit: 'Expédié', arrived: 'Arrivé',
-    delivered: 'Retiré', cancelled: 'Annulé',
+    request_received: 'Annonce', goods_received: 'Depose', preparing: 'Pese',
+    ready: 'Charge', in_transit: 'Expedie', arrived: 'Arrive',
+    delivered: 'Retire', cancelled: 'Annulé',
   }),
   billingLabels: Object.freeze({
-    real: 'Poids réel', volumetric: 'Poids volumétrique', quote: 'Sur devis',
+    real: 'Poids reel', volumetric: 'Poids volumetrique', quote: 'Sur devis',
   }),
   paymentLabels: Object.freeze({
     cash: 'Espèces', wave: 'Wave', bank_transfer: 'Virement', bank: 'Virement',
@@ -123,7 +123,7 @@ function dallySheetProjectionPull() {
 /** Une erreur de forme ne se réessaie pas : elle se corrige. */
 function isPermanentProjectionError_(err) {
   const text = errorText_(err);
-  return /onglet introuvable|projection inconnue|identité absente/i.test(text);
+  return /onglet introuvable|projection inconnue|identité absente|identité paiement contradictoire|aucune ligne libre/i.test(text);
 }
 
 function applyProjection_(spreadsheet, projection) {
@@ -148,6 +148,8 @@ function applyProjection_(spreadsheet, projection) {
 function applyDossierProjection_(spreadsheet, projection) {
   const grid = sheetGrid_(spreadsheet, projection.sheet);
   const identity = projection.identity || {};
+  const c = DALLY.columns;
+
   if (!identity.sync_source_key && !identity.global_external_reference) {
     throw new Error('Identité absente : impossible de retrouver la ligne.');
   }
@@ -156,15 +158,220 @@ function applyDossierProjection_(spreadsheet, projection) {
   const payments = projection.payments || [];
   const written = [];
 
-  for (let index = 0; index < articles.length; index++) {
-    const article = articles[index];
-    const row = findOrCreateDossierRow_(grid, identity, article.article_key);
-    // Une intention de replanification saisie à la main attend une décision
-    // humaine : la projection écrit les faits, pas le message.
-    writeDossierRow_(grid, row, projection, article, payments[index] || null);
-    written.push(row);
+  // Les paiements possèdent leur propre identité métier. L'ordre du tableau
+  // n'a aucune signification et ne doit jamais décider de la ligne Sheet.
+  const paymentByKey = new Map();
+
+  for (const payment of payments) {
+    const key = paymentProjectionKey_(payment);
+
+    if (paymentByKey.has(key)) {
+      throw new Error(
+        'Identité paiement contradictoire : clé dupliquée dans la projection : ' +
+        key
+      );
+    }
+
+    paymentByKey.set(key, payment);
   }
+
+  // Protection contre une réécriture silencieuse d'une ancienne identité.
+  // Une clé déjà présente sur ce dossier doit être explicitement portée par
+  // l'état Odoo projeté.
+  for (let row = grid.firstRow; row <= grid.lastRow(); row++) {
+    if (!dossierRowMatches_(grid, row, identity)) continue;
+
+    const existingPaymentKey = grid.text(row, c.paymentKey);
+
+    if (existingPaymentKey && !paymentByKey.has(existingPaymentKey)) {
+      throw new Error(
+        'Identité paiement contradictoire : clé existante absente de la projection : ' +
+        existingPaymentKey
+      );
+    }
+  }
+
+  // Les articles restent retrouvés uniquement par article_key.
+  const articleRows = [];
+  const articleByRow = new Map();
+
+  for (const article of articles) {
+    const row = findOrCreateDossierRow_(
+      grid,
+      identity,
+      article.article_key
+    );
+
+    writeDossierRow_(grid, row, projection, article, null);
+
+    articleRows.push(row);
+    articleByRow.set(row, article);
+
+    if (!written.includes(row)) written.push(row);
+  }
+
+  // Les paiements sont maintenant projetés indépendamment des articles.
+  // 1. Une payment_key existante retrouve toujours sa ligne.
+  // 2. Une nouvelle payment_key utilise d'abord une ligne article libre.
+  // 3. Les paiements supplémentaires utilisent une ligne administrative.
+  const usedPaymentRows = new Set();
+
+  for (const payment of payments) {
+    const key = paymentProjectionKey_(payment);
+
+    let row = findDossierPaymentRow_(grid, identity, key);
+
+    if (!row) {
+      row = articleRows.find(candidate =>
+        !usedPaymentRows.has(candidate) &&
+        !grid.text(candidate, c.paymentKey)
+      ) || 0;
+    }
+
+    if (!row) {
+      row = findOrCreateDossierPaymentRow_(
+        grid,
+        identity,
+        usedPaymentRows
+      );
+    }
+
+    const article = articleByRow.get(row) || null;
+
+    writeDossierRow_(
+      grid,
+      row,
+      projection,
+      article,
+      payment
+    );
+
+    usedPaymentRows.add(row);
+
+    if (!written.includes(row)) written.push(row);
+  }
+
   return written;
+}
+
+/**
+ * Première ligne métier réellement libre.
+ *
+ * `getLastRow()` n'est pas la dernière ligne métier du classeur : les feuilles
+ * de production sont préformatées avec des formules jusqu'en bas. On cherche
+ * donc d'abord une ligne dont les colonnes métier sont vides.
+ */
+function findFreeProjectionRow_(grid, columns) {
+  const uniques = [...new Set((columns || []).filter(Boolean))];
+  const last = grid.lastRow();
+
+  for (let row = grid.firstRow; row <= last; row++) {
+    if (uniques.every(column => !grid.text(row, column))) {
+      return row;
+    }
+  }
+
+  // Cas d'une feuille neuve/non préformatée : la prochaine ligne physique
+  // reste utilisable tant qu'elle ne dépasse pas getMaxRows().
+  const next = grid.nextRow();
+  if (
+    next &&
+    uniques.every(column => !grid.text(next, column))
+  ) {
+    return next;
+  }
+
+  return 0;
+}
+
+function noFreeProjectionRow_() {
+  throw new Error(
+    'Aucune ligne libre dans le modèle du classeur pour cette projection.'
+  );
+}
+
+/**
+ * Identité canonique d'un paiement projeté.
+ */
+function paymentProjectionKey_(payment) {
+  const key = String(
+    payment && payment.payment_key || ''
+  ).trim();
+
+  if (!key) {
+    throw new Error(
+      'Identité absente : clé de paiement manquante.'
+    );
+  }
+
+  return key;
+}
+
+/**
+ * Retrouve une ligne par payment_key.
+ *
+ * La clé est globale : la trouver sur un autre dossier est une corruption,
+ * pas une raison de réutiliser cette ligne.
+ */
+function findDossierPaymentRow_(grid, identity, paymentKey) {
+  const c = DALLY.columns;
+  let found = 0;
+
+  for (let row = grid.firstRow; row <= grid.lastRow(); row++) {
+    if (grid.text(row, c.paymentKey) !== paymentKey) continue;
+
+    if (found) {
+      throw new Error(
+        'Identité paiement contradictoire : clé dupliquée dans le classeur : ' +
+        paymentKey
+      );
+    }
+
+    found = row;
+  }
+
+  if (found && !dossierRowMatches_(grid, found, identity)) {
+    throw new Error(
+      'Identité paiement contradictoire : la clé ' +
+      paymentKey +
+      ' appartient à un autre dossier.'
+    );
+  }
+
+  return found;
+}
+
+/**
+ * Ligne administrative disponible pour un paiement sans article associé.
+ */
+function findOrCreateDossierPaymentRow_(grid, identity, reservedRows) {
+  const c = DALLY.columns;
+
+  const free = grid.findRow(row =>
+    dossierRowMatches_(grid, row, identity) &&
+    !grid.text(row, c.articleKey) &&
+    !grid.text(row, c.paymentKey) &&
+    !reservedRows.has(row)
+  );
+
+  if (free) return free;
+
+  const template = findFreeProjectionRow_(grid, [
+    c.plannedConsolidation,
+    c.dossier,
+    c.client,
+    c.goodsCategory,
+    c.description,
+    c.paymentEur,
+    c.paymentXof,
+    c.articleKey,
+    c.paymentKey,
+    c.syncSourceKey,
+    c.globalExternalReference,
+    c.shipmentId,
+  ]);
+
+  return template || noFreeProjectionRow_();
 }
 
 /**
@@ -185,7 +392,23 @@ function findOrCreateDossierRow_(grid, identity, articleKey) {
   const libre = grid.findRow(row =>
     dossierRowMatches_(grid, row, identity) && !grid.text(row, c.articleKey));
   if (libre) return libre;
-  return grid.appendRow();
+
+  const template = findFreeProjectionRow_(grid, [
+    c.plannedConsolidation,
+    c.dossier,
+    c.client,
+    c.goodsCategory,
+    c.description,
+    c.paymentEur,
+    c.paymentXof,
+    c.articleKey,
+    c.paymentKey,
+    c.syncSourceKey,
+    c.globalExternalReference,
+    c.shipmentId,
+  ]);
+
+  return template || noFreeProjectionRow_();
 }
 
 function dossierRowMatches_(grid, row, identity) {
@@ -206,6 +429,24 @@ function writeDossierRow_(grid, row, projection, article, payment) {
   const dossier = projection.dossier || {};
   const client = dossier.customer || {};
 
+  // La clé de paiement est une identité métier, pas une valeur calculée.
+  // Une projection n'a jamais le droit d'écraser silencieusement une clé
+  // existante par une autre.
+  const paymentKey = payment
+    ? paymentProjectionKey_(payment)
+    : '';
+
+  if (payment) {
+    const existingPaymentKey = grid.text(row, c.paymentKey);
+
+    if (existingPaymentKey && existingPaymentKey !== paymentKey) {
+      throw new Error(
+        'Identité paiement contradictoire : ' +
+        existingPaymentKey + ' != ' + paymentKey
+      );
+    }
+  }
+
   grid.set(row, c.depositDate, dossier.deposit_date || '');
   grid.set(row, c.plannedConsolidation, sheetLiteralText_(dossier.planned_consolidation));
   grid.set(row, c.dossier, sheetLiteralText_(dossier.reference));
@@ -214,27 +455,42 @@ function writeDossierRow_(grid, row, projection, article, payment) {
   grid.set(row, c.address, sheetLiteralText_(client.address));
   grid.set(row, c.email, sheetLiteralText_(client.email));
 
-  grid.set(row, c.goodsCategory, sheetLiteralText_(article.goods_category));
-  grid.set(row, c.description, sheetLiteralText_(article.description));
-  grid.set(row, c.quantity, article.quantity || 0);
-  grid.set(row, c.length, article.length_cm || '');
-  grid.set(row, c.width, article.width_cm || '');
-  grid.set(row, c.height, article.height_cm || '');
-  grid.set(row, c.unitVolume, article.unit_volume_cbm || '');
-  grid.set(row, c.totalVolume, article.total_volume_cbm || '');
-  grid.set(row, c.announcedWeight, article.announced_weight_kg || '');
-  grid.set(row, c.exactWeight, article.exact_weight_kg || '');
-  grid.set(row, c.billableWeight, article.billable_weight_kg || '');
-  grid.set(row, c.billingMethod,
-           DALLY_OUTBOX.billingLabels[article.billing_method] || '');
-  grid.set(row, c.appliedPrice, article.applied_unit_price_eur || '');
-  grid.set(row, c.totalEur, article.transport_amount_eur || '');
-  grid.set(row, c.customsValue, article.customs_value_xof || '');
-  // Le libellé attendu par le classeur, jamais le code brut — et jamais un
-  // repli silencieux : une famille inconnue doit se voir.
-  grid.set(row, c.tariffFamily, tariffFamilyLabel_(article.tariff_family_code));
   grid.set(row, c.parcelState, DALLY_OUTBOX.stateLabels[dossier.state] || '');
-  grid.set(row, c.articleKey, sheetLiteralText_(article.article_key));
+
+  if (article) {
+    grid.set(row, c.goodsCategory, sheetLiteralText_(article.goods_category));
+    grid.set(row, c.description, sheetLiteralText_(article.description));
+    grid.set(row, c.quantity, article.quantity || 0);
+    grid.set(row, c.length, article.length_cm || '');
+    grid.set(row, c.width, article.width_cm || '');
+    grid.set(row, c.height, article.height_cm || '');
+    grid.set(row, c.unitVolume, article.unit_volume_cbm || '');
+    grid.set(row, c.totalVolume, article.total_volume_cbm || '');
+    grid.set(row, c.announcedWeight, article.announced_weight_kg || '');
+    grid.set(row, c.exactWeight, article.exact_weight_kg || '');
+    grid.set(row, c.billableWeight, article.billable_weight_kg || '');
+    grid.set(
+      row,
+      c.billingMethod,
+      DALLY_OUTBOX.billingLabels[article.billing_method] || ''
+    );
+    grid.set(row, c.appliedPrice, article.applied_unit_price_eur || '');
+    grid.set(row, c.totalEur, article.transport_amount_eur || '');
+    grid.set(row, c.customsValue, article.customs_value_xof || '');
+
+    // Le libellé attendu par le classeur, jamais le code brut.
+    grid.set(
+      row,
+      c.tariffFamily,
+      tariffFamilyLabel_(article.tariff_family_code)
+    );
+
+    grid.set(
+      row,
+      c.articleKey,
+      sheetLiteralText_(article.article_key)
+    );
+  }
 
   if (payment) {
     grid.set(row, c.paymentEur, payment.amount_eur || '');
@@ -242,7 +498,8 @@ function writeDossierRow_(grid, row, projection, article, payment) {
     grid.set(row, c.paymentMethod,
              DALLY_OUTBOX.paymentLabels[payment.payment_method] || '');
     grid.set(row, c.collectedBy, sheetLiteralText_(payment.collected_by));
-    grid.set(row, c.paymentKey, sheetLiteralText_(payment.payment_key));
+    grid.set(row, c.paymentFlag, 1);
+    grid.set(row, c.paymentKey, sheetLiteralText_(paymentKey));
   }
 
   grid.set(row, c.partnerId, identity.partner_id || '');
@@ -290,7 +547,23 @@ function applyExpenseProjection_(spreadsheet, projection) {
   const key = expense.external_expense_key;
   if (!key) throw new Error('Identité absente : clé de dépense manquante.');
 
-  const row = grid.findRow(r => grid.text(r, cols.key) === key) || grid.appendRow();
+  const row =
+    grid.findRow(r => grid.text(r, cols.key) === key) ||
+    findFreeProjectionRow_(grid, [
+      cols.key,
+      cols.date,
+      cols.category,
+      cols.description,
+      cols.beneficiary,
+      cols.gilles,
+      cols.alain,
+      cols.dalanda,
+      cols.total,
+      cols.currency,
+      cols.reference,
+      cols.odooId,
+    ]) ||
+    noFreeProjectionRow_();
   grid.set(row, cols.key, sheetLiteralText_(key));
   grid.set(row, cols.date, expense.date || '');
   grid.set(row, cols.category, sheetLiteralText_(expense.category));
@@ -325,7 +598,19 @@ function applyTransferProjection_(spreadsheet, projection) {
   const key = transfer.external_transfer_key;
   if (!key) throw new Error('Identité absente : clé de transfert manquante.');
 
-  const row = grid.findRow(r => grid.text(r, cols.key) === key) || grid.appendRow();
+  const row =
+    grid.findRow(r => grid.text(r, cols.key) === key) ||
+    findFreeProjectionRow_(grid, [
+      cols.key,
+      cols.date,
+      cols.fromActor,
+      cols.toActor,
+      cols.amount,
+      cols.currency,
+      cols.reason,
+      cols.odooId,
+    ]) ||
+    noFreeProjectionRow_();
   grid.set(row, cols.key, sheetLiteralText_(key));
   grid.set(row, cols.date, transfer.date || '');
   grid.set(row, cols.fromActor, sheetLiteralText_(transfer.from_actor));
@@ -374,6 +659,17 @@ function sheetGrid_(spreadsheet, name, firstRow) {
       }
       return 0;
     },
-    appendRow: function () { return Math.max(sheet.getLastRow() + 1, start); },
+    nextRow: function () {
+      const next = Math.max(sheet.getLastRow() + 1, start);
+
+      if (
+        typeof sheet.getMaxRows === 'function' &&
+        next > sheet.getMaxRows()
+      ) {
+        return 0;
+      }
+
+      return next;
+    },
   };
 }

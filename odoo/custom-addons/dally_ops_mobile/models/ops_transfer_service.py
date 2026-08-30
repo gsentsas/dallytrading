@@ -157,6 +157,9 @@ class DallyOpsCashTransferService(models.AbstractModel):
                 donnees["request_uuid"], empreinte, transfert, dto)
             self._journaliser(
                 "cash_transfer_recorded", transfert, donnees["request_uuid"])
+            self.env["dally.ops.sheet.outbox"].enqueue(
+                "cash_transfer", transfert.external_transfer_key, transfert,
+                reference=transfert.reason or "")
             return dto
 
     @api.model

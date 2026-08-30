@@ -130,6 +130,9 @@ class DallyOpsPaymentService(models.AbstractModel):
             }
             self._inscrire(donnees["request_uuid"], empreinte, shipment, collection, dto)
             self._journaliser("payment_recorded", collection, donnees["request_uuid"])
+            # Un encaissement vit dans les colonnes de paiement de la ligne de
+            # son dossier : c'est donc le dossier qu'on reprojette.
+            self.env["dally.ops.sheet.outbox"].enqueue_dossier(shipment)
             return dto
 
     # ------------------------------------------------------------------

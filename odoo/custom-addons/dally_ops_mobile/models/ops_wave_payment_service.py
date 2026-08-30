@@ -181,6 +181,7 @@ class DallyOpsWavePaymentService(models.AbstractModel):
                 donnees["request_uuid"], empreinte, shipment, collection, dto)
             self._journaliser(
                 "wave_payment_recorded", collection, donnees["request_uuid"])
+            self.env["dally.ops.sheet.outbox"].enqueue_dossier(shipment)
             return dto
 
     @api.model

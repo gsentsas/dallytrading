@@ -146,6 +146,9 @@ class DallyOpsExpenseService(models.AbstractModel):
             }
             self._inscrire(donnees["request_uuid"], empreinte, depense, dto)
             self._journaliser("expense_recorded", depense, donnees["request_uuid"])
+            self.env["dally.ops.sheet.outbox"].enqueue(
+                "cash_expense", depense.external_expense_key, depense,
+                reference=depense.description or "")
             return dto
 
     # ------------------------------------------------------------------

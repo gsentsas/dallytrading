@@ -122,6 +122,7 @@ class DallyOpsIntakeLineService(models.AbstractModel):
             self._inscrire(request_uuid, "add", empreinte, shipment, colis,
                            ligne["line_uuid"], dto)
             self._journaliser("intake_line_added", colis, request_uuid)
+            self.env["dally.ops.sheet.outbox"].enqueue_dossier(colis.shipment_id)
             return dto
 
     # ------------------------------------------------------------------
@@ -204,6 +205,7 @@ class DallyOpsIntakeLineService(models.AbstractModel):
             self._inscrire(request_uuid, "update", empreinte, shipment, colis,
                            line_uuid, dto)
             self._journaliser("intake_line_updated", colis, request_uuid)
+            self.env["dally.ops.sheet.outbox"].enqueue_dossier(colis.shipment_id)
             return dto
 
     # ------------------------------------------------------------------

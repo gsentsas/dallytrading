@@ -120,6 +120,10 @@ class DallyOpsIntakeService(models.AbstractModel):
             self._journaliser(
                 "intake_created", shipment, donnees["request_uuid"],
             )
+            # L'intention de projeter vers le classeur est écrite **dans** la
+            # transaction, sans aucun accès réseau : une panne Google ne peut
+            # donc pas annuler une réception qui a eu lieu.
+            self.env["dally.ops.sheet.outbox"].enqueue_dossier(shipment)
             return self._dto(
                 shipment, package, donnees["line"]["line_uuid"],
                 status="created", pricing_status=pricing_status,

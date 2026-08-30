@@ -417,15 +417,14 @@ class DallyOpsSheetOutbox(models.Model):
         return lignes
 
     @staticmethod
-    def _cle_paiement(shipment, collection, rang):
-        """La clé de paiement, dans la convention du classeur.
+    def _cle_paiement(_shipment, collection, _rang):
+        """Réutilise l'identité métier déjà attribuée à la collection.
 
-        `<référence globale>|P|<n>` — la même que celle que le connecteur pose
-        lui-même en colonne BF. Un paiement rejoué retrouve donc sa ligne au
-        lieu d'en créer une seconde.
+        `external_payment_key` est la clé d'idempotence du paiement. La
+        projection ne doit jamais en fabriquer une seconde à partir du rang :
+        un aller Sheet → Odoo → Sheet doit conserver exactement la même clé.
         """
-        base = shipment.external_reference or shipment.sync_source_key or ""
-        return "%s|P|%s" % (base, rang)
+        return collection.external_payment_key or ""
 
     def _projection_depense(self, depense):
         return {

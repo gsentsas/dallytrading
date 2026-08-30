@@ -380,8 +380,15 @@ class TestOpsSheetOutbox(AccountTestInvoicingCommon):
         self.assertEqual(paiement["payment_method"], "wave")
         self.assertEqual(paiement["collected_by"], "Gilles")
         self.assertEqual(paiement["wave_reference"], "TWSHEET001")
-        self.assertTrue(paiement["payment_key"].endswith("|P|1"))
-        self.assertTrue(paiement["payment_key"].startswith(reference))
+        collection = self.env["dally.freight.collection"].sudo().search([
+            ("shipment_id", "=", self._shipment(reference).id),
+            ("state", "!=", "cancelled"),
+        ], limit=1)
+        self.assertTrue(collection)
+        self.assertEqual(
+            paiement["payment_key"],
+            collection.external_payment_key,
+        )
 
     def test_deux_paiements_partiels_restent_deux_lignes(self):
         reference = self._creer_dossier()

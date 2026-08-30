@@ -90,7 +90,14 @@ export class OpsGatewayError extends Error {
 }
 
 export interface OpsIdentity {
-  readonly user: { readonly id: number; readonly name: string; readonly login: string };
+  /**
+   * L'opérateur, nommé — jamais numéroté.
+   *
+   * La clé primaire Odoo ne descend pas jusqu'au navigateur : elle n'y sert à
+   * rien, et un identifiant de base publié finit toujours par être utilisé
+   * pour désigner quelqu'un.
+   */
+  readonly user: { readonly name: string; readonly login: string };
   readonly role: 'logistician' | 'supervisor';
   readonly cash_actor: string | null;
   readonly cash_actor_configured: boolean;

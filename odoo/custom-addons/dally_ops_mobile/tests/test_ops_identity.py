@@ -83,7 +83,6 @@ class TestOpsIdentity(HttpCase):
 
         self.assertTrue(charge["success"])
         donnees = charge["data"]
-        self.assertEqual(donnees["user"]["id"], self.logisticien.id)
         self.assertEqual(donnees["user"]["name"], "Gilles Test")
         self.assertEqual(donnees["user"]["login"], "ops.logi")
         self.assertEqual(donnees["role"], "logistician")
@@ -262,7 +261,21 @@ class TestOpsIdentity(HttpCase):
         self.assertEqual(
             set(donnees),
             {"user", "role", "cash_actor", "cash_actor_configured", "capabilities"})
-        self.assertEqual(set(donnees["user"]), {"id", "name", "login"})
+        self.assertEqual(set(donnees["user"]), {"name", "login"})
+
+    def test_la_charge_ne_porte_aucun_identifiant_de_base(self):
+        """Le navigateur n'a que faire de la clé primaire de l'opérateur.
+
+        Elle ne servait à rien — aucun écran ne la lit — et elle traversait
+        pourtant jusqu'à `/api/me`. Un identifiant de base publié sans usage
+        est une invitation à raisonner dessus : le jour où quelqu'un s'en sert
+        pour désigner un utilisateur, c'est le navigateur qui décide de qui
+        il parle.
+        """
+        donnees = json.loads(self._appel("ops.logi").content)["data"]
+        self.assertEqual(set(donnees["user"]), {"name", "login"})
+        self.assertNotIn(str(self.logisticien.id),
+                         json.dumps(donnees["user"]))
 
     def test_la_charge_ne_laisse_fuir_ni_session_ni_portee(self):
         texte = self._appel("ops.logi").text

@@ -54,7 +54,13 @@ async function declarer(
   await page.getByLabel('Devise').selectOption(devise);
   await page.getByRole('button', { name: 'ENREGISTRER LA DÉPENSE' }).click();
   await expect(page.getByTestId('formulaire-depense')).toHaveCount(0);
-  return page.locator('section.carte', { hasText: nature });
+  // La fermeture du formulaire ne dit que « le client a fini d'envoyer ». Les
+  // totaux, eux, viennent du serveur : les lire avant que la page ne se soit
+  // rafraîchie donne l'ancien montant, et le test échoue une fois sur trois
+  // sans qu'aucune dépense ne manque en base.
+  const carte = page.locator('section.carte', { hasText: nature });
+  await expect(carte).toBeVisible();
+  return carte;
 }
 
 /** Un libellé unique par exécution : la base du banc n'est pas remise à zéro. */

@@ -23,7 +23,7 @@ const { currentIdentity, loginOps, logoutOps, readOpsSession, MESSAGE_ECHEC_CONN
 type ErreurPasserelle = { readonly code: string };
 
 const IDENTITE = {
-  user: { id: 7, name: 'Gilles', login: 'gilles' },
+  user: { name: 'Gilles', login: 'gilles' },
   role: 'logistician' as const,
   cash_actor: 'Gilles',
   cash_actor_configured: true,

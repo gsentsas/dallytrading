@@ -158,14 +158,18 @@ class ResUsers(models.Model):
         """La charge utile de `/api/v1/ops/me`.
 
         Volontairement pauvre. N'y figurent ni groupes Odoo, ni identifiant de
-        session, ni portée d'API : ce sont des détails d'implémentation du
-        serveur, et les publier inviterait le frontend à raisonner dessus.
+        session, ni portée d'API, ni clé primaire : ce sont des détails
+        d'implémentation du serveur, et les publier inviterait le frontend à
+        raisonner dessus.
+
+        Le login suffit à désigner l'opérateur côté navigateur — c'est lui que
+        la file hors connexion utilise pour reconnaître son propriétaire. La
+        clé primaire, elle, ne servait à personne et descendait quand même.
         """
         utilisateur = self.env.user
         acteur = (utilisateur.dally_ops_cash_actor or "").strip() or None
         return {
             "user": {
-                "id": utilisateur.id,
                 "name": utilisateur.name,
                 "login": utilisateur.login,
             },

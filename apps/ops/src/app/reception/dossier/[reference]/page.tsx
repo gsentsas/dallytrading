@@ -55,6 +55,15 @@ export default async function PageDossier({
         </p>
       </section>
 
+      {/* Le reçu n'existe que pour un dossier que le serveur a numéroté :
+          l'accès passe donc par la référence qu'il a attribuée. */}
+      <Link
+        className="bouton-lien"
+        href={`/reception/dossier/${encodeURIComponent(dossier.reference)}/recu`}
+      >
+        VOIR LE REÇU
+      </Link>
+
       {/* Le collecteur vient de l'identité serveur, jamais d'une saisie. */}
       <DossierArticles
         dossier={dossier}

@@ -10,3 +10,4 @@ from . import ops_transfers
 from . import ops_appointments
 from . import ops_wave_payments
 from . import ops_sheet_outbox
+from . import ops_receipts

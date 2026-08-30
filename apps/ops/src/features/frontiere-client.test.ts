@@ -38,6 +38,7 @@ import { describe, expect, it } from 'vitest';
  */
 const MODULES_SURS = new Set([
   '@/lib/ops/expenses-vocabulaire',
+  '@/lib/ops/recu-vocabulaire',
   '@/lib/offline/client',
   '@/lib/offline/queue',
   '@/lib/offline/sync',

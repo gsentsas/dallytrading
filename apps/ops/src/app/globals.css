@@ -255,3 +255,146 @@ select {
   color: var(--ops-attenue);
   font-size: 0.85rem;
 }
+
+/*
+ * Le reçu client.
+ *
+ * Deux apparences pour un seul document : sombre à l'écran, comme le reste de
+ * l'application, et noir sur blanc à l'impression. Rien n'est dupliqué — ce
+ * sont les mêmes éléments, avec d'autres couleurs.
+ */
+.recu-entete {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid var(--ops-accent);
+}
+
+.recu-societe {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.recu-titre {
+  text-align: right;
+  font-weight: 700;
+}
+
+.recu-titre p {
+  margin: 0;
+}
+
+.recu-petit {
+  font-size: 0.85rem;
+}
+
+.recu-etiquette {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ops-attenue);
+}
+
+.recu-dossier {
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.75rem;
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-accent);
+  border-radius: 0.75rem;
+}
+
+.recu-numero {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.recu-articles {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recu-articles li + li {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--ops-bordure);
+}
+
+.recu-montant {
+  font-weight: 600;
+}
+
+.recu-totaux p {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 0.3rem;
+}
+
+.recu-solde {
+  padding-top: 0.4rem;
+  font-weight: 700;
+  border-top: 1px solid var(--ops-bordure);
+}
+
+/* Trois actions, empilées : la main tient le téléphone, pas une souris. */
+.recu-actions {
+  margin-top: 1.25rem;
+}
+
+.recu-actions button + button {
+  margin-top: 0.6rem;
+}
+
+/*
+ * À l'impression.
+ *
+ * Le fond sombre de l'application consommerait l'encre d'une imprimante de
+ * comptoir et rendrait le reçu illisible en photocopie. Les commandes
+ * disparaissent : un bouton imprimé n'est qu'un rectangle.
+ */
+@media print {
+  .sans-impression,
+  .retour {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 12px;
+  }
+
+  main {
+    max-width: none;
+    padding: 0;
+  }
+
+  .carte,
+  .recu-dossier {
+    background: #fff;
+    border: 1px solid #999;
+    border-radius: 0;
+    page-break-inside: avoid;
+  }
+
+  .attenue,
+  .recu-etiquette {
+    color: #333;
+  }
+
+  .recu-entete {
+    border-bottom-color: #000;
+  }
+
+  .recu-articles li + li,
+  .recu-solde {
+    border-top-color: #999;
+  }
+}

@@ -18,6 +18,7 @@ from . import ops_intake_service
 from . import ops_intake_line_service
 from . import ops_payment_service
 from . import ops_wave_payment_service
+from . import ops_receipt_service
 from . import ops_expense_service
 from . import ops_cash_actor_service
 from . import ops_transfer_service

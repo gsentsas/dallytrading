@@ -307,15 +307,64 @@ export async function opsGet<T>(
     correlationId,
   });
 
+  // La même traduction que partout ailleurs. Cette fonction en portait sa
+  // propre copie, plus courte : un dossier introuvable y devenait « service
+  // indisponible », si bien que l'écran invitait à patienter au lieu de dire
+  // que la référence n'existe pas.
+  return lireReponse<T>(reponse);
+}
+
+/**
+ * Lit un document Ops — un PDF, aujourd'hui le reçu client.
+ *
+ * Ne renvoie que des octets et un type : jamais un chemin, jamais une URL que
+ * le navigateur pourrait rappeler seul. Le document reste derrière la session,
+ * comme le reste.
+ */
+export async function opsGetDocument(
+  ressource: string,
+  sessionId: string,
+  correlationId: string,
+): Promise<{ readonly contenu: ArrayBuffer; readonly type: string }> {
+  if (!RESSOURCE_OPS.test(ressource)) {
+    throw new OpsGatewayError('invalid_path', `ressource non autorisée : ${ressource}`);
+  }
+
+  const reponse = await appel({
+    chemin: `${PREFIXE_OPS}${ressource}`,
+    methode: 'GET',
+    sessionId,
+    correlationId,
+  });
+
   if (reponse.status === 403) throw new OpsGatewayError('forbidden');
   if (reponse.status >= 300 && reponse.status < 400) throw new OpsGatewayError('forbidden');
+  if (reponse.status === 404) {
+    const charge = (await reponse.json().catch(() => null)) as
+      | { error?: { code?: string } }
+      | null;
+    throw new OpsGatewayError('not_found', 'introuvable', charge?.error?.code);
+  }
+  if (reponse.status === 409) {
+    const charge = (await reponse.json().catch(() => null)) as
+      | { error?: { code?: string } }
+      | null;
+    throw new OpsGatewayError('conflict', 'conflit', charge?.error?.code);
+  }
   if (!reponse.ok) throw new OpsGatewayError('unavailable', `statut ${reponse.status}`);
 
-  const charge = (await reponse.json()) as { success?: boolean; data?: unknown };
-  if (!charge.success || charge.data === undefined) {
-    throw new OpsGatewayError('unavailable', 'réponse illisible');
+  const type = reponse.headers.get('content-type') ?? '';
+  // Odoo répond en JSON quand il refuse ; un refus servi tel quel sous
+  // l'étiquette PDF donnerait au client un fichier illisible au lieu d'un
+  // message.
+  if (!type.toLowerCase().startsWith('application/pdf')) {
+    throw new OpsGatewayError('unavailable', 'document inattendu');
   }
-  return charge.data as T;
+  const contenu = await reponse.arrayBuffer();
+  if (contenu.byteLength === 0) {
+    throw new OpsGatewayError('unavailable', 'document vide');
+  }
+  return { contenu, type: 'application/pdf' };
 }
 
 /** Lecture Ops avec paramètres encodés, sans permettre à l'appelant d'écrire un chemin. */

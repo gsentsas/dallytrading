@@ -642,25 +642,85 @@ function applyTransferProjection_(spreadsheet, projection) {
 function sheetGrid_(spreadsheet, name, firstRow) {
   const sheet = spreadsheet.getSheetByName(name);
   if (!sheet) throw new Error('Onglet introuvable : ' + String(name));
+
   const start = firstRow || DALLY.firstDataRow;
+  const initialLast = sheet.getLastRow();
+  const width =
+    typeof sheet.getMaxColumns === 'function'
+      ? sheet.getMaxColumns()
+      : DALLY.maxColumn;
+
+  const count = Math.max(0, initialLast - start + 1);
+
+  // One Google read for the complete useful grid.
+  // Searches below operate only on this in-memory snapshot.
+  const display = count
+    ? sheet.getRange(start, 1, count, width).getDisplayValues()
+    : [];
+
+  let logicalLast = initialLast;
+
+  function normalize_(value) {
+    return String(value == null ? '' : value).trim();
+  }
+
+  function ensureRow_(row) {
+    const index = row - start;
+    if (index < 0) return -1;
+
+    while (display.length <= index) {
+      display.push(Array(width).fill(''));
+    }
+
+    return index;
+  }
+
   return {
     sheet: sheet,
     firstRow: start,
-    lastRow: function () { return sheet.getLastRow(); },
-    text: function (row, column) {
-      const value = sheet.getRange(row, column).getDisplayValue();
-      return String(value == null ? '' : value).trim();
+
+    lastRow: function () {
+      return logicalLast;
     },
-    set: function (row, column, value) { sheet.getRange(row, column).setValue(value); },
+
+    text: function (row, column) {
+      const index = row - start;
+
+      if (
+        index < 0 ||
+        column < 1 ||
+        column > width ||
+        !display[index]
+      ) {
+        return '';
+      }
+
+      return normalize_(display[index][column - 1]);
+    },
+
+    set: function (row, column, value) {
+      sheet.getRange(row, column).setValue(value);
+
+      const index = ensureRow_(row);
+
+      if (index >= 0 && column >= 1 && column <= width) {
+        display[index][column - 1] = value;
+      }
+
+      if (row > logicalLast) {
+        logicalLast = row;
+      }
+    },
+
     findRow: function (predicate) {
-      const last = sheet.getLastRow();
-      for (let row = start; row <= last; row++) {
+      for (let row = start; row <= logicalLast; row++) {
         if (predicate(row)) return row;
       }
       return 0;
     },
+
     nextRow: function () {
-      const next = Math.max(sheet.getLastRow() + 1, start);
+      const next = Math.max(logicalLast + 1, start);
 
       if (
         typeof sheet.getMaxRows === 'function' &&

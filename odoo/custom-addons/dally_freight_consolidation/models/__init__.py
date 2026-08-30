@@ -1,3 +1,4 @@
 # -*- coding: utf-8 -*-
 from . import consolidation
 from . import shipment
+from . import cash_expense_consolidation

@@ -1,0 +1,456 @@
+/*
+ * Feuille de style minimale.
+ *
+ * L'application se tient dans une main, souvent gantée, souvent au soleil :
+ * cibles tactiles larges, contraste élevé, aucune animation. Elle grandira
+ * quand il y aura des écrans métier à habiller ; à ce stade il n'y en a pas.
+ */
+
+:root {
+  --ops-fond: #0f172a;
+  --ops-surface: #1e293b;
+  --ops-texte: #f8fafc;
+  --ops-attenue: #94a3b8;
+  --ops-accent: #38bdf8;
+  --ops-erreur: #fca5a5;
+  --ops-bordure: #334155;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ops-fond);
+  color: var(--ops-texte);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+h1 {
+  font-size: 1.6rem;
+  margin: 0 0 0.25rem;
+}
+
+h2 {
+  margin: 1.5rem 0 0.75rem;
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+}
+
+label {
+  display: block;
+  margin-bottom: 1rem;
+  color: var(--ops-attenue);
+  font-size: 0.95rem;
+}
+
+input {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.9rem 0.85rem;
+  font-size: 1.05rem;
+  color: var(--ops-texte);
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-bordure);
+  border-radius: 0.6rem;
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 6rem;
+  margin-top: 0.35rem;
+  padding: 0.9rem 0.85rem;
+  font: inherit;
+  color: var(--ops-texte);
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-bordure);
+  border-radius: 0.6rem;
+}
+
+button {
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.9rem 1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ops-fond);
+  background: var(--ops-accent);
+  border: 0;
+  border-radius: 0.6rem;
+}
+
+button[disabled] {
+  opacity: 0.6;
+}
+
+button.secondaire {
+  color: var(--ops-attenue);
+  background: transparent;
+  border: 1px solid var(--ops-bordure);
+}
+
+.erreur {
+  margin: 0 0 1rem;
+  padding: 0.8rem 0.9rem;
+  color: var(--ops-erreur);
+  background: rgba(127, 29, 29, 0.35);
+  border: 1px solid var(--ops-erreur);
+  border-radius: 0.6rem;
+}
+
+.carte {
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-bordure);
+  border-radius: 0.75rem;
+}
+
+.attenue {
+  color: var(--ops-attenue);
+  font-size: 0.95rem;
+}
+
+/* Une carte cliquable reste une carte : même surface, même cible tactile. */
+a.carte-lien {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  border-color: var(--ops-accent);
+}
+
+/* Le bouton de sélection d'un départ, dimensionné pour un doigt ganté. */
+.bouton-lien {
+  display: block;
+  width: 100%;
+  min-height: 3.25rem;
+  margin-top: 0.9rem;
+  padding: 0.95rem 1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  color: var(--ops-fond);
+  background: var(--ops-accent);
+  border-radius: 0.6rem;
+}
+
+/* L'étiquette de mode : ce que l'œil cherche en premier sur un quai. */
+.mode {
+  display: inline-block;
+  margin-bottom: 0.4rem;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ops-fond);
+  background: var(--ops-accent);
+  border-radius: 0.35rem;
+}
+
+.route {
+  margin: 0.15rem 0 0.6rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.reference {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem;
+  color: var(--ops-attenue);
+}
+
+.retour {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: var(--ops-accent);
+  font-size: 0.95rem;
+}
+
+select {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.9rem 0.85rem;
+  font-size: 1.05rem;
+  color: var(--ops-texte);
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-bordure);
+  border-radius: 0.6rem;
+}
+
+.dimensions {
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+  color: var(--ops-attenue);
+  font-size: 0.95rem;
+}
+
+.grille-trois {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.grille-trois label {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.succes {
+  display: block;
+  color: #86efac;
+  font-weight: 800;
+}
+
+.alerte {
+  padding: 0.65rem;
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.35);
+  border: 1px solid #fbbf24;
+  border-radius: 0.5rem;
+  font-weight: 800;
+}
+
+.actions-deux {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 0.8rem 0;
+}
+
+.actions-deux .bouton-lien {
+  margin-top: 0;
+}
+
+.carte-rdv {
+  display: grid;
+  grid-template-columns: 4.25rem 1fr;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  color: var(--ops-texte);
+  background: var(--ops-surface);
+}
+
+.carte-rdv time {
+  color: var(--ops-accent);
+  font-weight: 800;
+}
+
+.carte-rdv span,
+.carte-rdv small {
+  display: block;
+}
+
+.timeline-activite {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activite {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.activite time,
+.acteur,
+.dossier-activite {
+  display: block;
+}
+
+.activite time {
+  color: var(--ops-accent);
+  font-weight: 800;
+}
+
+.acteur {
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ops-attenue);
+}
+
+.dossier-activite {
+  color: var(--ops-accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-decoration: none;
+}
+
+.libelle-activite {
+  margin: 0.25rem 0 0;
+  font-weight: 750;
+}
+
+.resume-activite,
+.correction-activite {
+  margin: 0.2rem 0 0;
+}
+
+.correction-activite span {
+  color: var(--ops-attenue);
+}
+
+.carte-rdv small {
+  margin-top: 0.25rem;
+  color: var(--ops-attenue);
+  font-size: 0.85rem;
+}
+
+/*
+ * Le reçu client.
+ *
+ * Deux apparences pour un seul document : sombre à l'écran, comme le reste de
+ * l'application, et noir sur blanc à l'impression. Rien n'est dupliqué — ce
+ * sont les mêmes éléments, avec d'autres couleurs.
+ */
+.recu-entete {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid var(--ops-accent);
+}
+
+.recu-societe {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.recu-titre {
+  text-align: right;
+  font-weight: 700;
+}
+
+.recu-titre p {
+  margin: 0;
+}
+
+.recu-petit {
+  font-size: 0.85rem;
+}
+
+.recu-etiquette {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ops-attenue);
+}
+
+.recu-dossier {
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.75rem;
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-accent);
+  border-radius: 0.75rem;
+}
+
+.recu-numero {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.recu-articles {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recu-articles li + li {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--ops-bordure);
+}
+
+.recu-montant {
+  font-weight: 600;
+}
+
+.recu-totaux p {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 0.3rem;
+}
+
+.recu-solde {
+  padding-top: 0.4rem;
+  font-weight: 700;
+  border-top: 1px solid var(--ops-bordure);
+}
+
+/* Trois actions, empilées : la main tient le téléphone, pas une souris. */
+.recu-actions {
+  margin-top: 1.25rem;
+}
+
+.recu-actions button + button {
+  margin-top: 0.6rem;
+}
+
+/*
+ * À l'impression.
+ *
+ * Le fond sombre de l'application consommerait l'encre d'une imprimante de
+ * comptoir et rendrait le reçu illisible en photocopie. Les commandes
+ * disparaissent : un bouton imprimé n'est qu'un rectangle.
+ */
+@media print {
+  .sans-impression,
+  .retour {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 12px;
+  }
+
+  main {
+    max-width: none;
+    padding: 0;
+  }
+
+  .carte,
+  .recu-dossier {
+    background: #fff;
+    border: 1px solid #999;
+    border-radius: 0;
+    page-break-inside: avoid;
+  }
+
+  .attenue,
+  .recu-etiquette {
+    color: #333;
+  }
+
+  .recu-entete {
+    border-bottom-color: #000;
+  }
+
+  .recu-articles li + li,
+  .recu-solde {
+    border-top-color: #999;
+  }
+}

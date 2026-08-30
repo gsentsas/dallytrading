@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Le reçu de prise en charge.
+
+        Rendu **uniquement** depuis le contrat construit par
+        `dally.ops.receipt.service` : le gabarit ne lit aucun enregistrement.
+        C'est ce qui garantit que l'aperçu mobile et le papier disent la même
+        chose — deux lectures séparées finiraient par diverger, et c'est
+        toujours le document emporté par le client qui dirait faux.
+
+        Aucun identifiant technique n'y figure. Ni `res.partner.id`, ni
+        `dally.shipment.id`, ni clé de synchronisation : un client n'a que
+        faire de la plomberie, et un document qui circule ne doit pas la
+        transporter.
+    -->
+    <template id="report_ops_receipt">
+        <t t-set="r" t-value="receipt"/>
+        <!--
+            Un document HTML complet et autonome, et non un fragment posé dans
+            `web.html_container`.
+
+            Les mises en page natives (`web.external_layout`, `basic_layout`)
+            lisent l'enregistrement imprimé pour composer leur entête ; le reçu
+            n'en lit aucun — il n'affiche que le contrat construit par le
+            service, si bien que l'aperçu mobile et le papier ne peuvent pas
+            diverger.
+
+            Elles injectent aussi les paquets d'assets d'Odoo, que le moteur PDF
+            va rechercher **par HTTP** sur le serveur. Un reçu client n'a aucune
+            raison de dépendre d'un aller-retour réseau : il en dépendrait pour
+            son apparence, et un paquet d'assets régénéré changerait un document
+            déjà remis. Tout le style est donc écrit ici, en clair.
+        -->
+&lt;!DOCTYPE html&gt;
+        <html>
+            <head>
+                <meta charset="utf-8"/>
+                <title>Reçu de prise en charge</title>
+            </head>
+            <body style="margin:0; padding:0;">
+                <div style="font-family: Helvetica, Arial, sans-serif; color:#17324d;">
+
+                    <div style="border-bottom:2px solid #17324d; padding-bottom:8px; margin-bottom:14px;">
+                        <div style="float:left;">
+                            <div style="font-size:20px; font-weight:bold;"
+                                 t-out="r['company']['name']"/>
+                            <div style="font-size:10px;" t-out="r['company']['address']"/>
+                            <div style="font-size:10px;">
+                                <span t-out="r['company']['phone']"/>
+                                <t t-if="r['company']['email']">
+                                    · <span t-out="r['company']['email']"/>
+                                </t>
+                            </div>
+                        </div>
+                        <div style="float:right; text-align:right;">
+                            <div style="font-size:15px; font-weight:bold;"
+                                 t-out="r['document']['title']"/>
+                            <div style="font-size:10px;">Établi le <span
+                                 t-out="r['document']['generated_at']"/></div>
+                        </div>
+                        <div style="clear:both;"/>
+                    </div>
+
+                    <!-- La référence du dossier, très visible : c'est elle que
+                         le client cite au téléphone. -->
+                    <div style="background:#17324d; color:white; padding:10px 12px; margin-bottom:14px;">
+                        <div style="font-size:11px; opacity:.85;">DOSSIER</div>
+                        <div style="font-size:22px; font-weight:bold; letter-spacing:1px;"
+                             t-out="r['reference']"/>
+                    </div>
+
+                    <table style="width:100%; font-size:11px; margin-bottom:14px;">
+                        <tr>
+                            <td style="width:50%; vertical-align:top;">
+                                <div style="font-weight:bold; margin-bottom:3px;">CLIENT</div>
+                                <div t-out="r['customer']['name']"/>
+                                <div t-if="r['customer']['phone']" t-out="r['customer']['phone']"/>
+                                <div t-if="r['customer']['address']" t-out="r['customer']['address']"/>
+                                <div t-if="r['customer']['email']" t-out="r['customer']['email']"/>
+                            </td>
+                            <td style="width:50%; vertical-align:top;">
+                                <div style="font-weight:bold; margin-bottom:3px;">EXPÉDITION</div>
+                                <div>Réception : <span t-out="r['received_on']"/></div>
+                                <div>Transport : <span t-out="r['transport_mode_label']"/></div>
+                                <div t-if="r['consolidation']['origin']">
+                                    Trajet : <span t-out="r['consolidation']['origin']"/>
+                                    → <span t-out="r['consolidation']['destination']"/>
+                                </div>
+                                <div t-if="r['consolidation']['reference']">
+                                    Départ : <span t-out="r['consolidation']['reference']"/>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <div style="font-weight:bold; font-size:11px; margin-bottom:4px;">
+                        MARCHANDISES PRISES EN CHARGE
+                    </div>
+                    <table style="width:100%; border-collapse:collapse; font-size:10px;">
+                        <thead>
+                            <tr style="background:#eef2f6;">
+                                <th style="border:1px solid #c9d3dd; padding:4px; text-align:left;">Désignation</th>
+                                <th style="border:1px solid #c9d3dd; padding:4px; text-align:left;">Famille</th>
+                                <th style="border:1px solid #c9d3dd; padding:4px; text-align:right;">Qté</th>
+                                <th style="border:1px solid #c9d3dd; padding:4px; text-align:right;">Poids</th>
+                                <th style="border:1px solid #c9d3dd; padding:4px; text-align:right;">Tarif</th>
+                                <th style="border:1px solid #c9d3dd; padding:4px; text-align:right;">Montant</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="r['articles']" t-as="article">
+                                <td style="border:1px solid #c9d3dd; padding:4px;">
+                                    <div t-out="article['description']"/>
+                                    <div t-if="article['goods_category']"
+                                         style="font-size:9px; color:#5b6b7c;"
+                                         t-out="article['goods_category']"/>
+                                    <div t-if="article['dimensions']"
+                                         style="font-size:9px; color:#5b6b7c;"
+                                         t-out="article['dimensions']"/>
+                                </td>
+                                <td style="border:1px solid #c9d3dd; padding:4px;"
+                                    t-out="article['tariff_family']"/>
+                                <td style="border:1px solid #c9d3dd; padding:4px; text-align:right;"
+                                    t-out="article['quantity']"/>
+                                <td style="border:1px solid #c9d3dd; padding:4px; text-align:right;"
+                                    t-out="article['exact_weight_display']"/>
+                                <td style="border:1px solid #c9d3dd; padding:4px; text-align:right;">
+                                    <t t-if="article['applied_unit_price_eur'] is not None">
+                                        <span t-out="article['applied_unit_price_display']"/>/kg
+                                    </t>
+                                    <t t-else="">À définir</t>
+                                </td>
+                                <td style="border:1px solid #c9d3dd; padding:4px; text-align:right;">
+                                    <t t-if="article['transport_amount_eur'] is not None">
+                                        <span t-out="article['transport_amount_display']"/>
+                                    </t>
+                                    <t t-else="">À définir</t>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <table style="width:100%; font-size:11px; margin-top:14px;">
+                        <tr>
+                            <td style="width:55%; vertical-align:top;">
+                                <div style="font-weight:bold; margin-bottom:3px;">PAIEMENTS REÇUS</div>
+                                <t t-if="r['payments']">
+                                    <!-- Un mouvement par ligne : deux paiements
+                                         partiels restent traçables. -->
+                                    <div t-foreach="r['payments']" t-as="p" style="margin-bottom:2px;">
+                                        <span t-out="p['date']"/> ·
+                                        <strong t-out="p['amount_display']"/> ·
+                                        <span t-out="p['method']"/>
+                                        <t t-if="p['collected_by']">
+                                            · reçu par <span t-out="p['collected_by']"/>
+                                        </t>
+                                        <t t-if="p['wave_reference']">
+                                            · réf. <span t-out="p['wave_reference']"/>
+                                        </t>
+                                    </div>
+                                </t>
+                                <t t-else="">
+                                    <div>Aucun paiement reçu à ce jour.</div>
+                                </t>
+                            </td>
+                            <td style="width:45%; vertical-align:top;">
+                                <table style="width:100%; font-size:11px;">
+                                    <tr>
+                                        <td>Articles</td>
+                                        <td style="text-align:right;" t-out="r['totals']['articles_count']"/>
+                                    </tr>
+                                    <tr>
+                                        <td>Poids total</td>
+                                        <td style="text-align:right;"
+                                            t-out="r['totals']['weight_display']"/>
+                                    </tr>
+                                    <tr style="font-weight:bold;">
+                                        <td>Total transport</td>
+                                        <td style="text-align:right;">
+                                            <t t-if="r['totals']['transport_amount_eur'] is not None">
+                                                <span t-out="r['totals']['transport_amount_display']"/>
+                                            </t>
+                                            <t t-else="">À définir</t>
+                                        </td>
+                                    </tr>
+                                    <tr t-foreach="r['totals']['paid']" t-as="paid">
+                                        <td>Montant reçu</td>
+                                        <td style="text-align:right;">
+                                            <span t-out="paid['display']"/>
+                                        </td>
+                                    </tr>
+                                    <tr t-if="not r['totals']['paid']">
+                                        <td>Montant reçu</td>
+                                        <td style="text-align:right;">0</td>
+                                    </tr>
+                                    <tr style="font-weight:bold; border-top:1px solid #17324d;">
+                                        <td>Reste à payer</td>
+                                        <td style="text-align:right;">
+                                            <t t-if="r['totals']['balance_eur'] is not None">
+                                                <span t-out="r['totals']['balance_display']"/>
+                                            </t>
+                                            <!-- Jamais un solde inventé : soustraire des
+                                                 francs d'un total en euros demanderait un
+                                                 taux que personne n'a choisi. -->
+                                            <t t-else="">Voir détail</t>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <div style="margin-top:16px; font-size:10px; color:#5b6b7c;">
+                        <div t-if="r['operator']['name']">
+                            Marchandises réceptionnées par <span t-out="r['operator']['name']"/>.
+                        </div>
+                        <div t-if="r['invoice_number']">
+                            Facture associée : <span t-out="r['invoice_number']"/>.
+                        </div>
+                        <div style="margin-top:6px;">
+                            Ce document atteste de la prise en charge des marchandises
+                            décrites ci-dessus. Il ne constitue pas une facture.
+                        </div>
+                    </div>
+                </div>
+            </body>
+        </html>
+    </template>
+
+    <record id="action_ops_receipt" model="ir.actions.report">
+        <field name="name">Reçu de prise en charge</field>
+        <field name="model">dally.shipment</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">dally_ops_mobile.report_ops_receipt</field>
+        <field name="report_file">dally_ops_mobile.report_ops_receipt</field>
+        <field name="print_report_name">'Recu - %s' % (object.external_reference or object.id)</field>
+    </record>
+</odoo>

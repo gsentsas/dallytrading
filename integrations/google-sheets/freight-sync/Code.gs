@@ -66,6 +66,10 @@ function onOpen() {
     .addItem('Synchroniser / corriger les paiements du dossier', 'dallyPaymentsSelectedDossier')
     .addSeparator()
     .addItem('Marquer tous les dossiers à synchroniser', 'dallyMarkAllForSync')
+    .addSeparator()
+    // Le sens inverse : ce que le CRM a décidé descend vers le classeur.
+    .addItem('Projeter les opérations du CRM', 'dallySheetProjectionRun')
+    .addItem('Installer la projection automatique', 'dallySheetProjectionSetup')
     .addToUi();
 
   if (typeof dallyCashOnOpen_ === 'function') dallyCashOnOpen_();

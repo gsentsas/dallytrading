@@ -67,3 +67,13 @@ apps/web/.next.previous/
 # répertoire servi par systemd, et Turbopack refuse un `node_modules` en lien
 # symbolique hors racine projet — d'où une copie sur le même système de fichiers.
 .shop-build/
+
+# Artefacts de Playwright pour apps/ops : captures, traces et rapports d'un
+# lancement local. Régénérés à chaque exécution.
+apps/ops/test-results/
+apps/ops/playwright-report/
+apps/ops/.next.old/
+apps/ops/.next.previous/
+
+# Généré par Next à chaque build.
+apps/ops/next-env.d.ts

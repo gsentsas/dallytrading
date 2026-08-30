@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_res_currency_ops_read,dally_ops.res_currency.read,base.model_res_currency,dally_ops_mobile.group_dally_ops_logistician,1,0,0,0

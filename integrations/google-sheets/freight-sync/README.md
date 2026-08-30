@@ -219,3 +219,100 @@ The planned consolidation is intentionally visible before the dossier: B = `Cons
 Use **Actualiser les départs ouverts** to refresh the read-only collecting-consolidation table in `Synchronisation CRM`. It returns only company-scoped collecting departures and the route/mode fields needed for selection; no financial or customer data is returned. Editing a cell never performs HTTP. The manual synchronisation action performs allocation and association. A `request_received` or `awaiting_goods` shipment stores its planned departure without physical lines; `goods_received` and `preparing` shipments attach available packages through the same server method as the Odoo wizard. If a departure closes before receipt, the response reports that re-planning is required and does not silently switch to another consolidation. Re-planning is allowed only before physical loading and keeps the intake/local/global identity unchanged.
 
 For a multi-line dossier, all rows share the same stable source key and logical consolidation+dossier group. The first successful response writes the local reference, global reference and intake namespace back to the hidden/technical columns; replaying the same source key returns the same shipment and does not consume another `Axxx`.
+
+## Projection CRM → classeur (Dally Ops)
+
+Deux sens coexistent désormais, et ils ne portent pas la même autorité.
+
+```text
+Saisie legacy / administrative :  Sheet  → Odoo
+Saisies terrain Dally Ops      :  Odoo   → Sheet
+```
+
+Pour tout ce qui est saisi depuis Dally Ops — réception, encaissement Wave,
+dépense, transfert — **Odoo est la source de vérité** et le classeur reçoit une
+projection. Le classeur reste une interface de contrôle, de reporting et de
+secours ; il ne redevient jamais l'autorité sur ces objets.
+
+### Le chemin
+
+```text
+transaction métier Odoo
+  ├─ crée l'objet
+  └─ inscrit l'intention dans `dally.ops.sheet.outbox`
+COMMIT
+
+Apps Script (minuteur 5 min ou menu)
+  → GET  /api/v1/freight/sheet-outbox
+  → applique la projection (UPSERT)
+  → POST /api/v1/freight/sheet-outbox/ack
+```
+
+Aucun appel réseau n'a lieu pendant la transaction métier : **une panne Google
+ne peut pas annuler une réception**. L'opération terrain est « synchronisée avec
+le CRM » dès qu'Odoo a confirmé ; la projection vers le classeur est un état
+administratif distinct, et n'est jamais une condition de succès.
+
+### Pourquoi c'est le classeur qui va chercher
+
+Toute l'autorisation Google vit dans ce projet Apps Script — ses portées et ses
+Script Properties. Odoo ne possède aucun identifiant Google, et en fabriquer un
+créerait un secret de production là où il n'y en avait pas. Surtout, savoir
+écrire dans ce classeur (63 colonnes canoniques, colonnes techniques
+d'identité, intention de replanification, neutralisation des formules,
+migrations héritées) est une connaissance qui vit ici. La reproduire côté Odoo
+créerait une seconde convention d'identité.
+
+Le « cron » de projection est donc **côté Apps Script**. Il n'y en a pas
+d'autre ailleurs.
+
+### Clé d'API
+
+Ajouter une troisième Script Property :
+
+- `DALLY_FREIGHT_SHEET_API_KEY`, portant le seul scope `freight:sheet`.
+
+Ce scope ne permet ni de créer un dossier, ni d'émettre une facture, ni de
+toucher à la caisse : il lit la file et accuse réception, rien de plus.
+
+### Clés d'UPSERT
+
+| Objet | Identité utilisée | Colonne |
+| --- | --- | --- |
+| Dossier | `sync_source_key`, puis `global_external_reference`, puis `shipment_id` | BH / BI / AH |
+| Article | `external_line_key` | BD |
+| Encaissement | `<référence globale>|P|<n>` | BF |
+| Dépense | `external_expense_key` | `Dépenses!A` |
+| Transfert | `external_transfer_key` | `Transferts caisse!A` |
+
+Aucune projection n'utilise `A001` seul : il est local à son départ, et deux
+consolidations en ont chacune un. Aucun numéro de ligne n'est utilisé comme
+identité — il change dès qu'on trie.
+
+Les encaissements n'ont pas d'onglet propre dans ce classeur : un paiement vit
+dans les colonnes de paiement de la ligne de son dossier (AW/AX, BB/BC, BF).
+Deux paiements partiels restent donc deux lignes distinctes.
+
+### Reprise et accusé
+
+L'accusé part **après** l'écriture. Si le classeur est écrit mais que l'accusé
+se perd, la ligne repasse en attente après quinze minutes et le passage suivant
+refait un UPSERT sur la **même** ligne : la clé métier n'a pas bougé.
+
+Les reprises sont espacées (0, 2, 10, 30, 120 puis 360 minutes). Une projection
+invalide passe en `failed` : elle reste visible pour diagnostic et cesse
+d'occuper le transport, sans jamais bloquer les autres.
+
+### Conflits avec une correction humaine
+
+La projection écrit les faits, pas les décisions. Une intention de
+replanification saisie dans le classeur survit à la projection : le message
+`Replanification demandée depuis la feuille.` est préservé, comme dans le sens
+Sheet → Odoo.
+
+### Diagnostic
+
+- **Menu `Dally CRM → Projeter les opérations du CRM`** : force un passage.
+- Côté Odoo, `dally.ops.sheet.outbox` montre l'état, le nombre de tentatives,
+  la prochaine reprise et le dernier motif d'échec.
+- Une ligne `failed` se relance en la repassant à `pending`.

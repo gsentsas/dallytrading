@@ -89,7 +89,27 @@ export function FormulaireRecherche() {
   return (
     <>
       <label htmlFor={identifiant}>Nom, téléphone ou référence</label>
-      <div style={{ display: 'flex', gap: '0.5rem' }}>
+      {/*
+        Les styles globaux donnent `width: 100%` à tout `input` et à tout
+        `button` — le bon défaut pour les formulaires empilés de Dally Ops,
+        où chaque champ se vise au pouce. Cette rangée est le seul endroit où
+        les deux cohabitent : ils réclament alors chacun toute la largeur, et
+        Chrome Android écrase le champ jusqu'à sa croix pendant qu'« Effacer »
+        prend la ligne. Constaté en production.
+
+        On neutralise donc ces largeurs **ici seulement**. Toucher la règle
+        globale corrigerait cet écran et en casserait tous les autres.
+
+        L'espacement sous l'étiquette passe de l'`input` à la rangée : le
+        `margin-top` global du champ, appliqué à lui seul, le décalerait vers
+        le bas par rapport au bouton.
+      */}
+      <div style={{
+        display: 'flex',
+        gap: '0.5rem',
+        alignItems: 'stretch',
+        marginTop: '0.35rem',
+      }}>
         <input
           id={identifiant}
           ref={champ}
@@ -101,13 +121,23 @@ export function FormulaireRecherche() {
           value={saisie}
           onChange={(evenement) => setSaisie(evenement.target.value)}
           placeholder="Mayram, 77 123 45 67, A012…"
-          style={{ flex: 1 }}
+          style={{
+            // `1 1 0` plutôt que `1` : une base nulle, pour que la largeur
+            // vienne de l'espace disponible et non du contenu.
+            flex: '1 1 0',
+            // Sans cela, un élément flex refuse de passer sous la taille de
+            // son contenu — c'est ce qui écrase le champ sur écran étroit.
+            minWidth: 0,
+            width: 'auto',
+            marginTop: 0,
+          }}
         />
         <button
           type="button"
           className="secondaire"
           onClick={() => { setSaisie(''); champ.current?.focus(); }}
           disabled={saisie === ''}
+          style={{ flex: '0 0 auto', width: 'auto', whiteSpace: 'nowrap' }}
         >
           Effacer
         </button>

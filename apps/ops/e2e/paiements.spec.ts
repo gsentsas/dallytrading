@@ -151,6 +151,39 @@ test('aucune donnée comptable ne descend dans la page', async ({ page }) => {
   }
 });
 
+test('un encaissement autonome part de l’accueil et retrouve le dossier par la recherche',
+  async ({ page }) => {
+    // Ce que ce test protège : qu'un opérateur venu encaisser n'ait pas à
+    // simuler une réception pour atteindre la fiche. Le dossier créé ici n'est
+    // qu'un décor ; la démonstration commence au retour à l'accueil.
+    const reference = await creerUnDossier(page);
+
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Bonjour Gilles' })).toBeVisible();
+
+    // À partir d'ici, aucune URL de dossier n'est fabriquée par le test. Si
+    // l'une des étapes manque, le parcours s'arrête — et c'est bien ce qu'on
+    // veut mesurer : l'autonomie du chemin, pas la joignabilité de la fiche.
+    await page.getByRole('link', { name: /Encaissement/ }).click();
+    await expect(page).toHaveURL(/\/recherche$/);
+
+    await page.getByLabel('Nom, téléphone ou référence').fill(reference);
+    const resultat = page.locator('[data-test="dossier-ouvrable"]').first();
+    await expect(resultat).toBeVisible();
+    await resultat.click();
+
+    await expect(page.getByRole('heading', { name: /^DOSSIER A\d{3}$/ })).toBeVisible();
+
+    await page.getByRole('button', { name: '+ ENREGISTRER UN PAIEMENT' }).click();
+    await page.getByLabel('Mode de paiement').selectOption('cash|EUR');
+    await page.getByLabel('Montant').fill('75');
+    await page.getByRole('button', { name: 'CONFIRMER L’ENCAISSEMENT' }).click();
+
+    await expect(page.getByTestId('paiement')).toHaveCount(1);
+    await expect(page.getByTestId('paiement')).toContainText('75,00');
+    await expect(page.getByTestId('paiement')).toContainText('Gilles');
+  });
+
 test('un visiteur anonyme n’atteint pas les routes de paiement', async ({ request }) => {
   const canaux = await request.get('/api/payment-channels');
   expect(canaux.status()).toBe(401);

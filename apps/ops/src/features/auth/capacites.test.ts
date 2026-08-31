@@ -25,15 +25,25 @@ describe('entrées de l’accueil', () => {
     expect(entreesAutorisees({ intake_create: 1 as unknown as boolean })).toEqual([]);
   });
 
-  it('couvre les six capacités déclarées par Odoo', () => {
+  it('couvre les sept capacités déclarées par Odoo', () => {
+    // L'égalité porte sur l'ensemble entier : ouvrir une capacité de plus doit
+    // être une décision, et non l'effet de bord d'un écran ajouté.
     expect(ENTREES_ACCUEIL.map((entree) => entree.capacite).sort()).toEqual([
       'appointment_manage',
       'expense_create',
       'intake_create',
+      'intake_search',
       'payment_create',
       'supervise',
       'transfer_create',
     ]);
+  });
+
+  it('la recherche de dossier ouvre bien un écran', () => {
+    // Une entrée sans écran reste une carte inerte. Celle-ci en a un : le
+    // vérifier évite d'annoncer au terrain une action qui ne mène nulle part.
+    const recherche = ENTREES_ACCUEIL.find((e) => e.capacite === 'intake_search');
+    expect(recherche?.href).toBe('/recherche');
   });
 });
 

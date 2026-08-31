@@ -74,6 +74,35 @@ class DallyOpsIntakesController(DallyOpsController):
         })
 
     # ------------------------------------------------------------------
+    # Retrouver un dossier
+    # ------------------------------------------------------------------
+
+    @http.route(
+        "/api/v1/ops/intakes/search",
+        type="http",
+        auth="user",
+        readonly=True,
+        methods=["GET"],
+        csrf=False,
+        save_session=False,
+    )
+    def ops_intakes_search(self, q=None, limit=None, **kwargs):
+        """Retrouver un dossier depuis une bribe — nom, numéro, référence.
+
+        Le segment `search` est statique : Werkzeug le préfère à la règle
+        `<string:reference>` de la fiche, qui est dynamique. Un test le vérifie
+        plutôt que de s'en remettre à cette préséance.
+
+        Les bornes — rôle, société, longueur, plafond — vivent dans le service.
+        Ce contrôleur ne fait que transmettre ce que le navigateur a tapé.
+        """
+        return self._servir(
+            lambda: request.env["dally.ops.intake.search.service"].search_intakes(
+                q, limit=limit),
+            "ops/intakes/search",
+        )
+
+    # ------------------------------------------------------------------
     # Le dossier et ses articles
     # ------------------------------------------------------------------
 

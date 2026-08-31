@@ -17,6 +17,12 @@ export interface EntreeAccueil {
 
 export const ENTREES_ACCUEIL: readonly EntreeAccueil[] = [
   {
+    capacite: 'intake_search',
+    titre: 'Rechercher un dossier',
+    description: 'Retrouver un dossier par nom, téléphone ou référence.',
+    href: '/recherche',
+  },
+  {
     capacite: 'intake_create',
     titre: 'Réceptionner un colis',
     description: 'Enregistrer un colis sur un départ ouvert.',

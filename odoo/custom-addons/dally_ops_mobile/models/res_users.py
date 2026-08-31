@@ -37,6 +37,7 @@ from odoo.exceptions import AccessError, UserError
 #: groupes Odoo, et ajouter un droit obligerait à rouvrir toutes les pages.
 CAPACITES = (
     "intake_create",
+    "intake_search",
     "payment_create",
     "expense_create",
     "transfer_create",
@@ -145,6 +146,7 @@ class ResUsers(models.Model):
         # l'annoncer plus tôt ferait promettre à l'application une action que
         # le serveur refuserait. L'agenda attend encore le sien.
         capacites["intake_create"] = True
+        capacites["intake_search"] = True
         capacites["payment_create"] = True
         capacites["expense_create"] = True
         capacites["transfer_create"] = True

@@ -251,16 +251,32 @@ class DallyOpsIntakeLineService(models.AbstractModel):
         """
         if not isinstance(reference, str) or not reference.strip():
             raise DallyOpsNotFound(_("Dossier introuvable."), code="intake_not_found")
-        shipment = self.env["dally.shipment"].sudo().search([
-            ("company_id", "=", self.env.company.id),
-            ("external_reference", "=", reference.strip()),
-            ("sync_source", "=", "backoffice"),
-            ("sync_source_key", "=like", "ops:%"),
-            ("intake_consolidation_id", "!=", False),
-        ], limit=1)
+        shipment = self.env["dally.shipment"].sudo().search(
+            self._domaine_dossier_ops() + [
+                ("external_reference", "=", reference.strip()),
+            ], limit=1)
         if not shipment:
             raise DallyOpsNotFound(_("Dossier introuvable."), code="intake_not_found")
         return shipment
+
+    @api.model
+    def _domaine_dossier_ops(self):
+        """Ce qui rend un dossier lisible par la fiche Ops, et rien d'autre.
+
+        Extrait de `_resoudre_dossier` pour que la recherche puisse annoncer si
+        un dossier trouvé s'ouvrira — sans recopier la règle. Deux formulations
+        de la même condition divergeraient au premier changement, et la
+        recherche promettrait alors une fiche que la fiche refuserait.
+
+        La référence n'y figure pas : c'est le critère d'identification, pas le
+        critère d'appartenance.
+        """
+        return [
+            ("company_id", "=", self.env.company.id),
+            ("sync_source", "=", "backoffice"),
+            ("sync_source_key", "=like", "ops:%"),
+            ("intake_consolidation_id", "!=", False),
+        ]
 
     @api.model
     def _consolidation_ouverte(self, shipment):

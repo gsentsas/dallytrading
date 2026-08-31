@@ -46,6 +46,7 @@ const DOSSIER = {
   customer: { name: 'Aissatou Kandji' },
   editable: true,
   edit_block_reason: null,
+  allowed_transitions: ['preparing'],
   lines: [LIGNE_LUE],
   totals: {
     lines_count: 1, weight_kg: 13.5, volume_cbm: 0,

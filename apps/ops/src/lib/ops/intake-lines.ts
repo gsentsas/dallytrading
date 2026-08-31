@@ -89,6 +89,9 @@ const dossier = z
     edit_block_reason: z
       .enum(['billing_locked', 'consolidation_not_open', 'intake_not_editable'])
       .nullable(),
+    // Ce que le serveur autorise depuis l'état courant. L'écran n'affiche que
+    // ça : il ne déduit jamais l'étape suivante lui-même.
+    allowed_transitions: z.array(z.enum(['preparing', 'ready'])).max(2),
     lines: z.array(ligneLue),
     totals: z
       .object({

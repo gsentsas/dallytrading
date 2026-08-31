@@ -9,6 +9,7 @@ import { fetchIntakeActivity } from '@/lib/ops/activity';
 import { newCorrelationId } from '@/lib/logger';
 import { ActivityTimeline } from '@/features/activity/ActivityTimeline';
 import { DossierArticles } from '@/features/reception/DossierArticles';
+import { EtatDossier } from '@/features/reception/EtatDossier';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,15 @@ export default async function PageDossier({
           {dossier.consolidation_reference}
         </p>
       </section>
+
+      {/* L'état et l'étape suivante, tels que le serveur les autorise. La
+          liste vient de lui : l'écran n'en déduit aucune. */}
+      <EtatDossier
+        reference={dossier.reference}
+        state={dossier.state}
+        allowedTransitions={dossier.allowed_transitions}
+        peutAvancer={identite.capabilities.intake_state_advance === true}
+      />
 
       {/* Le reçu n'existe que pour un dossier que le serveur a numéroté :
           l'accès passe donc par la référence qu'il a attribuée. */}

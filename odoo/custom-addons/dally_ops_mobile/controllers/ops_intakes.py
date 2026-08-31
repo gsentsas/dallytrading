@@ -127,6 +127,30 @@ class DallyOpsIntakesController(DallyOpsController):
         )
 
     @http.route(
+        "/api/v1/ops/intakes/<string:reference>/state",
+        type="http",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+        save_session=False,
+    )
+    def ops_intake_state(self, reference, **kwargs):
+        """Fait avancer l'état du dossier — une étape, décidée par le serveur.
+
+        Le corps porte l'identifiant du geste, l'état sur lequel l'écran a agi
+        et l'étape demandée. Le service refuse tout le reste : la matrice, les
+        portes métier et les effets de bord restent ceux de Freight.
+        """
+        corps = self._corps()
+        if corps is None:
+            return self._erreur("invalid_request", _("Corps de requête illisible."), 400)
+        return self._servir(
+            lambda: request.env[
+                "dally.ops.intake.state.service"].advance_state(reference, corps),
+            "ops/intakes/state",
+        )
+
+    @http.route(
         "/api/v1/ops/intakes/<string:reference>/lines",
         type="http",
         auth="user",

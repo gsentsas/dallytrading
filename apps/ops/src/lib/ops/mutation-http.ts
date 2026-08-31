@@ -167,5 +167,16 @@ const MESSAGES_CONFLIT: Record<string, string> = {
   intake_cancelled: 'Ce dossier est annulé : il ne peut plus être encaissé.',
   receipt_already_attached:
     'Cette dépense a déjà un justificatif. Il ne peut pas être remplacé depuis le terrain.',
+  // L'avancement d'état. Chaque refus appelle un geste différent : recharger la
+  // fiche, compléter le dossier, ou constater que l'étape n'existe pas ici.
+  state_changed:
+    'Le dossier a changé depuis son affichage.',
+  state_transition_blocked:
+    'Ce dossier n’est pas encore complet pour cette étape. '
+    + 'Vérifiez les articles, les poids et la tarification.',
+  state_transition_not_allowed:
+    'Cette étape n’est pas accessible depuis l’état actuel.',
+  state_target_not_allowed:
+    'Cette étape ne peut pas être demandée depuis Dally Ops.',
   default: 'Cette opération n’est plus possible.',
 };

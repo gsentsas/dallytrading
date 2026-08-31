@@ -287,11 +287,12 @@ class TestOpsIdentity(HttpCase):
         capacites = json.loads(self._appel("ops.logi").content)["data"]["capabilities"]
         self.assertEqual(
             set(capacites),
-            {"intake_create", "intake_search", "payment_create",
-             "expense_create", "transfer_create", "appointment_manage",
-             "supervise"})
+            {"intake_create", "intake_search", "intake_state_advance",
+             "payment_create", "expense_create", "transfer_create",
+             "appointment_manage", "supervise"})
         self.assertTrue(capacites["intake_create"])
         self.assertTrue(capacites["intake_search"])
+        self.assertTrue(capacites["intake_state_advance"])
         self.assertTrue(capacites["payment_create"])
         self.assertTrue(capacites["expense_create"])
         self.assertTrue(capacites["transfer_create"])

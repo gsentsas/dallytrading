@@ -63,9 +63,19 @@ CLOSING_STATES = ("delivered", "cancelled")
 #   mais **conserve** la gate `_check_ready_requirements` /
 #   `_check_departure_requirements`. Une projection `departed` qui ne satisfait
 #   pas la facture est rejetée, la transaction tk est ainsi annulée.
+# - `_OPS_STATE_WRITE_TOKEN` n'ouvre **que** la barrière de permission. Un
+#   opérateur de terrain n'a pas `group_dally_logistics` — ce groupe implique
+#   `group_dally_readonly` et ouvrirait vingt-et-un modèles à un téléphone
+#   d'entrepôt. Le service Ops a donc besoin de franchir ce contrôle, et de
+#   rien d'autre : la matrice, l'adjacence et les deux portes métier
+#   s'appliquent exactement comme pour un utilisateur Logistics.
+#
+#   C'est la différence avec les deux jetons ci-dessus, et elle se lit dans
+#   `_check_state_transition` : ce jeton n'y est jamais testé.
 _STATE_BYPASS_TOKEN = object()
 _OPERATIONAL_SYNC_TOKEN = object()
 _HISTORICAL_BACKFILL_TOKEN = object()
+_OPS_STATE_WRITE_TOKEN = object()
 
 ALLOWED_STATE_TRANSITIONS = {
     "draft": {"request_received", "cancelled"},
@@ -542,9 +552,13 @@ class DallyShipment(models.Model):
 
     def write(self, vals):
         if "state" in vals:
+            # Deux permissions distinctes, volontairement séparées : le droit
+            # d'écrire l'état, et le droit de sauter la matrice. Le jeton Ops
+            # n'accorde que le premier.
             internal = (
                 self.env.context.get("_dally_state_bypass") is _STATE_BYPASS_TOKEN
                 or self.env.context.get("_dally_operational_sync") is _OPERATIONAL_SYNC_TOKEN
+                or self.env.context.get("_dally_ops_state_write") is _OPS_STATE_WRITE_TOKEN
             )
             if not internal and not self.env.user.has_group("dally_core.group_dally_logistics"):
                 raise AccessError(_("Seuls les rôles Logistics et Manager peuvent modifier l’état d’un dossier."))
@@ -633,6 +647,25 @@ class DallyShipment(models.Model):
         return self.with_context(_dally_operational_sync=_OPERATIONAL_SYNC_TOKEN).write(
             {"state": new_state}
         )
+
+    def _action_set_state_from_ops(self, new_state):
+        """Entrée privée du terrain — permission élargie, règles inchangées.
+
+        Privée, donc non appelable en RPC. Elle ouvre la seule barrière que
+        l'application terrain ne peut pas franchir — l'appartenance à
+        `group_dally_logistics` — et rien de plus : `action_set_state` reste
+        l'appelé, donc la matrice, l'adjacence, `_check_ready_requirements` et
+        `_check_departure_requirements` s'appliquent intégralement.
+
+        Le `sudo()` couvre les ACL et les règles d'enregistrement ; le jeton
+        couvre le contrôle d'appartenance explicite. Les deux sont nécessaires,
+        et aucun des deux ne dispense l'appelant d'avoir déjà vérifié son rôle
+        Ops, sa société et son périmètre.
+        """
+        self.ensure_one()
+        return self.sudo().with_context(
+            _dally_ops_state_write=_OPS_STATE_WRITE_TOKEN
+        ).action_set_state(new_state)
 
     def _write_historical_state(self, new_state):
         """Private, Manager-only historical migration entry point."""

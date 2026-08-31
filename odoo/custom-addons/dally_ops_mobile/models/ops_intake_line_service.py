@@ -678,6 +678,11 @@ class DallyOpsIntakeLineService(models.AbstractModel):
             "customer": {"name": shipment.sudo().partner_id.name or ""},
             "editable": motif is None,
             "edit_block_reason": motif,
+            # Ce que l'écran a le droit de proposer, décidé ici. Une interface
+            # qui déduirait la suite elle-même promettrait un jour une action
+            # que le serveur refuserait.
+            "allowed_transitions": self.env[
+                "dally.ops.intake.state.service"].allowed_transitions(shipment),
             "lines": lignes,
             "totals": {
                 "lines_count": len(lignes),

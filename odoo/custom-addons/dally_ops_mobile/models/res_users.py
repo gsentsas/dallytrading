@@ -38,6 +38,7 @@ from odoo.exceptions import AccessError, UserError
 CAPACITES = (
     "intake_create",
     "intake_search",
+    "intake_state_advance",
     "payment_create",
     "expense_create",
     "transfer_create",
@@ -147,6 +148,7 @@ class ResUsers(models.Model):
         # le serveur refuserait. L'agenda attend encore le sien.
         capacites["intake_create"] = True
         capacites["intake_search"] = True
+        capacites["intake_state_advance"] = True
         capacites["payment_create"] = True
         capacites["expense_create"] = True
         capacites["transfer_create"] = True

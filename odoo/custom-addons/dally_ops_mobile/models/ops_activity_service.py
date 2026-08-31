@@ -28,6 +28,7 @@ EVENEMENTS_PUBLICS = {
     "intake_created": ("Réception enregistrée", "reception"),
     "intake_line_added": ("Article ajouté", "article"),
     "intake_line_updated": ("Article corrigé", "correction"),
+    "intake_state_advanced": ("État du dossier mis à jour", "reception"),
     "payment_recorded": ("Paiement enregistré", "payment"),
     "wave_payment_recorded": ("Paiement Wave", "payment"),
     "expense_recorded": ("Dépense enregistrée", "expense"),
@@ -41,6 +42,7 @@ EVENEMENTS_PUBLICS = {
 }
 
 LIBELLES_CHAMPS = {
+    "state": "État du dossier",
     "description": "Désignation",
     "goods_category": "Catégorie",
     "package_type": "Type de colis",
@@ -173,6 +175,8 @@ class DallyOpsActivityService(models.AbstractModel):
             record = False
         if event.action == "intake_created" and shipment:
             return "Dossier %s" % (shipment.collection_local_ref or shipment.external_reference)
+        if event.action == "intake_state_advanced" and changes:
+            return "%s → %s" % (changes[0]["old_value"], changes[0]["new_value"])
         if event.action in ("intake_line_added", "intake_line_updated") and record:
             if changes:
                 return "%s → %s" % (changes[0]["old_value"], changes[0]["new_value"])
@@ -215,7 +219,18 @@ class DallyOpsActivityService(models.AbstractModel):
             return "%s cm" % nombre(value)
         if field == "customs_value_xof":
             return montant(value, "XOF")
+        if field == "state":
+            # Les libellés viennent du champ lui-même : le journal ne tient pas
+            # un second vocabulaire des états, qui divergerait au premier ajout.
+            return self._libelle_etat(value)
         return nombre(value) if isinstance(value, (int, float)) else str(value)
+
+    @api.model
+    def _libelle_etat(self, code):
+        libelles = dict(
+            self.env["dally.shipment"]._fields["state"]._description_selection(
+                self.env))
+        return libelles.get(code, str(code))
 
     @api.model
     def _timezone(self):

@@ -299,6 +299,108 @@ class TestOpsSheetOutbox(AccountTestInvoicingCommon):
             self.assertNotEqual(ligne.business_key, "A001")
             self.assertNotIn(ligne.business_key, ("A001", "A002"))
 
+    # ─── La référence visible du dossier ─────────────────────────────
+
+    def _dossier_ancien(self, reference):
+        """Un dossier antérieur aux conventions d'identité d'Ops.
+
+        Ni `sync_source_key`, ni `collection_local_ref`, ni consolidation
+        d'entrée : exactement la forme des dossiers repris du classeur
+        historique, que la projection doit continuer de nommer.
+        """
+        return self.env["dally.shipment"].sudo().create({
+            "partner_id": self.partner.id,
+            "company_id": self.societe.id,
+            "external_reference": reference,
+            "transport_mode": "air",
+            "direction": "export",
+        })
+
+    def _projection_de(self, shipment):
+        """La projection réelle de ce dossier, transport compris."""
+        self._boite().enqueue_dossier(shipment)
+        for projection in self._projeter():
+            if projection["identity"]["shipment_id"] == shipment.id:
+                return projection
+        self.fail("aucune projection produite pour ce dossier")
+
+    def test_un_dossier_ancien_projette_sa_reference_globale(self):
+        """La régression : un dossier sans référence locale perdait son nom.
+
+        La projection écrit la colonne dossier du classeur sans condition.
+        Y envoyer une chaîne vide efface la référence visible d'une ligne
+        reprise du classeur historique — et avec elle ce que les formules du
+        classeur lisent dans cette colonne.
+        """
+        ancien = self._dossier_ancien("A012")
+        self.assertFalse(ancien.collection_local_ref)
+        self.assertFalse(ancien.sync_source_key)
+
+        projection = self._projection_de(ancien)
+
+        self.assertEqual(projection["dossier"]["reference"], "A012")
+
+    def test_un_dossier_moderne_garde_sa_reference_locale(self):
+        """La référence locale reste prioritaire, et ne devient pas globale.
+
+        Le repli ne doit jamais promouvoir la référence globale : le classeur
+        affiche `A001` dans sa colonne dossier, pas
+        `AIR-DSS-CDG-SHEET-001-A001`.
+        """
+        reference = self._creer_dossier()
+        shipment = self._shipment(reference)
+        self.assertTrue(shipment.collection_local_ref)
+
+        projection = self._projeter()[0]
+
+        self.assertEqual(
+            projection["dossier"]["reference"], shipment.collection_local_ref)
+        self.assertNotEqual(
+            projection["dossier"]["reference"], shipment.external_reference)
+        # Et l'identité technique reste ce qu'elle était : le repli d'affichage
+        # ne déteint pas sur la clé globale.
+        self.assertEqual(
+            projection["identity"]["global_external_reference"],
+            shipment.external_reference)
+        self.assertEqual(
+            projection["identity"]["collection_local_ref"],
+            shipment.collection_local_ref)
+
+    def test_un_dossier_sans_identite_visible_ne_fabrique_aucune_reference(self):
+        """Aucune référence n'est inventée : mieux vaut vide que faux.
+
+        Fabriquer un nom — un identifiant interne, un horodatage — ferait
+        entrer dans le classeur une valeur qu'aucun humain ne reconnaîtrait,
+        et qu'aucun rapprochement ne retrouverait.
+        """
+        ancien = self._dossier_ancien("A013-SANS-IDENTITE")
+        self._boite().enqueue_dossier(ancien)
+        # L'intention est inscrite ; le dossier perd ensuite sa seule
+        # référence visible. Rien ne doit la remplacer.
+        ancien.write({"external_reference": False})
+
+        projection = [p for p in self._projeter()
+                      if p["identity"]["shipment_id"] == ancien.id][0]
+
+        self.assertEqual(projection["dossier"]["reference"], "")
+        self.assertEqual(projection["identity"]["global_external_reference"], "")
+
+    def test_la_reference_affichee_suit_la_cle_metier_dun_dossier_ancien(self):
+        """Transport et affichage disent la même chose du même dossier.
+
+        La boîte d'envoi retient `A012` comme clé métier ; il serait
+        incompréhensible que la ligne projetée, elle, s'affiche sans nom.
+        """
+        ancien = self._dossier_ancien("A014")
+        ligne = self._boite().enqueue_dossier(ancien)
+        self.assertEqual(ligne.business_key, "A014")
+
+        projection = [p for p in self._projeter()
+                      if p["identity"]["shipment_id"] == ancien.id][0]
+
+        self.assertEqual(projection["business_key"], "A014")
+        self.assertEqual(projection["dossier"]["reference"], "A014")
+
     # ─── Articles ────────────────────────────────────────────────────
 
     def test_un_dossier_multi_articles_projette_une_ligne_par_article(self):

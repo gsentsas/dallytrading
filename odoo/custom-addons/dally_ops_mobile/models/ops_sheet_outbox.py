@@ -335,7 +335,20 @@ class DallyOpsSheetOutbox(models.Model):
                 "planned_consolidation": (
                     shipment.intake_consolidation_id.name
                     or shipment.consolidation_id.name or ""),
-                "reference": shipment.collection_local_ref or "",
+                # La référence *visible* du dossier. Les dossiers legacy
+                # n'ont pas de `collection_local_ref` : `external_reference`
+                # est alors le seul nom métier disponible. Sans ce repli, le
+                # connecteur écrit une chaîne vide dans la colonne dossier et
+                # les formules qui dépendent de cette colonne deviennent vides.
+                #
+                # Pour un dossier moderne, la référence locale garde la
+                # priorité : le classeur affiche `A001`, jamais l'identité
+                # globale qui la contient.
+                "reference": (
+                    shipment.collection_local_ref
+                    or shipment.external_reference
+                    or ""
+                ),
                 "deposit_date": self._date(shipment.request_date),
                 "state": shipment.state or "",
                 "customer": {

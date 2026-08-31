@@ -753,4 +753,238 @@ function nouveauClasseur(onWrite) {
                      'Odoo reçoit un échec, jamais un faux delivered');
 }
 
+/* --- 19. L'annulation d'un encaissement --------------------------- *
+ *
+ * Un paiement annulé ne disparaît plus de la projection : Odoo le porte
+ * toujours, avec son état. C'est cette différence — connu et annulé, plutôt
+ * qu'inconnu — que la garde d'identité doit savoir lire.
+ *
+ * Le classeur, lui, cesse de le compter : la clé reste, le montant part.
+ */
+
+const CLE_P1 = 'AIR-DSS-CDG-2026-002-A001|P|11111111-1111-4111-8111-111111111111';
+const CLE_P2 = 'AIR-DSS-CDG-2026-002-A001|P|22222222-2222-4222-8222-222222222222';
+
+function paiement(cle, surcharge) {
+  return Object.assign({
+    payment_key: cle, state: 'pending', amount_eur: 0, amount_xof: 100000,
+    currency_code: 'XOF', payment_method: 'wave', collected_by: 'Gilles',
+    wave_reference: 'TW1', payment_date: '2026-08-29',
+  }, surcharge || {});
+}
+
+/** L'état des paiements du classeur, indexé par identité — jamais par rang. */
+function etatPaiements(aerien) {
+  const etat = {};
+  for (const row of aerien.lignes()) {
+    const cle = aerien.valeur(row, C.paymentKey);
+    if (!cle) continue;
+    etat[cle] = {
+      row: row,
+      eur: aerien.valeur(row, C.paymentEur),
+      xof: aerien.valeur(row, C.paymentXof),
+      methode: aerien.valeur(row, C.paymentMethod),
+      flag: aerien.valeur(row, C.paymentFlag),
+      article: aerien.valeur(row, C.articleKey),
+    };
+  }
+  return etat;
+}
+
+function dossierAvecPaiements(classeur, paiements) {
+  const p = projectionDossier();
+  p.payments = paiements;
+  return ctx.applyDossierProjection_(classeur, p);
+}
+
+/* 19.a — actif puis annulé : la même ligne, sans montant ----------- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+
+  const [ligne] = dossierAvecPaiements(classeur, [paiement(CLE_P1)]);
+  assert.strictEqual(aerien.valeur(ligne, C.paymentXof), 100000);
+  assert.strictEqual(aerien.valeur(ligne, C.paymentFlag), 1);
+
+  const apres = dossierAvecPaiements(
+    classeur, [paiement(CLE_P1, {state: 'cancelled'})]);
+
+  assert.strictEqual(aerien.lignes().length, 1,
+                     'une annulation ne crée jamais de ligne');
+  assert.ok(apres.includes(ligne), 'la ligne historique est celle réécrite');
+  assert.strictEqual(aerien.valeur(ligne, C.paymentKey), CLE_P1,
+                     'la clé historique doit survivre à l’annulation');
+  assert.strictEqual(aerien.valeur(ligne, C.paymentXof), '',
+                     'un paiement annulé ne compte plus comme encaissement');
+  assert.strictEqual(aerien.valeur(ligne, C.paymentEur), '');
+  assert.strictEqual(aerien.valeur(ligne, C.paymentMethod), '');
+  assert.strictEqual(aerien.valeur(ligne, C.collectedBy), '');
+  assert.strictEqual(aerien.valeur(ligne, C.paymentFlag), 0);
+  assert.strictEqual(aerien.valeur(ligne, C.syncMessage),
+                     'Projeté depuis le CRM. Encaissement annulé.',
+                     'la ligne doit dire pourquoi elle n’a plus de montant');
+  // La ligne métier reste : un encaissement annulé n'efface pas un article.
+  assert.strictEqual(aerien.valeur(ligne, C.articleKey),
+                     projectionDossier().articles[0].article_key);
+  assert.strictEqual(aerien.valeur(ligne, C.description), 'Savon');
+}
+
+/* 19.b — rejouer l'annulation ne change plus rien ------------------ */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+
+  dossierAvecPaiements(classeur, [paiement(CLE_P1)]);
+  dossierAvecPaiements(classeur, [paiement(CLE_P1, {state: 'cancelled'})]);
+  const apresPremiere = etatPaiements(aerien);
+
+  dossierAvecPaiements(classeur, [paiement(CLE_P1, {state: 'cancelled'})]);
+  dossierAvecPaiements(classeur, [paiement(CLE_P1, {state: 'cancelled'})]);
+
+  assert.deepStrictEqual(etatPaiements(aerien), apresPremiere,
+                         'le rejeu d’une annulation est sans effet');
+  assert.strictEqual(aerien.lignes().length, 1,
+                     'aucune ligne supplémentaire au rejeu');
+}
+
+/* 19.c — annulé puis nouvel encaissement : deux identités ---------- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+
+  const [ligneP1] = dossierAvecPaiements(classeur, [paiement(CLE_P1)]);
+  dossierAvecPaiements(classeur, [
+    paiement(CLE_P1, {state: 'cancelled'}),
+    paiement(CLE_P2, {amount_xof: 50000, wave_reference: 'TW2'}),
+  ]);
+
+  assert.strictEqual(aerien.lignes().length, 2,
+                     'le nouvel encaissement dispose de sa propre ligne');
+  assert.strictEqual(aerien.valeur(ligneP1, C.paymentKey), CLE_P1,
+                     'la ligne annulée n’est jamais recyclée');
+  assert.strictEqual(aerien.valeur(ligneP1, C.paymentXof), '');
+
+  const ligneP2 = aerien.lignes()
+    .find(row => aerien.valeur(row, C.paymentKey) === CLE_P2);
+  assert.ok(ligneP2 && ligneP2 !== ligneP1,
+            'le nouveau paiement ne reprend pas la ligne de l’ancien');
+  assert.strictEqual(aerien.valeur(ligneP2, C.paymentXof), 50000);
+  assert.strictEqual(aerien.valeur(ligneP2, C.articleKey), '',
+                     'il vit sur une ligne administrative');
+}
+
+/* 19.d — l'ordre du payload reste sans effet ----------------------- */
+{
+  const annuleP1 = paiement(CLE_P1, {state: 'cancelled'});
+  const actifP2 = paiement(CLE_P2, {amount_xof: 50000});
+
+  const construire = ordre => {
+    const onglets = nouveauClasseur();
+    const classeur = fauxClasseur(onglets);
+    dossierAvecPaiements(classeur, [paiement(CLE_P1), actifP2]);
+    dossierAvecPaiements(classeur, ordre);
+    return onglets['Saisie aérien'];
+  };
+
+  const direct = construire([annuleP1, actifP2]);
+  const inverse = construire([actifP2, annuleP1]);
+
+  assert.deepStrictEqual(etatPaiements(direct), etatPaiements(inverse),
+                         'l’ordre du payload n’est pas une identité');
+  assert.strictEqual(etatPaiements(direct)[CLE_P1].xof, '',
+                     'P1 reste annulé dans les deux sens');
+  assert.strictEqual(etatPaiements(direct)[CLE_P2].xof, 50000);
+  assert.strictEqual(direct.lignes().length, 2);
+  assert.strictEqual(inverse.lignes().length, 2);
+}
+
+/* 19.e — connu et annulé ≠ clé inconnue ---------------------------- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+
+  dossierAvecPaiements(classeur, [paiement(CLE_P1)]);
+
+  // Une clé qu'Odoo ne revendique plus du tout reste une contradiction.
+  assert.throws(() => dossierAvecPaiements(classeur, []),
+                /Identité paiement contradictoire/,
+                'une clé absente de l’état Odoo doit rester refusée');
+  assert.strictEqual(ctx.isPermanentProjectionError_(new Error(
+    'Identité paiement contradictoire : clé existante absente de la ' +
+    'projection : ' + CLE_P1)), true, 'et rester une erreur permanente');
+
+  // La même clé, annoncée annulée, ne l'est pas.
+  assert.doesNotThrow(
+    () => dossierAvecPaiements(classeur, [paiement(CLE_P1, {state: 'cancelled'})]),
+    'un paiement connu et annulé n’est pas une contradiction');
+}
+
+/* 19.f — une annulation n'inscrit pas une identité jamais projetée - */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+
+  const lignes = dossierAvecPaiements(
+    classeur, [paiement(CLE_P1, {state: 'cancelled'})]);
+
+  assert.strictEqual(aerien.lignes().length, 1, 'seule la ligne d’article existe');
+  assert.strictEqual(aerien.valeur(lignes[0], C.paymentKey), '',
+                     'une annulation n’ouvre jamais de ligne de paiement');
+  assert.strictEqual(aerien.valeur(lignes[0], C.articleKey),
+                     projectionDossier().articles[0].article_key);
+}
+
+/* 19.g — le modèle préformaté reste utilisé après une annulation --- */
+{
+  const onglets = nouveauClasseur();
+  const aerien = onglets['Saisie aérien'];
+  aerien.getRange(1004, C.transportMode).setValue('Aérien');
+  const classeur = fauxClasseur(onglets);
+
+  dossierAvecPaiements(classeur, [paiement(CLE_P1)]);
+  const lignes = dossierAvecPaiements(classeur, [
+    paiement(CLE_P1, {state: 'cancelled'}),
+    paiement(CLE_P2, {amount_xof: 50000}),
+  ]);
+
+  assert.ok(Math.max.apply(null, lignes) <= 1004,
+            'un paiement qui suit une annulation reste dans le modèle');
+}
+
+/* 19.h — un dossier sans encaissement traverse inchangé ------------ */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+
+  const [ligne] = dossierAvecPaiements(classeur, []);
+  dossierAvecPaiements(classeur, []);
+
+  assert.strictEqual(aerien.lignes().length, 1);
+  assert.strictEqual(aerien.valeur(ligne, C.paymentKey), '');
+  assert.strictEqual(aerien.valeur(ligne, C.paymentFlag), '');
+}
+
+/* 19.i — un paiement sans état déclaré reste actif ----------------- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+
+  const ancien = paiement(CLE_P1);
+  delete ancien.state;
+  const [ligne] = dossierAvecPaiements(classeur, [ancien]);
+
+  assert.strictEqual(aerien.valeur(ligne, C.paymentXof), 100000,
+                     'une projection antérieure au champ d’état reste un encaissement');
+  assert.strictEqual(aerien.valeur(ligne, C.paymentFlag), 1);
+  assert.strictEqual(aerien.valeur(ligne, C.syncMessage),
+                     'Projeté depuis le CRM.',
+                     'un encaissement actif ne porte aucune mention d’annulation');
+}
+
 console.log('test_freight_sheet_outbox_projection: OK');

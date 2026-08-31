@@ -141,3 +141,42 @@ class TestFreightPaymentReconcileEndpoint(HttpCase):
             ("external_payment_key", "=", payment_key),
         ])
         self.assertEqual(collection.state, "pending")
+
+    def test_already_cancelled_collection_stays_cancelled_on_replay(self):
+        """The steady state of a projected tombstone.
+
+        Once the CRM has neutralised a Sheet row, its payment key keeps the
+        line but carries no amount. Every later Sheet sync therefore omits the
+        key from ``active_payment_keys`` — forever. That repeated omission must
+        read as "already settled", not as a fresh cancellation, and must never
+        touch the collection again.
+        """
+        shipment = self._shipment("HTTP-PAY-RECONCILE-TOMBSTONE")
+        payment_key = "HTTP-PAY-RECONCILE-TOMBSTONE|P|1"
+        self._post(
+            self.PAYMENT_ENDPOINT,
+            self._payment_payload(shipment, payment_key),
+        )
+        self._post(self.RECONCILE_ENDPOINT, self._reconcile_payload(shipment, []))
+
+        collection = self.env["dally.freight.collection"].search([
+            ("external_payment_key", "=", payment_key),
+        ])
+        self.assertEqual(collection.state, "cancelled")
+        written_at = collection.write_date
+
+        response = self._post(
+            self.RECONCILE_ENDPOINT, self._reconcile_payload(shipment, []))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertIn(payment_key, data["already_cancelled_payment_keys"])
+        self.assertFalse(data["cancelled_payment_keys"])
+        self.assertFalse(data["blocked_registered_payment_keys"])
+
+        collection.invalidate_recordset()
+        self.assertEqual(collection.state, "cancelled")
+        self.assertEqual(collection.write_date, written_at)
+        self.assertEqual(collection.external_payment_key, payment_key)
+        self.assertEqual(self.env["dally.freight.collection"].search_count([
+            ("shipment_id", "=", shipment.id),
+        ]), 1, "a replayed reconciliation must never create a second collection")

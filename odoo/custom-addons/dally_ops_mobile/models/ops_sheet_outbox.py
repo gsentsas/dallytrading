@@ -396,16 +396,31 @@ class DallyOpsSheetOutbox(models.Model):
         dans les colonnes de paiement de la ligne de son dossier, identifié par
         la clé `…|P|n` déjà en usage. Deux paiements partiels restent donc deux
         lignes distinctes, et ne se fondent jamais en une.
+
+        Les collectes annulées restent projetées, avec leur état. Les omettre
+        laisserait dans le classeur une clé qu'Odoo ne revendique plus : le
+        connecteur y verrait — à raison — une identité contradictoire, et le
+        dossier cesserait de se projeter pour toujours. Une annulation se dit ;
+        elle ne se tait pas.
+
+        Le montant historique est conservé tel qu'Odoo le porte : la projection
+        décrit l'état d'Odoo, et c'est au classeur de cesser de compter un
+        encaissement annulé. L'effacer ici rendrait une annulation
+        indiscernable d'un encaissement à zéro.
         """
         collections = self.env["dally.freight.collection"].sudo().search([
             ("shipment_id", "=", shipment.id),
-            ("state", "!=", "cancelled"),
         ], order="payment_date asc, id asc")
         lignes = []
         for rang, collection in enumerate(collections, start=1):
             devise = collection.currency_id.name
             lignes.append({
                 "payment_key": self._cle_paiement(shipment, collection, rang),
+                # L'état brut d'Odoo, comme pour le dossier, la dépense et le
+                # transfert. Le connecteur seul décide de ce qu'il en fait, et
+                # un état futur qu'il ne connaîtrait pas reste, par défaut, de
+                # l'argent reçu.
+                "state": collection.state or "",
                 "amount_eur": collection.amount if devise == "EUR" else 0,
                 "amount_xof": collection.amount if devise == "XOF" else 0,
                 "currency_code": devise,
@@ -478,3 +493,49 @@ class DallyOpsSheetOutbox(models.Model):
     @staticmethod
     def _date(valeur):
         return valeur.isoformat() if valeur else ""
+
+
+class DallyFreightCollection(models.Model):
+    """L'annulation d'un encaissement réveille la projection de son dossier.
+
+    Sans ce réveil, la pierre tombale attendrait qu'un événement étranger — un
+    article corrigé, une facture émise — reprojette le dossier. Le classeur
+    continuerait pendant ce temps d'afficher un encaissement qu'Odoo a
+    désavoué, et Odoo fait autorité.
+
+    ## Pourquoi l'extension vit ici
+
+    `dally_ops_mobile` dépend de `dally_freight_billing`, jamais l'inverse.
+    Faire appeler la boîte d'envoi par le module de facturation lui imposerait
+    de connaître un module qui lui est postérieur — et une dépendance
+    circulaire refuserait de s'installer.
+
+    Elle vit dans ce fichier plutôt que dans le sien parce qu'elle n'a qu'une
+    raison d'exister : inscrire une intention de projection. La règle et son
+    déclencheur se lisent ainsi d'un seul tenant.
+    """
+
+    _inherit = "dally.freight.collection"
+
+    def action_cancel_from_sync(self, reason=None):
+        """Annule, puis inscrit l'intention de reprojeter les dossiers touchés.
+
+        `super()` reste l'autorité métier : un encaissement déjà comptabilisé
+        lève, et rien n'est inscrit. L'inscription vient donc **après** — la
+        placer avant laisserait une intention derrière une annulation qui n'a
+        pas eu lieu.
+
+        `mapped` dédoublonne les dossiers : deux encaissements annulés du même
+        dossier n'écrivent qu'une intention. `enqueue_dossier` est de toute
+        façon idempotente, et réveille une ligne existante sans remettre son
+        compteur de tentatives à zéro.
+
+        Aucun accès réseau ici : la transaction métier écrit l'intention, et le
+        transport vient plus tard. Une panne de Google n'annule pas une
+        annulation.
+        """
+        resultat = super().action_cancel_from_sync(reason=reason)
+        Boite = self.env["dally.ops.sheet.outbox"]
+        for dossier in self.mapped("shipment_id"):
+            Boite.enqueue_dossier(dossier)
+        return resultat

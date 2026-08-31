@@ -18,11 +18,30 @@ Qu'un `A001` serve d'identité globale. Deux départs différents ont chacun leu
 `A001`, et les confondre mélangerait deux clients.
 """
 
+import ast
+import inspect
 import json
+import textwrap
 import uuid
 
+from odoo.exceptions import UserError
 from odoo.tests import HttpCase, tagged
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
+
+
+def code_seul(module):
+    """Le code exécutable d'un module, sans commentaires ni docstrings."""
+    arbre = ast.parse(textwrap.dedent(inspect.getsource(module)))
+    for noeud in ast.walk(arbre):
+        if not isinstance(noeud, (ast.Module, ast.ClassDef,
+                                  ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        premier = noeud.body[0] if noeud.body else None
+        if (isinstance(premier, ast.Expr)
+                and isinstance(premier.value, ast.Constant)
+                and isinstance(premier.value.value, str)):
+            noeud.body = noeud.body[1:] or [ast.Pass()]
+    return ast.unparse(arbre)
 
 
 @tagged("post_install", "-at_install", "dally")
@@ -412,6 +431,292 @@ class TestOpsSheetOutbox(AccountTestInvoicingCommon):
         service.record_wave_payment(reference, demande)
         service.record_wave_payment(reference, dict(demande))
         self.assertEqual(len(self._projeter()[0]["payments"]), 1)
+
+    # ─── Annulation d'un encaissement ────────────────────────────────
+
+    def _collections(self, reference):
+        return self.env["dally.freight.collection"].sudo().search(
+            [("shipment_id", "=", self._shipment(reference).id)],
+            order="id asc")
+
+    def test_un_encaissement_actif_annonce_son_etat(self):
+        """Sans état déclaré, le classeur ne peut pas distinguer les deux cas."""
+        reference = self._creer_dossier()
+        self._encaisser(reference)
+        paiement = self._projeter()[0]["payments"][0]
+        self.assertIn("state", paiement)
+        self.assertNotEqual(paiement["state"], "cancelled")
+
+    def test_un_encaissement_annule_reste_projete_avec_son_identite(self):
+        """Le cœur du sujet : disparaître n'est pas dire « annulé ».
+
+        Tant que la projection se contente d'omettre la collecte annulée, le
+        classeur garde une clé qu'Odoo ne revendique plus — et la garde
+        d'identité y voit à juste titre une contradiction permanente.
+        """
+        reference = self._creer_dossier()
+        self._encaisser(reference)
+        collection = self._collections(reference)
+        cle = collection.external_payment_key
+        collection.write({"state": "cancelled"})
+
+        paiements = self._projeter()[0]["payments"]
+        self.assertEqual(len(paiements), 1)
+        self.assertEqual(paiements[0]["payment_key"], cle)
+        self.assertEqual(paiements[0]["state"], "cancelled")
+
+    def test_la_projection_dun_paiement_annule_garde_son_montant_historique(self):
+        """La projection décrit Odoo ; c'est le classeur qui neutralise.
+
+        Effacer le montant ici ferait mentir la projection sur l'état d'Odoo,
+        et rendrait l'annulation indistinguable d'un encaissement à zéro.
+        """
+        reference = self._creer_dossier()
+        self._encaisser(reference, 100000.0)
+        self._collections(reference).write({"state": "cancelled"})
+        paiement = self._projeter()[0]["payments"][0]
+        self.assertEqual(paiement["amount_xof"], 100000.0)
+        self.assertEqual(paiement["currency_code"], "XOF")
+
+    def test_un_encaissement_annule_ne_libere_jamais_sa_cle(self):
+        """Un nouvel encaissement porte sa propre identité, jamais l'ancienne."""
+        reference = self._creer_dossier()
+        self._encaisser(reference, 100000.0, "TWANNUL1")
+        ancienne = self._collections(reference)
+        cle_annulee = ancienne.external_payment_key
+        ancienne.write({"state": "cancelled"})
+        self._encaisser(reference, 50000.0, "TWANNUL2")
+
+        paiements = self._projeter()[0]["payments"]
+        self.assertEqual(len(paiements), 2)
+        par_cle = {p["payment_key"]: p for p in paiements}
+        self.assertEqual(len(par_cle), 2)
+        self.assertEqual(par_cle[cle_annulee]["state"], "cancelled")
+        active = [p for p in paiements if p["payment_key"] != cle_annulee][0]
+        self.assertNotEqual(active["state"], "cancelled")
+        self.assertEqual(active["amount_xof"], 50000.0)
+
+    def test_reprojeter_une_annulation_rend_toujours_la_meme_charge(self):
+        """Le rejeu doit être sans surprise : même clé, même état."""
+        reference = self._creer_dossier()
+        self._encaisser(reference)
+        self._collections(reference).write({"state": "cancelled"})
+        shipment = self._shipment(reference)
+
+        premiere = self._projeter()
+        self._accuser(premiere)
+        self._boite().enqueue_dossier(shipment)
+        seconde = self._projeter()
+
+        self.assertEqual(len(self._lignes("freight_dossier")), 1)
+        self.assertEqual(premiere[0]["payments"], seconde[0]["payments"])
+
+    def test_un_dossier_sans_encaissement_projette_une_liste_vide(self):
+        self._creer_dossier()
+        self.assertEqual(self._projeter()[0]["payments"], [])
+
+    # ─── L'annulation réveille la projection ─────────────────────────
+
+    def test_annuler_un_encaissement_reveille_la_projection(self):
+        """Le défaut central : sans réveil, la pierre tombale attend.
+
+        Une annulation qui ne réveille pas la boîte d'envoi laisse le classeur
+        afficher un encaissement qu'Odoo a désavoué, jusqu'à ce qu'un
+        événement étranger — un article, une facture — reprojette le dossier.
+        Odoo fait autorité : l'annulation elle-même doit inscrire l'intention.
+        """
+        reference = self._creer_dossier()
+        self._encaisser(reference)
+        self._accuser(self._projeter())
+        ligne = self._lignes("freight_dossier")
+        self.assertEqual(ligne.state, "delivered")
+
+        collection = self._collections(reference)
+        collection.action_cancel_from_sync()
+
+        self.assertEqual(collection.state, "cancelled")
+        self.assertEqual(ligne.state, "pending")
+
+    def test_annuler_inscrit_la_projection_quand_elle_a_disparu(self):
+        reference = self._creer_dossier()
+        self._encaisser(reference)
+        collection = self._collections(reference)
+        self._lignes("freight_dossier").unlink()
+        self.assertFalse(self._lignes("freight_dossier"))
+
+        collection.action_cancel_from_sync()
+
+        lignes = self._lignes("freight_dossier")
+        self.assertEqual(len(lignes), 1)
+        self.assertEqual(lignes.state, "pending")
+
+    def test_rejouer_une_annulation_ne_cree_pas_une_seconde_intention(self):
+        reference = self._creer_dossier()
+        self._encaisser(reference)
+        collection = self._collections(reference)
+        collection.action_cancel_from_sync()
+        collection.action_cancel_from_sync()
+        self.assertEqual(len(self._lignes("freight_dossier")), 1)
+
+    def test_deux_encaissements_annules_ne_donnent_quune_intention(self):
+        """Un dossier se projette d'un bloc : deux annulations, une intention."""
+        reference = self._creer_dossier()
+        self._encaisser(reference, 100000.0, "TWDEUX001")
+        self._encaisser(reference, 50000.0, "TWDEUX002")
+        collections = self._collections(reference)
+        self.assertEqual(len(collections), 2)
+        self._accuser(self._projeter())
+
+        collections.action_cancel_from_sync()
+
+        lignes = self._lignes("freight_dossier")
+        self.assertEqual(len(lignes), 1)
+        self.assertEqual(lignes.state, "pending")
+        self.assertEqual(
+            {p["state"] for p in self._projeter()[0]["payments"]}, {"cancelled"})
+
+    def test_le_compteur_de_tentatives_survit_a_lannulation(self):
+        """L'historique des échecs de transport n'est pas effacé par l'annulation.
+
+        Le remettre à zéro ferait repartir le palier de reprise au minimum et
+        masquerait un transport durablement en peine.
+        """
+        reference = self._creer_dossier()
+        self._encaisser(reference)
+        self._accuser(self._projeter(), ok=False, erreur="Google indisponible")
+        ligne = self._lignes("freight_dossier")
+        tentatives = ligne.attempt_count
+        self.assertTrue(tentatives)
+
+        self._collections(reference).action_cancel_from_sync()
+
+        self.assertEqual(ligne.attempt_count, tentatives)
+        self.assertEqual(ligne.state, "pending")
+        self.assertFalse(ligne.last_error)
+
+    def test_un_paiement_comptabilise_refuse_lannulation_sans_rien_inscrire(self):
+        """`super()` reste l'autorité : son refus ne laisse aucune trace.
+
+        Le refus se rattrape à la main plutôt qu'avec `assertRaises` : celui
+        d'Odoo enveloppe le bloc dans un `savepoint` et le rembobine dès que
+        l'exception attendue survient. Une inscription faite **avant** l'appel
+        à `super()` serait annulée avec elle, et le test la manquerait —
+        mesuré : sous `assertRaises`, la mutation « inscrire avant `super()` »
+        passe inaperçue.
+        """
+        reference = self._creer_dossier()
+        self._encaisser(reference)
+        collection = self._collections(reference)
+        paiement = self.env["account.payment"].sudo().create({
+            "payment_type": "inbound", "partner_type": "customer",
+            "partner_id": self.partner.id, "amount": 100.0,
+            "journal_id": self.company_data["default_journal_bank"].id,
+        })
+        collection.write({"payment_id": paiement.id})
+        self._accuser(self._projeter())
+        ligne = self._lignes("freight_dossier")
+        self.assertEqual(ligne.state, "delivered")
+
+        try:
+            collection.action_cancel_from_sync()
+        except UserError:
+            pass
+        else:
+            self.fail("un encaissement comptabilisé doit refuser l'annulation")
+
+        self.assertNotEqual(collection.state, "cancelled")
+        self.assertEqual(
+            ligne.state, "delivered",
+            "un refus métier ne doit réveiller aucune projection")
+
+    def test_lannulation_inscrit_apres_super_jamais_avant(self):
+        """L'ordre est la garantie, et il se lit dans le code.
+
+        La transaction seule ne suffit pas à le prouver : selon l'endroit d'où
+        l'annulation est appelée, un rembobinage peut masquer une inscription
+        prématurée. On fixe donc aussi l'ordre à la source.
+        """
+        from odoo.addons.dally_ops_mobile.models import ops_sheet_outbox
+        surcharge = code_seul(
+            ops_sheet_outbox.DallyFreightCollection.action_cancel_from_sync)
+        self.assertLess(
+            surcharge.index("super()"), surcharge.index("enqueue_dossier"),
+            "l'inscription doit suivre `super()`, jamais le précéder")
+
+    def test_lannulation_inscrit_la_meme_cle_metier_que_le_dossier(self):
+        reference = self._creer_dossier()
+        self._encaisser(reference)
+        shipment = self._shipment(reference)
+        self._lignes("freight_dossier").unlink()
+
+        self._collections(reference).action_cancel_from_sync()
+
+        ligne = self._lignes("freight_dossier")
+        self.assertEqual(ligne.business_key, shipment.sync_source_key)
+        self.assertEqual(ligne.resource_model, "dally.shipment")
+        self.assertEqual(ligne.resource_id, shipment.id)
+        self.assertEqual(ligne.resource_reference, shipment.external_reference)
+
+    def test_lannulation_reprend_le_repli_de_cle_des_dossiers_anciens(self):
+        """Les dossiers antérieurs à `sync_source_key` restent projetables.
+
+        `sync_source_key` est immuable une fois la collecte allouée — on ne
+        peut donc pas le retirer d'un dossier Ops, et il ne faut pas essayer.
+        Le repli concerne les dossiers plus anciens que cette convention :
+        c'est un tel dossier qu'on reconstitue ici.
+        """
+        ancien = self.env["dally.shipment"].sudo().create({
+            "partner_id": self.partner.id,
+            "company_id": self.societe.id,
+            "external_reference": "AIR-LEGACY-SHEET-0001",
+            "transport_mode": "air",
+            "direction": "export",
+        })
+        self.assertFalse(ancien.sync_source_key)
+        collection = self.env["dally.freight.collection"].sudo().create({
+            "external_payment_key": "AIR-LEGACY-SHEET-0001|P|1",
+            "shipment_id": ancien.id,
+            "amount": 100000.0,
+            "currency_id": self.xof.id,
+            "payment_date": "2026-08-29",
+            "source_method": "wave",
+        })
+        self.assertFalse(self._lignes("freight_dossier").filtered(
+            lambda ligne: ligne.resource_id == ancien.id))
+
+        collection.action_cancel_from_sync()
+
+        ligne = self._lignes("freight_dossier").filtered(
+            lambda ligne: ligne.resource_id == ancien.id)
+        self.assertEqual(len(ligne), 1)
+        self.assertEqual(ligne.business_key, ancien.external_reference)
+        self.assertEqual(ligne.state, "pending")
+
+    def test_lannulation_ne_fabrique_aucune_cle_de_son_cote(self):
+        """La surcharge délègue : elle ne recalcule jamais une identité.
+
+        C'est ce qui garantit que le repli, les champs de ressource et
+        l'idempotence restent ceux d'`enqueue_dossier` — une seconde règle de
+        clé, même identique aujourd'hui, divergerait un jour.
+        """
+        from odoo.addons.dally_ops_mobile.models import ops_sheet_outbox
+        surcharge = code_seul(ops_sheet_outbox.DallyFreightCollection)
+        self.assertIn("enqueue_dossier", surcharge)
+        for interdit in ("business_key", "sync_source_key",
+                         "collection_local_ref", "resource_model"):
+            self.assertNotIn(interdit, surcharge)
+
+    def test_lannulation_n_ouvre_aucune_connexion_reseau(self):
+        """Une annulation ne doit jamais dépendre de Google pour aboutir.
+
+        C'est toute la raison d'être de la boîte d'envoi : la transaction
+        métier écrit l'intention, et le transport vient plus tard.
+        """
+        from odoo.addons.dally_ops_mobile.models import ops_sheet_outbox
+        code = code_seul(ops_sheet_outbox)
+        for primitive in ("requests", "urllib", "urlopen", "http",
+                          "socket", "UrlFetch"):
+            self.assertNotIn(primitive, code)
 
     # ─── Facture ─────────────────────────────────────────────────────
 

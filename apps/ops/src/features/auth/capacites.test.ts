@@ -45,6 +45,15 @@ describe('entrées de l’accueil', () => {
     const recherche = ENTREES_ACCUEIL.find((e) => e.capacite === 'intake_search');
     expect(recherche?.href).toBe('/recherche');
   });
+
+  it('l’encaissement ouvre la recherche de dossier', () => {
+    // Un paiement se saisit dans la fiche d'un dossier : il n'existe pas
+    // d'écran d'encaissement autonome, et il ne doit pas en exister un. La
+    // carte mène donc à la recherche — le seul endroit d'où l'opérateur
+    // retrouve un dossier sans avoir à commencer par une réception.
+    const encaissement = ENTREES_ACCUEIL.find((e) => e.capacite === 'payment_create');
+    expect(encaissement?.href).toBe('/recherche');
+  });
 });
 
 describe('l’interface ne raisonne jamais en rôles', () => {

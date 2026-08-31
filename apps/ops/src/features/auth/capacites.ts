@@ -32,6 +32,10 @@ export const ENTREES_ACCUEIL: readonly EntreeAccueil[] = [
     capacite: 'payment_create',
     titre: 'Encaissement',
     description: 'Saisir un paiement reçu d’un client.',
+    // L'encaissement vit dans la fiche du dossier : il n'a pas d'écran à lui.
+    // La carte mène donc là où l'opérateur retrouve le dossier, sans l'obliger
+    // à commencer par une réception dont il n'a pas besoin.
+    href: '/recherche',
   },
   {
     capacite: 'expense_create',

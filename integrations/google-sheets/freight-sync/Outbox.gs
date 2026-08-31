@@ -221,6 +221,11 @@ function applyDossierProjection_(spreadsheet, projection) {
 
     let row = findDossierPaymentRow_(grid, identity, key);
 
+    // Une annulation neutralise une ligne existante ; elle n'en ouvre jamais.
+    // Sans ligne, cet encaissement n'a jamais atteint le classeur : lui en
+    // allouer une y inscrirait un paiement qui n'y a jamais figuré.
+    if (!row && paymentIsCancelled_(payment)) continue;
+
     if (!row) {
       row = articleRows.find(candidate =>
         !usedPaymentRows.has(candidate) &&
@@ -305,6 +310,21 @@ function paymentProjectionKey_(payment) {
   }
 
   return key;
+}
+
+/**
+ * Un paiement annulé — une identité qui subsiste, un encaissement qui non.
+ *
+ * C'est toute la différence que la garde d'identité doit savoir lire : une
+ * clé qu'Odoo déclare annulée reste une clé qu'Odoo connaît, tandis qu'une
+ * clé absente de la projection reste une contradiction.
+ *
+ * Un paiement sans état déclaré est actif : les projections antérieures à ce
+ * champ décrivent toutes de l'argent reçu, et un doute sur un encaissement ne
+ * doit jamais l'effacer du classeur.
+ */
+function paymentIsCancelled_(payment) {
+  return String(payment && payment.state || '').trim() === 'cancelled';
 }
 
 /**
@@ -493,12 +513,18 @@ function writeDossierRow_(grid, row, projection, article, payment) {
   }
 
   if (payment) {
-    grid.set(row, c.paymentEur, payment.amount_eur || '');
-    grid.set(row, c.paymentXof, payment.amount_xof || '');
-    grid.set(row, c.paymentMethod,
-             DALLY_OUTBOX.paymentLabels[payment.payment_method] || '');
-    grid.set(row, c.collectedBy, sheetLiteralText_(payment.collected_by));
-    grid.set(row, c.paymentFlag, 1);
+    // Un paiement annulé garde son identité et perd son montant : la ligne
+    // cesse de compter comme encaissement sans cesser d'être reconnaissable.
+    // Effacer la clé rendrait la ligne indistinguable d'une ligne parasite,
+    // et la ligne métier elle-même n'est jamais supprimée.
+    const cancelled = paymentIsCancelled_(payment);
+    grid.set(row, c.paymentEur, cancelled ? '' : (payment.amount_eur || ''));
+    grid.set(row, c.paymentXof, cancelled ? '' : (payment.amount_xof || ''));
+    grid.set(row, c.paymentMethod, cancelled ? '' :
+             (DALLY_OUTBOX.paymentLabels[payment.payment_method] || ''));
+    grid.set(row, c.collectedBy, cancelled ? '' :
+             sheetLiteralText_(payment.collected_by));
+    grid.set(row, c.paymentFlag, cancelled ? 0 : 1);
     grid.set(row, c.paymentKey, sheetLiteralText_(paymentKey));
   }
 
@@ -519,8 +545,13 @@ function writeDossierRow_(grid, row, projection, article, payment) {
   // Une replanification demandée à la main reste lisible : la projection dit
   // ce qu'Odoo affirme, elle n'efface pas une décision en attente.
   const message = grid.text(row, c.syncMessage);
-  grid.set(row, c.syncMessage,
-           preserveReplanIntentMessage_(message, 'Projeté depuis le CRM.'));
+  // Une ligne qui porte une clé sans montant doit dire pourquoi : sans cela,
+  // elle se lit comme un encaissement perdu.
+  grid.set(row, c.syncMessage, preserveReplanIntentMessage_(
+    message,
+    payment && paymentIsCancelled_(payment)
+      ? 'Projeté depuis le CRM. Encaissement annulé.'
+      : 'Projeté depuis le CRM.'));
 }
 
 /**

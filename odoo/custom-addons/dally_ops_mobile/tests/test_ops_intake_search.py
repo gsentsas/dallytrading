@@ -160,6 +160,56 @@ class TestOpsIntakeSearch(AccountTestInvoicingCommon):
         reference = self._dossier_ops()
         self.assertEqual(self._references(self._chercher(reference)), [reference])
 
+    def test_R2b_reference_globale_avec_annee_et_sequence(self):
+        """Une vraie référence porte une année : elle passe les neuf chiffres.
+
+        `AIR-DSS-CDG-2026-902-A001` ne contient que dix chiffres une fois les
+        lettres et les tirets retirés — assez pour que la convention
+        téléphonique la reconnaisse comme un numéro et cherche un partenaire
+        au lieu d'un dossier.
+
+        Les autres tests de référence globale ne l'attrapaient pas : leur
+        consolidation s'appelle `AIR-DSS-CDG-SEARCH-001`, qui n'a que six
+        chiffres. La fixture ne ressemblait pas à la production.
+        """
+        depart = self._consolidation("AIR-DSS-CDG-2026-902")
+        reference = self._dossier_ops(depart)
+        self.assertEqual(reference, "AIR-DSS-CDG-2026-902-A001")
+
+        self.assertEqual(
+            self._references(self._chercher(reference)), [reference])
+
+    def test_R2c_une_reference_globale_n_est_jamais_lue_comme_un_numero(self):
+        """La classification, prise au mot.
+
+        Le test précédent vérifie le résultat ; celui-ci vérifie le chemin.
+        Une chaîne qui contient des lettres n'entre pas dans la branche
+        téléphone, quel que soit le nombre de chiffres qu'elle porte.
+        """
+        service = (self.env["dally.ops.intake.search.service"]
+                   .with_user(self.gilles).with_company(self.societe))
+        # La branche téléphone se reconnaît à sa forme exacte :
+        # `("partner_id", "in", [...])`. La recherche par nom, elle, vise
+        # `partner_id.name` — c'est un chemin, pas la même chose.
+        BRANCHE_TELEPHONE = "('partner_id', 'in'"
+
+        for reference in ("AIR-DSS-CDG-2026-902-A001",
+                          "SEA-DKR-LEH-2026-014-A007",
+                          "AIR-DSS-CDG-2026-002"):
+            domaine = repr(service._domaine_de_recherche(reference))
+            self.assertNotIn(
+                BRANCHE_TELEPHONE, domaine,
+                "%r ne doit pas être cherchée comme un numéro" % reference)
+            self.assertIn("external_reference", domaine)
+
+        # …et les cinq saisies téléphoniques y entrent toujours.
+        for saisie in ("+221 77 123 45 67", "00221771234567",
+                       "221771234567", "77 123 45 67", "771234567"):
+            domaine = repr(service._domaine_de_recherche(saisie))
+            self.assertIn(
+                BRANCHE_TELEPHONE, domaine,
+                "%r doit rester une recherche par numéro" % saisie)
+
     # ─── R3/R15/R16 · le dossier repris du classeur ──────────────────
 
     def test_R3_un_dossier_ancien_est_retrouve(self):

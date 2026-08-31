@@ -52,6 +52,21 @@ from .ops_errors import DallyOpsError
 #: caractères ne ramène jamais qu'une poignée de dossiers d'un même départ.
 REFERENCE_LOCALE = re.compile(r"^[A-Za-z]\d{1,5}$")
 
+#: Ce qui *ressemble* à un numéro : commence par `+` ou un chiffre, et ne
+#: contient ensuite que des chiffres et la ponctuation dont on sépare un
+#: numéro.
+#:
+#: Cette garde existe parce que `normalize_phone` ne juge pas de la forme :
+#: elle retire tout ce qui n'est pas un chiffre, puis compte. Une référence
+#: globale réelle — `AIR-DSS-CDG-2026-902-A001` — en laisse dix, et serait
+#: donc prise pour un numéro. Le dossier partirait alors se chercher parmi
+#: les partenaires, et ne se trouverait jamais.
+#:
+#: La règle est celle de la forme, pas du contenu : une chaîne qui porte des
+#: lettres n'est pas un numéro, quel que soit le nombre de chiffres qu'elle
+#: contient.
+FORME_TELEPHONE = re.compile(r"^[+0-9][0-9\s()./-]*$")
+
 #: En deçà, une requête générique ne cherche plus : elle énumère.
 LONGUEUR_MINIMALE = 3
 
@@ -186,7 +201,13 @@ class DallyOpsIntakeSearchService(models.AbstractModel):
         colonnes : chacune vise les champs où la réponse peut réellement se
         trouver, et une seule d'entre elles s'exécute.
         """
-        telephone = normalize_phone(requete)
+        # La forme est jugée ici ; le seuil de neuf chiffres reste celui du
+        # CRM, appelé tel quel. Aucune seconde normalisation.
+        telephone = (
+            normalize_phone(requete)
+            if FORME_TELEPHONE.fullmatch(requete)
+            else None
+        )
         if telephone:
             return Domain([
                 ("partner_id", "in", self._partenaires_par_telephone(telephone)),

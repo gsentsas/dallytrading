@@ -11,6 +11,7 @@ import { ActivityTimeline } from '@/features/activity/ActivityTimeline';
 import { DossierArticles } from '@/features/reception/DossierArticles';
 import { EtatDossier } from '@/features/reception/EtatDossier';
 import { PhotosDossier } from '@/features/reception/PhotosDossier';
+import { EvenementsDossier } from '@/features/reception/EvenementsDossier';
 
 export const dynamic = 'force-dynamic';
 
@@ -107,6 +108,13 @@ export default async function PageDossier({
           </>
         ) : <p className="attenue">Activité momentanément indisponible.</p>}
       </section>
+
+      {/* Distinct de l'ACTIVITÉ ci-dessus : celle-ci dit ce que Dally Ops a
+          fait, celui-ci ce qui est arrivé au colis. */}
+      <EvenementsDossier
+        reference={dossier.reference}
+        peutConsigner={identite.capabilities.event_create === true}
+      />
     </main>
   );
 }

@@ -41,7 +41,38 @@ interface Options<T extends z.ZodTypeAny> {
   readonly schema: T;
   readonly evenement: string;
   readonly executer: (demande: z.infer<T>, sessionId: string) => Promise<unknown>;
+  /**
+   * Budget de débit, quand celui des réceptions ne convient pas.
+   *
+   * Absent, la mutation prend le budget des réceptions — ce qu'ont toujours
+   * fait les routes qui l'empruntent. Une fonctionnalité au rythme différent
+   * fournit le sien plutôt que de partager un compteur avec des gestes qui
+   * n'ont rien à voir : un opérateur qui documente un colis abîmé ne doit pas
+   * consommer le droit d'en réceptionner un autre.
+   */
+  readonly budget?: BudgetMutation;
 }
+
+export interface BudgetMutation {
+  readonly session: { readonly limite: number; readonly fenetreMs: number };
+  readonly ip: { readonly limite: number; readonly fenetreMs: number };
+  readonly cleSession: (identifiantSession: string) => string;
+  readonly cleIp: (ip: string) => string;
+  /**
+   * L'espace où se compte le `request_uuid`. Facultatif : sans lui, la clé
+   * historique reste employée, et les appelants existants gardent exactement
+   * le comportement qu'ils avaient.
+   */
+  readonly cleDemande?: (requestUuid: string) => string;
+}
+
+/** Le budget historique, celui des réceptions. */
+const BUDGET_PAR_DEFAUT: BudgetMutation = {
+  session: OPS_INTAKE_SESSION,
+  ip: OPS_INTAKE_IP,
+  cleSession: cleIntakeSession,
+  cleIp: cleIntakeIp,
+};
 
 export async function reponseMutation<T extends z.ZodTypeAny>(
   options: Options<T>,
@@ -71,25 +102,28 @@ export async function reponseMutation<T extends z.ZodTypeAny>(
   }
   const demande = analyse.data as { request_uuid: string };
 
-  const cleSession = cleIntakeSession(session.odooSessionId);
-  const cleIp = cleIntakeIp(getClientIp(request.headers));
-  for (const [cle, budget, portee] of [
-    [cleSession, OPS_INTAKE_SESSION, 'session'],
-    [cleIp, OPS_INTAKE_IP, 'ip'],
+  const budget = options.budget ?? BUDGET_PAR_DEFAUT;
+  const cleSession = budget.cleSession(session.odooSessionId);
+  const cleIp = budget.cleIp(getClientIp(request.headers));
+  for (const [cle, borne, portee] of [
+    [cleSession, budget.session, 'session'],
+    [cleIp, budget.ip, 'ip'],
   ] as const) {
-    const etat = peekRateLimit(cle, budget.limite);
+    const etat = peekRateLimit(cle, borne.limite);
     if (!etat.allowed) {
       logger.warn(`${evenement}.throttled`, { correlationId, scope: portee });
       return erreur(429, 'Trop d’opérations. Réessayez dans quelques minutes.',
                     undefined, etat.retryAfterSeconds);
     }
   }
-  // Les tentatives réseau d'une même demande ne comptent qu'une fois.
+  // Les tentatives réseau d'une même demande ne comptent qu'une fois, et
+  // seulement dans l'espace de leur propre mutation.
+  const cleDemande = budget.cleDemande ?? cleDemandeComptee;
   const premiere = checkRateLimit(
-    cleDemandeComptee(demande.request_uuid), 1, OPS_INTAKE_SESSION.fenetreMs);
+    cleDemande(demande.request_uuid), 1, budget.session.fenetreMs);
   if (premiere.allowed) {
-    checkRateLimit(cleSession, OPS_INTAKE_SESSION.limite, OPS_INTAKE_SESSION.fenetreMs);
-    checkRateLimit(cleIp, OPS_INTAKE_IP.limite, OPS_INTAKE_IP.fenetreMs);
+    checkRateLimit(cleSession, budget.session.limite, budget.session.fenetreMs);
+    checkRateLimit(cleIp, budget.ip.limite, budget.ip.fenetreMs);
   }
 
   try {
@@ -143,6 +177,11 @@ const MESSAGES_REFUS: Record<string, string> = {
   receipt_too_large: 'La photo dépasse 10 Mo. Reprenez-la en qualité réduite.',
   receipt_type_not_allowed:
     'Seules les photos JPEG, PNG, WebP ou HEIC sont acceptées comme justificatif.',
+  // Les événements de terrain.
+  event_kind_invalid: 'Cette nature d’événement n’existe pas.',
+  event_note_required:
+    'Cette nature d’événement demande une note : décrivez ce que vous avez constaté.',
+  event_note_too_long: 'La note est trop longue. Résumez en 1000 caractères au plus.',
   default: 'Vérifiez les informations saisies.',
 };
 
@@ -183,5 +222,6 @@ const MESSAGES_CONFLIT: Record<string, string> = {
   photo_already_deleted: 'Cette photo a déjà été retirée.',
   photo_delete_not_allowed:
     'Vous ne pouvez pas retirer cette photo. Demandez à un responsable.',
+  event_state_not_allowed: 'Ce dossier n’accepte plus d’événement.',
   default: 'Cette opération n’est plus possible.',
 };

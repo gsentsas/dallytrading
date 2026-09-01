@@ -44,6 +44,9 @@ donnerait à un téléphone les pouvoirs d'un automate.
         "dally_freight",
         "dally_freight_billing",
         "dally_freight_consolidation",
+        # Étape 5 : les événements de terrain enrichissent
+        # `dally.shipment.event`, qui vit dans ce module.
+        "dally_tracking",
     ],
     "data": [
         "security/dally_ops_groups.xml",

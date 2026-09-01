@@ -220,6 +220,20 @@ function syncDossier_(sheet, dossier, rows, cfg) {
   if (!articleRows.length) throw new Error('Aucun article Freight détecté pour ' + dossier);
   const payload = buildFreightPayload_(sheet.getName(), dossier, rows, articleRows, cfg);
   const data = apiPost_('/api/v1/freight/sync', 'DALLY_FREIGHT_SYNC_API_KEY', payload, cfg);
+  const returnedLocalRef = String(data.collection_local_ref || '').trim();
+  if (returnedLocalRef) {
+    const sheetDossiers = [...new Set(
+      rows.map(row => display_(row, DALLY.columns.dossier)).filter(Boolean)
+    )];
+    const conflicts = sheetDossiers.filter(value => value !== returnedLocalRef);
+    if (conflicts.length) {
+      throw new Error(
+        'ERREUR NUMERO DOSSIER : Sheet=' + conflicts.join(', ') +
+        ' / CRM=' + returnedLocalRef +
+        '. La colonne N dossier n’a pas été modifiée.'
+      );
+    }
+  }
   const lineByKey = {};
   (data.lines || []).forEach(line => lineByKey[String(line.external_line_key)] = line);
   const now = new Date();
@@ -228,7 +242,8 @@ function syncDossier_(sheet, dossier, rows, cfg) {
     const key = articleKey_(row);
     const line = lineByKey[String(key || '')];
     applyReturnedPlannedRef_(sheet, row.row, data);
-    if (data.collection_local_ref) setCell_(sheet, row.row, DALLY.columns.dossier, data.collection_local_ref);
+    const currentDossier = display_(row, DALLY.columns.dossier);
+    if (returnedLocalRef && !currentDossier) setCell_(sheet, row.row, DALLY.columns.dossier, returnedLocalRef);
     setCell_(sheet, row.row, DALLY.columns.partnerId, data.partner_id || '');
     setCell_(sheet, row.row, DALLY.columns.shipmentId, data.shipment_id || '');
     setCell_(sheet, row.row, DALLY.columns.collectionLocalRef, data.collection_local_ref || '');
@@ -315,8 +330,14 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
     throw new Error('Une replanification doit sélectionner une consolidation ouverte ; vider la colonne B n’est pas une désaffectation valide.');
   }
   const sendPlannedRef = !!plannedRef && (!serverIdentified || explicitReplan);
+  const requestedLocalRef = (
+    source === 'google_sheets' &&
+    plannedRef &&
+    !serverIdentified &&
+    String(dossier || '').trim()
+  ) ? String(dossier).trim() : '';
   const payload = {
-    external_reference: payloadExternalReference_(rows, dossier),
+    external_reference: requestedLocalRef ? undefined : payloadExternalReference_(rows, dossier),
     sync_source_key: sourceKey,
     transport_mode: route.mode || DALLY.modeCodes[display_(first, DALLY.columns.transportMode)],
     direction: route.direction,
@@ -325,7 +346,7 @@ function buildFreightPayload_(sheetName, dossier, rows, articleRows, cfg) {
     customer_segment: DALLY.segmentCodes[display_(first, DALLY.columns.clientType)] || 'individual',
     state: sheetShipmentState_(first),
     planned_consolidation_ref: sendPlannedRef ? plannedRef : undefined,
-    collection_local_ref: plannedRef ? undefined : (firstText_(rows, DALLY.columns.collectionLocalRef) || undefined),
+    collection_local_ref: requestedLocalRef || (plannedRef ? undefined : (firstText_(rows, DALLY.columns.collectionLocalRef) || undefined)),
     dossier_fee_eur: firstNumber_(rows, DALLY.columns.dossierFee) || 0,
     other_fees_eur: sum_(articleRows, DALLY.columns.otherFees),
     client: {

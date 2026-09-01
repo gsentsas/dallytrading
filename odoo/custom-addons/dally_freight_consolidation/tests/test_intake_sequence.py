@@ -179,14 +179,21 @@ class TestIntakeSequence(TransactionCase):
         self.assertEqual(shipment.external_reference, "A001")
         self.assertEqual(result["external_reference"], "A001")
 
-    def test_google_sheets_local_reference_is_server_assigned(self):
+    def test_google_sheets_local_reference_is_preserved(self):
         consolidation = self._consolidation("AIR-DSS-CDG-2099-004")
-        with self.assertRaises(ValidationError):
-            self.service.upsert(
-                self._payload("sheet:004:a", consolidation, state="request_received") | {
-                    "collection_local_ref": "A001",
-                }
-            )
+        result, shipment = self.service.upsert(
+            self._payload("sheet:004:a", consolidation, state="request_received") | {
+                "collection_local_ref": "A015",
+            }
+        )
+        self.assertEqual(result["collection_local_ref"], "A015")
+        self.assertEqual(result["collection_sequence"], 15)
+        self.assertEqual(shipment.collection_local_ref, "A015")
+        self.assertEqual(shipment.collection_sequence, 15)
+        self.assertEqual(
+            shipment.external_reference,
+            "%s-A015" % consolidation.name,
+        )
 
     def test_request_received_stores_plan_without_physical_lines(self):
         consolidation = self._consolidation("AIR-DSS-CDG-2099-006")

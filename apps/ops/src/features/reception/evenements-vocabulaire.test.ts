@@ -9,8 +9,10 @@ import {
   creerSuiviDeGeste,
   dateLisible,
   demandeValide,
+  determinerAffichageEvenements,
   interpreterEnvoi,
   libelleSource,
+  lireEvenements,
   motifDIndisponibilite,
 } from '@/features/reception/evenements-vocabulaire';
 
@@ -112,6 +114,66 @@ describe('ce que l’opérateur lit', () => {
     expect(dateLisible('2026-09-01T09:05:00Z')).toMatch(
       /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/);
     expect(dateLisible('pas-une-date')).toBe('');
+  });
+});
+
+describe('une lecture qui échoue n’est pas un dossier vide', () => {
+  const CHARGE = { events: [], can_add: true, kinds: [] };
+
+  function affichage(issue: 'ok' | 'echec', ouvert = true) {
+    return determinerAffichageEvenements({
+      chargement: false,
+      lectureEchouee: issue === 'echec',
+      nombreEvenements: 0,
+      canAdd: true,
+      ouvert,
+    });
+  }
+
+  it('rend les données quand le serveur a répondu', async () => {
+    expect(await lireEvenements(
+      async () => ({ ok: true, corps: { success: true, data: CHARGE } })))
+      .toEqual({ issue: 'ok', donnees: CHARGE });
+  });
+
+  it.each([
+    ['HTTP 503', async () => ({ ok: false, corps: null })],
+    ['HTTP 200 avec success=false', async () => ({
+      ok: true, corps: { success: false, error: 'Session expirée.' },
+    })],
+    ['exception réseau', async () => {
+      throw new TypeError('Failed to fetch');
+    }],
+  ] as const)('%s affiche l’indisponibilité, jamais le vide ni le formulaire',
+    async (_scenario, appeler) => {
+      const resultat = await lireEvenements(appeler);
+      expect(resultat).toEqual({ issue: 'echec' });
+      expect(affichage(resultat.issue)).toMatchObject({
+        indisponible: true,
+        aucunEvenement: false,
+        formulaire: false,
+      });
+    });
+
+  it('un vrai succès vide affiche le vide, pas l’indisponibilité', async () => {
+    const resultat = await lireEvenements(
+      async () => ({ ok: true, corps: { success: true, data: CHARGE } }));
+    expect(resultat).toEqual({ issue: 'ok', donnees: CHARGE });
+    expect(affichage(resultat.issue)).toMatchObject({
+      indisponible: false,
+      aucunEvenement: true,
+    });
+  });
+
+  it('refuse un corps illisible', async () => {
+    expect(await lireEvenements(async () => ({ ok: true, corps: null })))
+      .toEqual({ issue: 'echec' });
+  });
+
+  it('le composant expose les deux états sous leurs identifiants stables', () => {
+    expect(SOURCE).toContain('data-testid="evenements-indisponibles"');
+    expect(SOURCE).toContain('data-testid="aucun-evenement"');
+    expect(SOURCE).toContain('data-testid="formulaire-evenement"');
   });
 });
 

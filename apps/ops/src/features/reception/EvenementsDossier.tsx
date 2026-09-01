@@ -12,8 +12,10 @@ import {
   creerSuiviDeGeste,
   dateLisible,
   demandeValide,
+  determinerAffichageEvenements,
   interpreterEnvoi,
   libelleSource,
+  lireEvenements,
   motifDIndisponibilite,
   type NatureProposable,
 } from './evenements-vocabulaire';
@@ -49,6 +51,7 @@ export function EvenementsDossier({
 }) {
   const [donnees, setDonnees] = useState<Charge | null>(null);
   const [chargement, setChargement] = useState(true);
+  const [lectureEchouee, setLectureEchouee] = useState(false);
   const [ouvert, setOuvert] = useState(false);
   const [kind, setKind] = useState('');
   const [note, setNote] = useState('');
@@ -59,18 +62,26 @@ export function EvenementsDossier({
   const geste = useRef(creerSuiviDeGeste(() => crypto.randomUUID()));
 
   const recharger = useCallback(async () => {
-    try {
+    const resultat = await lireEvenements(async () => {
       const reponse = await fetch(
         `/api/intakes/${encodeURIComponent(reference)}/events`,
         { cache: 'no-store' });
-      const corps = await reponse.json().catch(() => null);
-      if (reponse.ok && corps?.success === true) setDonnees(corps.data);
-    } finally {
-      setChargement(false);
+      return { ok: reponse.ok, corps: await reponse.json().catch(() => null) };
+    });
+    if (resultat.issue === 'ok') {
+      setDonnees(resultat.donnees as Charge);
+      setLectureEchouee(false);
+    } else {
+      // Ne pas confondre « je n'ai pas pu lire » avec « il n'y a rien ».
+      setLectureEchouee(true);
     }
+    setChargement(false);
   }, [reference]);
 
-  useEffect(() => { void recharger(); }, [recharger]);
+  useEffect(() => {
+    const chargementInitial = setTimeout(() => { void recharger(); }, 0);
+    return () => clearTimeout(chargementInitial);
+  }, [recharger]);
 
   const natures: readonly NatureProposable[] = donnees?.kinds ?? [];
   const nature = natures.find((candidate) => candidate.kind === kind);
@@ -141,6 +152,13 @@ export function EvenementsDossier({
   if (!peutConsigner) return null;
 
   const evenements: readonly Evenement[] = donnees?.events ?? [];
+  const affichage = determinerAffichageEvenements({
+    chargement,
+    lectureEchouee,
+    nombreEvenements: evenements.length,
+    canAdd: donnees?.can_add,
+    ouvert,
+  });
 
   return (
     <section aria-labelledby="evenements-titre" data-testid="evenements-dossier">
@@ -155,7 +173,14 @@ export function EvenementsDossier({
 
       {chargement ? <p className="attenue">Chargement…</p> : null}
 
-      {!chargement && evenements.length === 0 ? (
+      {affichage.indisponible ? (
+        <p className="erreur" role="alert"
+           data-testid="evenements-indisponibles">
+          Événements momentanément indisponibles.
+        </p>
+      ) : null}
+
+      {affichage.aucunEvenement ? (
         <p className="attenue" data-testid="aucun-evenement">
           Aucun événement consigné pour ce dossier.
         </p>
@@ -193,7 +218,7 @@ export function EvenementsDossier({
         </section>
       ))}
 
-      {donnees?.can_add && !ouvert ? (
+      {affichage.boutonAjout ? (
         <button
           type="button"
           onClick={() => setOuvert(true)}
@@ -203,7 +228,7 @@ export function EvenementsDossier({
         </button>
       ) : null}
 
-      {donnees?.can_add && ouvert ? (
+      {affichage.formulaire ? (
         <form onSubmit={envoyer} noValidate data-testid="formulaire-evenement">
           <label htmlFor="evenement-nature">
             Type d’événement
@@ -253,7 +278,7 @@ export function EvenementsDossier({
         </form>
       ) : null}
 
-      {donnees && !donnees.can_add ? (
+      {affichage.ajoutFerme ? (
         <p className="attenue" data-testid="ajout-evenement-ferme">
           Ce dossier n’accepte plus d’événement.
         </p>

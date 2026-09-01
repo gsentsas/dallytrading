@@ -19,7 +19,10 @@ const { readOpsSession } = await import('@/lib/auth/auth');
 const { origineAcceptable } = await import('@/lib/http/origine');
 const { createEvent, fetchEvents } = await import('@/lib/ops/events');
 const { OpsGatewayError } = await import('@/lib/auth/odoo-ops');
-const { resetRateLimits } = await import('@/lib/rate-limit');
+const {
+  OPS_EVENT_SESSION, checkRateLimit, cleDemandeComptee, cleEvenementDemande,
+  cleEvenementSession, peekRateLimit, resetRateLimits,
+} = await import('@/lib/rate-limit');
 const { GET, POST } = await import('@/app/api/intakes/[reference]/events/route');
 
 const REFERENCE = 'AIR-DSS-CDG-2026-902-A001';
@@ -154,6 +157,36 @@ describe('le débit propre aux événements', () => {
       expect(Number(refuse.headers.get('retry-after'))).toBeGreaterThan(0);
       expect(vi.mocked(createEvent)).toHaveBeenCalledTimes(20);
     });
+
+  it('la clé d’un événement n’est pas celle des créations de client', () => {
+    expect(cleEvenementDemande(UUID)).not.toBe(cleDemandeComptee(UUID));
+    expect(cleEvenementDemande(UUID)).toMatch(/^ops:events:uuid:/);
+    expect(cleDemandeComptee(UUID)).toMatch(/^ops:customers:create:uuid:/);
+  });
+
+  it('un UUID déjà employé par une autre mutation ne vole pas ce budget',
+    async () => {
+      // Une autre mutation a consommé CE même uuid, dans SON espace à elle.
+      checkRateLimit(cleDemandeComptee(UUID), 1, OPS_EVENT_SESSION.fenetreMs);
+      const avant = peekRateLimit(
+        cleEvenementSession('session'), OPS_EVENT_SESSION.limite);
+      expect((await appel(GESTE)).status).toBe(200);
+      const apres = peekRateLimit(
+        cleEvenementSession('session'), OPS_EVENT_SESSION.limite);
+      expect(apres.remaining, 'le geste doit consommer son propre budget')
+        .toBe(avant.remaining - 1);
+    });
+
+  it('mais la reprise agit bien, dans l’espace des événements', async () => {
+    checkRateLimit(cleEvenementDemande(UUID), 1, OPS_EVENT_SESSION.fenetreMs);
+    const avant = peekRateLimit(
+      cleEvenementSession('session'), OPS_EVENT_SESSION.limite);
+    expect((await appel(GESTE)).status).toBe(200);
+    const apres = peekRateLimit(
+      cleEvenementSession('session'), OPS_EVENT_SESSION.limite);
+    expect(apres.remaining, 'un geste déjà compté ne se recompte pas')
+      .toBe(avant.remaining);
+  });
 
   it('une reprise du même geste ne consomme pas une seconde unité', async () => {
     for (let index = 0; index < 50; index += 1) {

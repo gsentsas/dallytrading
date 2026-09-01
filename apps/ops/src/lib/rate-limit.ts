@@ -372,6 +372,19 @@ export function cleEvenementIp(ip: string): string {
   return `ops:events:ip:${ip}`;
 }
 
+/**
+ * L'espace de déduplication propre aux événements.
+ *
+ * `cleDemandeComptee` porte le préfixe `ops:customers:create:` — c'est la clé
+ * des créations de client, empruntée par toutes les mutations JSON. Deux
+ * gestes de nature différente portant le même `request_uuid` se voleraient
+ * donc leur budget : le second se croirait déjà compté et ne consommerait
+ * rien, tout en atteignant Odoo. Les événements comptent dans le leur.
+ */
+export function cleEvenementDemande(requestUuid: string): string {
+  return `ops:events:uuid:${empreinteCourte('event-request', requestUuid)}`;
+}
+
 export function clePhotoAdmise(requestUuid: string): string {
   return `ops:photos:admis:${empreinteCourte('photo-admis', requestUuid)}`;
 }

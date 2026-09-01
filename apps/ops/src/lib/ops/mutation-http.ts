@@ -58,6 +58,12 @@ export interface BudgetMutation {
   readonly ip: { readonly limite: number; readonly fenetreMs: number };
   readonly cleSession: (identifiantSession: string) => string;
   readonly cleIp: (ip: string) => string;
+  /**
+   * L'espace où se compte le `request_uuid`. Facultatif : sans lui, la clé
+   * historique reste employée, et les appelants existants gardent exactement
+   * le comportement qu'ils avaient.
+   */
+  readonly cleDemande?: (requestUuid: string) => string;
 }
 
 /** Le budget historique, celui des réceptions. */
@@ -110,9 +116,11 @@ export async function reponseMutation<T extends z.ZodTypeAny>(
                     undefined, etat.retryAfterSeconds);
     }
   }
-  // Les tentatives réseau d'une même demande ne comptent qu'une fois.
+  // Les tentatives réseau d'une même demande ne comptent qu'une fois, et
+  // seulement dans l'espace de leur propre mutation.
+  const cleDemande = budget.cleDemande ?? cleDemandeComptee;
   const premiere = checkRateLimit(
-    cleDemandeComptee(demande.request_uuid), 1, budget.session.fenetreMs);
+    cleDemande(demande.request_uuid), 1, budget.session.fenetreMs);
   if (premiere.allowed) {
     checkRateLimit(cleSession, budget.session.limite, budget.session.fenetreMs);
     checkRateLimit(cleIp, budget.ip.limite, budget.ip.fenetreMs);

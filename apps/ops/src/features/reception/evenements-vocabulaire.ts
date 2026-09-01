@@ -104,6 +104,63 @@ export function interpreterEnvoi(
   };
 }
 
+export type ResultatLecture =
+  | { readonly issue: 'ok'; readonly donnees: unknown }
+  | { readonly issue: 'echec' };
+
+/**
+ * Ce que vaut une lecture de la frise.
+ *
+ * Trois issues se ressemblaient et n'en formaient qu'une : le service qui
+ * répond 503, le serveur qui refuse en clair, et le réseau qui rompt. Toutes
+ * laissaient l'écran sans données — donc, faute de les distinguer, l'écran
+ * annonçait « aucun événement consigné ». Il affirmait alors quelque chose du
+ * dossier alors qu'il n'en savait rien.
+ *
+ * L'appel est reçu en paramètre pour que ces trois issues se vérifient sans
+ * navigateur : c'est le même parti que `interpreterEnvoi`.
+ */
+export async function lireEvenements(
+  appeler: () => Promise<{ ok: boolean; corps: unknown }>,
+): Promise<ResultatLecture> {
+  try {
+    const { ok, corps } = await appeler();
+    const charge = corps as { success?: unknown; data?: unknown } | null;
+    if (ok && charge?.success === true) {
+      return { issue: 'ok', donnees: charge.data };
+    }
+    return { issue: 'echec' };
+  } catch {
+    return { issue: 'echec' };
+  }
+}
+
+interface ContexteAffichageEvenements {
+  readonly chargement: boolean;
+  readonly lectureEchouee: boolean;
+  readonly nombreEvenements: number;
+  readonly canAdd: boolean | undefined;
+  readonly ouvert: boolean;
+}
+
+/** Les éléments que l'écran peut montrer après une tentative de lecture. */
+export function determinerAffichageEvenements({
+  chargement,
+  lectureEchouee,
+  nombreEvenements,
+  canAdd,
+  ouvert,
+}: ContexteAffichageEvenements) {
+  const lectureDisponible = !chargement && !lectureEchouee;
+  return {
+    indisponible: !chargement && lectureEchouee,
+    aucunEvenement: lectureDisponible && nombreEvenements === 0,
+    boutonAjout: lectureDisponible && canAdd === true && !ouvert,
+    formulaire: lectureDisponible && canAdd === true && ouvert,
+    ajoutFerme: lectureDisponible && canAdd === false,
+  } as const;
+}
+
 /** La date d'un événement, lisible sans le fuseau du serveur. */
 export function dateLisible(iso: string): string {
   const instant = new Date(iso);

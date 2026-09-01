@@ -32,8 +32,13 @@ export type NatureEvenement = z.infer<typeof natureEvenement>;
 export const evenement = z.object({
   kind: z.string().max(40),
   kind_label: z.string().max(120),
-  description: z.string().max(240),
-  note: z.string().max(2000),
+  // Sans borne, délibérément : côté Odoo `description` est un `Char` et
+  // `internal_note` un `Text`, ni l'un ni l'autre dimensionné, et la liste
+  // inclut les événements créés au back-office. Refuser ici une valeur
+  // qu'Odoo accepte ferait tomber la lecture en 503 et effacerait toute la
+  // frise du dossier. La borne de saisie, elle, reste au contrat d'écriture.
+  description: z.string(),
+  note: z.string(),
   status: z.string().max(40),
   status_label: z.string().max(120),
   event_date: z.string().max(40),

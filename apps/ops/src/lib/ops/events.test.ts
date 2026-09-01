@@ -140,3 +140,28 @@ describe('les appels', () => {
     expect(opsGet).not.toHaveBeenCalled();
   });
 });
+
+describe('la lecture accepte ce qu’Odoo autorise à écrire', () => {
+  it('ne borne ni la description ni la note d’un événement du back-office',
+    async () => {
+      // `description` est un Char et `internal_note` un Text, ni l'un ni
+      // l'autre dimensionné : un événement saisi dans Odoo peut dépasser
+      // n'importe quelle borne que l'application se donnerait ici.
+      const long = {
+        ...EVENEMENT, kind: '', kind_label: '', source: 'backoffice' as const,
+        description: 'D'.repeat(1200), note: 'N'.repeat(5000),
+      };
+      vi.mocked(opsGet).mockResolvedValue({ ...LISTE, events: [long] });
+      const lu = await fetchEvents(REFERENCE, 'session', 'correlation');
+      expect(lu.events[0]?.description).toHaveLength(1200);
+      expect(lu.events[0]?.note).toHaveLength(5000);
+    });
+
+  it('mais le contrat d’écriture garde exactement sa borne', () => {
+    const gabarit = { request_uuid: UUID, kind: 'anomaly' as const };
+    expect(demandeEvenement.safeParse(
+      { ...gabarit, note: 'x'.repeat(1000) }).success).toBe(true);
+    expect(demandeEvenement.safeParse(
+      { ...gabarit, note: 'x'.repeat(1001) }).success).toBe(false);
+  });
+});

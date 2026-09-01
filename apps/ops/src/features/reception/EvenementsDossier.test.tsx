@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 const { EvenementsDossier } = await import(
   '@/features/reception/EvenementsDossier');
+const { determinerAffichageEvenements } = await import(
+  '@/features/reception/evenements-vocabulaire');
 
 const SOURCE = readFileSync(
   fileURLToPath(new URL('./EvenementsDossier.tsx', import.meta.url)), 'utf8');
@@ -99,8 +101,18 @@ describe('ce que l’écran ne propose jamais', () => {
 
 describe('le serveur décide, l’écran obéit', () => {
   it('le formulaire n’apparaît que sur `can_add`', () => {
-    expect(SOURCE).toContain('donnees?.can_add && ouvert');
-    expect(SOURCE).toContain('donnees && !donnees.can_add');
+    const affichage = (canAdd: boolean | undefined) =>
+      determinerAffichageEvenements({
+        chargement: false,
+        lectureEchouee: false,
+        nombreEvenements: 0,
+        canAdd,
+        ouvert: true,
+      });
+    expect(affichage(true).formulaire).toBe(true);
+    expect(affichage(false).formulaire).toBe(false);
+    expect(affichage(undefined).formulaire).toBe(false);
+    expect(affichage(false).ajoutFerme).toBe(true);
   });
 
   it('le bouton reste gris tant que la demande est invalide', () => {

@@ -28,6 +28,7 @@ import { reponseMutation } from '@/lib/ops/mutation-http';
 import {
   OPS_EVENT_IP,
   OPS_EVENT_SESSION,
+  cleEvenementDemande,
   cleEvenementIp,
   cleEvenementSession,
 } from '@/lib/rate-limit';
@@ -39,6 +40,7 @@ const BUDGET_EVENEMENT = {
   ip: OPS_EVENT_IP,
   cleSession: cleEvenementSession,
   cleIp: cleEvenementIp,
+  cleDemande: cleEvenementDemande,
 } as const;
 
 function erreur(status: number, message: string) {

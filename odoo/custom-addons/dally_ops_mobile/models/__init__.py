@@ -20,6 +20,8 @@ from . import ops_intake_service
 from . import ops_intake_line_service
 from . import ops_intake_search_service
 from . import ops_intake_state_service
+from . import ops_photo
+from . import ops_photo_service
 from . import ops_payment_service
 from . import ops_wave_payment_service
 from . import ops_receipt_service

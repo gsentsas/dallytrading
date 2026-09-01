@@ -294,6 +294,65 @@ export function cleJustificatifIp(ip: string): string {
   return `ops:receipts:ip:${ip}`;
 }
 
+/**
+ * Budgets des preuves photographiques d'un dossier.
+ *
+ * Distincts de ceux du justificatif de caisse, et pour une raison de terrain :
+ * un opérateur envoie une photo de ticket par dépense, mais documente un colis
+ * abîmé sous cinq angles d'affilée. Partager le budget ferait payer au second
+ * geste la parcimonie attendue du premier.
+ *
+ * Plus serrés en revanche que les écritures de texte : une photo pèse mille
+ * fois plus qu'une ligne de saisie.
+ */
+export const OPS_PHOTO_SESSION = {
+  limite: 30,
+  fenetreMs: 10 * 60_000,
+} as const;
+export const OPS_PHOTO_IP = {
+  limite: 120,
+  fenetreMs: 10 * 60_000,
+} as const;
+
+export function clePhotoSession(identifiantSession: string): string {
+  return `ops:photos:session:${empreinteCourte('photo', identifiantSession)}`;
+}
+
+export function clePhotoIp(ip: string): string {
+  return `ops:photos:ip:${ip}`;
+}
+
+/**
+ * Le budget des reprises d'un geste déjà admis.
+ *
+ * Un rejeu échappe au budget de session — il a déjà payé sa place, et le
+ * serveur lui rendra la photo qu'il a écrite. Mais « échapper » ne veut pas
+ * dire « sans fin » : cinq reprises suffisent largement à un téléphone qui
+ * perd le réseau, et au-delà ce n'est plus une reprise, c'est un martèlement.
+ */
+export const OPS_PHOTO_REPLAY = {
+  limite: 5,
+  fenetreMs: 10 * 60_000,
+} as const;
+
+/**
+ * La clé d'admission d'un geste.
+ *
+ * Elle ne dit pas « déjà vu » mais **« déjà traité avec succès par Odoo »**.
+ * La nuance décide de tout : une clé posée à la simple observation ferait
+ * qu'un envoi refusé — par le débit, par une validation, par une panne —
+ * deviendrait ensuite un rejeu autorisé à contourner le budget. Elle n'est
+ * donc écrite qu'après une réponse serveur réussie.
+ */
+export function clePhotoAdmise(requestUuid: string): string {
+  return `ops:photos:admis:${empreinteCourte('photo-admis', requestUuid)}`;
+}
+
+/** Le compteur de reprises d'un geste admis. */
+export function clePhotoRejeu(requestUuid: string): string {
+  return `ops:photos:rejeu:${empreinteCourte('photo-rejeu', requestUuid)}`;
+}
+
 export function cleJustificatifDemande(requestUuid: string): string {
   return `ops:receipts:uuid:${empreinteCourte('receipt-request', requestUuid)}`;
 }

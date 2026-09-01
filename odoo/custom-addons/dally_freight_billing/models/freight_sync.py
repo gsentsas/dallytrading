@@ -109,8 +109,6 @@ class DallyFreightSyncService(models.AbstractModel):
         if shipment and matched_by_external_reference and sync_source_key and consolidation_fields and shipment.sync_source_key and shipment.sync_source_key != sync_source_key:
             raise ValidationError(_("La clé source appartient déjà à un autre dossier."))
         if shipment_created and planned:
-            if source == "google_sheets" and local_ref:
-                raise ValidationError(_("collection_local_ref est attribué par le serveur."))
             identity = Shipment._allocate_intake_identity(planned, sync_source_key=sync_source_key, local_ref=local_ref, source=source)
             if isinstance(identity, tuple):
                 sequence, local = identity

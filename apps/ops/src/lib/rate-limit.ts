@@ -344,6 +344,34 @@ export const OPS_PHOTO_REPLAY = {
  * deviendrait ensuite un rejeu autorisé à contourner le budget. Elle n'est
  * donc écrite qu'après une réponse serveur réussie.
  */
+/**
+ * Budget des événements consignés depuis le terrain.
+ *
+ * Vingt par dix minutes : un opérateur qui documente un colis abîmé en écrit
+ * deux ou trois, jamais vingt. Le budget n'existe pas pour le gêner mais pour
+ * qu'un appareil devenu fou ne remplisse pas la frise d'un dossier.
+ *
+ * Plus simple que celui des photos : un événement pèse quelques centaines
+ * d'octets, et son rejeu est déjà borné par le registre d'idempotence côté
+ * Odoo — qui rend le même événement sans jamais en écrire un second.
+ */
+export const OPS_EVENT_SESSION = {
+  limite: 20,
+  fenetreMs: 10 * 60_000,
+} as const;
+export const OPS_EVENT_IP = {
+  limite: 100,
+  fenetreMs: 10 * 60_000,
+} as const;
+
+export function cleEvenementSession(identifiantSession: string): string {
+  return `ops:events:session:${empreinteCourte('event', identifiantSession)}`;
+}
+
+export function cleEvenementIp(ip: string): string {
+  return `ops:events:ip:${ip}`;
+}
+
 export function clePhotoAdmise(requestUuid: string): string {
   return `ops:photos:admis:${empreinteCourte('photo-admis', requestUuid)}`;
 }

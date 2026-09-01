@@ -35,6 +35,7 @@ EVENEMENTS_PUBLICS = {
     "expense_receipt_attached": ("Justificatif de dépense ajouté", "expense"),
     "photo_added": ("Photo ajoutée au dossier", "reception"),
     "photo_deleted": ("Photo retirée du dossier", "reception"),
+    "event_recorded": ("Événement consigné", "reception"),
     "cash_transfer_recorded": ("Transfert de caisse enregistré", "transfer"),
     "cash_transfer_received": ("Transfert de caisse reçu", "transfer"),
     "appointment_recorded": ("Rendez-vous créé", "appointment"),
@@ -45,6 +46,8 @@ EVENEMENTS_PUBLICS = {
 
 LIBELLES_CHAMPS = {
     "state": "État du dossier",
+    "ops_event_kind": "Nature de l'événement",
+    "shipment_state": "État au moment du geste",
     "description": "Désignation",
     "goods_category": "Catégorie",
     "package_type": "Type de colis",

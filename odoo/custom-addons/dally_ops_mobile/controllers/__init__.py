@@ -12,4 +12,5 @@ from . import ops_wave_payments
 from . import ops_sheet_outbox
 from . import ops_receipts
 from . import ops_photos
+from . import ops_events
 from . import ops_activity

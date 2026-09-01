@@ -33,6 +33,8 @@ EVENEMENTS_PUBLICS = {
     "wave_payment_recorded": ("Paiement Wave", "payment"),
     "expense_recorded": ("Dépense enregistrée", "expense"),
     "expense_receipt_attached": ("Justificatif de dépense ajouté", "expense"),
+    "photo_added": ("Photo ajoutée au dossier", "reception"),
+    "photo_deleted": ("Photo retirée du dossier", "reception"),
     "cash_transfer_recorded": ("Transfert de caisse enregistré", "transfer"),
     "cash_transfer_received": ("Transfert de caisse reçu", "transfer"),
     "appointment_recorded": ("Rendez-vous créé", "appointment"),

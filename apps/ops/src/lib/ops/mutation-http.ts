@@ -178,5 +178,10 @@ const MESSAGES_CONFLIT: Record<string, string> = {
     'Cette étape n’est pas accessible depuis l’état actuel.',
   state_target_not_allowed:
     'Cette étape ne peut pas être demandée depuis Dally Ops.',
+  // Le retrait d'une preuve photographique. L'ajout, lui, est multipart et
+  // porte ses propres messages : il n'emprunte pas ce squelette.
+  photo_already_deleted: 'Cette photo a déjà été retirée.',
+  photo_delete_not_allowed:
+    'Vous ne pouvez pas retirer cette photo. Demandez à un responsable.',
   default: 'Cette opération n’est plus possible.',
 };

@@ -48,6 +48,17 @@ const PREFIXE_OPS = '/api/v1/ops/';
  * le `?` restent exclus : ni remontée de répertoire, ni chaîne de requête
  * glissée dans un segment.
  */
+/**
+ * Les deux seuls noms de champ qu'un envoi multipart peut porter.
+ *
+ * Un `string` libre laisserait une route poser le champ d'une autre, et le
+ * contrôleur Odoo qui l'attend ne le trouverait pas — ou pire, le trouverait
+ * là où il ne devrait pas être. Deux valeurs, décidées ici : le justificatif
+ * de caisse et la preuve photographique.
+ */
+export const CHAMPS_FICHIER = ['receipt', 'photo'] as const;
+export type NomChampFichier = (typeof CHAMPS_FICHIER)[number];
+
 const RESSOURCE_OPS =
   /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*(?:\/[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)*$/;
 
@@ -126,7 +137,7 @@ function sessionIdSur(sessionId: string): string {
 
 interface OptionsAppel {
   readonly chemin: string;
-  readonly methode: 'GET' | 'POST' | 'PUT';
+  readonly methode: 'GET' | 'POST' | 'PUT' | 'DELETE';
   readonly corps?: unknown;
   /**
    * Un envoi de fichier, quand il y en a un.
@@ -139,6 +150,15 @@ interface OptionsAppel {
   /** Session de l'opérateur, quand il y en a une. */
   readonly sessionId?: string;
   readonly correlationId: string;
+  /**
+   * Contrôleur d'annulation fourni par l'appelant.
+   *
+   * Le minuteur interne s'arrête au retour de `fetch`, donc dès les en-têtes.
+   * Cela suffit pour du JSON, qui est lu dans la foulée ; pas pour une image
+   * relayée en flux, dont le corps se consomme bien après. L'appelant fournit
+   * alors son propre contrôleur et décide lui-même quand l'éteindre.
+   */
+  readonly minuteur?: AbortController;
 }
 
 /**
@@ -161,8 +181,11 @@ async function appel(options: OptionsAppel): Promise<Response> {
     enTetes.Cookie = `session_id=${sessionIdSur(sessionId)}`;
   }
 
-  const minuteur = new AbortController();
-  const echeance = setTimeout(() => minuteur.abort(), env.ODOO_TIMEOUT_MS);
+  const minuteur = options.minuteur ?? new AbortController();
+  // Un minuteur fourni appartient à l'appelant : on ne l'éteint pas ici.
+  const echeance = options.minuteur
+    ? null
+    : setTimeout(() => minuteur.abort(), env.ODOO_TIMEOUT_MS);
   const depart = Date.now();
 
   const init: RequestInit = {
@@ -195,7 +218,7 @@ async function appel(options: OptionsAppel): Promise<Response> {
     });
     throw new OpsGatewayError('unavailable', 'Odoo injoignable');
   } finally {
-    clearTimeout(echeance);
+    if (echeance) clearTimeout(echeance);
   }
 }
 
@@ -481,15 +504,20 @@ export async function opsPostFichier<T>(
   champs: Readonly<Record<string, string>>,
   sessionId: string,
   correlationId: string,
+  nomChamp: NomChampFichier = 'receipt',
 ): Promise<T> {
   if (!RESSOURCE_OPS.test(ressource)) {
     throw new OpsGatewayError('invalid_path', `ressource non autorisée : ${ressource}`);
   }
 
+  if (!CHAMPS_FICHIER.includes(nomChamp)) {
+    throw new OpsGatewayError('invalid_path', `champ de fichier non autorisé : ${nomChamp}`);
+  }
+
   const formulaire = new FormData();
   for (const [cle, valeur] of Object.entries(champs)) formulaire.append(cle, valeur);
   formulaire.append(
-    'receipt',
+    nomChamp,
     new File([fichier.contenu], fichier.nom, { type: fichier.type }),
   );
 
@@ -501,6 +529,182 @@ export async function opsPostFichier<T>(
     correlationId,
   });
   return lireReponse<T>(reponse);
+}
+
+/**
+ * Retire une ressource Ops.
+ *
+ * Le corps JSON porte l'identifiant du geste : un retrait se rejoue comme une
+ * écriture, et le serveur doit pouvoir reconnaître la reprise plutôt que de
+ * refuser une photo déjà retirée.
+ */
+export async function opsDelete<T>(
+  ressource: string,
+  corps: unknown,
+  sessionId: string,
+  correlationId: string,
+): Promise<T> {
+  if (!RESSOURCE_OPS.test(ressource)) {
+    throw new OpsGatewayError('invalid_path', `ressource non autorisée : ${ressource}`);
+  }
+
+  const reponse = await appel({
+    chemin: `${PREFIXE_OPS}${ressource}`,
+    methode: 'DELETE',
+    corps,
+    sessionId,
+    correlationId,
+  });
+  return lireReponse<T>(reponse);
+}
+
+/**
+ * Le corps d'une réponse, sous surveillance.
+ *
+ * ## Pourquoi une pompe plutôt qu'un `pipeThrough`
+ *
+ * La lecture est tirée par l'aval : un chunk n'est demandé à Odoo que lorsque
+ * le navigateur en réclame un. La contre-pression est donc préservée et la
+ * mémoire reste celle d'un chunk, quelle que soit la taille de l'image.
+ *
+ * ## Pourquoi le minuteur vit ici
+ *
+ * Le minuteur du transport s'arrête aux en-têtes. Un serveur qui répond
+ * `200 OK` puis n'envoie plus rien tiendrait la connexion indéfiniment. La
+ * borne couvre donc aussi la consommation du corps, et son expiration annule
+ * réellement la requête amont — elle ne se contente pas de rendre la main.
+ */
+function corpsSurveille(
+  source: ReadableStream<Uint8Array>,
+  arreter: () => void,
+  controleur: AbortController,
+): ReadableStream<Uint8Array> {
+  const lecteur = source.getReader();
+
+  /**
+   * Un seul écouteur d'abandon pour toute la vie du flux.
+   *
+   * L'expiration doit interrompre la lecture, pas seulement le `fetch` : une
+   * source qui n'honore pas le signal — ou qui ne renvoie plus rien — laisserait
+   * la promesse de lecture pendante pour toujours.
+   *
+   * Mais en poser un par `pull()` en accumulerait un par morceau : mille
+   * morceaux, mille écouteurs retenus jusqu'à la fin du flux. On en enregistre
+   * donc **un**, et chaque lecture ne fait que déposer sa fonction de rejet.
+   */
+  let rejeterLecture: ((raison: unknown) => void) | null = null;
+  const surAbandon = () => {
+    rejeterLecture?.(new OpsGatewayError('unavailable', 'lecture interrompue'));
+  };
+  controleur.signal.addEventListener('abort', surAbandon, { once: true });
+
+  /** Éteint le minuteur et retire l'écouteur. Idempotent. */
+  const nettoyer = () => {
+    controleur.signal.removeEventListener('abort', surAbandon);
+    rejeterLecture = null;
+    arreter();
+  };
+
+  return new ReadableStream<Uint8Array>({
+    async pull(sortie) {
+      try {
+        const abandon = new Promise<never>((_resoudre, rejeter) => {
+          if (controleur.signal.aborted) {
+            rejeter(new OpsGatewayError('unavailable', 'lecture interrompue'));
+            return;
+          }
+          rejeterLecture = rejeter;
+        });
+        const { done, value } = await Promise.race([lecteur.read(), abandon]);
+        // La course est finie : la fonction de rejet n'a plus de course à
+        // perdre, et ne doit pas survivre au morceau qui l'a posée.
+        rejeterLecture = null;
+        if (done) {
+          nettoyer();
+          sortie.close();
+          return;
+        }
+        sortie.enqueue(value);
+      } catch (erreur) {
+        nettoyer();
+        controleur.abort();
+        await lecteur.cancel(erreur).catch(() => undefined);
+        sortie.error(erreur);
+      }
+    },
+    cancel(raison) {
+      nettoyer();
+      controleur.abort();
+      return lecteur.cancel(raison);
+    },
+  });
+}
+
+/**
+ * Relaie un binaire Ops sans jamais le tenir en mémoire.
+ *
+ * Distinct d'`opsGetDocument`, qui reste réservé au reçu PDF et n'a pas à
+ * changer : celui-ci ne connaît pas le type attendu à l'avance et rend un flux
+ * plutôt qu'un tampon. Les fusionner aurait obligé le reçu à devenir
+ * streamable pour rien, et cette route à accepter le PDF pour rien.
+ */
+export async function opsGetBinaire(
+  ressource: string,
+  sessionId: string,
+  correlationId: string,
+  typesAcceptes: readonly string[],
+): Promise<{ readonly corps: ReadableStream<Uint8Array>; readonly type: string }> {
+  if (!RESSOURCE_OPS.test(ressource)) {
+    throw new OpsGatewayError('invalid_path', `ressource non autorisée : ${ressource}`);
+  }
+
+  const controleur = new AbortController();
+  let echeance: ReturnType<typeof setTimeout> | null = setTimeout(
+    () => controleur.abort(), opsEnv().ODOO_TIMEOUT_MS);
+  const arreter = () => {
+    if (echeance !== null) {
+      clearTimeout(echeance);
+      echeance = null;
+    }
+  };
+
+  try {
+    const reponse = await appel({
+      chemin: `${PREFIXE_OPS}${ressource}`,
+      methode: 'GET',
+      sessionId,
+      correlationId,
+      minuteur: controleur,
+    });
+
+    if (reponse.status === 403) throw new OpsGatewayError('forbidden');
+    // Une redirection vers /web/login est un refus, pas une page à suivre.
+    if (reponse.status >= 300 && reponse.status < 400) {
+      throw new OpsGatewayError('forbidden');
+    }
+    if (reponse.status === 404) {
+      const charge = (await reponse.json().catch(() => null)) as
+        | { error?: { code?: string } }
+        | null;
+      throw new OpsGatewayError('not_found', 'introuvable', charge?.error?.code);
+    }
+    if (!reponse.ok) throw new OpsGatewayError('unavailable', `statut ${reponse.status}`);
+
+    // Odoo répond en JSON quand il refuse. Servi tel quel sous l'étiquette
+    // d'une image, un refus donnerait au navigateur un fichier illisible au
+    // lieu d'un message.
+    const type = (reponse.headers.get('content-type') ?? '').split(';')[0]?.trim() ?? '';
+    if (!typesAcceptes.includes(type)) {
+      throw new OpsGatewayError('unavailable', 'contenu inattendu');
+    }
+    if (!reponse.body) throw new OpsGatewayError('unavailable', 'corps absent');
+
+    return { corps: corpsSurveille(reponse.body, arreter, controleur), type };
+  } catch (erreur) {
+    arreter();
+    controleur.abort();
+    throw erreur;
+  }
 }
 
 /** L'identité de l'opérateur connecté. */

@@ -289,7 +289,7 @@ class TestOpsIdentity(HttpCase):
             set(capacites),
             {"intake_create", "intake_search", "intake_state_advance",
              "payment_create", "expense_create", "transfer_create",
-             "appointment_manage", "supervise"})
+             "appointment_manage", "photo_manage", "supervise"})
         self.assertTrue(capacites["intake_create"])
         self.assertTrue(capacites["intake_search"])
         self.assertTrue(capacites["intake_state_advance"])
@@ -297,6 +297,7 @@ class TestOpsIdentity(HttpCase):
         self.assertTrue(capacites["expense_create"])
         self.assertTrue(capacites["transfer_create"])
         self.assertTrue(capacites["appointment_manage"])
+        self.assertTrue(capacites["photo_manage"])
         # La supervision, elle, ne dépend pas d'un écran mais du rôle : un
         # logisticien ne la reçoit jamais, quel que soit le nombre d'écrans
         # ouverts.

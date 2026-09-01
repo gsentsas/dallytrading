@@ -43,6 +43,7 @@ CAPACITES = (
     "expense_create",
     "transfer_create",
     "appointment_manage",
+    "photo_manage",
     "supervise",
 )
 
@@ -153,6 +154,7 @@ class ResUsers(models.Model):
         capacites["expense_create"] = True
         capacites["transfer_create"] = True
         capacites["appointment_manage"] = True
+        capacites["photo_manage"] = True
         if role == "supervisor":
             capacites["supervise"] = True
         return capacites

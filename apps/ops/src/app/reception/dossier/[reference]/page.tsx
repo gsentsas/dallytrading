@@ -10,6 +10,7 @@ import { newCorrelationId } from '@/lib/logger';
 import { ActivityTimeline } from '@/features/activity/ActivityTimeline';
 import { DossierArticles } from '@/features/reception/DossierArticles';
 import { EtatDossier } from '@/features/reception/EtatDossier';
+import { PhotosDossier } from '@/features/reception/PhotosDossier';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,6 +86,14 @@ export default async function PageDossier({
         familles={familles}
         canaux={canaux}
         collecteur={identite.cash_actor ?? ''}
+      />
+
+      {/* Les preuves de terrain : après les articles qu'elles documentent,
+          avant le journal qui les consigne. */}
+      <PhotosDossier
+        reference={dossier.reference}
+        etat={dossier.state}
+        peutGerer={identite.capabilities.photo_manage === true}
       />
 
       <section aria-labelledby="activite-dossier-titre">

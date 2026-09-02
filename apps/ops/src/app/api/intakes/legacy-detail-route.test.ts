@@ -77,6 +77,61 @@ describe('les gardes d’entrée', () => {
   });
 });
 
+describe('R3 · une référence malformée vaut 400, jamais 500 ni 503', () => {
+  /**
+   * App Router livre le segment **déjà décodé** : ces tests passent donc la
+   * valeur telle que Next la remettrait, sans fabriquer un encodage qui
+   * n'existe pas en production. Mesuré avant correction — `A%252DB` arrivait
+   * en `A%2DB`, la route redécodait, et `A-B` atteignait Odoo.
+   */
+  const MALFORMEES = [
+    ['vide', ''],
+    ['espaces seuls', '   '],
+    ['trop longue', 'A'.repeat(121)],
+    ['caractère interdit', 'A B'],
+    ['séquence % invalide', 'A%ZZ'],
+    ['pourcent résiduel', 'A%2DB'],
+    ['barre oblique', 'A/B'],
+    ['remontée de chemin', '../autre'],
+    ['requête greffée', 'A001?x=1'],
+  ] as const;
+
+  for (const [nom, mauvaise] of MALFORMEES) {
+    it(`refuse en 400 : ${nom}`, async () => {
+      const reponse = await routeModule.GET(
+        new Request('https://ops.test/api/intakes/x/legacy-detail'),
+        { params: Promise.resolve({ reference: mauvaise }) },
+      ) as unknown as Response;
+      expect(reponse.status, nom).toBe(400);
+      expect((await reponse.json()).error).toBe('Référence de dossier invalide.');
+      // Le refus ne coûte pas un aller-retour à Odoo.
+      expect(vi.mocked(fetchLegacyIntake), nom).not.toHaveBeenCalled();
+    });
+  }
+
+  it('ne redécode pas ce que Next a déjà décodé', () => {
+    const SOURCE = readFileSync(fileURLToPath(new URL(
+      '../../../app/api/intakes/[reference]/legacy-detail/route.ts',
+      import.meta.url)), 'utf8');
+    const code = SOURCE.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(code).not.toContain('decodeURIComponent');
+    expect(code).toContain('normaliserReference');
+  });
+
+  it('laisse passer les formes réelles, souligné compris', async () => {
+    for (const bonne of ['AIR-DSS-CDG-2026-002-A015', 'SN-DK_FR-PA_004',
+                         'LEGACY-E2E-001']) {
+      vi.mocked(fetchLegacyIntake).mockClear();
+      const reponse = await routeModule.GET(
+        new Request('https://ops.test/api/intakes/x/legacy-detail'),
+        { params: Promise.resolve({ reference: bonne }) },
+      ) as unknown as Response;
+      expect(reponse.status, bonne).toBe(200);
+      expect(vi.mocked(fetchLegacyIntake).mock.calls[0]?.[0], bonne).toBe(bonne);
+    }
+  });
+});
+
 describe('les refus d’Odoo sont traduits', () => {
   it('B03/B04 · un dossier inconnu et un dossier natif répondent pareil', async () => {
     // Le service legacy refuse un dossier natif avec le même code : distinguer

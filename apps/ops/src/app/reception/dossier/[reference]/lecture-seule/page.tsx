@@ -1,10 +1,9 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { currentIdentity, readOpsSession } from '@/lib/auth/auth';
-import { fetchLegacyIntake } from '@/lib/ops/legacy-intake';
+import { currentIdentity } from '@/lib/auth/auth';
 import { newCorrelationId } from '@/lib/logger';
-import { FicheLectureSeule } from '@/features/reception/FicheLectureSeule';
+import { ChargeurFicheLectureSeule } from '@/features/reception/ChargeurFicheLectureSeule';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,9 +21,12 @@ export const dynamic = 'force-dynamic';
  * Aucun composant de mutation. Ils n'existent pas dans l'arbre rendu : il n'y
  * a donc rien à désactiver, et rien qui puisse être réactivé par mégarde.
  *
- * La capacité vérifiée est `intake_create`, la même que la fiche native :
- * c'est le droit d'entrer dans le parcours de réception, pas celui d'écrire
- * sur ce dossier-ci — sur lequel personne n'écrit.
+ * ## Ce que cette page ne fait plus
+ *
+ * Elle n'appelle plus Odoo. Le rendu serveur court-circuitait le BFF : le
+ * parcours réel n'était donc pas débité, et deux chemins de lecture
+ * coexistaient. La page ne porte plus que l'identité, la capacité et la
+ * référence ; la lecture passe par `/api/intakes/<ref>/legacy-detail`.
  */
 export default async function PageDossierLectureSeule({
   params,
@@ -34,24 +36,18 @@ export default async function PageDossierLectureSeule({
   const correlationId = newCorrelationId();
   const identite = await currentIdentity(correlationId).catch(() => null);
   if (!identite) redirect('/connexion');
-  if (identite.capabilities.intake_create !== true) redirect('/');
-
-  const session = await readOpsSession();
-  if (!session) redirect('/connexion');
+  // La même capacité que `/recherche`, d'où l'on vient : cette fiche en est
+  // le prolongement en lecture. `intake_create` serait un autre droit — celui
+  // d'enregistrer une réception — et rien ici n'écrit.
+  if (identite.capabilities.intake_search !== true) redirect('/');
 
   const { reference } = await params;
-  const fiche = await fetchLegacyIntake(
-    decodeURIComponent(reference), session.odooSessionId, correlationId,
-  ).catch(() => null);
-  // Un dossier natif, une référence inconnue et une panne se ressemblent ici :
-  // dans les trois cas la recherche est le bon point de retour.
-  if (!fiche) redirect('/recherche');
 
   return (
     <main>
       <Link className="retour" href="/recherche">← Recherche</Link>
-      <h1>DOSSIER {fiche.local_reference || fiche.reference}</h1>
-      <FicheLectureSeule fiche={fiche} />
+      <h1>DOSSIER {reference}</h1>
+      <ChargeurFicheLectureSeule reference={reference} />
     </main>
   );
 }

@@ -8,9 +8,13 @@ import { expect, test, type Page } from '@playwright/test';
  * ouvre un dossier que Dally Ops n'a pas créé, et que l'écran obtenu ne
  * propose **aucune** action.
  *
- * Le contrôle décisif est le dernier : aucune requête d'écriture ne part
- * pendant toute la visite. Un bouton absent se vérifie à l'œil ; une requête
- * absente se vérifie au réseau.
+ * Deux contrôles décisifs, tous deux au réseau plutôt qu'à l'œil :
+ *
+ * 1. l'ouverture consomme bien `/api/intakes/<ref>/legacy-detail`. Sans cette
+ *    mesure, le parcours réel pourrait court-circuiter le BFF — et son
+ *    plafond de consultation ne s'appliquerait à personne. C'est exactement
+ *    ce qui se produisait avant ce durcissement.
+ * 2. aucune requête d'écriture ne part pendant toute la visite.
  */
 
 const OPERATEUR = {
@@ -34,9 +38,14 @@ async function ouvrirLAccueil(page: Page) {
 test('un dossier repris se consulte, et rien ne s’y écrit', async ({ page }) => {
   // Toute requête d'écriture partant de cette page est un échec du parcours.
   const ecritures: string[] = [];
+  const lecturesBff: string[] = [];
   page.on('request', (requete) => {
+    const chemin = new URL(requete.url()).pathname;
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(requete.method())) {
-      ecritures.push(`${requete.method()} ${new URL(requete.url()).pathname}`);
+      ecritures.push(`${requete.method()} ${chemin}`);
+    }
+    if (requete.method() === 'GET' && chemin.endsWith('/legacy-detail')) {
+      lecturesBff.push(chemin);
     }
   });
 
@@ -54,6 +63,7 @@ test('un dossier repris se consulte, et rien ne s’y écrit', async ({ page }) 
   // Les écritures faites pendant la connexion et la recherche ne concernent
   // pas la fiche : on repart d'une ardoise propre avant de l'ouvrir.
   ecritures.length = 0;
+  lecturesBff.length = 0;
 
   await carte.click();
   await expect(page).toHaveURL(new RegExp(`/lecture-seule$`));
@@ -63,6 +73,12 @@ test('un dossier repris se consulte, et rien ne s’y écrit', async ({ page }) 
     .toHaveText('DOSSIER EN LECTURE SEULE');
   await expect(page.getByTestId('ls-reference')).toHaveText(REFERENCE);
   await expect(page.getByTestId('ls-client-nom')).not.toBeEmpty();
+
+  // Le premier contrôle décisif : la fiche vient bien du BFF, et de lui seul.
+  expect(lecturesBff.length,
+         'l’ouverture doit consommer /legacy-detail').toBeGreaterThan(0);
+  expect(lecturesBff.every((chemin) => chemin
+    === `/api/intakes/${encodeURIComponent(REFERENCE)}/legacy-detail`)).toBe(true);
 
   // Aucune action : ni bouton, ni champ, ni formulaire.
   await expect(page.locator('main button')).toHaveCount(0);
@@ -76,6 +92,6 @@ test('un dossier repris se consulte, et rien ne s’y écrit', async ({ page }) 
   await page.getByRole('link', { name: '← Recherche' }).click();
   await expect(page).toHaveURL(/\/recherche$/);
 
-  // Le contrôle décisif : la visite n'a produit aucune écriture.
+  // Le second contrôle décisif : la visite n'a produit aucune écriture.
   expect(ecritures, 'aucune requête d’écriture ne doit partir').toEqual([]);
 });

@@ -86,11 +86,40 @@ export type FicheLegacy = z.infer<typeof ficheLegacy>;
 export type LigneLegacy = z.infer<typeof ligneLegacy>;
 export type PaiementLegacy = z.infer<typeof paiementLegacy>;
 
+export const LONGUEUR_REFERENCE_MAXIMALE = 120;
+
+/**
+ * La forme d'une référence globale, mesurée sur les données réelles.
+ *
+ * Les 52 références de production n'emploient que des lettres, des chiffres,
+ * le tiret et le souligné — cinq d'entre elles portent un souligné, par
+ * exemple `SN-DK_FR-PA_004`. Une classe qui l'oublierait rendrait ces
+ * dossiers-là inatteignables sans qu'aucun test ne s'en aperçoive.
+ *
+ * La barre verticale n'y figure pas : elle n'apparaît que dans les clés de
+ * ligne des colis, qui ne quittent jamais le serveur.
+ */
+const FORME_REFERENCE = /^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*$/;
+
+/**
+ * La référence, ou rien.
+ *
+ * Une seule fonction pour la route et pour l'appel, afin qu'un refus ait
+ * toujours le même sens. Elle ne décode pas : le routeur d'App Router livre
+ * déjà le segment décodé, et redécoder transformerait `A%252DB` en `A-B` —
+ * mesuré, et corrigé ici.
+ */
+export function normaliserReference(brute: unknown): string | null {
+  if (typeof brute !== 'string') return null;
+  const reference = brute.trim();
+  if (!reference || reference.length > LONGUEUR_REFERENCE_MAXIMALE) return null;
+  return FORME_REFERENCE.test(reference) ? reference : null;
+}
+
 function ressource(reference: string): string {
-  if (!/^[A-Za-z0-9]+(?:[-|][A-Za-z0-9]+)*$/.test(reference)) {
-    throw new Error('Référence de dossier invalide.');
-  }
-  return `intakes/${reference}/legacy-detail`;
+  const propre = normaliserReference(reference);
+  if (propre === null) throw new Error('Référence de dossier invalide.');
+  return `intakes/${propre}/legacy-detail`;
 }
 
 /** Lit la fiche. Aucune écriture n'existe sur ce chemin. */

@@ -24,7 +24,7 @@ import { NextResponse } from 'next/server';
 import { readOpsSession } from '@/lib/auth/auth';
 import { OpsGatewayError } from '@/lib/auth/odoo-ops';
 import { logger, newCorrelationId } from '@/lib/logger';
-import { fetchLegacyIntake } from '@/lib/ops/legacy-intake';
+import { fetchLegacyIntake, normaliserReference } from '@/lib/ops/legacy-intake';
 import {
   OPS_LEGACY_DETAIL_IP,
   OPS_LEGACY_DETAIL_SESSION,
@@ -36,8 +36,6 @@ import {
 } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
-
-const LONGUEUR_MAXIMALE = 120;
 
 function reponse(corps: unknown, status: number, retryAfterSeconds = 0): NextResponse {
   const sortie = NextResponse.json(corps, {
@@ -59,9 +57,13 @@ export async function GET(
     return reponse({ success: false, error: 'Filtre invalide.' }, 400);
   }
 
+  // Pas de `decodeURIComponent` ici : App Router livre le segment déjà
+  // décodé. Le redécoder faisait passer `A%252DB` pour `A-B` — donc une
+  // référence forgée atteignait Odoo — et une séquence `%` invalide levait
+  // un `URIError` hors du filet, rendu en 500. Les deux ont été mesurés.
   const { reference: brute } = await contexte.params;
-  const reference = decodeURIComponent(brute ?? '');
-  if (!reference || reference.length > LONGUEUR_MAXIMALE) {
+  const reference = normaliserReference(brute);
+  if (reference === null) {
     return reponse({ success: false, error: 'Référence de dossier invalide.' }, 400);
   }
 

@@ -124,14 +124,17 @@ describe('F09-F10 · aucune mutation n’existe dans cet écran', () => {
   });
 });
 
-describe('F12 · la page se replie proprement', () => {
-  it('renvoie vers la recherche quand la fiche ne se lit pas', () => {
-    expect(PAGE).toContain("redirect('/recherche')");
+describe('F12 · la page reste mince', () => {
+  it('ne porte que l’identité, la capacité et la référence', () => {
+    // La lecture appartient au chargeur client, qui passe par le BFF ; les
+    // issues d'échec se vérifient dans ChargeurFicheLectureSeule.test.tsx.
     expect(PAGE).toContain("redirect('/connexion')");
+    expect(PAGE).toContain("redirect('/')");
+    expect(PAGE).toContain('ChargeurFicheLectureSeule');
   });
 
-  it('lit la fiche par la route dédiée', () => {
-    expect(PAGE).toContain('fetchLegacyIntake');
+  it('n’ouvre aucun second chemin de lecture', () => {
+    expect(PAGE).not.toContain('fetchLegacyIntake');
     expect(PAGE).not.toContain('fetchIntake(');
   });
 });

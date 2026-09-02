@@ -19,6 +19,14 @@ import { describe, expect, it } from 'vitest';
  * pixels, pas sur les intentions : les bords doivent être blancs, donc le
  * dessin est entier ; et pour la variante `maskable`, tout ce qui sort du
  * disque de sûreté d'Android doit être blanc, donc rien ne sera découpé.
+ *
+ * **Une exception, et une seule : les favicons 16 et 32.** À ces tailles, le
+ * logo complet ne se lit plus — le wordmark et la signature se réduisent à une
+ * bavure grise sous un emblème minuscule. Ces deux fichiers portent donc
+ * l'**emblème seul**, découpé dans l'œuvre officielle sans que ses couleurs ni
+ * ses proportions ne changent. Ce n'est ni un monogramme, ni un pictogramme
+ * inventé : c'est la même œuvre, cadrée plus serré. Tous les autres supports —
+ * Apple, PWA, maskable, en-tête — gardent le logo entier.
  */
 
 const racine = (chemin: string) =>
@@ -169,15 +177,22 @@ describe('le logo officiel, jamais reconstruit', () => {
   });
 });
 
+/** Les supports qui portent le logo entier : emblème, wordmark et signature. */
+const LOGO_COMPLET = [
+  ['public/icones/dallytrading-ops-192.png', 192],
+  ['public/icones/dallytrading-ops-512.png', 512],
+  ['public/icones/dallytrading-ops-apple-180.png', 180],
+  ['public/icones/dallytrading-ops-maskable-512.png', 512],
+] as const;
+
+/** L'exception : à 16 et 32 px, l'emblème seul. */
+const FAVICONS = [
+  ['public/icones/dallytrading-ops-favicon-32.png', 32],
+  ['public/icones/dallytrading-ops-favicon-16.png', 16],
+] as const;
+
 describe('les icônes dérivent du logo complet', () => {
-  const carrees = [
-    ['public/icones/dallytrading-ops-192.png', 192],
-    ['public/icones/dallytrading-ops-512.png', 512],
-    ['public/icones/dallytrading-ops-apple-180.png', 180],
-    ['public/icones/dallytrading-ops-maskable-512.png', 512],
-    ['public/icones/dallytrading-ops-favicon-32.png', 32],
-    ['public/icones/dallytrading-ops-favicon-16.png', 16],
-  ] as const;
+  const carrees = [...LOGO_COMPLET, ...FAVICONS] as const;
 
   it.each(carrees)('%s est un PNG carré de la taille annoncée', (chemin, cote) => {
     const image = lirePng(chemin);
@@ -235,6 +250,50 @@ describe('les icônes dérivent du logo complet', () => {
       }
     }
     expect(dehors, 'pixels de logo hors du disque de sûreté').toBe(0);
+  });
+});
+
+describe('les favicons portent l’emblème seul', () => {
+  /**
+   * L'exception assumée du §marque : à 16 et 32 px, le logo complet devient
+   * illisible — mesuré sur l'ancienne version, le marine ne couvrait que 7
+   * pixels sur 256 à 16 px, le dessin se réduisant à une bavure. L'emblème
+   * seul, découpé dans la même œuvre, en couvre 28.
+   *
+   * Le seuil porte donc sur la présence réelle des deux couleurs de la marque,
+   * en proportion de la surface. Il est franchi largement par l'emblème,
+   * échoué par une plaque blanche — et échoué aussi par l'ancien favicon au
+   * logo complet, ce qui empêche un retour en arrière silencieux.
+   */
+  const PART_MINIMALE = 0.06;
+
+  it.each(FAVICONS)('%s porte le marine et le vert de la marque', (chemin, cote) => {
+    const image = lirePng(chemin);
+    let marine = 0;
+    let vert = 0;
+    for (let y = 0; y < cote; y += 1) {
+      for (let x = 0; x < cote; x += 1) {
+        const [r, v, b] = image.pixel(x, y);
+        if (b > r && b > v && b > 40 && r < 90) marine += 1;
+        if (v > r && v > b && v > 90) vert += 1;
+      }
+    }
+    const minimum = cote * cote * PART_MINIMALE;
+    expect(marine, `${chemin} : marine`).toBeGreaterThanOrEqual(minimum);
+    expect(vert, `${chemin} : vert`).toBeGreaterThanOrEqual(minimum);
+  });
+
+  it.each(FAVICONS)('%s n’est pas une plaque presque vide', (chemin, cote) => {
+    // Un favicon qui aurait perdu son dessin — fichier blanchi, export raté —
+    // passerait encore le contrôle des bords. Celui-ci mesure la surface
+    // réellement encrée : l'emblème en couvre près de la moitié.
+    const image = lirePng(chemin);
+    let encre = 0;
+    for (let y = 0; y < cote; y += 1) {
+      for (let x = 0; x < cote; x += 1) if (!estBlanc(image.pixel(x, y))) encre += 1;
+    }
+    expect(encre, `${chemin} : pixels encrés`)
+      .toBeGreaterThanOrEqual(cote * cote * 0.25);
   });
 });
 

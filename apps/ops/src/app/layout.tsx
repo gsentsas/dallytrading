@@ -9,9 +9,11 @@ export const metadata: Metadata = {
   title: 'Dally Ops',
   description: 'Application terrain des opérations DallyTrading.',
   applicationName: 'Dally Ops',
-  // Toutes ces icônes dérivent du logo complet officiel. L'onglet et l'écran
-  // d'accueil montrent donc la même marque que l'en-tête, jamais un
-  // monogramme ni un pictogramme alternatif.
+  // Toutes ces icônes viennent de l'œuvre officielle, jamais d'un monogramme
+  // ni d'un pictogramme alternatif. Les tailles d'écran d'accueil portent le
+  // logo complet ; les deux favicons portent l'emblème seul, parce qu'à 16 et
+  // 32 px le wordmark n'est plus qu'une bavure grise — même œuvre, cadrage
+  // plus serré.
   icons: {
     icon: [
       { url: '/icones/dallytrading-ops-favicon-16.png', type: 'image/png', sizes: '16x16' },

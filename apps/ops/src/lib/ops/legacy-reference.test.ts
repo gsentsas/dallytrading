@@ -25,8 +25,22 @@ describe('les références réelles passent', () => {
     expect(normaliserReference('SN-DK_FR-PA_004')).toBe('SN-DK_FR-PA_004');
   });
 
-  it('tolère les espaces de bordure d’une saisie', () => {
-    expect(normaliserReference('  A012  ')).toBe('A012');
+  it('I2 · refuse les espaces de bordure, sans les rogner', () => {
+    // Ceci est une identité d'URL. Rogner ferait pointer `%20A012%20` vers le
+    // dossier `A012` : deux chemins pour une ressource, dont un que rien n'a
+    // publié. La recherche, elle, peut rogner une saisie — ce n'est pas la
+    // même chose.
+    for (const bordee of [' A012', 'A012 ', '  A012  ', '\tA012', 'A012\n',
+                          '\nA012', 'A012\t']) {
+      expect(normaliserReference(bordee), JSON.stringify(bordee)).toBeNull();
+    }
+  });
+
+  it('I2 · les formes réelles restent valides', () => {
+    for (const bonne of ['A012', 'AIR-DSS-CDG-2026-002-A015',
+                         'SN-DK_FR-PA_004', 'LEGACY-E2E-001']) {
+      expect(normaliserReference(bonne), bonne).toBe(bonne);
+    }
   });
 });
 

@@ -43,6 +43,56 @@ export function issueDuStatut(statut: number): IssueLecture {
   return 'indisponible';
 }
 
+import type { FicheLegacy } from '@/lib/ops/legacy-intake';
+
+/**
+ * L'état d'une lecture, **et le dossier auquel il appartient**.
+ *
+ * La référence est portée dans l'état, pas seulement dans la prop : sans
+ * elle, une fiche déjà chargée survit au changement de dossier, et l'écran
+ * montre les données d'un client sous l'adresse d'un autre. Le même piège que
+ * `A001` ailleurs dans ce chantier, à un autre étage.
+ */
+export type EtatLecture =
+  | { readonly reference: string; readonly phase: 'chargement' }
+  | { readonly reference: string; readonly phase: 'fiche'; readonly fiche: FicheLegacy }
+  | { readonly reference: string; readonly phase: 'issue'; readonly issue: IssueLecture };
+
+export function chargementDe(reference: string): EtatLecture {
+  return { reference, phase: 'chargement' };
+}
+
+/**
+ * L'état qui s'applique vraiment au dossier demandé.
+ *
+ * Un état qui parle d'un autre dossier ne vaut rien ici : on repart d'un
+ * chargement plutôt que de l'afficher. La fiche obsolète devient ainsi
+ * impossible à rendre, au lieu d'être seulement improbable.
+ */
+export function etatApplicable(etat: EtatLecture, reference: string): EtatLecture {
+  return etat.reference === reference ? etat : chargementDe(reference);
+}
+
+/**
+ * Lit, puis ne pose l'état que si la lecture vaut encore.
+ *
+ * `obsolete()` est consulté **après** l'attente : une réponse lente pour le
+ * dossier A ne doit jamais réécrire ce que le dossier B vient d'afficher.
+ * Rien n'est posé dans ce cas — ni fiche, ni issue.
+ */
+export async function chargerFiche(
+  reference: string,
+  appeler: () => Promise<{ ok: boolean; statut: number; corps: unknown }>,
+  poser: (etat: EtatLecture) => void,
+  obsolete: () => boolean,
+): Promise<void> {
+  const resultat = await lireFicheLegacy(appeler);
+  if (obsolete()) return;
+  poser(resultat.issue === 'ok'
+    ? { reference, phase: 'fiche', fiche: resultat.fiche as FicheLegacy }
+    : { reference, phase: 'issue', issue: resultat.issue });
+}
+
 export type ResultatLecture =
   | { readonly issue: 'ok'; readonly fiche: unknown }
   | { readonly issue: IssueLecture };

@@ -49,6 +49,21 @@ describe('R1 · le parcours réel passe par le BFF', () => {
     expect(html).toContain('data-testid="lecture-chargement"');
     expect(html).not.toContain('DOSSIER EN LECTURE SEULE');
   });
+
+  it('CR2 · abandonne la lecture précédente au nettoyage', () => {
+    // Sans annulation, une réponse lente pour A revenait après celle de B.
+    expect(CHARGEUR).toContain('new AbortController()');
+    expect(CHARGEUR).toContain('signal: controleur.signal');
+    expect(CHARGEUR).toContain('controleur.abort()');
+    expect(CHARGEUR).toContain('() => controleur.signal.aborted');
+    // L'effet dépend de la référence : elle change, la lecture repart.
+    expect(CHARGEUR).toContain('}, [reference]);');
+  });
+
+  it('CR2 · le rendu ne lit jamais un état d’un autre dossier', () => {
+    expect(CHARGEUR).toContain('etatApplicable(etat, reference)');
+    expect(CHARGEUR).toContain('courant.phase');
+  });
 });
 
 describe('R1 · les quatre refus restent distincts', () => {

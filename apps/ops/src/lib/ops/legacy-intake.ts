@@ -111,9 +111,13 @@ const FORME_REFERENCE = /^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*$/;
  */
 export function normaliserReference(brute: unknown): string | null {
   if (typeof brute !== 'string') return null;
-  const reference = brute.trim();
-  if (!reference || reference.length > LONGUEUR_REFERENCE_MAXIMALE) return null;
-  return FORME_REFERENCE.test(reference) ? reference : null;
+  // Aucun rognage : ceci est une **identité d'URL**, pas une saisie libre.
+  // Rogner ferait pointer `%20A012%20` vers le dossier `A012` — deux chemins
+  // pour une même ressource, dont un que rien n'a jamais publié. La recherche,
+  // elle, peut rogner ce que l'opérateur tape : ce n'est pas la même chose.
+  if (brute !== brute.trim()) return null;
+  if (!brute || brute.length > LONGUEUR_REFERENCE_MAXIMALE) return null;
+  return FORME_REFERENCE.test(brute) ? brute : null;
 }
 
 function ressource(reference: string): string {

@@ -34,7 +34,13 @@ export default async function PageDossierLectureSeule({
   params: Promise<{ reference: string }>;
 }) {
   const correlationId = newCorrelationId();
-  const identite = await currentIdentity(correlationId).catch(() => null);
+  // Pas de `.catch(() => null)` ici : `currentIdentity` rend `null` quand la
+  // session manque ou qu'Odoo la refuse, et **lève** pour tout le reste.
+  // Avaler cette levée transformait une panne du back en déconnexion, et
+  // renvoyait vers l'écran de connexion un opérateur qui n'avait rien perdu.
+  // L'erreur remonte donc, et c'est l'absence de session — elle seule — qui
+  // conduit à `/connexion`.
+  const identite = await currentIdentity(correlationId);
   if (!identite) redirect('/connexion');
   // La même capacité que `/recherche`, d'où l'on vient : cette fiche en est
   // le prolongement en lecture. `intake_create` serait un autre droit — celui

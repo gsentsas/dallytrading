@@ -363,11 +363,66 @@ class DallyFreightConsolidation(models.Model):
         self.with_context(_dally_consolidation_state_write=_CONSOLIDATION_STATE_WRITE_TOKEN).write({"state": "collecting", "loading_closed_on": False})
         return True
 
+    def _expected_shipments(self):
+        """Les dossiers attendus sur ce départ, chargés ou non.
+
+        ## Pourquoi `shipment_ids` ne suffisait pas
+
+        `shipment_ids` se calcule depuis `line_ids`. Un dossier prévu ici mais
+        dont aucun colis n'est encore chargé en était donc absent — et les
+        contrôles de départ, qui l'itéraient, ne le voyaient pas. Le dossier
+        ne partait pas, mais il ne bloquait rien non plus : le départ se
+        déclarait complet en laissant de la marchandise à quai.
+
+        L'autorité est `planned_consolidation_id`, le départ **prévu**.
+        `intake_consolidation_id` désigne la consolidation de **réception**,
+        c'est-à-dire l'espace où le dossier a reçu son `A001` : deux questions
+        différentes, que la replanification sépare pour de bon.
+
+        L'union avec les dossiers déjà chargés est délibérée : elle garantit
+        que rien de ce qui était contrôlé hier ne cesse de l'être aujourd'hui,
+        y compris les rattachements historiques sans départ prévu.
+        """
+        self.ensure_one()
+        planifies = self.env["dally.shipment"].search([
+            ("company_id", "=", self.company_id.id),
+            ("planned_consolidation_id", "=", self.id),
+        ])
+        return planifies | self.line_ids.mapped("shipment_id")
+
+    def _loaded_but_not_planned_shipments(self):
+        """Les dossiers chargés ici alors qu'ils sont prévus ailleurs.
+
+        C'est une incohérence, pas un cas limite : la marchandise est dans ce
+        départ et le plan dit un autre. On la signale au lieu de la corriger —
+        réassigner `planned_consolidation_id` en silence déciderait à la place
+        de l'exploitation.
+
+        Un dossier sans départ prévu n'entre pas ici : il ne pointe nulle
+        part, donc il ne contredit rien.
+        """
+        self.ensure_one()
+        return self.line_ids.mapped("shipment_id").filtered(
+            lambda shipment: shipment.planned_consolidation_id
+            and shipment.planned_consolidation_id != self
+        )
+
     def _departure_blockers(self):
         self.ensure_one()
         blockers = []
-        if not self.shipment_ids:
+        expected = self._expected_shipments()
+        if not expected:
             blockers.append(_("Aucun dossier n'est rattaché."))
+        for shipment in self._loaded_but_not_planned_shipments().sorted(
+            lambda rec: rec.external_reference or rec.reference
+        ):
+            blockers.append(
+                _("%(ref)s : chargé sur ce départ mais prévu sur "
+                  "%(other)s. Corrigez le départ prévu ou retirez le "
+                  "chargement.",
+                  ref=shipment.external_reference or shipment.reference,
+                  other=shipment.planned_consolidation_id.display_name)
+            )
         if not self.line_ids:
             blockers.append(_("Aucun colis n'est chargé."))
         if self.transport_mode == "air" and not self.mawb_number:
@@ -378,7 +433,7 @@ class DallyFreightConsolidation(models.Model):
             blockers.append(_("L'origine est incomplète."))
         if not self.destination_location and not self.destination_city:
             blockers.append(_("La destination est incomplète."))
-        for shipment in self.shipment_ids.sorted(lambda rec: rec.external_reference or rec.reference):
+        for shipment in expected.sorted(lambda rec: rec.external_reference or rec.reference):
             if shipment.state != "ready":
                 blockers.append(_("%(ref)s - %(client)s\nÉtat actuel : %(state)s (attendu : Prête à partir).",
                                   ref=shipment.external_reference or shipment.reference,
@@ -406,10 +461,16 @@ class DallyFreightConsolidation(models.Model):
         """
         self.ensure_one()
         blockers = []
-        for shipment in self.shipment_ids.sorted(
+        for shipment in self._expected_shipments().sorted(
             lambda rec: rec.external_reference or rec.reference
         ):
             reference = shipment.external_reference or shipment.reference
+            if not shipment.package_ids:
+                blockers.append(
+                    _("%(ref)s : aucun colis n'est enregistré sur ce "
+                      "dossier.", ref=reference)
+                )
+                continue
             for package in shipment.package_ids:
                 loaded_here = sum(
                     package.consolidation_line_ids.filtered(
@@ -632,6 +693,20 @@ class DallyFreightConsolidationLine(models.Model):
             ["consolidation-package:%s" % package_id],
         )
 
+    @api.model
+    def _mesures_chargees(self, package, quantity):
+        """Le poids et le volume d'une quantité chargée.
+
+        La formule vit ici, et nulle part ailleurs. Elle était appliquée à la
+        création par ce modèle et redite à la correction par le service Ops :
+        deux endroits pour une même règle, donc deux résultats le jour où
+        l'un des deux évolue.
+        """
+        return {
+            "weight_loaded": package.unit_weight_kg * quantity,
+            "volume_loaded": package.unit_volume_cbm * quantity,
+        }
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -644,8 +719,8 @@ class DallyFreightConsolidationLine(models.Model):
             self._check_operational_compatibility(consolidation, package)
             vals["shipment_id"] = package.shipment_id.id
             quantity = vals.get("quantity_loaded") or 1
-            vals.setdefault("weight_loaded", package.unit_weight_kg * quantity)
-            vals.setdefault("volume_loaded", package.unit_volume_cbm * quantity)
+            for champ, valeur in self._mesures_chargees(package, quantity).items():
+                vals.setdefault(champ, valeur)
             self._lock_package(self.env.cr, package.id)
         lines = super().create(vals_list)
         lines._check_loaded_quantity()
@@ -706,6 +781,12 @@ class DallyFreightConsolidationLine(models.Model):
                 _("Une ligne ne peut être supprimée que tant que la "
                   "collecte est ouverte.")
             )
+        # `create` et `write` sérialisaient déjà par colis ; `unlink` non. Un
+        # retrait concurrent d'un chargement pouvait donc s'entrelacer avec un
+        # ajout et faire lire à `_check_loaded_quantity` un état intermédiaire.
+        # Les trois verbes passent désormais par le même verrou.
+        for package_id in sorted(set(self.mapped("package_id.id"))):
+            self._lock_package(self.env.cr, package_id)
         return super().unlink()
 
     @api.constrains("package_id", "shipment_id", "quantity_loaded", "consolidation_id")

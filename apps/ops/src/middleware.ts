@@ -14,22 +14,29 @@ import { NextResponse, type NextRequest } from 'next/server';
  * route ne peut pas voir. La forme de la référence, elle, reste jugée par
  * `normaliserReference` — ici on ne vérifie que la lisibilité de l'URI.
  *
- * Le `matcher` le borne aux deux chemins de la fiche en lecture seule : un
- * middleware large deviendrait un second endroit où raisonner sur les
- * chemins, et divergerait.
+ * Le `matcher` le borne aux chemins qui portent une référence dans l'URI :
+ * la fiche en lecture seule et le chargement d'un départ. Un middleware large
+ * deviendrait un second endroit où raisonner sur les chemins, et divergerait.
  */
 export function middleware(requete: NextRequest) {
   try {
     decodeURIComponent(requete.nextUrl.pathname);
   } catch {
-    const versApi = requete.nextUrl.pathname.startsWith('/api/');
-    if (versApi) {
+    const chemin = requete.nextUrl.pathname;
+    // Le mot juste : l'opérateur qui suit un lien de chargement cherche un
+    // départ, pas un dossier. Un message faux ferait chercher au mauvais
+    // endroit.
+    const message = chemin.startsWith('/api/consolidations/')
+      || chemin.startsWith('/chargement/')
+      ? 'Référence de départ invalide.'
+      : 'Référence de dossier invalide.';
+    if (chemin.startsWith('/api/')) {
       return NextResponse.json(
-        { success: false, error: 'Référence de dossier invalide.' },
+        { success: false, error: message },
         { status: 400, headers: { 'Cache-Control': 'private, no-store, max-age=0' } },
       );
     }
-    return new NextResponse('Référence de dossier invalide.', {
+    return new NextResponse(message, {
       status: 400,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
@@ -44,5 +51,7 @@ export const config = {
   matcher: [
     '/api/intakes/:reference/legacy-detail',
     '/reception/dossier/:reference/lecture-seule',
+    '/api/consolidations/:reference/loading',
+    '/chargement/:reference',
   ],
 };

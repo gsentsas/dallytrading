@@ -12,12 +12,23 @@ import { opsGetQuery } from '@/lib/auth/odoo-ops';
  * d'activité répond alors 503. Un geste de chargement écrit `package_loaded`
  * ou `package_unloaded` ; les déclarer ici n'est donc pas une politesse, c'est
  * ce qui empêche le premier chargement d'éteindre le journal.
+ *
+ * La démonstration a eu lieu en production : quatre codes publiés depuis les
+ * étapes 2, 4 et 5 manquaient ici, et un `photo_added` existant en base
+ * suffisait à éteindre le fil pour tout le monde. La liste doit donc rester le
+ * miroir exact d'`EVENEMENTS_PUBLICS`, dans
+ * `dally_ops_mobile/models/ops_activity_service.py` ; le test de ce module
+ * compare les deux à la source, dans les deux sens.
  */
 export const activityEvent = z.enum([
   'customer_created',
   'intake_created',
   'intake_line_added',
   'intake_line_updated',
+  'intake_state_advanced',
+  'photo_added',
+  'photo_deleted',
+  'event_recorded',
   'package_loaded',
   'package_unloaded',
   'payment_recorded',

@@ -13,6 +13,10 @@ import type { MetadataRoute } from 'next';
  * déborderait ouvrirait le site marketing dans la fenêtre de l'outil de
  * travail.
  *
+ * Les icônes sont dérivées du logo DallyTrading officiel fourni par le
+ * propriétaire de la marque. La variante maskable conserve une marge sûre
+ * pour les formes d'icônes Android.
+ *
  * `orientation: portrait` parce que la saisie se fait debout, d'une main.
  */
 export default function manifest(): MetadataRoute.Manifest {
@@ -26,12 +30,27 @@ export default function manifest(): MetadataRoute.Manifest {
     display: 'standalone',
     orientation: 'portrait',
     lang: 'fr',
-    theme_color: '#0f172a',
-    background_color: '#0f172a',
+    theme_color: '#16365B',
+    background_color: '#ffffff',
     icons: [
-      { src: '/icones/ops-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/icones/ops-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: '/icones/ops-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      {
+        src: '/icones/dallytrading-ops-192.png',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icones/dallytrading-ops-512.jpg',
+        sizes: '512x512',
+        type: 'image/jpeg',
+        purpose: 'any',
+      },
+      {
+        src: '/icones/dallytrading-ops-maskable-512.jpg',
+        sizes: '512x512',
+        type: 'image/jpeg',
+        purpose: 'maskable',
+      },
     ],
   };
 }

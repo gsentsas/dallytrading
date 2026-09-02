@@ -373,6 +373,34 @@ export function cleEvenementIp(ip: string): string {
 }
 
 /**
+ * Le budget de la fiche en lecture seule d'un dossier repris.
+ *
+ * Mêmes seuils que la recherche, et pour la même raison : c'est une surface
+ * d'énumération, les références se devinent. Mais un compteur distinct — les
+ * partager laisserait une consultation soutenue fermer la recherche, alors que
+ * ce sont deux gestes différents du même comptoir.
+ *
+ * Le budget protège la porte, pas chaque dossier : la référence demandée
+ * n'entre donc jamais dans la clé.
+ */
+export const OPS_LEGACY_DETAIL_SESSION = {
+  limite: 60,
+  fenetreMs: 5 * 60_000,
+} as const;
+export const OPS_LEGACY_DETAIL_IP = {
+  limite: 300,
+  fenetreMs: 5 * 60_000,
+} as const;
+
+export function cleLegacyDetailSession(identifiantSession: string): string {
+  return `ops:legacy-detail:session:${empreinteCourte('legacy-detail', identifiantSession)}`;
+}
+
+export function cleLegacyDetailIp(ip: string): string {
+  return `ops:legacy-detail:ip:${ip}`;
+}
+
+/**
  * L'espace de déduplication propre aux événements.
  *
  * `cleDemandeComptee` porte le préfixe `ops:customers:create:` — c'est la clé

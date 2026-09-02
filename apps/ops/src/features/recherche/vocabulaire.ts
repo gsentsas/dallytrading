@@ -44,3 +44,14 @@ export function libelleMode(code: string): string {
 export function cheminFicheDossier(referenceGlobale: string): string {
   return `/reception/dossier/${encodeURIComponent(referenceGlobale)}`;
 }
+
+/**
+ * La fiche en lecture seule d'un dossier repris.
+ *
+ * Toujours composée avec la référence **globale**. `A001` est local à son
+ * départ : deux consolidations en ont chacune un, et l'utiliser ici ouvrirait
+ * le dossier d'un autre client.
+ */
+export function cheminFicheLectureSeule(referenceGlobale: string): string {
+  return `/reception/dossier/${encodeURIComponent(referenceGlobale)}/lecture-seule`;
+}

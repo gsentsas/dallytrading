@@ -22,8 +22,16 @@ import { z } from 'zod';
 import { opsGetQuery } from '@/lib/auth/odoo-ops';
 
 export const intakeSearchItem = z.object({
-  /** La référence globale — la seule clé de navigation. */
-  reference: z.string().min(1).max(120),
+  /**
+   * La référence globale — la seule clé de navigation.
+   *
+   * Elle peut être **vide** : des dossiers repris n'en portent aucune, et le
+   * serveur les rend tout de même, avec `detail_access: "unavailable"`. Exiger
+   * ici au moins un caractère faisait tomber la page entière sur un tel
+   * résultat, alors qu'un seul dossier était concerné. C'est `detail_access`
+   * qui dit si le dossier s'ouvre, pas la longueur de sa référence.
+   */
+  reference: z.string().max(120),
   /** `A001`, pour l'œil. Vide sur un dossier repris du classeur. */
   local_reference: z.string().max(40),
   customer_name: z.string().max(200),
@@ -32,8 +40,16 @@ export const intakeSearchItem = z.object({
   transport_mode: z.string().max(20),
   consolidation_reference: z.string().max(120),
   received_on: z.string().max(30),
-  detail_access: z.enum(['full', 'unavailable']),
-  detail_access_reason: z.enum(['legacy_not_supported']).nullable(),
+  /**
+   * Trois issues, décidées par le serveur : `full` ouvre la fiche complète,
+   * `readonly` la fiche en lecture seule d'un dossier repris, `unavailable`
+   * n'ouvre rien — faute d'une référence globale, aucune URL ne saurait
+   * désigner le dossier sans risquer celui d'un autre client.
+   */
+  detail_access: z.enum(['full', 'readonly', 'unavailable']),
+  detail_access_reason: z
+    .enum(['legacy_readonly', 'no_reference'])
+    .nullable(),
 }).strict();
 
 /**

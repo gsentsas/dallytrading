@@ -38,17 +38,39 @@ describe('contrat de la recherche de dossier', () => {
     expect(vi.mocked(opsGetQuery).mock.calls[0]?.[1]).toEqual({ q: 'Soumar' });
   });
 
-  it('accepte un dossier historique et son motif', async () => {
+  it('accepte un dossier repris, ouvrable en lecture seule', async () => {
     vi.mocked(opsGetQuery).mockResolvedValue({
       items: [{
         ...ITEM, reference: 'A012', local_reference: '',
-        detail_access: 'unavailable', detail_access_reason: 'legacy_not_supported',
+        detail_access: 'readonly', detail_access_reason: 'legacy_readonly',
       }],
       has_more: false,
     });
     const page = await searchIntakes({ q: 'A012' }, 'session', 'correlation');
+    expect(page.items[0]?.detail_access).toBe('readonly');
+    expect(page.items[0]?.detail_access_reason).toBe('legacy_readonly');
+  });
+
+  it('accepte un dossier sans référence globale, que rien ne peut ouvrir', async () => {
+    vi.mocked(opsGetQuery).mockResolvedValue({
+      items: [{
+        ...ITEM, reference: '', local_reference: '',
+        detail_access: 'unavailable', detail_access_reason: 'no_reference',
+      }],
+      has_more: false,
+    });
+    const page = await searchIntakes({ q: 'Soumare' }, 'session', 'correlation');
     expect(page.items[0]?.detail_access).toBe('unavailable');
-    expect(page.items[0]?.detail_access_reason).toBe('legacy_not_supported');
+    expect(page.items[0]?.detail_access_reason).toBe('no_reference');
+  });
+
+  it('refuse l’ancien motif, retiré avec la fiche en lecture seule', async () => {
+    vi.mocked(opsGetQuery).mockResolvedValue({
+      items: [{ ...ITEM, detail_access_reason: 'legacy_not_supported' }],
+      has_more: false,
+    });
+    await expect(searchIntakes({ q: 'A012' }, 'session', 'correlation'))
+      .rejects.toThrow();
   });
 
   it('refuse un champ inconnu plutôt que de le transmettre au navigateur', async () => {

@@ -18,6 +18,7 @@ from . import ops_consolidation_service
 from . import ops_customer_service
 from . import ops_intake_service
 from . import ops_intake_line_service
+from . import ops_legacy_intake_service
 from . import ops_intake_search_service
 from . import ops_intake_state_service
 from . import ops_photo

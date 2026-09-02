@@ -1,16 +1,19 @@
 import Link from 'next/link';
 
 import type { IntakeSearchItem } from '@/lib/ops/intake-search';
-import { cheminFicheDossier, libelleEtat, libelleMode } from './vocabulaire';
+import {
+  cheminFicheDossier, cheminFicheLectureSeule, libelleEtat, libelleMode,
+} from './vocabulaire';
 
 /**
  * La liste des dossiers trouvés.
  *
- * ## Deux natures de résultat, une seule liste
+ * ## Trois natures de résultat, une seule liste
  *
- * Un dossier né de Dally Ops s'ouvre : sa carte est un lien. Un dossier repris
- * du classeur historique existe et s'identifie, mais sa fiche détaillée n'est
- * pas encore compatible : sa carte n'est pas un lien, et le dit.
+ * Un dossier né de Dally Ops s'ouvre en entier : sa carte mène à la fiche
+ * complète. Un dossier repris s'ouvre en lecture seule, et le dit. Un dossier
+ * sans référence globale ne s'ouvre pas : aucune URL ne saurait le désigner
+ * sans risquer d'ouvrir celui d'un autre client — sa carte reste inerte.
  *
  * La distinction n'est pas décidée ici. Elle est lue dans `detail_access`, que
  * le serveur calcule avec le domaine de la fiche elle-même. Reconstituer cette
@@ -31,8 +34,10 @@ export function ResultatsRecherche(
 
   return (
     <ul className="liste-resultats" style={{ listStyle: 'none', padding: 0 }}>
-      {items.map((item) => (
-        <li key={item.reference} style={{ marginBottom: '0.75rem' }}>
+      {items.map((item, rang) => (
+        // La référence est vide sur un dossier sans identité globale : deux
+        // d'entre eux partageraient la même clé.
+        <li key={`${item.reference}-${rang}`} style={{ marginBottom: '0.75rem' }}>
           <CarteDossier item={item} />
         </li>
       ))}
@@ -48,14 +53,30 @@ export function ResultatsRecherche(
 function CarteDossier({ item }: { item: IntakeSearchItem }) {
   const contenu = <ContenuDossier item={item} />;
 
-  // Un dossier historique n'a pas de fiche : mieux vaut une carte inerte
-  // qu'un lien qui répondrait « dossier introuvable » — il existe.
+  if (item.detail_access === 'readonly') {
+    return (
+      <Link
+        className="carte carte-lien"
+        href={cheminFicheLectureSeule(item.reference)}
+        data-test="dossier-lecture-seule"
+      >
+        {contenu}
+        <p className="attenue" style={{ margin: '0.5rem 0 0', fontSize: '0.85rem' }}>
+          Dossier historique — lecture seule
+        </p>
+      </Link>
+    );
+  }
+
+  // Sans référence globale, aucun lien : il existe, mais rien ne peut le
+  // désigner sans ambiguïté. Une carte inerte dit la vérité ; un lien
+  // ouvrirait le dossier d'un autre client.
   if (item.detail_access !== 'full') {
     return (
       <section className="carte" data-test="dossier-historique">
         {contenu}
         <p className="attenue" style={{ margin: '0.5rem 0 0', fontSize: '0.85rem' }}>
-          Consultation détaillée non disponible dans Dally Ops
+          Référence globale indisponible — consultation détaillée impossible.
         </p>
       </section>
     );
@@ -78,7 +99,9 @@ function ContenuDossier({ item }: { item: IntakeSearchItem }) {
     <>
       <strong>{titre}</strong>
       {item.detail_access !== 'full' ? (
-        <span className="badge" style={{ marginLeft: '0.5rem' }}>Dossier historique</span>
+        <span className="badge" style={{ marginLeft: '0.5rem' }}>
+          {item.detail_access === 'readonly' ? 'Lecture seule' : 'Dossier historique'}
+        </span>
       ) : null}
       <p style={{ margin: '0.25rem 0 0' }}>{item.customer_name}</p>
       {item.customer_phone ? (

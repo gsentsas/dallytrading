@@ -4,11 +4,22 @@ import { z } from 'zod';
 
 import { opsGetQuery } from '@/lib/auth/odoo-ops';
 
+/**
+ * Les actions du journal métier, telles que le serveur les publie.
+ *
+ * Le contrat est strict et sans repli : un code que le serveur publie mais que
+ * cette liste ignore fait échouer l'analyse de **toute** la page, et le fil
+ * d'activité répond alors 503. Un geste de chargement écrit `package_loaded`
+ * ou `package_unloaded` ; les déclarer ici n'est donc pas une politesse, c'est
+ * ce qui empêche le premier chargement d'éteindre le journal.
+ */
 export const activityEvent = z.enum([
   'customer_created',
   'intake_created',
   'intake_line_added',
   'intake_line_updated',
+  'package_loaded',
+  'package_unloaded',
   'payment_recorded',
   'wave_payment_recorded',
   'expense_recorded',
@@ -32,7 +43,7 @@ export const activityItem = z.object({
   event: activityEvent,
   category: z.enum([
     'customer', 'reception', 'article', 'correction', 'payment',
-    'expense', 'transfer', 'appointment',
+    'expense', 'loading', 'transfer', 'appointment',
   ]),
   label: z.string().min(1).max(160),
   occurred_at: z.string().datetime({ offset: true }),

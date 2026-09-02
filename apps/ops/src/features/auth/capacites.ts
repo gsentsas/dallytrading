@@ -29,6 +29,12 @@ export const ENTREES_ACCUEIL: readonly EntreeAccueil[] = [
     href: '/reception',
   },
   {
+    capacite: 'consolidation_load',
+    titre: 'Charger un départ',
+    description: 'Vérifier ce qui part, et compléter la pile.',
+    href: '/chargement',
+  },
+  {
     capacite: 'payment_create',
     titre: 'Encaissement',
     description: 'Saisir un paiement reçu d’un client.',

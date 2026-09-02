@@ -36,6 +36,8 @@ EVENEMENTS_PUBLICS = {
     "photo_added": ("Photo ajoutée au dossier", "reception"),
     "photo_deleted": ("Photo retirée du dossier", "reception"),
     "event_recorded": ("Événement consigné", "reception"),
+    "package_loaded": ("Colis chargé au départ", "loading"),
+    "package_unloaded": ("Colis retiré du départ", "loading"),
     "cash_transfer_recorded": ("Transfert de caisse enregistré", "transfer"),
     "cash_transfer_received": ("Transfert de caisse reçu", "transfer"),
     "appointment_recorded": ("Rendez-vous créé", "appointment"),

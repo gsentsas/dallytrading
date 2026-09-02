@@ -136,11 +136,54 @@ function lirePng(chemin: string): Image {
 const estBlanc = ([r, v, b]: readonly [number, number, number]) =>
   r >= 250 && v >= 250 && b >= 250;
 
+function compterPixelsMarque(image: Image, pas = 1) {
+  let encre = 0;
+  let marine = 0;
+  let vert = 0;
+  for (let y = 0; y < image.hauteur; y += pas) {
+    for (let x = 0; x < image.largeur; x += pas) {
+      const [r, v, b] = image.pixel(x, y);
+      if (!estBlanc([r, v, b])) encre += 1;
+      if (b > r && b > v && b > 40 && r < 90) marine += 1;
+      if (v > r && v > b && v > 90) vert += 1;
+    }
+  }
+  return { encre, marine, vert };
+}
+
 describe('le logo officiel, jamais reconstruit', () => {
   it('l’en-tête affiche le fichier du logo complet', () => {
     const brand = source('src/features/brand/DallyTradingBrand.tsx');
     expect(brand).toContain("src=\"/brand/dallytrading-logo.png\"");
     expect(exists('public/brand/dallytrading-logo.png')).toBe(true);
+  });
+
+  it('le logo d’en-tête est le PNG complet, non rogné et encré', () => {
+    const image = lirePng('public/brand/dallytrading-logo.png');
+    expect(image.largeur).toBe(640);
+    expect(image.hauteur).toBe(460);
+
+    let bordHaut = 0;
+    let bordBas = 0;
+    for (let x = 0; x < image.largeur; x += 1) {
+      if (!estBlanc(image.pixel(x, 0))) bordHaut += 1;
+      if (!estBlanc(image.pixel(x, image.hauteur - 1))) bordBas += 1;
+    }
+    let bordGauche = 0;
+    let bordDroit = 0;
+    for (let y = 0; y < image.hauteur; y += 1) {
+      if (!estBlanc(image.pixel(0, y))) bordGauche += 1;
+      if (!estBlanc(image.pixel(image.largeur - 1, y))) bordDroit += 1;
+    }
+    expect(bordHaut, 'marge haute sûre').toBeLessThan(80);
+    expect(bordBas, 'signature non rognée en bas').toBeLessThan(300);
+    expect(bordGauche, 'marge gauche sûre').toBeLessThan(120);
+    expect(bordDroit, 'marge droite sûre').toBeLessThan(80);
+
+    const { encre, marine, vert } = compterPixelsMarque(image);
+    expect(encre).toBeGreaterThan(1000);
+    expect(marine, 'le marine de la marque dans le logo d’en-tête').toBeGreaterThan(100);
+    expect(vert, 'le vert de la marque dans le logo d’en-tête').toBeGreaterThan(100);
   });
 
   it('aucun wordmark n’est reconstruit en CSS ni en texte', () => {
@@ -219,17 +262,7 @@ describe('les icônes dérivent du logo complet', () => {
 
   it('les icônes portent réellement le dessin, pas une plaque vide', () => {
     const image = lirePng('public/icones/dallytrading-ops-512.png');
-    let encre = 0;
-    let marine = 0;
-    let vert = 0;
-    for (let y = 0; y < 512; y += 2) {
-      for (let x = 0; x < 512; x += 2) {
-        const [r, v, b] = image.pixel(x, y);
-        if (!estBlanc([r, v, b])) encre += 1;
-        if (b > r && b > v && b > 40 && r < 90) marine += 1;
-        if (v > r && v > b && v > 90) vert += 1;
-      }
-    }
+    const { encre, marine, vert } = compterPixelsMarque(image, 2);
     expect(encre).toBeGreaterThan(1000);
     expect(marine, 'le marine de la marque').toBeGreaterThan(100);
     expect(vert, 'le vert de la marque').toBeGreaterThan(100);

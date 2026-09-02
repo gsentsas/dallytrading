@@ -9,12 +9,18 @@ export const metadata: Metadata = {
   title: 'Dally Ops',
   description: 'Application terrain des opérations DallyTrading.',
   applicationName: 'Dally Ops',
+  // Toutes ces icônes dérivent du logo complet officiel. L'onglet et l'écran
+  // d'accueil montrent donc la même marque que l'en-tête, jamais un
+  // monogramme ni un pictogramme alternatif.
   icons: {
     icon: [
+      { url: '/icones/dallytrading-ops-favicon-16.png', type: 'image/png', sizes: '16x16' },
+      { url: '/icones/dallytrading-ops-favicon-32.png', type: 'image/png', sizes: '32x32' },
       { url: '/icones/dallytrading-ops-192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/icones/dallytrading-ops-512.png', type: 'image/png', sizes: '512x512' },
     ],
     apple: [
-      { url: '/icones/dallytrading-ops-192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/icones/dallytrading-ops-apple-180.png', type: 'image/png', sizes: '180x180' },
     ],
   },
   appleWebApp: {

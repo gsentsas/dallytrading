@@ -13,7 +13,7 @@
 .ops-brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: 0.75rem;
   color: inherit;
   text-decoration: none;
 }
@@ -24,55 +24,33 @@
   border-radius: 0.5rem;
 }
 
-.ops-brand-icon {
-  width: 3rem;
-  height: 3rem;
+/*
+  La plaque : le logo officiel a été dessiné sur du blanc, et l'application a un
+  fond presque noir. Sans elle, le marine du wordmark serait illisible. Elle
+  n'altère ni les couleurs ni la composition — elle rend au logo son support.
+  La hauteur est fixée et la largeur suit : le rapport du fichier officiel est
+  la seule mise en page autorisée.
+*/
+.ops-brand-logo {
+  height: 3.5rem;
+  width: auto;
   flex: 0 0 auto;
-  border-radius: 0.72rem;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
-}
-
-.ops-brand-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  line-height: 1;
-}
-
-.ops-brand-wordmark {
-  font-size: 1.25rem;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-}
-
-.ops-brand-dally {
-  color: #ffffff;
-}
-
-.ops-brand-trading {
-  color: var(--dally-brand-green);
-}
-
-.ops-brand-signature {
-  margin-top: 0.32rem;
-  color: #cbd5e1;
-  font-size: 0.48rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  padding: 0.3rem 0.45rem;
+  border-radius: 0.6rem;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
 
 .ops-brand-app {
-  margin-top: 0.38rem;
   color: var(--ops-attenue);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 650;
   letter-spacing: 0.04em;
 }
 
 @media (max-width: 360px) {
-  .ops-brand-signature {
-    display: none;
+  .ops-brand-logo {
+    height: 3rem;
   }
 }
 

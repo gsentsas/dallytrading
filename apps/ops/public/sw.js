@@ -69,6 +69,10 @@ function cacheable(url) {
   if (url.pathname.startsWith('/api/')) return false;
   return url.pathname.startsWith('/_next/static/')
     || url.pathname.startsWith('/icones/')
+    // Le logo de l'en-tête vit sous /brand/ : il est sur toutes les pages, y
+    // compris hors connexion, et sans lui l'en-tête afficherait une image
+    // cassée au moment précis où l'opérateur a le moins de réseau.
+    || url.pathname.startsWith('/brand/')
     || url.pathname === '/manifest.webmanifest'
     || NAVIGATIONS_EN_CACHE.includes(url.pathname);
 }

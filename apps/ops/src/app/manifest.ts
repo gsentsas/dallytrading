@@ -13,9 +13,17 @@ import type { MetadataRoute } from 'next';
  * déborderait ouvrirait le site marketing dans la fenêtre de l'outil de
  * travail.
  *
- * Les icônes sont dérivées du logo DallyTrading officiel fourni par le
- * propriétaire de la marque. La variante maskable conserve une marge sûre
- * pour les formes d'icônes Android.
+ * ## Les icônes
+ *
+ * Toutes dérivent du **logo complet** officiel, à l'échelle, jamais recadrées :
+ * l'emblème, le wordmark et la signature sont présents dans chacune. Le fond
+ * blanc est celui sur lequel l'œuvre a été dessinée.
+ *
+ * La variante `maskable` mérite son propre fichier. Android découpe l'icône
+ * dans une forme dont seule la zone centrale — un disque de 80 % du côté — est
+ * garantie visible. Le logo y est donc réduit pour que sa **diagonale** entre
+ * dans ce disque : c'est la seule façon qu'aucun angle du dessin ne soit rogné.
+ * La marge ainsi gagnée est blanche, et rien d'autre ne change.
  *
  * `orientation: portrait` parce que la saisie se fait debout, d'une main.
  */
@@ -40,15 +48,15 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'any',
       },
       {
-        src: '/icones/dallytrading-ops-512.jpg',
+        src: '/icones/dallytrading-ops-512.png',
         sizes: '512x512',
-        type: 'image/jpeg',
+        type: 'image/png',
         purpose: 'any',
       },
       {
-        src: '/icones/dallytrading-ops-maskable-512.jpg',
+        src: '/icones/dallytrading-ops-maskable-512.png',
         sizes: '512x512',
-        type: 'image/jpeg',
+        type: 'image/png',
         purpose: 'maskable',
       },
     ],

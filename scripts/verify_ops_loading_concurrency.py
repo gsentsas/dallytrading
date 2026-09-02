@@ -6,7 +6,7 @@ au meme instant. Odoo execute chaque test dans une transaction unique et
 annulee ; les verrous consultatifs pg_advisory_xact_lock ne s'y opposent donc
 a personne. Il faut de vrais curseurs, de vrais commits, et une barriere.
 
-Quatre questions, quatre reponses attendues :
+Cinq questions, cinq reponses attendues :
 
 1. Le meme geste envoye deux fois en parallele - reprise reseau, double appui -
    ne charge le colis qu'une fois.
@@ -16,6 +16,8 @@ Quatre questions, quatre reponses attendues :
    que d'un seul cote.
 4. Un chargement concurrent d'une cloture de collecte ne cree jamais de ligne
    apres cloture.
+5. Deux gestes de `request_uuid` differents sur le meme depart ne se lisent
+   jamais sur un instantane perime.
 
 A lancer dans un shell Odoo, sur une base de banc - jamais en production.
 """
@@ -377,6 +379,116 @@ assert lignes(depart) == 0, ("sonde 4 : lignes apres cloture", lignes(depart))
 assert_invariants(depart, premier)
 print("sonde 4 OK - LOAD vs cloture ne cree rien apres cloture")
 
+# -- 5. UUID differents : unload et load sur le meme depart -------------
+# La course que la revue a trouvee : `unload` supprime une ligne enfant sans
+# jamais toucher la ligne `dally_freight_consolidation`. Un `load` concurrent
+# obtenait donc son verrou de ligne sans erreur de serialisation, gardait son
+# instantane, y voyait encore la ligne supprimee, ne recreait rien, et
+# repondait « charge » sur une base ou le colis ne l'etait plus.
+#
+# On impose ici l'entrelacement decisif : UNLOAD tient les verrous, LOAD les
+# demande et doit etre rejoue, puis UNLOAD commite et LOAD repart sur un
+# instantane neuf.
+import threading as _threading
+
+vider(depart)
+if depart.state != "collecting":
+    depart.action_open_collection()
+dossier.planned_consolidation_id = depart
+env["dally.freight.consolidation.line"].sudo().create({
+    "consolidation_id": depart.id, "package_id": premier.id,
+    "quantity_loaded": premier.quantity})
+env.cr.commit()
+relire()
+
+Service = env["dally.ops.loading.service"].__class__
+verrou_original = Service._verrouiller_avant_instantane
+unload_tient = _threading.Event()
+load_a_echoue = _threading.Event()
+compte = {"echecs_load": 0, "pause_faite": False}
+
+
+def verrou_espion(self, request_uuid, reference):
+    nom = _threading.current_thread().name
+    try:
+        resultat = verrou_original(self, request_uuid, reference)
+    except Exception:
+        if nom == "P5_LOAD":
+            compte["echecs_load"] += 1
+            load_a_echoue.set()
+        raise
+    if nom == "P5_UNLOAD" and not compte["pause_faite"]:
+        compte["pause_faite"] = True
+        unload_tient.set()
+        load_a_echoue.wait(timeout=30)   # on laisse LOAD se heurter au verrou
+    return resultat
+
+
+Service._verrouiller_avant_instantane = verrou_espion
+p5_resultats, p5_erreurs = {}, {}
+
+
+def p5_geste(nom, action, request_uuid, attendre=False):
+    try:
+        with registre.cursor() as cr:
+            local = api.Environment(cr, operateur.id, {"allowed_company_ids": [societe.id]})
+            soc = local["res.company"].browse(societe.id)
+            if attendre:
+                unload_tient.wait(timeout=30)
+
+            def appel():
+                return (local["dally.ops.loading.service"].with_company(soc)
+                        .apply_loading(depart.name, {
+                            "request_uuid": request_uuid, "action": action,
+                            "package_reference": premier.ops_loading_uuid}))
+            p5_resultats[nom] = retrying(appel, local)
+    except Exception as exc:  # noqa: BLE001
+        p5_erreurs[nom] = repr(exc)
+
+
+p5_uuid_unload, p5_uuid_load = str(uuid4()), str(uuid4())
+p5_fils = [
+    _threading.Thread(target=p5_geste, name="P5_UNLOAD",
+                      args=("UNLOAD", "unload", p5_uuid_unload)),
+    _threading.Thread(target=p5_geste, name="P5_LOAD",
+                      args=("LOAD", "load", p5_uuid_load, True)),
+]
+for f in p5_fils:
+    f.start()
+for f in p5_fils:
+    f.join(60)
+Service._verrouiller_avant_instantane = verrou_original
+assert not any(f.is_alive() for f in p5_fils), "sonde 5 : un fil est reste vivant"
+relire()
+
+assert not p5_erreurs, ("sonde 5", p5_erreurs)
+assert compte["echecs_load"] >= 1, (
+    "sonde 5 : LOAD aurait du etre rejoue au moins une fois", compte)
+assert lignes(depart) == 1, ("sonde 5 : la ligne doit exister", lignes(depart))
+assert quantite(depart, premier) == premier.quantity, (
+    "sonde 5 : quantite", quantite(depart, premier))
+
+# la reponse rendue a l'operateur doit decrire la base, pas un instantane perime
+dto = p5_resultats["LOAD"]["loading"]["shipments"][0]["packages"][0]
+assert dto["loaded_quantity"] == quantite(depart, premier), (
+    "sonde 5 : la reponse ne decrit pas la base", dto["loaded_quantity"],
+    quantite(depart, premier))
+assert dto["status"] == "loaded", ("sonde 5 : statut", dto["status"])
+
+Audit = env_ops()["dally.ops.audit.event"].sudo()
+audit_unload = Audit.search_count([("request_uuid", "=", p5_uuid_unload),
+                                   ("action", "=", "package_unloaded")])
+audit_load = Audit.search_count([("request_uuid", "=", p5_uuid_load),
+                                 ("action", "=", "package_loaded")])
+assert audit_unload == 1, ("sonde 5 : audit unload", audit_unload)
+assert audit_load == 1, ("sonde 5 : audit load", audit_load)
+Demande = env_ops()["dally.ops.loading.request"].sudo()
+for uuid_geste in (p5_uuid_unload, p5_uuid_load):
+    assert Demande.search_count([("request_uuid", "=", uuid_geste)]) == 1, (
+        "sonde 5 : un registre par geste", uuid_geste)
+print("sonde 5 OK - UUID differents : LOAD rejoue, ligne recreee, reponse = base"
+      " (rejeux LOAD : %d)" % compte["echecs_load"])
+
 # -- Nettoyage ---------------------------------------------------------
 # Le coeur refuse de supprimer une consolidation deja utilisee, et c'est une
 # bonne regle : la sonde ne la contourne pas. Elle annule et archive ce qu'elle
@@ -414,4 +526,4 @@ except Exception as exc:  # noqa: BLE001
 
 if restes:
     print("nettoyage partiel, restes sur la base de banc :", restes)
-print("SONDES DE CONCURRENCE : 4/4 OK")
+print("SONDES DE CONCURRENCE : 5/5 OK")

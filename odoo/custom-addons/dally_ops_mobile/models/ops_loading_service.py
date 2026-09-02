@@ -103,8 +103,7 @@ class DallyOpsLoadingService(models.AbstractModel):
         request_uuid = self._request_uuid_pour_verrou(payload)
 
         with self.env.cr.savepoint():
-            self._verrouiller_geste("ops-loading:%s:%s" % (
-                self.env.company.id, request_uuid))
+            self._verrouiller_avant_instantane(request_uuid, reference)
             self._exiger_role_ops()
             donnees = self._valider(payload)
 
@@ -244,38 +243,83 @@ class DallyOpsLoadingService(models.AbstractModel):
             raise DallyOpsNotFound(_("Colis introuvable."), code="package_not_found")
         return colis
 
+    #: Ce que vaut la part « société » de la clé quand le contexte n'en porte
+    #: aucune. Une sentinelle, pas une société : deux appels sans contexte se
+    #: gênent alors mutuellement, ce qui est sans conséquence — ils sont
+    #: exceptionnels — là où une fenêtre d'instantané périmé, elle, ne l'est
+    #: pas.
+    SOCIETE_INCONNUE = 0
+
     @api.model
-    def _verrouiller_geste(self, cle):
-        """Sérialise deux envois du même geste — sans jamais attendre.
+    def _societe_pour_verrou(self):
+        """La part « société » de la clé de verrou. **Jamais** une garantie.
 
-        ## Pourquoi attendre ne suffit pas
+        ## Pourquoi aucune lecture ici
 
-        Odoo ouvre ses transactions en `REPEATABLE READ` (`sql_db.py`). Sous ce
-        niveau, l'instantané est figé au **premier ordre SQL**, et un
-        `pg_advisory_xact_lock` bloquant en fait partie : la seconde
-        transaction prend son instantané *avant* d'obtenir le verrou. Quand
-        elle l'obtient enfin, la première a commité — mais son registre reste
-        invisible, pour toujours, dans cet instantané. Le rejeu n'est donc pas
-        reconnu, la ligne est créée une seconde fois, et c'est la contrainte
-        d'unicité `(consolidation, colis)` qui tranche, en erreur.
+        `self.env.company` valide la société contre `env.companies` et émet un
+        `SELECT` — mesuré : `res_company` quand le contexte porte
+        `allowed_company_ids`, `res_users` quand il n'en porte pas. Cet
+        ordre-là figerait l'instantané juste avant notre verrou et rouvrirait
+        la fenêtre qu'on vient de fermer. Le repli ORM est donc exclu, y
+        compris pour le cas rare.
 
-        Mesuré : deux `load` concurrents portant le même `request_uuid`
-        produisaient une `UniqueViolation` au lieu d'un rejeu.
+        ## Ce que cette valeur est, et ce qu'elle n'est pas
 
-        ## Ce qu'on fait à la place
-
-        On tente le verrou sans attendre. S'il est déjà tenu, notre instantané
-        est périmé par construction : rien de ce qu'on lirait ne serait fiable.
-        On lève alors la seule erreur qu'Odoo sait rejouer — `ConcurrencyError`
-        —, et `service.model.retrying` relance la requête entière, sur une
-        transaction neuve, dont l'instantané voit enfin le registre. Le second
-        appui rend alors `replayed: true`, ce que l'opérateur attend.
+        C'est une **clé de contention**, rien d'autre. L'isolation réelle
+        reste vérifiée après le verrou, par les recherches métier :
+        `_resoudre_depart` borne sur `company_id`, et un départ d'une autre
+        société reste introuvable. Confondre les deux reviendrait à faire d'un
+        verrou une frontière de sécurité, ce qu'il n'est pas.
         """
+        autorisees = self.env.context.get("allowed_company_ids")
+        return autorisees[0] if autorisees else self.SOCIETE_INCONNUE
+
+    @api.model
+    def _verrouiller_avant_instantane(self, request_uuid, reference):
+        """Les deux verrous Ops, en **un seul ordre SQL**, avant toute lecture.
+
+        ## Pourquoi deux clés, et pourquoi ensemble
+
+        Le geste est protégé par son `request_uuid` : deux envois du même geste
+        se sérialisent. Mais deux gestes **différents** visant le même départ
+        ne partagent aucune clé — et c'est par là qu'une incohérence passait.
+        Un `unload` supprime une ligne enfant sans jamais toucher la ligne
+        `dally_freight_consolidation` ; un `load` concurrent obtenait donc son
+        verrou de ligne sans erreur de sérialisation, gardait son instantané,
+        y voyait encore la ligne supprimée, ne recréait rien, et répondait
+        « chargé » sur une base où le colis ne l'était plus. Reproduit.
+
+        Les deux clés sont donc prises dans le **même ordre SQL**. Deux
+        `SELECT` successifs ne suffiraient pas : sous `REPEATABLE READ`, le
+        premier fige déjà l'instantané, et le second arriverait trop tard.
+
+        ## Pourquoi sans attendre
+
+        Attendre rendrait la main sur un instantané périmé — le défaut qu'on
+        vient de fermer. On tente ; si l'une des deux clés est tenue, on lève
+        `ConcurrencyError`, que `service.model.retrying` rejoue sur une
+        transaction neuve, dont l'instantané voit enfin l'état à jour.
+
+        ## Ce que ce verrou ne protège pas
+
+        Il ne protège **que** Ops contre Ops. Le back-office ne le prend pas ;
+        c'est le verrou de ligne de `_verrouiller_depart` qui s'en charge.
+
+        La clé du départ se construit sans ORM — société et référence
+        normalisée — pour que rien ne soit lu avant elle.
+        """
+        societe = self._societe_pour_verrou()
+        propre = reference.strip() if isinstance(reference, str) else "invalid"
+        cles = ("ops-loading-request:%s:%s" % (societe, request_uuid),
+                "ops-loading-departure:%s:%s" % (societe, propre))
         self.env.cr.execute(
-            "SELECT pg_try_advisory_xact_lock(hashtextextended(%s, 0))", [cle])
-        if not self.env.cr.fetchone()[0]:
+            "SELECT pg_try_advisory_xact_lock(hashtextextended(%s, 0)),"
+            "       pg_try_advisory_xact_lock(hashtextextended(%s, 0))",
+            list(cles))
+        geste, depart = self.env.cr.fetchone()
+        if not (geste and depart):
             raise ConcurrencyError(
-                "Un geste de chargement identique est déjà en cours.")
+                "Un autre geste de chargement occupe ce départ.")
 
     @api.model
     def _verrouiller_depart(self, depart):
@@ -295,15 +339,22 @@ class DallyOpsLoadingService(models.AbstractModel):
 
         Il porte sur la **ligne réelle**, celle que la clôture modifie. Si le
         départ a changé depuis notre instantané, PostgreSQL refuse le verrou
-        avec une erreur de sérialisation — que `service.model.retrying` rejoue.
-        La transaction repart alors sur un instantané neuf, y lit l'état à
-        jour, et le geste est refusé comme il doit l'être.
+        avec une erreur de sérialisation ; s'il est tenu par une clôture en
+        cours, `NOWAIT` refuse immédiatement plutôt que de rendre la main sur
+        un instantané périmé.
 
-        Il sérialise aussi deux gestes Ops visant le même départ, ce que
-        faisait déjà le verrou consultatif.
+        Les deux erreurs — `SerializationFailure` (40001) et
+        `LockNotAvailable` (55P03) — figurent déjà dans
+        `PG_CONCURRENCY_EXCEPTIONS_TO_RETRY` d'Odoo : vérifié dans cet
+        environnement, avec psycopg2 2.9.9. Aucune conversion n'est donc
+        nécessaire, `retrying` les rejoue telles quelles.
+
+        Ce verrou ne sérialise **pas** deux gestes Ops entre eux : cette
+        garantie appartient à `_verrouiller_avant_instantane`, pris plus tôt.
         """
         self.env.cr.execute(
-            "SELECT id FROM dally_freight_consolidation WHERE id = %s FOR UPDATE",
+            "SELECT id FROM dally_freight_consolidation WHERE id = %s "
+            "FOR UPDATE NOWAIT",
             [depart.id],
         )
 

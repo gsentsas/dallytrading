@@ -22,6 +22,7 @@ identifiant réutilisé pour une autre intention est refusé.
 
 import importlib.util
 import inspect
+import textwrap
 import json
 import uuid
 from pathlib import Path
@@ -423,61 +424,232 @@ class TestOpsLoading(AccountTestInvoicingCommon):
         self.assertEqual(
             self._colis_dto(self._detail(), paquet)["status"], STATUT_CHARGE)
 
-    # ─── Le verrou du geste ──────────────────────────────────────────
+    # ─── Les verrous ─────────────────────────────────────────────────
 
-    def test_le_verrou_du_geste_n_attend_jamais(self):
-        """Attendre le verrou ne servirait à rien, et nuirait.
+    def _requetes_de(self, appel):
+        """Les ordres SQL émis par un appel, avec leurs paramètres.
 
-        Odoo ouvre ses transactions en `REPEATABLE READ` : l'instantané est
-        figé au premier ordre SQL, verrou compris. Une transaction qui attend
-        puis obtient le verrou lit donc un état antérieur au commit de celle
-        qui la précédait — elle ne voit pas le registre, recrée la ligne, et
-        c'est la contrainte d'unicité qui tranche, en erreur. Le verrou doit
-        donc être *tenté*, jamais attendu.
+        Les paramètres comptent autant que le texte : c'est là que vivent les
+        clés de verrou, et donc ce qui distingue deux gestes de deux départs.
         """
         requetes = []
         original = type(self.env.cr).execute
 
         def espion(cr, requete, params=None, *args, **kwargs):
-            requetes.append(requete)
+            requetes.append((requete, params))
             return original(cr, requete, params, *args, **kwargs)
 
         with patch.object(type(self.env.cr), "execute", espion):
-            self._service()._verrouiller_geste("ops-loading:test")
+            appel()
+        return requetes
 
-        verrous = [r for r in requetes if "advisory" in r]
-        self.assertEqual(len(verrous), 1)
-        self.assertIn("pg_try_advisory_xact_lock", verrous[0])
-        self.assertNotIn("pg_advisory_xact_lock(", verrous[0])
+    def _cles_de_verrou(self, request_uuid, reference):
+        """Les deux clés réellement passées à PostgreSQL."""
+        requetes = self._requetes_de(
+            lambda: self._service()._verrouiller_avant_instantane(
+                request_uuid, reference))
+        for texte, params in requetes:
+            if "advisory" in texte:
+                return list(params)
+        self.fail("aucun ordre de verrou émis")
 
-    def test_un_verrou_deja_tenu_leve_l_erreur_que_le_cadre_rejoue(self):
-        """`ConcurrencyError` et rien d'autre.
+    def test_les_deux_verrous_tiennent_dans_un_seul_ordre_sql(self):
+        """Un seul ordre, parce que le premier fige l'instantané.
 
-        C'est la seule erreur que `service.model.retrying` sait rejouer : il
-        relance la requête entière sur une transaction neuve, dont
-        l'instantané voit enfin le registre. Une `UserError` ferait remonter
-        un échec à l'opérateur là où un rejeu suffisait.
+        Sous `REPEATABLE READ`, deux `SELECT` successifs ne suffiraient pas :
+        le premier figerait déjà l'instantané, et le second arriverait trop
+        tard pour protéger quoi que ce soit.
         """
-        # `create=True` : le curseur d'Odoo delegue `fetchone` par
-        # `__getattr__`, il n'a donc pas l'attribut en propre. Le poser sur la
-        # classe le masque le temps du test.
-        with patch.object(type(self.env.cr), "fetchone",
-                          return_value=(False,), create=True):
-            with self.assertRaises(ConcurrencyError):
-                self._service()._verrouiller_geste("ops-loading:test")
+        requetes = self._requetes_de(
+            lambda: self._service()._verrouiller_avant_instantane(
+                str(uuid.uuid4()), self.depart.name))
+        verrous = [t for t, _ in requetes if "advisory" in t]
+        self.assertEqual(len(verrous), 1, requetes)
+        self.assertEqual(verrous[0].count("pg_try_advisory_xact_lock"), 2)
 
-    def test_le_geste_prend_son_verrou_avant_toute_lecture_metier(self):
-        """L'ordre est l'invariant : le verrou, puis le reste.
+    def test_le_verrou_n_attend_jamais(self):
+        """Attendre rendrait la main sur un instantané périmé.
 
-        Le placer après le contrôle de rôle ou la validation ferait ouvrir
-        l'instantané sur une lecture métier, et le verrou n'y changerait plus
-        rien.
+        C'est exactement le défaut qu'on vient de fermer : la transaction qui
+        attend obtient son verrou après le commit de l'autre, mais lit encore
+        l'état d'avant.
         """
+        requetes = self._requetes_de(
+            lambda: self._service()._verrouiller_avant_instantane(
+                str(uuid.uuid4()), self.depart.name))
+        for texte, _ in requetes:
+            if "advisory" in texte:
+                self.assertIn("pg_try_advisory_xact_lock", texte)
+
+    def test_une_cle_tenue_leve_l_erreur_que_le_cadre_rejoue(self):
+        """`ConcurrencyError`, que l'une ou l'autre clé manque.
+
+        C'est l'erreur que `service.model.retrying` sait rejouer : il relance
+        la requête entière sur une transaction neuve, dont l'instantané voit
+        enfin l'état à jour.
+        """
+        # `create=True` : le curseur d'Odoo délègue `fetchone` par
+        # `__getattr__`, il n'a donc pas l'attribut en propre.
+        for reponse in ((False, True), (True, False), (False, False)):
+            with patch.object(type(self.env.cr), "fetchone",
+                              return_value=reponse, create=True):
+                with self.assertRaises(ConcurrencyError, msg=reponse):
+                    self._service()._verrouiller_avant_instantane(
+                        str(uuid.uuid4()), self.depart.name)
+
+    def test_deux_departs_partagent_la_cle_du_geste_mais_pas_celle_du_depart(self):
+        """Cas B : même `request_uuid`, deux départs.
+
+        Le geste reste sérialisé par son identifiant — c'est l'idempotence —
+        mais deux départs distincts ne se bloquent pas l'un l'autre.
+        """
+        autre = self._consolidation("AIR-DSS-CDG-LOAD-CLE-B")
+        identifiant = str(uuid.uuid4())
+        ici = self._cles_de_verrou(identifiant, self.depart.name)
+        ailleurs = self._cles_de_verrou(identifiant, autre.name)
+
+        self.assertEqual(ici[0], ailleurs[0], "la clé du geste doit être la même")
+        self.assertNotEqual(ici[1], ailleurs[1], "les départs ne doivent pas se bloquer")
+        self.assertIn("ops-loading-request:", ici[0])
+        self.assertIn("ops-loading-departure:", ici[1])
+        self.assertIn(self.depart.name, ici[1])
+
+    def test_deux_gestes_differents_partagent_la_cle_du_depart(self):
+        """Cas C : deux `request_uuid`, un seul départ.
+
+        C'est la clé qui manquait. Sans elle, un `unload` et un `load`
+        concurrents ne se sérialisaient pas, et le second répondait sur un
+        instantané périmé — reproduit avant correction.
+        """
+        premier = self._cles_de_verrou(str(uuid.uuid4()), self.depart.name)
+        second = self._cles_de_verrou(str(uuid.uuid4()), self.depart.name)
+
+        self.assertNotEqual(premier[0], second[0], "deux gestes, deux clés")
+        self.assertEqual(premier[1], second[1], "un seul départ, une seule clé")
+
+    def test_la_cle_du_depart_se_construit_sans_lecture_metier(self):
+        """Elle ne doit dépendre que de la société et de la référence.
+
+        Résoudre le départ pour bâtir la clé reviendrait à lire avant de
+        verrouiller — donc à figer l'instantané trop tôt.
+        """
+        cles = self._cles_de_verrou(str(uuid.uuid4()), "  AIR-DSS-CDG-INEXISTANT  ")
+        self.assertIn("AIR-DSS-CDG-INEXISTANT", cles[1])
+        self.assertNotIn("  ", cles[1])
+        # une référence non textuelle ne fait pas tomber la construction
+        self.assertIn("invalid", self._cles_de_verrou(str(uuid.uuid4()), 42)[1])
+
+    def test_aucune_lecture_orm_ne_precede_le_verrou(self):
+        """L'invariant décisif, mesuré sur les deux contextes.
+
+        Le verrou doit être le premier ordre SQL qui fige l'instantané. Un
+        `SELECT` métier avant lui — `res_company` quand le contexte porte les
+        sociétés, `res_users` quand il n'en porte pas — rouvrirait la fenêtre
+        que ce verrou existe pour fermer. `SAVEPOINT` ne compte pas : c'est du
+        contrôle de transaction, il n'acquiert aucun instantané.
+
+        Le cas sans `allowed_company_ids` est le plus traître : il ne survient
+        qu'en dehors de la passerelle HTTP, donc jamais dans les parcours
+        courants, et passerait inaperçu sans ce test.
+        """
+        for contexte, libelle in (({"allowed_company_ids": [self.societe.id]}, "normal"),
+                                  ({}, "sans allowed_company_ids")):
+            service = (self.env["dally.ops.loading.service"]
+                       .with_user(self.gilles).with_context(**contexte))
+            requetes = []
+            original = type(self.env.cr).execute
+
+            def espion(cr, requete, params=None, *args, **kwargs):
+                requetes.append(" ".join(str(requete).split()))
+                return original(cr, requete, params, *args, **kwargs)
+
+            with patch.object(type(self.env.cr), "execute", espion):
+                service._verrouiller_avant_instantane(
+                    str(uuid.uuid4()), self.depart.name)
+
+            rang = next(i for i, r in enumerate(requetes)
+                        if "pg_try_advisory_xact_lock" in r)
+            avant = [r for r in requetes[:rang]
+                     if not r.upper().startswith(("SAVEPOINT", "RELEASE", "ROLLBACK"))]
+            self.assertEqual(avant, [], "%s : SQL avant le verrou" % libelle)
+
+    def test_le_contexte_sans_societe_ne_leve_rien_et_ne_lit_rien(self):
+        """Une sentinelle, pas une société.
+
+        Deux appels sans contexte se gênent alors mutuellement — sans
+        conséquence, ils sont exceptionnels — là où une fenêtre d'instantané
+        périmé, elle, ne pardonnerait pas. Ce n'est **pas** une garantie
+        d'isolation : celle-ci reste vérifiée après le verrou, par les
+        recherches métier bornées sur `company_id`.
+        """
+        service = (self.env["dally.ops.loading.service"]
+                   .with_user(self.gilles).with_context())
+        sans = service.with_context(allowed_company_ids=None)
+        self.assertEqual(sans._societe_pour_verrou(),
+                         sans.SOCIETE_INCONNUE)
+        avec = service.with_context(allowed_company_ids=[self.societe.id])
+        self.assertEqual(avec._societe_pour_verrou(), self.societe.id)
+        # et la clé se construit sans lever
+        sans._verrouiller_avant_instantane(str(uuid.uuid4()), self.depart.name)
+
+    def test_le_role_et_la_societe_sont_verifies_apres_le_verrou(self):
+        """L'ordre, encore : verrou, puis rôle, puis résolution métier."""
         source = inspect.getsource(
             type(self.env["dally.ops.loading.service"]).apply_loading)
         corps = source[source.index("with self.env.cr.savepoint():"):]
-        self.assertLess(corps.index("_verrouiller_geste"), corps.index("_exiger_role_ops"))
-        self.assertLess(corps.index("_verrouiller_geste"), corps.index("_valider"))
+        pose = corps.index("_verrouiller_avant_instantane")
+        for suivant in ("_exiger_role_ops", "_valider", "_resoudre_depart"):
+            self.assertLess(pose, corps.index(suivant), suivant)
+        # La clé de verrou ne doit pas passer par l'ORM. On lit le code seul :
+        # la docstring, elle, *nomme* `self.env.company` pour expliquer
+        # précisément pourquoi elle ne l'appelle pas.
+        import ast
+        source = inspect.getsource(
+            type(self.env["dally.ops.loading.service"])._societe_pour_verrou)
+        arbre = ast.parse(textwrap.dedent(source))
+        fonction = arbre.body[0]
+        if (fonction.body and isinstance(fonction.body[0], ast.Expr)
+                and isinstance(fonction.body[0].value, ast.Constant)):
+            fonction.body = fonction.body[1:]          # on retire la docstring
+        code = ast.unparse(fonction)
+        for interdit in ("self.env.company", "search", "browse", "sudo"):
+            self.assertNotIn(interdit, code, interdit)
+        self.assertIn("allowed_company_ids", code)
+
+    def test_le_verrou_de_ligne_du_depart_est_sans_attente(self):
+        """Cas F : la contention du verrou de ligne ne doit pas attendre.
+
+        `NOWAIT` refuse immédiatement plutôt que de rendre la main sur un
+        instantané périmé.
+        """
+        requetes = self._requetes_de(
+            lambda: self._service()._verrouiller_depart(self.depart))
+        verrous = [t for t, _ in requetes if "FOR UPDATE" in t]
+        self.assertEqual(len(verrous), 1)
+        self.assertIn("FOR UPDATE NOWAIT", verrous[0])
+        self.assertIn("dally_freight_consolidation", verrous[0])
+        self.assertFalse([t for t, _ in requetes if "advisory" in t])
+
+    def test_le_cadre_rejoue_deja_les_erreurs_de_contention(self):
+        """Vérifié dans cet environnement, pas supposé.
+
+        `LockNotAvailable` (55P03) et `SerializationFailure` (40001) figurent
+        déjà dans la liste qu'Odoo rejoue : aucune conversion n'est donc
+        nécessaire pour le verrou de ligne.
+        """
+        from psycopg2 import errors as erreurs_pg
+        from odoo.service.model import PG_CONCURRENCY_EXCEPTIONS_TO_RETRY
+        self.assertIn(erreurs_pg.LockNotAvailable, PG_CONCURRENCY_EXCEPTIONS_TO_RETRY)
+        self.assertIn(erreurs_pg.SerializationFailure, PG_CONCURRENCY_EXCEPTIONS_TO_RETRY)
+
+    def test_les_verrous_precedent_toute_lecture_metier(self):
+        """L'ordre est l'invariant : les verrous, puis le reste."""
+        source = inspect.getsource(
+            type(self.env["dally.ops.loading.service"]).apply_loading)
+        corps = source[source.index("with self.env.cr.savepoint():"):]
+        pose = corps.index("_verrouiller_avant_instantane")
+        for suivant in ("_exiger_role_ops", "_valider", "_resoudre_depart"):
+            self.assertLess(pose, corps.index(suivant), suivant)
 
     def test_la_cle_de_verrou_normalise_comme_la_validation(self):
         """Un identifiant entouré d'espaces reste le même geste.

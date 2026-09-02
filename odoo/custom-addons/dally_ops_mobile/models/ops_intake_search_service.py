@@ -14,10 +14,14 @@ Elle couvre **tous** les dossiers de la société, y compris ceux repris du
 classeur historique. Un tel dossier existe : le cacher ferait croire au
 comptoir qu'il n'a jamais été enregistré.
 
-Mais la fiche détaillée d'Ops ne sait afficher que les dossiers nés de Dally
+Mais la fiche complète d'Ops ne sait afficher que les dossiers nés de Dally
 Ops. Chaque résultat porte donc `detail_access`, calculé **ici** avec le
 domaine de la fiche lui-même — jamais avec une copie. L'interface lit cette
 valeur ; elle ne reconstitue aucune règle, et ne peut donc pas se tromper.
+
+Trois issues, et non deux : `full` pour un dossier natif, `readonly` pour un
+dossier repris qui porte une référence globale, `unavailable` pour celui qui
+n'en a pas et qu'aucune URL ne saurait désigner.
 
 ## Ce que la référence désigne
 
@@ -270,7 +274,7 @@ class DallyOpsIntakeSearchService(models.AbstractModel):
         Ni identifiant Odoo, ni clé de source, ni clé de ligne : la navigation
         se fait par la référence globale, et le reste ne regarde que le serveur.
         """
-        ouvrable = dossier.id in ouvrables
+        acces, motif = self._acces_detail(dossier, ouvrables)
         return {
             # Toujours la référence globale : c'est elle, et elle seule, qui
             # ouvre une fiche sans ambiguïté.
@@ -287,9 +291,26 @@ class DallyOpsIntakeSearchService(models.AbstractModel):
                 dossier.goods_received_on or dossier.request_date),
             # La décision d'ouverture appartient au serveur. L'interface la
             # lit ; elle ne redéduit jamais le domaine de la fiche.
-            "detail_access": "full" if ouvrable else "unavailable",
-            "detail_access_reason": None if ouvrable else "legacy_not_supported",
+            "detail_access": acces,
+            "detail_access_reason": motif,
         }
+
+    @api.model
+    def _acces_detail(self, dossier, ouvrables):
+        """Laquelle des trois fiches ce dossier ouvre-t-il — s'il en ouvre une.
+
+        Un dossier natif ouvre la fiche complète. Un dossier repris ouvre une
+        fiche en lecture seule, à condition d'avoir une référence globale :
+        elle seule navigue sans ambiguïté, `A001` étant local à son départ.
+        Sans elle, le dossier existe et se voit dans la recherche, mais aucune
+        URL ne peut le désigner — le dire vaut mieux que proposer un lien qui
+        ouvrirait le dossier d'un autre client.
+        """
+        if dossier.id in ouvrables:
+            return "full", None
+        if dossier.external_reference:
+            return "readonly", "legacy_readonly"
+        return "unavailable", "no_reference"
 
     @staticmethod
     def _date(valeur):

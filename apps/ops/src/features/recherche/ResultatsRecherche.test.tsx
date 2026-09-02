@@ -19,12 +19,21 @@ const OPS: IntakeSearchItem = {
   detail_access_reason: null,
 };
 
-const ANCIEN: IntakeSearchItem = {
+const REPRIS: IntakeSearchItem = {
   ...OPS,
   reference: 'A012',
   local_reference: '',
+  detail_access: 'readonly',
+  detail_access_reason: 'legacy_readonly',
+};
+
+/** Un dossier réel, mais qu'aucune URL ne saurait désigner. */
+const SANS_REFERENCE: IntakeSearchItem = {
+  ...OPS,
+  reference: '',
+  local_reference: '',
   detail_access: 'unavailable',
-  detail_access_reason: 'legacy_not_supported',
+  detail_access_reason: 'no_reference',
 };
 
 const rendu = (items: readonly IntakeSearchItem[], hasMore = false) =>
@@ -36,16 +45,30 @@ describe('la liste des dossiers trouvés', () => {
     expect(html).toContain(`href="/reception/dossier/${encodeURIComponent(GLOBALE)}"`);
   });
 
-  it('R20 · ne rend aucun lien pour un dossier historique', () => {
-    const html = rendu([ANCIEN]);
+  it('F02 · ouvre un dossier repris sur sa fiche en lecture seule', () => {
+    const html = rendu([REPRIS]);
+    expect(html).toContain('href="/reception/dossier/A012/lecture-seule"');
+    expect(html).toContain('Lecture seule');
+    expect(html).toContain('Dossier historique — lecture seule');
+  });
+
+  it('F03 · ne rend aucun lien sans référence globale', () => {
+    const html = rendu([SANS_REFERENCE]);
     expect(html).not.toContain('<a');
     expect(html).not.toContain('href=');
-    expect(html).toContain('Dossier historique');
-    expect(html).toContain('Consultation détaillée non disponible');
+    expect(html).toContain('Référence globale indisponible');
+  });
+
+  it('deux dossiers sans référence ne se confondent pas dans la liste', () => {
+    // Leur `reference` est vide : prise comme clé de liste, elle serait la
+    // même pour les deux.
+    const html = rendu([SANS_REFERENCE, { ...SANS_REFERENCE, customer_name: 'Autre' }]);
+    expect(html).toContain('Mayram Soumaré');
+    expect(html).toContain('Autre');
   });
 
   it('ne dit jamais qu’un dossier historique est introuvable', () => {
-    expect(rendu([ANCIEN])).not.toContain('introuvable');
+    expect(rendu([REPRIS])).not.toContain('introuvable');
   });
 
   it('M10 · n’utilise jamais la référence locale dans une URL', () => {

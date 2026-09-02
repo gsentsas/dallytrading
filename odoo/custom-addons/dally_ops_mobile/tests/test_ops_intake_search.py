@@ -216,13 +216,19 @@ class TestOpsIntakeSearch(AccountTestInvoicingCommon):
         self._dossier_ancien("A012")
         self.assertIn("A012", self._references(self._chercher("A012")))
 
-    def test_R15_un_dossier_ancien_annonce_sa_fiche_indisponible(self):
+    def test_R15_un_dossier_ancien_annonce_sa_fiche_en_lecture_seule(self):
+        """Le contrat est passé de deux issues à trois.
+
+        Un dossier repris qui porte une référence globale s'ouvre désormais,
+        mais en lecture seule. L'ancienne valeur `legacy_not_supported` disait
+        « pas de fiche » ; elle serait fausse aujourd'hui.
+        """
         self._dossier_ancien("A012")
         item = self._chercher("A012")["items"][0]
         self.assertEqual(item["reference"], "A012")
         self.assertEqual(item["local_reference"], "")
-        self.assertEqual(item["detail_access"], "unavailable")
-        self.assertEqual(item["detail_access_reason"], "legacy_not_supported")
+        self.assertEqual(item["detail_access"], "readonly")
+        self.assertEqual(item["detail_access_reason"], "legacy_readonly")
 
     def test_R16_aucune_url_de_fiche_n_est_publiee(self):
         self._dossier_ancien("A012")
@@ -432,6 +438,73 @@ class TestOpsIntakeSearch(AccountTestInvoicingCommon):
         self.assertIn(("sync_source", "=", "backoffice"), domaine)
         self.assertIn(("sync_source_key", "=like", "ops:%"), domaine)
         self.assertIn(("intake_consolidation_id", "!=", False), domaine)
+
+    # ─── S01-S09 · le contrat tri-état ───────────────────────────────
+
+    def test_S01_un_dossier_natif_reste_full(self):
+        reference = self._dossier_ops()
+        item = self._chercher(reference)["items"][0]
+        self.assertEqual(item["detail_access"], "full")
+        self.assertIsNone(item["detail_access_reason"])
+
+    def test_S02_un_dossier_du_classeur_avec_reference_est_readonly(self):
+        self._dossier_ancien("LEGACY-S02")
+        item = self._chercher("LEGACY-S02")["items"][0]
+        self.assertEqual(item["detail_access"], "readonly")
+        self.assertEqual(item["detail_access_reason"], "legacy_readonly")
+
+    def test_S03_un_dossier_du_tableur_avec_reference_est_readonly(self):
+        dossier = self._dossier_ancien("LEGACY-S03")
+        dossier.sudo().write({"sync_source": "google_sheets",
+                              "sync_source_key": "sheets:S03"})
+        item = self._chercher("LEGACY-S03")["items"][0]
+        self.assertEqual(item["detail_access"], "readonly")
+
+    def test_S04_un_dossier_sans_reference_globale_reste_inatteignable(self):
+        """Il se voit, mais aucune URL ne saurait le désigner sans risque."""
+        self.env["dally.shipment"].sudo().create({
+            "partner_id": self.partner.id, "company_id": self.societe.id,
+            "transport_mode": "air", "direction": "export",
+        })
+        items = [item for item in self._chercher(self.partner.name)["items"]
+                 if item["reference"] == ""]
+        self.assertTrue(items, "le dossier sans référence doit rester trouvable")
+        self.assertEqual(items[0]["detail_access"], "unavailable")
+        self.assertEqual(items[0]["detail_access_reason"], "no_reference")
+
+    def test_S05_la_navigation_reste_la_reference_globale(self):
+        self._dossier_ancien("AIR-DSS-CDG-S05-A001")
+        item = self._chercher("AIR-DSS-CDG-S05-A001")["items"][0]
+        self.assertEqual(item["reference"], "AIR-DSS-CDG-S05-A001")
+
+    def test_S06_la_reference_locale_ne_navigue_jamais(self):
+        """Deux `A001` repris : seule la référence globale les départage."""
+        premier = self._dossier_ancien("AIR-DSS-CDG-S06A-A001")
+        second = self._dossier_ancien("AIR-DSS-CDG-S06B-A001")
+        for dossier in (premier, second):
+            dossier.sudo().write({"collection_local_ref": "A001"})
+        items = self._chercher("A001")["items"]
+        globales = {item["reference"] for item in items
+                    if item["local_reference"] == "A001"}
+        self.assertIn("AIR-DSS-CDG-S06A-A001", globales)
+        self.assertIn("AIR-DSS-CDG-S06B-A001", globales)
+
+    def test_S07_la_recherche_par_telephone_est_inchangee(self):
+        self._dossier_ancien("LEGACY-S07")
+        references = self._references(self._chercher("+221 77 123 45 67"))
+        self.assertIn("LEGACY-S07", references)
+
+    def test_S08_l_isolation_par_societe_est_inchangee(self):
+        autre = self.env["res.partner"].create({
+            "name": "Client S08", "company_id": self.autre_societe.id})
+        self._dossier_ancien("LEGACY-S08", societe=self.autre_societe,
+                             partenaire=autre)
+        self.assertNotIn("LEGACY-S08", self._references(self._chercher("LEGACY-S08")))
+
+    def test_S09_le_plafond_de_resultats_est_inchange(self):
+        with self.assertRaises(DallyOpsError) as erreur:
+            self._chercher("A001", limit=51)
+        self.assertEqual(erreur.exception.code, "search_limit_invalid")
 
     def test_un_dossier_declare_full_est_reellement_ouvrable(self):
         """Le contrat le plus important : `full` ne doit jamais mentir."""

@@ -143,6 +143,38 @@ describe('lecture d’une ressource Ops', () => {
       'https://odoo.example.test/api/v1/ops/intakes/AIR-DSS-CDG-2026-002');
   });
 
+  it.each([
+    ['I1.1 · référence à souligné', 'intakes/SN-DK_FR-PA_004/legacy-detail'],
+    ['I1.2 · souligné et tiret mêlés', 'intakes/A-B_C/legacy-detail'],
+  ])('accepte %s', async (_cas, ressource) => {
+    // Cinq dossiers de production portent un souligné — `SN-DK_FR-PA_004` en
+    // est un. La classe précédente ne l'admettait pas : la recherche les
+    // annonçait ouvrables, et la fiche répondait « service indisponible ».
+    espionner(reponseJson({ success: true, data: {} }));
+    await opsGet(ressource, 'session-abc', 'corr');
+    expect(appelsFetch[0]?.url)
+      .toBe(`https://odoo.example.test/api/v1/ops/${ressource}`);
+  });
+
+  it.each([
+    ['une remontée de chemin', '../freight'],
+    ['une barre oblique encodée', 'A%2FB'],
+    ['un espace', 'A B'],
+    ['une chaîne de requête', 'A?x=1'],
+    ['un fragment', 'A#x'],
+    ['un point', 'A.B'],
+    ['un souligné isolé', '_'],
+    ['un souligné en tête', '_A'],
+    ['un souligné en fin', 'A_'],
+    ['deux soulignés de suite', 'A__B'],
+  ])('refuse toujours %s malgré l’élargissement', async (_cas, ressource) => {
+    const faux = espionner(reponseJson({ success: true, data: {} }));
+    await expect(opsGet(ressource, 'session-abc', 'corr')).rejects.toMatchObject({
+      code: 'invalid_path',
+    });
+    expect(faux).not.toHaveBeenCalled();
+  });
+
   it('renvoie la charge « data » et rien d’autre', async () => {
     espionner(reponseJson({ success: true, data: { consolidations: [1, 2] } }));
     await expect(opsGet('consolidations', 'session-abc', 'corr')).resolves.toEqual({

@@ -60,7 +60,7 @@ export const CHAMPS_FICHIER = ['receipt', 'photo'] as const;
 export type NomChampFichier = (typeof CHAMPS_FICHIER)[number];
 
 const RESSOURCE_OPS =
-  /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*(?:\/[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)*$/;
+  /^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*(?:\/[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*)*$/;
 
 export class OpsGatewayError extends Error {
   readonly code:

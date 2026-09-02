@@ -8,17 +8,52 @@ tests décrivent ce qui reste vrai pour l'opérateur.
 """
 
 import re
+from datetime import date
+from unittest.mock import patch
 
+from lxml import etree
 from odoo import fields
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import tagged
 
 from .common import ConsolidationCommon
-from ..models.consolidation import _CONSOLIDATION_BYPASS_TOKEN, _CONSOLIDATION_STATE_WRITE_TOKEN
+from ..models.consolidation import (
+    _CONSOLIDATION_BYPASS_TOKEN,
+    _CONSOLIDATION_STATE_WRITE_TOKEN,
+    _is_reference_placeholder,
+)
 
 
 @tagged("post_install", "-at_install", "dally_freight")
 class TestConsolidationLifecycle(ConsolidationCommon):
+
+    def _route_2099_values(self, **extra):
+        return {
+            "company_id": self.env.company.id,
+            "transport_mode": "air",
+            "direction": "export",
+            "origin_city": "Dakar",
+            "origin_location": "DSS",
+            "destination_city": "Paris",
+            "destination_location": "CDG",
+            "collection_open_on": date(2099, 1, 1),
+            **extra,
+        }
+
+    def _seed_route_2099(self, label):
+        company = self.env["res.company"].create({
+            "name": "Route allocator 2099 - %s" % label,
+        })
+        model = self.env["dally.freight.consolidation"]
+        records = model.create([
+            self._route_2099_values(
+                company_id=company.id, name="AIR-DSS-CDG-2099-001"
+            ),
+            self._route_2099_values(
+                company_id=company.id, name="AIR-DSS-CDG-2099-002"
+            ),
+        ])
+        return company, records
 
     def _route_existing_suffixes(self, origin, destination, year):
         """Return valid existing suffixes in one allocator namespace."""
@@ -49,6 +84,49 @@ class TestConsolidationLifecycle(ConsolidationCommon):
         # Le format « AIR-DSS-CDG-YYYY-NNN » est stable dans le temps ; on ne
         # dépend pas d'une année précise pour ne pas casser en 2027.
         self.assertRegex(consolidation.name, r"^AIR-DSS-CDG-\d{4}-\d{3}$")
+
+    def test_placeholders_allouent_exactement_la_prochaine_reference(self):
+        """001 + 002 donnent 003 pour chaque forme issue d'une vraie création."""
+        model = self.env["dally.freight.consolidation"]
+        missing = object()
+        cases = (
+            ("name absent", missing),
+            ("None", None),
+            ("False", False),
+            ("vide", ""),
+            ("Nouveau", "Nouveau"),
+            ("New", "New"),
+            ("slash", "/"),
+            ("espaces", " Nouveau "),
+        )
+        for label, placeholder in cases:
+            with self.subTest(placeholder=label):
+                company, _records = self._seed_route_2099(label)
+                values = self._route_2099_values(company_id=company.id)
+                if placeholder is not missing:
+                    values["name"] = placeholder
+                record = model.create(values)
+                self.assertEqual(record.name, "AIR-DSS-CDG-2099-003")
+                self.assertFalse(_is_reference_placeholder(record.name))
+
+    def test_aucune_creation_batch_ne_persiste_un_placeholder(self):
+        model = self.env["dally.freight.consolidation"]
+        company = self.env["res.company"].create({
+            "name": "Route placeholder batch 2098",
+        })
+        records = model.create([
+            {
+                "name": placeholder,
+                "company_id": company.id,
+                "transport_mode": "air",
+                "direction": "export",
+                "origin_location": "TST",
+                "destination_location": "REF",
+                "collection_open_on": date(2098, 1, 1),
+            }
+            for placeholder in (None, False, "", "Nouveau", "New", "/", " Nouveau ")
+        ])
+        self.assertFalse(any(_is_reference_placeholder(record.name) for record in records))
 
     def test_creation_batch_reserve_des_references_uniques(self):
         model = self.env["dally.freight.consolidation"]
@@ -182,6 +260,38 @@ class TestConsolidationLifecycle(ConsolidationCommon):
         self.assertFalse(successor.mawb_number)
         self.assertFalse(successor.flight_number)
         self.assertFalse(successor.line_ids)
+
+    def test_prochain_depart_alloue_003_sans_persister_nouveau(self):
+        _company, records = self._seed_route_2099("next departure")
+        consolidation = records[1]
+        consolidation.with_context(
+            _dally_consolidation_state_write=_CONSOLIDATION_STATE_WRITE_TOKEN,
+            _dally_consolidation_bypass=_CONSOLIDATION_BYPASS_TOKEN,
+        ).write({"state": "departed"})
+
+        with patch.object(fields.Date, "context_today", return_value=date(2099, 1, 2)):
+            action = consolidation.action_create_next_departure()
+
+        successor = self.env["dally.freight.consolidation"].browse(action["res_id"])
+        self.assertEqual(successor.name, "AIR-DSS-CDG-2099-003")
+        self.assertFalse(_is_reference_placeholder(successor.name))
+
+    def test_formulaire_affiche_une_reference_automatique_non_editable(self):
+        view = self.env.ref(
+            "dally_freight_consolidation.consolidation_view_form"
+        )
+        arch = etree.fromstring(view.arch_db.encode())
+        saved_name = arch.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), "
+            "' oe_title ')]/h1[@invisible='not id']/field[@name='name']"
+        )
+        automatic_label = arch.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), "
+            "' oe_title ')]/h1[@invisible='id']/span[normalize-space()="
+            "\"Référence automatique à l'enregistrement\"]"
+        )
+        self.assertEqual(saved_name[0].get("readonly"), "1")
+        self.assertTrue(automatic_label)
 
     def test_ecart_manifeste_est_recompute_sans_toucher_aux_colis_client(self):
         consolidation = self._consolidation()

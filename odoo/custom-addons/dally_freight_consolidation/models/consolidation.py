@@ -33,6 +33,22 @@ _CONSOLIDATION_BYPASS_TOKEN = object()
 _CONSOLIDATION_STATE_WRITE_TOKEN = object()
 _INTAKE_SEQUENCE_SETUP_TOKEN = object()
 
+_REFERENCE_PLACEHOLDERS = frozenset({"", "/", "nouveau", "new"})
+
+
+def _is_reference_placeholder(value):
+    """Whether ``value`` still asks the server to allocate a reference.
+
+    Imports and backfills may provide a real consolidation reference, so this
+    deliberately recognises only the UI/default sentinels. Normalising edge
+    whitespace and case keeps the decision identical across form, RPC and
+    server-side creates without broadening it to valid business references.
+    """
+    if value is None or value is False:
+        return True
+    return str(value).strip().casefold() in _REFERENCE_PLACEHOLDERS
+
+
 def _route_text(value):
     return re.sub(r"\s+", " ", (value or "").strip().casefold())
 
@@ -222,15 +238,14 @@ class DallyFreightConsolidation(models.Model):
             initial_state = vals.get("state", "draft")
             if initial_state not in {"draft", "collecting"}:
                 raise UserError(_("Une consolidation doit être créée à l’état « Brouillon » ou « Collecte ouverte »."))
-            # `vals.get("name")` vaut `None` quand la clé n'est pas fournie
-            # depuis un create serveur : le premier test tombait sur un dossier
-            # nommé « Nouveau » (valeur par défaut appliquée par le super après
-            # notre garde). On teste explicitement toutes les formes vides.
-            placeholder = vals.get("name")
-            if not placeholder or placeholder in (_("Nouveau"), "Nouveau", "New"):
+            if _is_reference_placeholder(vals.get("name")):
                 vals["name"] = self._next_route_reference(vals, reserved_names)
                 reserved_names.add(vals["name"])
         records = super().create(vals_list)
+        if records.filtered(lambda record: _is_reference_placeholder(record.name)):
+            raise ValidationError(_(
+                "La référence de consolidation doit être attribuée automatiquement."
+            ))
         Sequence = self.env["ir.sequence"].sudo()
         for record in records.filtered(lambda rec: not rec.intake_sequence_id):
             sequence = Sequence.create({

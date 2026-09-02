@@ -3,6 +3,7 @@ from . import test_consolidation_workflow
 from . import test_consolidation_reference_guard
 from . import test_line_and_packages
 from . import test_historical_backfill
+from . import test_departure_completeness
 from . import test_departure_gate
 from . import test_payment_override
 from . import test_review_findings

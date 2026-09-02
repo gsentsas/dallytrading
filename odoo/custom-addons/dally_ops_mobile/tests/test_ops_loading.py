@@ -163,8 +163,12 @@ class TestOpsLoading(AccountTestInvoicingCommon):
             "request_uuid": (str(uuid.uuid4())
                              if request_uuid is self._ABSENT else request_uuid),
             "action": action,
-            "package_reference": (paquet if isinstance(paquet, str)
-                                  else paquet.ops_loading_uuid),
+            # Un enregistrement donne son identité ; tout le reste — chaîne,
+            # entier, liste — passe tel quel, pour pouvoir éprouver ce que le
+            # service fait d'une référence qui n'est pas du texte.
+            "package_reference": (paquet.ops_loading_uuid
+                                  if hasattr(paquet, "ops_loading_uuid")
+                                  else paquet),
         }
         charge.update(extra)
         return self._service(utilisateur).apply_loading(
@@ -475,6 +479,102 @@ class TestOpsLoading(AccountTestInvoicingCommon):
         self.assertLess(corps.index("_verrouiller_geste"), corps.index("_exiger_role_ops"))
         self.assertLess(corps.index("_verrouiller_geste"), corps.index("_valider"))
 
+    def test_la_cle_de_verrou_normalise_comme_la_validation(self):
+        """Un identifiant entouré d'espaces reste le même geste.
+
+        `_uuid` rogne avant d'analyser : « <uuid> » espacé valide donc vers sa
+        forme canonique. Si la clé de verrou ne rognait pas, elle tomberait sur
+        « invalid » pendant que le même identifiant sans espaces prendrait la
+        sienne — les deux gestes échapperaient à la sérialisation, et le second
+        heurterait la contrainte d'unicité du registre au lieu de se
+        reconnaître comme un rejeu.
+        """
+        service = self._service()
+        identifiant = str(uuid.uuid4())
+        canonique = service._request_uuid_pour_verrou({"request_uuid": identifiant})
+        self.assertEqual(canonique, identifiant)
+        for espace in (" %s", "%s ", "  %s\n", "\t%s\t"):
+            self.assertEqual(
+                service._request_uuid_pour_verrou({"request_uuid": espace % identifiant}),
+                canonique, espace)
+        # Ce qui n'est pas un identifiant partage une clé unique et inoffensive.
+        for mauvais in ({"request_uuid": "pas-un-uuid"}, {"request_uuid": 42}, {}):
+            self.assertEqual(service._request_uuid_pour_verrou(mauvais), "invalid")
+
+    def test_une_reference_de_colis_non_textuelle_est_refusee_proprement(self):
+        """Un type inattendu doit refuser, pas planter.
+
+        `(42 or "").strip()` lève une `AttributeError` : le contrôleur ne
+        l'attrape pas, et la route rendrait 500 là où le contrat promet un
+        refus. La valeur traverse donc `_valider` sans coercition, et
+        `_resoudre_colis` — qui sait déjà refuser ce qui n'est pas du texte —
+        rend « colis introuvable ».
+        """
+        reference = self._creer_dossier()
+        self._decharger(reference)
+        for valeur in (42, True, [], {}, None, 3.5):
+            with self.assertRaises(DallyOpsError) as capture:
+                self._appliquer("load", valeur)
+            self.assertEqual(capture.exception.code, "package_not_found", valeur)
+            self.assertEqual(capture.exception.status, 404, valeur)
+        self.assertFalse(self._lignes())
+
+    def test_le_verrou_du_depart_porte_sur_la_ligne_reelle(self):
+        """Un verrou consultatif ne voyait pas la clôture back-office.
+
+        Celle-ci prend `consolidation:<préfixe>`, pas nos clés : il n'y avait
+        aucune contention. Et sous `REPEATABLE READ`, relire `state` après
+        `invalidate_recordset` reste sur l'instantané. `FOR UPDATE` porte sur
+        la ligne que la clôture modifie : si elle a changé depuis notre
+        instantané, PostgreSQL lève une erreur de sérialisation, et
+        `retrying` rejoue sur une transaction neuve.
+        """
+        requetes = []
+        original = type(self.env.cr).execute
+
+        def espion(cr, requete, params=None, *args, **kwargs):
+            requetes.append(requete)
+            return original(cr, requete, params, *args, **kwargs)
+
+        with patch.object(type(self.env.cr), "execute", espion):
+            self._service()._verrouiller_depart(self.depart)
+
+        verrous = [r for r in requetes if "FOR UPDATE" in r]
+        self.assertEqual(len(verrous), 1)
+        self.assertIn("dally_freight_consolidation", verrous[0])
+        self.assertFalse([r for r in requetes if "advisory" in r],
+                         "le verrou du départ ne doit plus être consultatif")
+
+    def test_la_creation_et_la_correction_calculent_les_memes_mesures(self):
+        """Une seule formule, deux chemins.
+
+        `create` l'appliquait dans le modèle, `write` la redisait dans le
+        service : deux endroits pour une même règle. Les deux passent
+        désormais par `_mesures_chargees`, et ce test compare leurs sorties à
+        cette source unique.
+        """
+        Ligne = self.env["dally.freight.consolidation.line"].sudo()
+        reference = self._creer_dossier()
+        paquet = self._decharger(reference)
+        paquet.sudo().write({"quantity": 4})
+        attendu = Ligne._mesures_chargees(paquet, 4)
+
+        # chemin `create`, par le service
+        self._appliquer("load", paquet)
+        ligne = self._lignes()
+        self.assertEqual(len(ligne), 1)
+        self.assertAlmostEqual(ligne.weight_loaded, attendu["weight_loaded"], 3)
+        self.assertAlmostEqual(ligne.volume_loaded, attendu["volume_loaded"], 4)
+
+        # chemin `write` : on redescend la ligne, puis on la complète
+        ligne.write({"quantity_loaded": 1,
+                     **Ligne._mesures_chargees(paquet, 1)})
+        self._appliquer("load", paquet)
+        ligne.invalidate_recordset()
+        self.assertEqual(ligne.quantity_loaded, 4)
+        self.assertAlmostEqual(ligne.weight_loaded, attendu["weight_loaded"], 3)
+        self.assertAlmostEqual(ligne.volume_loaded, attendu["volume_loaded"], 4)
+
     # ─── Idempotence ─────────────────────────────────────────────────
 
     def test_le_meme_geste_rejoue_ne_charge_pas_deux_fois(self):
@@ -737,6 +837,23 @@ class TestOpsLoading(AccountTestInvoicingCommon):
         self.assertIsNone(self.env.cr.fetchone()[0])
 
 
+def _descendants(racine):
+    """Toute la descendance d'une classe, pas seulement ses filles directes.
+
+    `__subclasses__()` ne descend que d'un niveau. Un contrôleur qui hériterait
+    d'une classe intermédiaire échapperait à l'inspection — alors qu'Odoo le
+    fusionnerait comme les autres, et que le conflit de signature passerait
+    inaperçu.
+
+    Écrite au niveau du module pour être éprouvée seule, sur une hiérarchie
+    jouet : construire un vrai contrôleur intermédiaire polluerait la carte de
+    routage d'Odoo pour toute la suite.
+    """
+    for fille in racine.__subclasses__():
+        yield fille
+        yield from _descendants(fille)
+
+
 @tagged("post_install", "-at_install", "dally")
 class TestOpsControllersNeSeMarchentPasDessus(TransactionCase):
     """Deux contrôleurs Ops ne peuvent pas définir la même aide autrement.
@@ -754,6 +871,28 @@ class TestOpsControllersNeSeMarchentPasDessus(TransactionCase):
     même nom aient exactement la même signature.
     """
 
+    def test_le_parcours_descend_au_dela_des_filles_directes(self):
+        """La récursion, prouvée sur une hiérarchie à trois étages.
+
+        `__subclasses__()` seul ne verrait que `Intermediaire`. C'est
+        `Petite` — deux niveaux plus bas — qui porterait le conflit de
+        signature, et qui échappait donc au garde.
+        """
+        class Racine:
+            pass
+
+        class Intermediaire(Racine):
+            pass
+
+        class Petite(Intermediaire):
+            pass
+
+        directes = set(Racine.__subclasses__())
+        toutes = set(_descendants(Racine))
+        self.assertEqual(directes, {Intermediaire})
+        self.assertEqual(toutes, {Intermediaire, Petite})
+        self.assertNotIn(Petite, directes)
+
     def test_deux_aides_de_meme_nom_ont_la_meme_signature(self):
         import importlib
         import inspect
@@ -770,7 +909,7 @@ class TestOpsControllersNeSeMarchentPasDessus(TransactionCase):
 
         signatures = {}
         conflits = []
-        for classe in DallyOpsController.__subclasses__():
+        for classe in _descendants(DallyOpsController):
             for nom, membre in vars(classe).items():
                 if not nom.startswith("_") or nom.startswith("__"):
                     continue
@@ -927,6 +1066,31 @@ class TestOpsLoadingHttp(HttpCase):
         self.assertEqual(reponse.status_code, 400)
         self.assertEqual(json.loads(reponse.content)["error"]["code"],
                          "invalid_request")
+
+    def test_une_reference_de_colis_non_textuelle_repond_404_et_non_500(self):
+        """Le contrat, pas une trace de pile.
+
+        C'est par HTTP que se mesure la différence : une `AttributeError`
+        traverserait le contrôleur et rendrait 500.
+        """
+        chemin = "consolidations/%s" % self.depart.name
+        for valeur in (42, True, [], {}, None):
+            reponse = self._poster(chemin, self._geste(package_reference=valeur))
+            self.assertEqual(reponse.status_code, 404, "%r -> %s" % (valeur, reponse.content[:200]))
+            self.assertEqual(json.loads(reponse.content)["error"]["code"],
+                             "package_not_found", valeur)
+
+    def test_un_identifiant_de_geste_espace_reste_le_meme_geste(self):
+        """Deux envois du même identifiant, l'un espacé, ne chargent qu'une fois."""
+        identifiant = str(uuid.uuid4())
+        chemin = "consolidations/%s" % self.depart.name
+        premier = self._poster(chemin, self._geste(request_uuid=identifiant))
+        self.assertEqual(premier.status_code, 200, premier.content[:400])
+        second = self._poster(chemin, self._geste(request_uuid="  %s  " % identifiant))
+        self.assertEqual(second.status_code, 200, second.content[:400])
+        self.assertTrue(json.loads(second.content)["data"]["replayed"])
+        self.assertEqual(self.env["dally.freight.consolidation.line"].search_count(
+            [("consolidation_id", "=", self.depart.id)]), 1)
 
     def test_une_action_inconnue_repond_400(self):
         reponse = self._poster("consolidations/%s" % self.depart.name,

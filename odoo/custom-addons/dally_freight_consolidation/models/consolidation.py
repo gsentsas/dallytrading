@@ -693,6 +693,20 @@ class DallyFreightConsolidationLine(models.Model):
             ["consolidation-package:%s" % package_id],
         )
 
+    @api.model
+    def _mesures_chargees(self, package, quantity):
+        """Le poids et le volume d'une quantité chargée.
+
+        La formule vit ici, et nulle part ailleurs. Elle était appliquée à la
+        création par ce modèle et redite à la correction par le service Ops :
+        deux endroits pour une même règle, donc deux résultats le jour où
+        l'un des deux évolue.
+        """
+        return {
+            "weight_loaded": package.unit_weight_kg * quantity,
+            "volume_loaded": package.unit_volume_cbm * quantity,
+        }
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -705,8 +719,8 @@ class DallyFreightConsolidationLine(models.Model):
             self._check_operational_compatibility(consolidation, package)
             vals["shipment_id"] = package.shipment_id.id
             quantity = vals.get("quantity_loaded") or 1
-            vals.setdefault("weight_loaded", package.unit_weight_kg * quantity)
-            vals.setdefault("volume_loaded", package.unit_volume_cbm * quantity)
+            for champ, valeur in self._mesures_chargees(package, quantity).items():
+                vals.setdefault(champ, valeur)
             self._lock_package(self.env.cr, package.id)
         lines = super().create(vals_list)
         lines._check_loaded_quantity()

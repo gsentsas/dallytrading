@@ -177,10 +177,11 @@ class DallyOpsLoadingService(models.AbstractModel):
             })
             return
         if ligne.quantity_loaded < colis.quantity:
+            # La formule appartient au cœur : `create` l'applique déjà, et la
+            # redire ici la ferait diverger au premier changement.
             ligne.write({
                 "quantity_loaded": colis.quantity,
-                "weight_loaded": colis.unit_weight_kg * colis.quantity,
-                "volume_loaded": colis.unit_volume_cbm * colis.quantity,
+                **Ligne._mesures_chargees(colis, colis.quantity),
             })
 
     @api.model
@@ -244,11 +245,6 @@ class DallyOpsLoadingService(models.AbstractModel):
         return colis
 
     @api.model
-    def _verrouiller(self, cle):
-        self.env.cr.execute(
-            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", [cle])
-
-    @api.model
     def _verrouiller_geste(self, cle):
         """Sérialise deux envois du même geste — sans jamais attendre.
 
@@ -283,13 +279,33 @@ class DallyOpsLoadingService(models.AbstractModel):
 
     @api.model
     def _verrouiller_depart(self, depart):
-        """Sérialise les gestes visant le même départ.
+        """Verrouille la ligne du départ, et non un verrou consultatif.
 
-        Sans lui, une clôture back-office pourrait s'intercaler entre la
-        lecture de l'état et l'écriture de la ligne. Le cœur refuserait
-        peut-être — mais « peut-être » n'est pas un invariant.
+        ## Ce qu'un verrou consultatif ne pouvait pas voir
+
+        Une clôture back-office ne prend pas nos clés — elle prend
+        `consolidation:<préfixe>`, celle de la numérotation. Il n'y avait donc
+        aucune contention avec un `ops-loading-consolidation:<id>`, et sous
+        `REPEATABLE READ` notre instantané est figé depuis le premier ordre
+        SQL : `invalidate_recordset` ne vide que le cache ORM, la relecture de
+        `state` restait sur l'instantané, et une ligne pouvait naître après
+        `collection_closed`.
+
+        ## Ce que `FOR UPDATE` apporte
+
+        Il porte sur la **ligne réelle**, celle que la clôture modifie. Si le
+        départ a changé depuis notre instantané, PostgreSQL refuse le verrou
+        avec une erreur de sérialisation — que `service.model.retrying` rejoue.
+        La transaction repart alors sur un instantané neuf, y lit l'état à
+        jour, et le geste est refusé comme il doit l'être.
+
+        Il sérialise aussi deux gestes Ops visant le même départ, ce que
+        faisait déjà le verrou consultatif.
         """
-        self._verrouiller("ops-loading-consolidation:%s" % depart.id)
+        self.env.cr.execute(
+            "SELECT id FROM dally_freight_consolidation WHERE id = %s FOR UPDATE",
+            [depart.id],
+        )
 
     # ------------------------------------------------------------------
     # Idempotence
@@ -335,11 +351,19 @@ class DallyOpsLoadingService(models.AbstractModel):
         if action not in ACTIONS:
             raise DallyOpsError(
                 _("Action de chargement inconnue."), code="loading_action_invalid")
+        reference_colis = payload.get("package_reference")
+        if isinstance(reference_colis, str):
+            reference_colis = reference_colis.strip()
         return {
             "request_uuid": self.env["dally.ops.intake.service"]._uuid(
                 payload.get("request_uuid"), "request_uuid"),
             "action": action,
-            "package_reference": (payload.get("package_reference") or "").strip(),
+            # Pas de coercition : `(42 or "").strip()` lèverait une
+            # `AttributeError`, et la route rendrait 500 là où le contrat
+            # promet un refus. La valeur passe telle quelle, et
+            # `_resoudre_colis` — qui sait déjà refuser ce qui n'est pas du
+            # texte — rend « colis introuvable ».
+            "package_reference": reference_colis,
         }
 
     @api.model
@@ -356,7 +380,12 @@ class DallyOpsLoadingService(models.AbstractModel):
         if not isinstance(valeur, str):
             return "invalid"
         try:
-            return str(uuid.UUID(valeur))
+            # `.strip()` comme `_uuid` : sans lui, « <uuid> » entouré d'espaces
+            # tomberait sur la clé « invalid » tandis que le même identifiant
+            # sans espaces prendrait la sienne. Les deux gestes échapperaient
+            # alors à la sérialisation, et le second heurterait la contrainte
+            # d'unicité du registre au lieu de se reconnaître comme un rejeu.
+            return str(uuid.UUID(valeur.strip()))
         except (TypeError, ValueError):
             return "invalid"
 

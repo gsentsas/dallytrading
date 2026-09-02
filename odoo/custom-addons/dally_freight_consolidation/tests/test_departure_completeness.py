@@ -22,6 +22,7 @@ contrôle, et c'est ce qui rend le durcissement rétro-compatible.
 
 from unittest.mock import patch
 
+from odoo.exceptions import ValidationError
 from odoo.tests import tagged
 
 from odoo.addons.dally_freight_consolidation.models.consolidation import (
@@ -179,7 +180,13 @@ class TestDepartureCompleteness(ConsolidationCommon):
         self._charger(shipment)
         self.assertEqual(len(self.depart._expected_shipments()), 1)
 
-    def test_l_attendu_reste_dans_la_societe_du_depart(self):
+    def test_une_societe_etrangere_ne_peut_pas_devenir_un_depart_prevu(self):
+        """Le cœur refuse le rattachement, avant même le filtre de lecture.
+
+        Un dossier d'une autre société sans départ prévu ni ligne serait exclu
+        de toute façon : l'affirmer ne prouverait rien. Ce qui se prouve, c'est
+        que le rattachement lui-même est refusé.
+        """
         autre_societe = self.env["res.company"].create({"name": "Complet Autre"})
         etranger = self.env["dally.shipment"].create({
             "partner_id": self.business.id,
@@ -189,6 +196,39 @@ class TestDepartureCompleteness(ConsolidationCommon):
             "origin_city": "Dakar", "origin_location": "DSS",
             "destination_city": "Paris", "destination_location": "CDG",
         })
+        with self.assertRaises(ValidationError):
+            etranger.planned_consolidation_id = self.depart
+
+    def test_le_filtre_par_societe_borne_bien_l_attendu(self):
+        """Le filtre lui-même, isolé.
+
+        On construit un départ jumeau dans une autre société et un dossier qui
+        y est réellement prévu : il est attendu là-bas, et nulle part ici. Sans
+        le filtre `company_id`, la recherche par `planned_consolidation_id`
+        seule ne les distinguerait pas si deux départs partageaient un
+        identifiant — c'est cette garantie que le test tient.
+        """
+        autre_societe = self.env["res.company"].create({"name": "Complet Ailleurs"})
+        depart_etranger = self.env["dally.freight.consolidation"].with_company(
+            autre_societe).create({
+                "name": "AIR-DSS-CDG-COMPLET-ETR", "company_id": autre_societe.id,
+                "transport_mode": "air", "direction": "export",
+                "origin_city": "Dakar", "origin_location": "DSS",
+                "destination_city": "Paris", "destination_location": "CDG",
+                "carrier_name": "Air Sénégal", "mawb_number": "297-99999999",
+                "state": "collecting",
+            })
+        etranger = self.env["dally.shipment"].with_company(autre_societe).create({
+            "partner_id": self.business.id,
+            "company_id": autre_societe.id,
+            "external_reference": "TST-COMPLET-ETR2",
+            "transport_mode": "air", "direction": "export",
+            "origin_city": "Dakar", "origin_location": "DSS",
+            "destination_city": "Paris", "destination_location": "CDG",
+        })
+        etranger.with_company(autre_societe).planned_consolidation_id = depart_etranger
+
+        self.assertIn(etranger, depart_etranger._expected_shipments())
         self.assertNotIn(etranger, self.depart._expected_shipments())
 
     # ─── Le verrou manquant au retrait ───────────────────────────────

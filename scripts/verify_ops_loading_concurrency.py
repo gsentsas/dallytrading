@@ -12,7 +12,8 @@ Quatre questions, quatre reponses attendues :
    ne charge le colis qu'une fois.
 2. Un chargement et un retrait concurrents du meme colis ne violent jamais les
    invariants de quantite ou d'unicite.
-3. Le meme colis ne peut pas etre charge simultanement sur deux departs actifs.
+3. Le meme colis, attendu sur deux departs a la fois, ne peut finir charge
+   que d'un seul cote.
 4. Un chargement concurrent d'une cloture de collecte ne cree jamais de ligne
    apres cloture.
 
@@ -100,6 +101,7 @@ env["dally.freight.consolidation.line"].sudo().search(
 env.cr.commit()
 
 registre = Registry(env.cr.dbname)
+DOSSIER_ID = dossier.id
 
 
 def env_ops():
@@ -118,6 +120,23 @@ def quantite(cible, paquet):
         ("consolidation_id", "=", cible.id),
         ("package_id", "=", paquet.id),
     ]).mapped("quantity_loaded"))
+
+
+def audits():
+    """Les traces du journal metier ecrites pour ce dossier.
+
+    Le registre des demandes empeche deja un second geste ; l'audit est ecrit
+    apres lui, donc il ne peut pas diverger — mais l'ecrire est une chose, le
+    prouver en est une autre.
+
+    Le journal metier est immuable : `vider()` retire les lignes et le
+    registre, jamais les traces. On compte donc toujours un *delta* par sonde,
+    jamais un total — le total ne ferait que croitre d'une sonde a l'autre.
+    """
+    return env_ops()["dally.ops.audit.event"].sudo().search_count([
+        ("shipment_id", "=", DOSSIER_ID),
+        ("action", "in", ("package_loaded", "package_unloaded")),
+    ])
 
 
 def demandes(cible):
@@ -209,14 +228,21 @@ def lancer(paires):
     ]
     for fil in fils:
         fil.start()
+    bloques = []
     for fil in fils:
         fil.join(30)
+        if fil.is_alive():
+            bloques.append(fil.name)
+    assert not bloques, (
+        "des fils sont encore vivants apres le delai : les listes de resultats "
+        "seraient partielles et les assertions suivantes trompeuses", bloques)
     relire()
     return resultats, erreurs
 
 
 # -- 1. LOAD vs LOAD meme package/request_uuid -------------------------
 identique = str(uuid4())
+audits_avant = audits()
 resultats, erreurs = lancer([
     (identique, premier.ops_loading_uuid, "load", depart.name),
     (identique, premier.ops_loading_uuid, "load", depart.name),
@@ -227,11 +253,14 @@ assert lignes(depart) == 1, ("sonde 1 : lignes", lignes(depart))
 assert demandes(depart) == 1, ("sonde 1 : registre", demandes(depart))
 assert quantite(depart, premier) == premier.quantity, (
     "sonde 1 : quantite", quantite(depart, premier))
+assert audits() - audits_avant == 1, (
+    "sonde 1 : un seul audit pour un geste rejoue", audits() - audits_avant)
 assert_invariants(depart, premier)
 print("sonde 1 OK - LOAD vs LOAD meme package ne charge qu'une fois")
 
 # -- 2. LOAD vs UNLOAD meme package ------------------------------------
 vider(depart)
+audits_avant = audits()
 resultats, erreurs = lancer([
     (str(uuid4()), premier.ops_loading_uuid, "load", depart.name),
     (str(uuid4()), premier.ops_loading_uuid, "unload", depart.name),
@@ -241,30 +270,48 @@ assert lignes(depart) in (0, 1), ("sonde 2 : lignes", lignes(depart))
 assert quantite(depart, premier) in (0, premier.quantity), (
     "sonde 2 : quantite", quantite(depart, premier))
 assert_invariants(depart, premier)
+# Un chargement et un retrait : deux gestes distincts, donc au plus deux
+# traces — jamais l'une des deux en double.
+assert audits() - audits_avant <= 2, (
+    "sonde 2 : audits en double", audits() - audits_avant)
 print("sonde 2 OK - LOAD vs UNLOAD meme package garde les invariants")
 
-# -- 3. LOAD consolidation A vs LOAD consolidation B -------------------
+# -- 3. LOAD sur A vs LOAD sur B, le colis attendu des deux cotes ---------
+# La version precedente repointait `planned_consolidation_id` vers B, ce qui
+# faisait refuser le fil A par `package_not_found` avant tout verrou : elle
+# mesurait un refus de portee, pas une course. Pour atteindre reellement
+# `_quantite_ailleurs`, le colis doit etre attendu des deux cotes au moment de
+# la course : prevu sur A, et deja charge sur B — l'union que
+# `_expected_shipments` calcule.
 vider(depart)
 vider(depart_b)
-dossier.planned_consolidation_id = depart_b
+dossier.planned_consolidation_id = depart
+env["dally.freight.consolidation.line"].sudo().create({
+    "consolidation_id": depart_b.id,
+    "package_id": premier.id,
+    "quantity_loaded": premier.quantity,
+})
 env.cr.commit()
+assert premier.shipment_id in depart._expected_shipments(), "attendu sur A"
+assert premier.shipment_id in depart_b._expected_shipments(), "attendu sur B"
+
 resultats, erreurs = lancer([
     (str(uuid4()), premier.ops_loading_uuid, "load", depart.name),
     (str(uuid4()), premier.ops_loading_uuid, "load", depart_b.name),
 ])
-assert len(erreurs) == 1, ("sonde 3 : un depart doit refuser le colis", erreurs)
-assert "package_not_found" in erreurs[0] or "Colis introuvable" in erreurs[0], (
-    "sonde 3", erreurs)
-assert lignes(depart) + lignes(depart_b) == 1, (
-    "sonde 3 : lignes", lignes(depart), lignes(depart_b))
+# Le fil B ne fait rien : le colis y est deja entier. Le fil A doit se heurter
+# a `_quantite_ailleurs` et refuser.
+assert len(erreurs) == 1, ("sonde 3 : A doit refuser un colis charge ailleurs", erreurs)
+assert "package_loaded_elsewhere" in erreurs[0] or "autre depart" in erreurs[0] \
+    or "autre départ" in erreurs[0], ("sonde 3", erreurs)
+assert lignes(depart) == 0, ("sonde 3 : aucune ligne sur A", lignes(depart))
+assert lignes(depart_b) == 1, ("sonde 3 : une seule ligne sur B", lignes(depart_b))
 assert not (quantite(depart, premier) and quantite(depart_b, premier)), (
     "sonde 3 : colis charge sur deux departs",
-    quantite(depart, premier),
-    quantite(depart_b, premier),
-)
+    quantite(depart, premier), quantite(depart_b, premier))
 assert_invariants(depart, premier)
 assert_invariants(depart_b, premier)
-print("sonde 3 OK - LOAD consolidation A vs B ne double-charge pas")
+print("sonde 3 OK - LOAD sur deux departs : le colis ne peut etre que d'un cote")
 
 # -- 4. LOAD vs close collection ---------------------------------------
 # Les deux departs doivent etre vides avant de repointer le dossier : le coeur
@@ -285,7 +332,10 @@ def cloturer():
             local = api.Environment(
                 cr, operateur.id, {"allowed_company_ids": [societe.id]})
             cible = local["dally.freight.consolidation"].browse(depart.id).sudo()
-            local["dally.ops.loading.service"]._verrouiller_depart(cible)
+            # Volontairement AUCUN verrou du service : un back-office reel n'en
+            # prend pas. La version precedente appelait `_verrouiller_depart`
+            # ici, ce qui faisait du clotureur un adversaire cooperatif — et la
+            # sonde validait alors un scenario qui n'existe pas.
             barriere.wait(timeout=20)
             # Par l'action metier : le coeur refuse une ecriture directe de
             # `state`, et la sonde n'a pas a contourner cette regle.
@@ -310,11 +360,20 @@ fil_load.start()
 fil_close.start()
 fil_load.join(30)
 fil_close.join(30)
+assert not fil_load.is_alive() and not fil_close.is_alive(), (
+    "sonde 4 : un fil est encore vivant apres le delai")
 relire()
-assert not erreurs, ("sonde 4", erreurs)
+# Le chargement peut legitimement echouer : c'est meme l'issue attendue quand
+# la cloture le precede. Ce qui ne doit jamais arriver, c'est une ligne creee
+# alors que la collecte est close.
+assert not [e for e in erreurs if "ConcurrencyError" not in e
+            and "consolidation_not_collecting" not in e
+            and "plus ouverte" not in e], ("sonde 4", erreurs)
 assert depart.state == "collection_closed", ("sonde 4 : etat", depart.state)
-if quantite(depart, premier):
-    assert demandes(depart) == 1, ("sonde 4 : registre", demandes(depart))
+assert not quantite(depart, premier), (
+    "sonde 4 : une ligne existe alors que la collecte est close",
+    quantite(depart, premier))
+assert lignes(depart) == 0, ("sonde 4 : lignes apres cloture", lignes(depart))
 assert_invariants(depart, premier)
 print("sonde 4 OK - LOAD vs cloture ne cree rien apres cloture")
 

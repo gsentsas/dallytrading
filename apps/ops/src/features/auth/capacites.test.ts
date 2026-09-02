@@ -25,11 +25,12 @@ describe('entrées de l’accueil', () => {
     expect(entreesAutorisees({ intake_create: 1 as unknown as boolean })).toEqual([]);
   });
 
-  it('couvre les sept capacités déclarées par Odoo', () => {
+  it('couvre les huit capacités déclarées par Odoo', () => {
     // L'égalité porte sur l'ensemble entier : ouvrir une capacité de plus doit
     // être une décision, et non l'effet de bord d'un écran ajouté.
     expect(ENTREES_ACCUEIL.map((entree) => entree.capacite).sort()).toEqual([
       'appointment_manage',
+      'consolidation_load',
       'expense_create',
       'intake_create',
       'intake_search',
@@ -37,6 +38,12 @@ describe('entrées de l’accueil', () => {
       'supervise',
       'transfer_create',
     ]);
+  });
+
+  it('le chargement d’un départ ouvre son écran', () => {
+    const chargement = ENTREES_ACCUEIL.find(
+      (e) => e.capacite === 'consolidation_load');
+    expect(chargement?.href).toBe('/chargement');
   });
 
   it('la recherche de dossier ouvre bien un écran', () => {

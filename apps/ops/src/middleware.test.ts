@@ -40,13 +40,39 @@ describe('une URI illisible vaut 400', () => {
   });
 });
 
+describe('le chargement d’un départ est protégé de la même façon', () => {
+  it('sur la route du BFF, et le mot désigne bien un départ', async () => {
+    const reponse = middleware(requete('/api/consolidations/A%ZZ/loading'));
+    expect(reponse.status).toBe(400);
+    expect(await reponse.json()).toEqual({
+      success: false, error: 'Référence de départ invalide.',
+    });
+  });
+
+  it('sur la page, en texte', async () => {
+    const reponse = middleware(requete('/chargement/A%ZZ'));
+    expect(reponse.status).toBe(400);
+    expect(reponse.headers.get('Content-Type')).toContain('text/plain');
+    expect(await reponse.text()).toBe('Référence de départ invalide.');
+  });
+
+  it('laisse passer une URI lisible', () => {
+    for (const chemin of ['/api/consolidations/AIR-DSS-CDG-2026-002/loading',
+                          '/chargement/AIR-DSS-CDG-2026-002']) {
+      expect(middleware(requete(chemin)).status, chemin).toBe(200);
+    }
+  });
+});
+
 describe('sa portée reste étroite', () => {
-  it('ne couvre que les deux chemins de la fiche en lecture seule', () => {
+  it('ne couvre que les chemins portant une référence dans l’URI', () => {
     // Un middleware large deviendrait un second endroit où raisonner sur les
     // chemins, et divergerait du premier.
     expect(config.matcher).toEqual([
       '/api/intakes/:reference/legacy-detail',
       '/reception/dossier/:reference/lecture-seule',
+      '/api/consolidations/:reference/loading',
+      '/chargement/:reference',
     ]);
   });
 });

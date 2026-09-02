@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/auth/odoo-ops', () => ({ opsGetQuery: vi.fn() }));
 
 const { opsGetQuery } = await import('@/lib/auth/odoo-ops');
 const {
-  activityPage, fetchActivity, fetchIntakeActivity,
+  activityEvent, activityItem, activityPage, fetchActivity, fetchIntakeActivity,
 } = await import('@/lib/ops/activity');
 
 const TZ = 'Africa/Dakar';
@@ -77,5 +80,50 @@ describe('le contrat activité', () => {
     expect(opsGetQuery).toHaveBeenCalledWith(
       `intakes/${EVENT.dossier_reference}/activity`, { limit: '10' }, 's', 'c',
     );
+  });
+});
+
+describe('les deux actions du chargement sont analysables', () => {
+  /**
+   * `activityPage.parse` est strict et sans repli : le jour où un opérateur
+   * charge un colis, le serveur écrit `package_loaded`. Si l'énumération
+   * l'ignorait, l'analyse de la page entière échouerait et le fil d'activité
+   * rendrait 503 — pour tout le monde, pas seulement pour cet événement.
+   *
+   * La liste est lue à la source côté serveur plutôt que recopiée : une copie
+   * divergerait au premier changement.
+   */
+  const SERVICE = readFileSync(fileURLToPath(new URL(
+    '../../../../../odoo/custom-addons/dally_ops_mobile/models/'
+    + 'ops_activity_service.py', import.meta.url)), 'utf8');
+
+  it('le serveur les publie bien, dans la catégorie « loading »', () => {
+    for (const action of ['package_loaded', 'package_unloaded']) {
+      expect(SERVICE).toContain(`"${action}": (`);
+      const ligne = SERVICE.slice(SERVICE.indexOf(`"${action}": (`));
+      expect(ligne.slice(0, ligne.indexOf('\n'))).toContain('"loading"');
+    }
+  });
+
+  it('le navigateur sait les analyser', () => {
+    const connus = new Set<string>(activityEvent.options);
+    expect(connus.has('package_loaded')).toBe(true);
+    expect(connus.has('package_unloaded')).toBe(true);
+    expect(new Set<string>(activityItem.shape.category.options).has('loading'))
+      .toBe(true);
+  });
+
+  it('un événement de chargement traverse le contrat entier', () => {
+    const page = {
+      events: [{
+        event: 'package_loaded', category: 'loading',
+        label: 'Colis chargé au départ',
+        occurred_at: '2026-09-02T09:00:00+00:00', actor: 'Gilles',
+        dossier_reference: 'AIR-DSS-CDG-2026-002-A001', dossier_label: 'A001',
+        summary: '', changes: [],
+      }],
+      next_cursor: null, timezone: TZ,
+    };
+    expect(() => activityPage.parse(page)).not.toThrow();
   });
 });

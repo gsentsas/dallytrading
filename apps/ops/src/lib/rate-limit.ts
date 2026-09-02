@@ -413,6 +413,40 @@ export function cleEvenementDemande(requestUuid: string): string {
   return `ops:events:uuid:${empreinteCourte('event-request', requestUuid)}`;
 }
 
+/**
+ * Le débit du chargement.
+ *
+ * Plus large que celui des événements : préparer un départ, c'est enchaîner
+ * un geste par colis, et une palette de trente colis est ordinaire. Le budget
+ * doit tenir un départ entier sans jamais arrêter un opérateur au milieu de
+ * sa pile — mais il reste borné, pour qu'une boucle défaillante ne réécrive
+ * pas la composition d'un départ mille fois.
+ *
+ * Il est le sien : charger un colis ne doit pas consommer le droit d'en
+ * réceptionner un autre.
+ */
+export const OPS_LOADING_SESSION = {
+  limite: 200,
+  fenetreMs: 10 * 60_000,
+} as const;
+export const OPS_LOADING_IP = {
+  limite: 600,
+  fenetreMs: 10 * 60_000,
+} as const;
+
+export function cleChargementSession(identifiantSession: string): string {
+  return `ops:loading:session:${empreinteCourte('loading', identifiantSession)}`;
+}
+
+export function cleChargementIp(ip: string): string {
+  return `ops:loading:ip:${ip}`;
+}
+
+/** Comme pour les événements : un compteur de demande qui n'emprunte rien. */
+export function cleChargementDemande(requestUuid: string): string {
+  return `ops:loading:uuid:${empreinteCourte('loading-request', requestUuid)}`;
+}
+
 export function clePhotoAdmise(requestUuid: string): string {
   return `ops:photos:admis:${empreinteCourte('photo-admis', requestUuid)}`;
 }

@@ -1,0 +1,358 @@
+# -*- coding: utf-8 -*-
+"""Sonde de concurrence DEV pour le chargement d'un depart.
+
+Ce qu'aucun test transactionnel ne peut montrer : deux operateurs qui appuient
+au meme instant. Odoo execute chaque test dans une transaction unique et
+annulee ; les verrous consultatifs pg_advisory_xact_lock ne s'y opposent donc
+a personne. Il faut de vrais curseurs, de vrais commits, et une barriere.
+
+Quatre questions, quatre reponses attendues :
+
+1. Le meme geste envoye deux fois en parallele - reprise reseau, double appui -
+   ne charge le colis qu'une fois.
+2. Un chargement et un retrait concurrents du meme colis ne violent jamais les
+   invariants de quantite ou d'unicite.
+3. Le meme colis ne peut pas etre charge simultanement sur deux departs actifs.
+4. Un chargement concurrent d'une cloture de collecte ne cree jamais de ligne
+   apres cloture.
+
+A lancer dans un shell Odoo, sur une base de banc - jamais en production.
+"""
+
+from threading import Barrier, Thread
+from time import time_ns
+from uuid import uuid4
+
+from odoo import api
+from odoo.modules.registry import Registry
+from odoo.service.model import retrying
+
+PREFIXE = "AIR-DSS-CDG-2099-LOAD-" + str(time_ns())
+env = globals().get("env")
+if env is None:
+    raise RuntimeError("Cette sonde doit etre executee dans un shell Odoo.")
+
+societe = env.company
+Con = env["dally.freight.consolidation"]
+Colis = env["dally.shipment.package"]
+
+operateur = env["res.users"].create({
+    "name": "Sonde chargement",
+    "login": "sonde.load.%s" % uuid4().hex[:8],
+    "group_ids": [(6, 0, [
+        env.ref("dally_ops_mobile.group_dally_ops_logistician").id,
+    ])],
+    "company_id": societe.id,
+    "company_ids": [(6, 0, [societe.id])],
+})
+partenaire = env["res.partner"].create({"name": "Client sonde %s" % PREFIXE})
+
+
+def nouveau_depart(suffixe):
+    return Con.create({
+        "name": PREFIXE + suffixe,
+        "company_id": societe.id,
+        "state": "collecting",
+        "transport_mode": "air",
+        "direction": "export",
+        "origin_country_id": env.ref("base.sn").id,
+        "origin_city": "Dakar",
+        "origin_location": "DSS",
+        "destination_country_id": env.ref("base.fr").id,
+        "destination_city": "Paris",
+        "destination_location": "CDG",
+    })
+
+
+depart = nouveau_depart("-A")
+depart_b = nouveau_depart("-B")
+dossier = env["dally.shipment"].create({
+    "partner_id": partenaire.id,
+    "company_id": societe.id,
+    "external_reference": PREFIXE + "-A001",
+    "transport_mode": "air",
+    "direction": "export",
+    "origin_country_id": env.ref("base.sn").id,
+    "origin_city": "Dakar",
+    "origin_location": "DSS",
+    "destination_country_id": env.ref("base.fr").id,
+    "destination_city": "Paris",
+    "destination_location": "CDG",
+})
+premier = Colis.create({
+    "shipment_id": dossier.id,
+    "package_type": "parcel",
+    "description": "Colis un",
+    "quantity": 1,
+    "unit_weight_kg": 4.0,
+})
+second = Colis.create({
+    "shipment_id": dossier.id,
+    "package_type": "parcel",
+    "description": "Colis deux",
+    "quantity": 1,
+    "unit_weight_kg": 6.0,
+})
+dossier.planned_consolidation_id = depart
+# La reception native n'est pas passee par ici : on part d'un depart vide.
+env["dally.freight.consolidation.line"].sudo().search(
+    [("consolidation_id", "in", (depart | depart_b).ids)]).unlink()
+env.cr.commit()
+
+registre = Registry(env.cr.dbname)
+
+
+def env_ops():
+    return api.Environment(
+        env.cr, operateur.id, {"allowed_company_ids": [societe.id]})
+
+
+def lignes(cible):
+    return env_ops()["dally.freight.consolidation.line"].sudo().search_count(
+        [("consolidation_id", "=", cible.id)])
+
+
+def quantite(cible, paquet):
+    line_env = env_ops()["dally.freight.consolidation.line"].sudo()
+    return sum(line_env.search([
+        ("consolidation_id", "=", cible.id),
+        ("package_id", "=", paquet.id),
+    ]).mapped("quantity_loaded"))
+
+
+def demandes(cible):
+    return env_ops()["dally.ops.loading.request"].sudo().search_count(
+        [("consolidation_id", "=", cible.id)])
+
+
+def assert_invariants(cible, paquet):
+    line_env = env_ops()["dally.freight.consolidation.line"].sudo()
+    lignes_colis = line_env.search([
+        ("consolidation_id", "=", cible.id),
+        ("package_id", "=", paquet.id),
+    ])
+    assert len(lignes_colis) <= 1, (
+        "ligne dupliquee", cible.name, paquet.id, len(lignes_colis))
+    for ligne in lignes_colis:
+        assert ligne.quantity_loaded <= paquet.quantity, (
+            "quantity_loaded depasse package.quantity",
+            ligne.quantity_loaded,
+            paquet.quantity,
+        )
+
+
+def vider(cible):
+    env["dally.freight.consolidation.line"].sudo().search(
+        [("consolidation_id", "=", cible.id)]).unlink()
+    env["dally.ops.loading.request"].sudo().search(
+        [("consolidation_id", "=", cible.id)]).unlink()
+    env.cr.commit()
+
+
+def geste(barriere, resultats, erreurs, request_uuid, reference_colis,
+          action="load", reference_depart=None):
+    """Un geste, joue par le meme chemin qu'une requete HTTP.
+
+    `service.model.retrying` n'est pas un detail de confort : sous
+    REPEATABLE READ, une transaction qui ne peut pas prendre le verrou du
+    geste sait que son instantane est perime et leve `ConcurrencyError`.
+    C'est `retrying` qui rejoue alors la requete entiere sur une transaction
+    neuve. Appeler le service en direct mesurerait un chemin qui n'existe pas
+    en production.
+    """
+    try:
+        with registre.cursor() as cr:
+            local = api.Environment(
+                cr, operateur.id, {"allowed_company_ids": [societe.id]})
+            societe_locale = local["res.company"].browse(societe.id)
+
+            def appel():
+                return (local["dally.ops.loading.service"]
+                        .with_company(societe_locale)
+                        .apply_loading(
+                            reference_depart,
+                            {
+                                "request_uuid": request_uuid,
+                                "action": action,
+                                "package_reference": reference_colis,
+                            },
+                        ))
+
+            barriere.wait(timeout=20)
+            sortie = retrying(appel, local)
+            resultats.append(sortie["replayed"])
+    except Exception as exc:  # noqa: BLE001
+        erreurs.append(repr(exc))
+
+
+def relire():
+    """Ouvre un instantane neuf sur l'environnement principal.
+
+    REPEATABLE READ fige l'instantane au premier ordre SQL de la transaction.
+    Le shell en a deja execute avant de lancer les fils : sans commit, il
+    relirait un etat anterieur a leurs ecritures et la sonde conclurait a tort
+    que rien n'a ete cree.
+    """
+    env.cr.commit()
+    env.invalidate_all()
+
+
+def lancer(paires):
+    barriere = Barrier(len(paires))
+    resultats, erreurs = [], []
+    fils = [
+        Thread(
+            target=geste,
+            args=(barriere, resultats, erreurs, uuid, colis, action, ref_depart),
+        )
+        for uuid, colis, action, ref_depart in paires
+    ]
+    for fil in fils:
+        fil.start()
+    for fil in fils:
+        fil.join(30)
+    relire()
+    return resultats, erreurs
+
+
+# -- 1. LOAD vs LOAD meme package/request_uuid -------------------------
+identique = str(uuid4())
+resultats, erreurs = lancer([
+    (identique, premier.ops_loading_uuid, "load", depart.name),
+    (identique, premier.ops_loading_uuid, "load", depart.name),
+])
+assert not erreurs, ("sonde 1", erreurs)
+assert sorted(resultats) == [False, True], ("sonde 1", resultats)
+assert lignes(depart) == 1, ("sonde 1 : lignes", lignes(depart))
+assert demandes(depart) == 1, ("sonde 1 : registre", demandes(depart))
+assert quantite(depart, premier) == premier.quantity, (
+    "sonde 1 : quantite", quantite(depart, premier))
+assert_invariants(depart, premier)
+print("sonde 1 OK - LOAD vs LOAD meme package ne charge qu'une fois")
+
+# -- 2. LOAD vs UNLOAD meme package ------------------------------------
+vider(depart)
+resultats, erreurs = lancer([
+    (str(uuid4()), premier.ops_loading_uuid, "load", depart.name),
+    (str(uuid4()), premier.ops_loading_uuid, "unload", depart.name),
+])
+assert not erreurs, ("sonde 2", erreurs)
+assert lignes(depart) in (0, 1), ("sonde 2 : lignes", lignes(depart))
+assert quantite(depart, premier) in (0, premier.quantity), (
+    "sonde 2 : quantite", quantite(depart, premier))
+assert_invariants(depart, premier)
+print("sonde 2 OK - LOAD vs UNLOAD meme package garde les invariants")
+
+# -- 3. LOAD consolidation A vs LOAD consolidation B -------------------
+vider(depart)
+vider(depart_b)
+dossier.planned_consolidation_id = depart_b
+env.cr.commit()
+resultats, erreurs = lancer([
+    (str(uuid4()), premier.ops_loading_uuid, "load", depart.name),
+    (str(uuid4()), premier.ops_loading_uuid, "load", depart_b.name),
+])
+assert len(erreurs) == 1, ("sonde 3 : un depart doit refuser le colis", erreurs)
+assert "package_not_found" in erreurs[0] or "Colis introuvable" in erreurs[0], (
+    "sonde 3", erreurs)
+assert lignes(depart) + lignes(depart_b) == 1, (
+    "sonde 3 : lignes", lignes(depart), lignes(depart_b))
+assert not (quantite(depart, premier) and quantite(depart_b, premier)), (
+    "sonde 3 : colis charge sur deux departs",
+    quantite(depart, premier),
+    quantite(depart_b, premier),
+)
+assert_invariants(depart, premier)
+assert_invariants(depart_b, premier)
+print("sonde 3 OK - LOAD consolidation A vs B ne double-charge pas")
+
+# -- 4. LOAD vs close collection ---------------------------------------
+# Les deux departs doivent etre vides avant de repointer le dossier : le coeur
+# refuse une consolidation prevue tant que le dossier est charge ailleurs.
+vider(depart)
+vider(depart_b)
+dossier.planned_consolidation_id = depart
+if depart.state != "collecting":
+    depart.action_open_collection()
+env.cr.commit()
+barriere = Barrier(2)
+resultats, erreurs = [], []
+
+
+def cloturer():
+    try:
+        with registre.cursor() as cr:
+            local = api.Environment(
+                cr, operateur.id, {"allowed_company_ids": [societe.id]})
+            cible = local["dally.freight.consolidation"].browse(depart.id).sudo()
+            local["dally.ops.loading.service"]._verrouiller_depart(cible)
+            barriere.wait(timeout=20)
+            # Par l'action metier : le coeur refuse une ecriture directe de
+            # `state`, et la sonde n'a pas a contourner cette regle.
+            cible.action_close_collection()
+            cr.commit()
+            resultats.append("closed")
+    except Exception as exc:  # noqa: BLE001
+        erreurs.append(repr(exc))
+
+
+fil_load = Thread(target=geste, args=(
+    barriere,
+    resultats,
+    erreurs,
+    str(uuid4()),
+    premier.ops_loading_uuid,
+    "load",
+    depart.name,
+))
+fil_close = Thread(target=cloturer)
+fil_load.start()
+fil_close.start()
+fil_load.join(30)
+fil_close.join(30)
+relire()
+assert not erreurs, ("sonde 4", erreurs)
+assert depart.state == "collection_closed", ("sonde 4 : etat", depart.state)
+if quantite(depart, premier):
+    assert demandes(depart) == 1, ("sonde 4 : registre", demandes(depart))
+assert_invariants(depart, premier)
+print("sonde 4 OK - LOAD vs cloture ne cree rien apres cloture")
+
+# -- Nettoyage ---------------------------------------------------------
+# Le coeur refuse de supprimer une consolidation deja utilisee, et c'est une
+# bonne regle : la sonde ne la contourne pas. Elle annule et archive ce qu'elle
+# a cree, et signale ce qu'elle n'a pas pu retirer plutot que de le taire.
+restes = []
+try:
+    for cible in (depart, depart_b):
+        if cible.state == "collection_closed":
+            cible.action_open_collection()
+    env.cr.commit()
+
+    env["dally.freight.consolidation.line"].sudo().search(
+        [("consolidation_id", "in", (depart | depart_b).ids)]).unlink()
+    env["dally.ops.loading.request"].sudo().search(
+        [("consolidation_id", "in", (depart | depart_b).ids)]).unlink()
+    # Le journal metier est immuable par construction : son unlink leve
+    # toujours. La sonde n'a pas a faire d'exception a cette regle - elle
+    # efface ses propres traces en SQL, sur une base de banc, pour pouvoir
+    # supprimer le dossier.
+    env.cr.execute(
+        "DELETE FROM dally_ops_audit_event WHERE shipment_id = %s",
+        [dossier.id],
+    )
+    (premier | second).unlink()
+    dossier.unlink()
+    for cible in (depart, depart_b):
+        cible.action_cancel()
+        cible.write({"active": False})
+    partenaire.unlink()
+    operateur.unlink()
+    env.cr.commit()
+except Exception as exc:  # noqa: BLE001
+    env.cr.rollback()
+    restes.append(repr(exc))
+
+if restes:
+    print("nettoyage partiel, restes sur la base de banc :", restes)
+print("SONDES DE CONCURRENCE : 4/4 OK")

@@ -15,3 +15,4 @@ from . import ops_photos
 from . import ops_events
 from . import ops_activity
 from . import ops_legacy_intakes
+from . import ops_loading

@@ -158,6 +158,20 @@ function lirePng(chemin: string): Image {
 const estBlanc = ([r, v, b]: readonly [number, number, number]) =>
   r >= 250 && v >= 250 && b >= 250;
 
+/**
+ * Ce qu'une image contient de la marque, compté sur ses pixels.
+ *
+ * Trois nombres, parce que trois questions différentes se posent : `encre` dit
+ * si le fichier porte un dessin plutôt qu'une plaque vide ; `marine` et `vert`
+ * disent si ce dessin est bien celui de DallyTrading et non n'importe quelle
+ * tache. Un logo blanchi tombe sur le premier, un logo remplacé par un autre
+ * tombe sur les deux suivants.
+ *
+ * `pas` échantillonne une image sur `pas` pixels dans chaque direction. Il ne
+ * change aucun critère : il évite seulement de parcourir un 512 × 512 entier
+ * quand un quart des pixels suffit à conclure. Les seuils des appelants sont
+ * donc à lire à l'échelle du pas choisi.
+ */
 function compterPixelsMarque(image: Image, pas = 1) {
   let encre = 0;
   let marine = 0;

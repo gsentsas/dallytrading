@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
@@ -43,6 +44,27 @@ const exists = (chemin: string) => existsSync(racine(chemin));
 
 /** Le rapport du fichier officiel : 715 × 514 une fois détouré. */
 const RAPPORT_OFFICIEL = 715 / 514;
+
+/**
+ * L'empreinte de l'œuvre officielle validée par le propriétaire.
+ *
+ * C'est **la** garantie d'intégrité du logo d'en-tête. Les contrôles de pixels
+ * décrivent les propriétés attendues ; seule l'empreinte prouve que le fichier
+ * est bien celui-là et pas une variante.
+ *
+ * Aucune mesure de bord ne pouvait jouer ce rôle : l'encre de cette œuvre
+ * touche les quatre bords — sa boîte englobante est l'image entière, `x 0..639`
+ * et `y 0..459`. Exiger des bords blancs ferait donc échouer le fichier
+ * officiel, et des marges positives calculées depuis la boîte englobante
+ * vaudraient zéro. Un seuil de tolérance, lui, laisserait toujours passer un
+ * rognage assez léger. L'empreinte tranche ce que la géométrie ne peut pas.
+ *
+ * Si le propriétaire fournit une nouvelle version de l'œuvre, cette constante
+ * doit être mise à jour **sciemment**, et les contrôles de pixels ci-dessous
+ * diront si la nouvelle version a bien les propriétés attendues.
+ */
+const EMPREINTE_LOGO_OFFICIEL =
+  'fa80a7fd698d5de610de464bc054ea0a3ebf1bf12b198d00c98112811774c8d2';
 
 interface Image {
   readonly largeur: number;
@@ -158,27 +180,22 @@ describe('le logo officiel, jamais reconstruit', () => {
     expect(exists('public/brand/dallytrading-logo.png')).toBe(true);
   });
 
-  it('le logo d’en-tête est le PNG complet, non rogné et encré', () => {
+  it('le logo d’en-tête reste exactement l’œuvre officielle validée', () => {
+    const donnees = readFileSync(racine('public/brand/dallytrading-logo.png'));
+    const empreinte = createHash('sha256').update(donnees).digest('hex');
+    expect(empreinte, 'empreinte du logo d’en-tête').toBe(EMPREINTE_LOGO_OFFICIEL);
+  });
+
+  it('le logo d’en-tête a les propriétés attendues de l’œuvre', () => {
+    // Ces mesures ne prouvent pas l'intégrité du fichier — l'empreinte s'en
+    // charge. Elles disent ce qu'on attend d'une œuvre officielle : le bon
+    // format, du dessin, et les deux couleurs de la marque. Elles servent le
+    // jour où le propriétaire en fournit une nouvelle version et où
+    // l'empreinte doit être mise à jour : c'est ici qu'on verra si la
+    // nouvelle est plausible.
     const image = lirePng('public/brand/dallytrading-logo.png');
     expect(image.largeur).toBe(640);
     expect(image.hauteur).toBe(460);
-
-    let bordHaut = 0;
-    let bordBas = 0;
-    for (let x = 0; x < image.largeur; x += 1) {
-      if (!estBlanc(image.pixel(x, 0))) bordHaut += 1;
-      if (!estBlanc(image.pixel(x, image.hauteur - 1))) bordBas += 1;
-    }
-    let bordGauche = 0;
-    let bordDroit = 0;
-    for (let y = 0; y < image.hauteur; y += 1) {
-      if (!estBlanc(image.pixel(0, y))) bordGauche += 1;
-      if (!estBlanc(image.pixel(image.largeur - 1, y))) bordDroit += 1;
-    }
-    expect(bordHaut, 'marge haute sûre').toBeLessThan(80);
-    expect(bordBas, 'signature non rognée en bas').toBeLessThan(300);
-    expect(bordGauche, 'marge gauche sûre').toBeLessThan(120);
-    expect(bordDroit, 'marge droite sûre').toBeLessThan(80);
 
     const { encre, marine, vert } = compterPixelsMarque(image);
     expect(encre).toBeGreaterThan(1000);

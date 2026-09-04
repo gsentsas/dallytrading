@@ -477,6 +477,29 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
                     "Ligne %(id)s : attente incomplète — %(champs)s.",
                     id=line_id, champs=", ".join(creux)))
                 continue
+
+            # Les conversions qui suivent — `int`, `float` — lèveraient sur une
+            # valeur mal typée. On valide donc chaque champ AVANT de convertir,
+            # et l'on passe la ligne dès qu'un seul est invalide : `simulate`
+            # doit rapporter, jamais rompre.
+            mal_types = []
+            for champ in ("consolidation_id", "package_id", "quantity_loaded"):
+                if not _entier_positif(attendue[champ]):
+                    mal_types.append(_(
+                        "Ligne %(id)s : %(champ)s doit être un entier strictement "
+                        "positif (reçu %(recu)r).",
+                        id=line_id, champ=champ, recu=attendue[champ]))
+            for champ in ("weight_loaded", "volume_loaded"):
+                if not _mesure_positive(attendue[champ]):
+                    mal_types.append(_(
+                        "Ligne %(id)s : %(champ)s doit être une mesure numérique "
+                        ">= 0 (reçu %(recu)r).",
+                        id=line_id, champ=champ, recu=attendue[champ]))
+            if mal_types:
+                for grief in mal_types:
+                    exiger(False, grief)
+                continue
+
             exiger(reelle["consolidation_id"] == int(attendue["consolidation_id"]), _(
                 "Ligne %(id)s : départ %(attendu)s attendu, %(reel)s en base.",
                 id=line_id, attendu=attendue["consolidation_id"],

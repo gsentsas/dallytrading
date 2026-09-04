@@ -1389,6 +1389,71 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self._simulate_tolere(
             ops, consolidation, falsifier, "doit être un identifiant")
 
+    def test_simulate_tolerates_every_malformed_line_value(self):
+        """Aucune valeur de ligne ne doit pouvoir faire lever `simulate`.
+
+        `line_id` est protege par l'indexation, mais les autres champs etaient
+        encore convertis directement — `int()` et `float()` levent sur une
+        valeur nulle ou textuelle. Le diagnostic public doit rapporter chacune
+        de ces malformations.
+        """
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-950")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:typage", "A120")
+        cas = [
+            ("consolidation_id", None, "consolidation_id"),
+            ("package_id", None, "package_id"),
+            ("quantity_loaded", "1", "quantity_loaded"),
+            ("weight_loaded", "23,0", "weight_loaded"),
+            ("volume_loaded", None, "volume_loaded"),
+            ("consolidation_id", True, "consolidation_id"),
+            ("weight_loaded", -1.0, "weight_loaded"),
+        ]
+        for champ, valeur, extrait in cas:
+            with self.subTest(champ=champ, valeur=valeur):
+                attendu = self._expected(ops, consolidation)
+                for ligne in attendu[ops.id]["loaded_lines"]:
+                    ligne[champ] = valeur
+                try:
+                    rapport = self.recovery.simulate([ops.id], expected=attendu)
+                except Exception as erreur:  # noqa: BLE001 — c'est le sujet
+                    self.fail("simulate() a leve %s sur %s=%r : %s"
+                              % (type(erreur).__name__, champ, valeur, erreur))
+                self.assertFalse(rapport["dry_run_pass"])
+                self.assertTrue(
+                    any(extrait in motif for motif in rapport["blocking"]),
+                    "motif attendu « %s », obtenu %s" % (extrait, rapport["blocking"]))
+                # Le chemin mutant reste strict, et refuse avant tout verrou.
+                with self.assertRaises(UserError):
+                    self.recovery._apply_authorized_recovery(
+                        [ops.id], attendu, self.env.cr.dbname)
+
+        # Rien n'a bouge malgre tous ces appels.
+        self.env.invalidate_all()
+        self.assertEqual(ops.collection_local_ref, "A120")
+        self.assertTrue(ops.planned_consolidation_id)
+        self.assertTrue(ops.consolidation_line_ids)
+
+    def test_a_correctly_typed_line_still_passes(self):
+        """Le nominal doit rester nominal : le durcissement ne ferme rien de legitime."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-951")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:typage-ok", "A121")
+        attendu = self._expected(ops, consolidation)
+        for ligne in attendu[ops.id]["loaded_lines"]:
+            self.assertIsInstance(ligne["consolidation_id"], int)
+            self.assertIsInstance(ligne["package_id"], int)
+            self.assertIsInstance(ligne["quantity_loaded"], int)
+            self.assertIsInstance(ligne["weight_loaded"], (int, float))
+            self.assertIsInstance(ligne["volume_loaded"], (int, float))
+
+        rapport = self.recovery.simulate([ops.id], expected=attendu)
+
+        self.assertTrue(rapport["dry_run_pass"], rapport["blocking"])
+        self.recovery._apply_authorized_recovery(
+            [ops.id], attendu, self.env.cr.dbname)
+        self.env.invalidate_all()
+        self.assertFalse(ops.consolidation_line_ids)
+        self.assertFalse(ops.planned_consolidation_id)
+
 
 @tagged("post_install", "-at_install")
 class TestIntakeIdentityRecoveryAccounting(RecoveryFixtures):

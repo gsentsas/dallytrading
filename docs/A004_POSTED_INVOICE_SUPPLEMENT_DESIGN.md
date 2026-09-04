@@ -53,3 +53,46 @@ comptables normaux, sans réécriture de la facture posted initiale.
 
 Cette branche ne doit pas implémenter le supplément A004. Elle ne porte que la
 note de conception pour cadrer une correction future.
+
+## Contrat comptable à définir avant implémentation
+
+Le moteur d'encaissement actuel ne sait rapprocher qu'**une seule** pièce.
+`DallyFreightCollection._try_register_native_payment()`
+(`dally_freight_billing/models/payment_collection.py`) lit `collection.invoice_id`,
+champ *related* vers `shipment_id.invoice_id` : un dossier n'y porte qu'une
+facture, et le rapprochement ne connaît qu'elle.
+
+Ce chemin ne doit donc **pas** être réutilisé tel quel pour le supplément
+A004, où deux pièces coexisteront : `FAC/2026/00019` déjà comptabilisée, et
+la facture complémentaire à créer.
+
+**Cette PR ne modifie pas `DallyFreightCollection._try_register_native_payment`.
+Cette évolution appartient au futur workflow de facturation supplémentaire
+A004.**
+
+### Décisions à spécifier avant d'écrire la moindre ligne
+
+Les points suivants sont des choix de gestion, pas des détails
+d'implémentation. Les trancher dans le code reviendrait à décider à la place
+de la comptabilité :
+
+- **Date de conversion XOF/EUR** — date d'encaissement, date de facture, ou
+  date de rapprochement ; les trois donnent des montants différents.
+- **Source et taux de change** — quel référentiel fait foi, et où il est
+  stocké pour être auditable a posteriori.
+- **Règle d'arrondi** — sens et précision, et sur quel montant elle s'applique
+  (chaque pièce, ou le total).
+- **Ordre et règle d'allocation** entre `FAC/2026/00019` et la facture
+  complémentaire — la plus ancienne d'abord, la plus petite d'abord, ou une
+  imputation explicite portée par l'encaissement.
+- **Paiement inférieur, égal ou supérieur** au total des pièces ouvertes :
+  les trois cas doivent être décrits, y compris le trop-perçu.
+- **Reliquat et écart de change** — comment ils sont portés comptablement,
+  sachant que la facture comptabilisée ne doit jamais être réécrite.
+- **Idempotence** — comment les contrats existants `/api/v1/freight/payment`
+  et `/api/v1/freight/payment/reconcile` se comportent quand un même
+  encaissement touche deux pièces, et quelle clé garantit qu'un rejeu ne
+  double rien.
+
+Aucun taux ni aucune politique d'allocation n'est fixé ici : cette note
+recense les décisions à prendre, elle n'en prend aucune.

@@ -13,6 +13,25 @@ _INTAKE_IDENTITY_FIELDS = frozenset({
     "sync_source_key", "external_reference",
 })
 
+#: Le seul chemin qui puisse vider `planned_consolidation_id`.
+#:
+#: Le modèle exige normalement un départ prévu : un dossier sans plan
+#: disparaîtrait des contrôles de départ, et personne ne remarquerait la
+#: marchandise restée à quai. Cette exigence ne bougera pas.
+#:
+#: Un dossier **annulé** rattaché à un départ vivant pose pourtant le problème
+#: inverse : `_expected_shipments()` le réclame, `_departure_blockers()` exige
+#: qu'il soit « prête à partir », et un dossier annulé ne le sera jamais. Le
+#: départ ne peut donc plus se déclarer. Le retirer du plan est la seule sortie
+#: qui ne mente sur rien.
+#:
+#: Le jeton est privé au module et vérifié par identité, jamais par valeur :
+#: aucun appel externe, aucun contexte forgé depuis une requête RPC ne peut le
+#: produire. Les conditions de fond sont vérifiées en plus, dans
+#: `_check_planned_retirement` — le jeton dit « c'est la maintenance », pas
+#: « c'est autorisé ».
+_PLANNED_RETIRE_TOKEN = object()
+
 
 def _format_money(currency, amount):
     return "%.2f %s" % (amount or 0.0, currency.name or "")
@@ -123,6 +142,44 @@ class DallyShipment(models.Model):
                     raise ValidationError(_("La route de la consolidation prévue est incompatible avec le dossier."))
         return True
 
+    def _check_planned_retirement(self):
+        """Les conditions de fond pour retirer un dossier d'un départ prévu.
+
+        Le jeton seul ne suffit pas : il désigne l'appelant, pas la légitimité.
+        Ces cinq conditions sont vérifiées à chaque écriture, y compris quand
+        c'est la maintenance qui écrit — un service qui s'auto-autorise n'est
+        pas un garde-fou.
+        """
+        self.ensure_one()
+        if self.state != "cancelled":
+            raise ValidationError(_(
+                "Seul un dossier annulé peut être retiré d'un départ prévu "
+                "(état actuel : %s).", self.state))
+        if self.sale_order_id or self.invoice_id:
+            raise ValidationError(_(
+                "Un dossier portant un devis ou une facture ne peut pas être "
+                "retiré d'un départ prévu."))
+        if self.env["dally.freight.collection"].sudo().search_count(
+            [("shipment_id", "=", self.id)]
+        ):
+            raise ValidationError(_(
+                "Un dossier portant un encaissement ne peut pas être retiré "
+                "d'un départ prévu."))
+        planifie = self.planned_consolidation_id
+        if planifie and planifie.state != "collecting":
+            raise ValidationError(_(
+                "Le départ prévu n'est plus en collecte : le retrait "
+                "modifierait un manifeste arrêté."))
+        # Après nettoyage, et pas avant : tant qu'un colis reste chargé, le
+        # dossier appartient encore physiquement au départ, et le retirer du
+        # plan créerait précisément l'incohérence que
+        # `_loaded_but_not_planned_shipments` est là pour dénoncer.
+        if self.consolidation_line_ids:
+            raise ValidationError(_(
+                "Le dossier porte encore %s ligne(s) de chargement : retirez "
+                "le chargement avant le plan.", len(self.consolidation_line_ids)))
+        return True
+
     @api.model
     def _create_with_intake_identity(self, values):
         created = self.with_context(_dally_intake_identity_token=_INTAKE_IDENTITY_TOKEN).create(values)
@@ -219,7 +276,14 @@ class DallyShipment(models.Model):
                     raise ValidationError(_("La consolidation d'entrée est immuable après allocation."))
         if "planned_consolidation_id" in vals:
             target = self.env["dally.freight.consolidation"].browse(vals.get("planned_consolidation_id")).exists()
+            retrait = (
+                not vals.get("planned_consolidation_id")
+                and self.env.context.get("_dally_planned_retire_token") is _PLANNED_RETIRE_TOKEN
+            )
             for shipment in self:
+                if retrait:
+                    shipment._check_planned_retirement()
+                    continue
                 if not target:
                     raise ValidationError(_("Une consolidation prévue est requise."))
                 shipment._check_planned_consolidation_compatibility(target)

@@ -7,6 +7,7 @@ from . import test_departure_completeness
 from . import test_departure_gate
 from . import test_payment_override
 from . import test_review_findings
+from . import test_intake_identity_recovery
 
 from . import test_intake_sequence
 

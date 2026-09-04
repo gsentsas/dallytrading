@@ -193,9 +193,11 @@ class TestOpsSheetOutbox(AccountTestInvoicingCommon):
             "collection_sequence": shipment.collection_sequence,
             "sync_source_key": shipment.sync_source_key,
             "loaded_lines": [
-                {"line_id": ligne.id, "package_id": ligne.package_id.id,
+                {"line_id": ligne.id, "consolidation_id": ligne.consolidation_id.id,
+                 "package_id": ligne.package_id.id,
                  "quantity_loaded": ligne.quantity_loaded,
-                 "weight_loaded": ligne.weight_loaded}
+                 "weight_loaded": ligne.weight_loaded,
+                 "volume_loaded": ligne.volume_loaded}
                 for ligne in shipment.consolidation_line_ids
             ],
             "outbox": [
@@ -1294,7 +1296,7 @@ class TestOpsSheetOutbox(AccountTestInvoicingCommon):
 
         with patch.object(self.env.cr, "execute", espion):
             self.env["dally.freight.intake.identity.recovery"]._verrouiller_cibles(
-                [shipment.id])
+                [shipment.id], self._recovery_expected(shipment))
 
         jointes = " ".join(requetes)
         self.assertIn("FROM dally_ops_sheet_outbox WHERE", jointes)

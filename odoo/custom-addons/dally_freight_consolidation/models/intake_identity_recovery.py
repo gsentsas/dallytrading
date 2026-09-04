@@ -66,6 +66,11 @@ _logger = logging.getLogger(__name__)
 #: à la précision métier — celle qui figure sur le manifeste.
 PRECISION_CHARGEMENT = 3
 
+#: Les volumes portent une décimale de plus que les poids, en base comme sur
+#: le manifeste : les comparer à la précision des poids laisserait passer un
+#: écart de dix litres.
+PRECISION_VOLUME = 4
+
 #: Les champs qu'une attente doit porter pour qu'un retrait soit possible.
 #:
 #: Une attente partielle rendrait le service « adaptatif » : les champs qu'elle
@@ -84,9 +89,36 @@ CHAMPS_ATTENDUS = (
 #: Une liste vide est une affirmation — « ce dossier ne porte aucun
 #: chargement » —, une clé absente n'en est pas une. Les deux ne doivent jamais
 #: se confondre, d'où l'exigence de la clé et non d'un contenu.
-CHAMPS_LIGNE_ATTENDUE = ("line_id", "package_id", "quantity_loaded", "weight_loaded")
+CHAMPS_LIGNE_ATTENDUE = (
+    "line_id", "consolidation_id", "package_id",
+    "quantity_loaded", "weight_loaded", "volume_loaded")
 CHAMPS_OUTBOX_ATTENDUE = (
     "outbox_id", "projection_type", "business_key", "state", "resource_reference")
+
+
+def _entier_positif(valeur):
+    """Un identifiant, au sens strict.
+
+    ``bool`` est un ``int`` en Python : sans cette exclusion, ``True`` passerait
+    pour l'identifiant 1. Une attente qui se laisse écrire ``True`` n'est plus
+    une attente.
+    """
+    return isinstance(valeur, int) and not isinstance(valeur, bool) and valeur > 0
+
+
+def _mesure_positive(valeur):
+    """Un poids ou un volume : présent, numérique, jamais négatif.
+
+    Zéro est une mesure légitime — un colis sans volume déclaré en porte un —,
+    ``None`` ne l'est pas. Accepter ``None`` en ferait un caractère générique,
+    et un champ générique dans une empreinte ne compare rien.
+    """
+    return isinstance(valeur, (int, float)) and not isinstance(valeur, bool) and valeur >= 0
+
+
+def _texte_renseigne(valeur):
+    """Une valeur de projection réellement décrite, pas une case vide."""
+    return isinstance(valeur, str) and bool(valeur.strip())
 
 #: Le décalage qui place une identité d'archive hors d'atteinte.
 #:
@@ -288,6 +320,20 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
                _("Le départ prévu n'est plus en collecte (état : %s).",
                  planifie.state if planifie else ""))
 
+        # Un dossier peut avoir des colis charges dans plusieurs departs. Le
+        # retrait ne vise que le depart prevu : delester un autre manifeste
+        # reviendrait a decider a la place d'une exploitation qui n'a rien
+        # demande, et la marchandise disparaitrait d'un depart qui la compte.
+        if planifie:
+            hors_plan = [
+                ligne["line_id"] for ligne in lignes
+                if ligne["consolidation_id"] != planifie.id
+            ]
+            exiger(not hors_plan, _(
+                "Les lignes %(ids)s sont chargées sur un autre départ que le départ "
+                "prévu %(plan)s : le retrait ne délestera jamais un départ qu'il ne "
+                "vise pas.", ids=hors_plan, plan=planifie.name))
+
         boite = self.env["dally.ops.sheet.outbox"].sudo().search([
             ("resource_model", "=", "dally.shipment"), ("resource_id", "=", shipment.id),
         ]) if "dally.ops.sheet.outbox" in self.env else self.env["dally.shipment"].browse()
@@ -362,22 +408,38 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
             return
         for line_id, attendue in sorted(attendues.items()):
             reelle = reelles[line_id]
-            if attendue.get("package_id") is not None:
-                exiger(reelle["package_id"] == int(attendue["package_id"]), _(
-                    "Ligne %(id)s : colis %(attendu)s attendu, %(reel)s en base.",
-                    id=line_id, attendu=attendue["package_id"], reel=reelle["package_id"]))
-            if attendue.get("quantity_loaded") is not None:
-                exiger(reelle["quantity_loaded"] == attendue["quantity_loaded"], _(
-                    "Ligne %(id)s : quantité %(attendu)s attendue, %(reel)s en base.",
-                    id=line_id, attendu=attendue["quantity_loaded"],
-                    reel=reelle["quantity_loaded"]))
-            if attendue.get("weight_loaded") is not None:
-                exiger(float_compare(
-                    reelle["weight_loaded"], float(attendue["weight_loaded"]),
-                    precision_digits=PRECISION_CHARGEMENT) == 0, _(
-                    "Ligne %(id)s : poids %(attendu)s attendu, %(reel)s en base.",
-                    id=line_id, attendu=attendue["weight_loaded"],
-                    reel=reelle["weight_loaded"]))
+            # `simulate` est public et lit ce qu'on lui donne : une attente
+            # amputée doit y devenir un refus lisible, jamais une KeyError. Le
+            # schéma strict, lui, n'est exigé qu'à l'application.
+            creux = [champ for champ in CHAMPS_LIGNE_ATTENDUE if champ not in attendue]
+            if creux:
+                exiger(False, _(
+                    "Ligne %(id)s : attente incomplète — %(champs)s.",
+                    id=line_id, champs=", ".join(creux)))
+                continue
+            exiger(reelle["consolidation_id"] == int(attendue["consolidation_id"]), _(
+                "Ligne %(id)s : départ %(attendu)s attendu, %(reel)s en base.",
+                id=line_id, attendu=attendue["consolidation_id"],
+                reel=reelle["consolidation_id"]))
+            exiger(reelle["package_id"] == int(attendue["package_id"]), _(
+                "Ligne %(id)s : colis %(attendu)s attendu, %(reel)s en base.",
+                id=line_id, attendu=attendue["package_id"], reel=reelle["package_id"]))
+            exiger(reelle["quantity_loaded"] == attendue["quantity_loaded"], _(
+                "Ligne %(id)s : quantité %(attendu)s attendue, %(reel)s en base.",
+                id=line_id, attendu=attendue["quantity_loaded"],
+                reel=reelle["quantity_loaded"]))
+            exiger(float_compare(
+                reelle["weight_loaded"], float(attendue["weight_loaded"]),
+                precision_digits=PRECISION_CHARGEMENT) == 0, _(
+                "Ligne %(id)s : poids %(attendu)s attendu, %(reel)s en base.",
+                id=line_id, attendu=attendue["weight_loaded"],
+                reel=reelle["weight_loaded"]))
+            exiger(float_compare(
+                reelle["volume_loaded"], float(attendue["volume_loaded"]),
+                precision_digits=PRECISION_VOLUME) == 0, _(
+                "Ligne %(id)s : volume %(attendu)s attendu, %(reel)s en base.",
+                id=line_id, attendu=attendue["volume_loaded"],
+                reel=reelle["volume_loaded"]))
 
     @api.model
     def _exiger_empreinte_outbox(self, expected, outbox, exiger):
@@ -399,9 +461,13 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
             return
         for outbox_id, attendue in sorted(attendues.items()):
             reelle = reelles[outbox_id]
+            creux = [champ for champ in CHAMPS_OUTBOX_ATTENDUE if champ not in attendue]
+            if creux:
+                exiger(False, _(
+                    "Projection %(id)s : attente incomplète — %(champs)s.",
+                    id=outbox_id, champs=", ".join(creux)))
+                continue
             for champ in ("projection_type", "business_key", "state", "resource_reference"):
-                if attendue.get(champ) is None:
-                    continue
                 exiger(reelle[champ] == attendue[champ], _(
                     "Projection %(id)s : %(champ)s « %(attendu)s » attendu, "
                     "« %(reel)s » en base.",
@@ -495,6 +561,7 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
                 griefs.append(_(
                     "dossier %(id)s : champ(s) obligatoire(s) absent(s) — %(champs)s",
                     id=identifiant, champs=", ".join(absents)))
+            vus_lignes = []
             for rang, ligne in enumerate(attente.get("loaded_lines") or [], start=1):
                 if not isinstance(ligne, dict):
                     griefs.append(_(
@@ -506,6 +573,33 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
                     griefs.append(_(
                         "dossier %(id)s : ligne %(rang)s incomplète — %(champs)s",
                         id=identifiant, rang=rang, champs=", ".join(creux)))
+                    continue
+                for champ in ("line_id", "consolidation_id", "package_id"):
+                    if not _entier_positif(ligne[champ]):
+                        griefs.append(_(
+                            "dossier %(id)s : ligne %(rang)s, %(champ)s doit être un "
+                            "identifiant entier positif (reçu %(recu)r)",
+                            id=identifiant, rang=rang, champ=champ, recu=ligne[champ]))
+                if not _entier_positif(ligne["quantity_loaded"]):
+                    griefs.append(_(
+                        "dossier %(id)s : ligne %(rang)s, quantity_loaded doit être un "
+                        "entier strictement positif (reçu %(recu)r)",
+                        id=identifiant, rang=rang, recu=ligne["quantity_loaded"]))
+                for champ in ("weight_loaded", "volume_loaded"):
+                    if not _mesure_positive(ligne[champ]):
+                        griefs.append(_(
+                            "dossier %(id)s : ligne %(rang)s, %(champ)s doit être une "
+                            "mesure numérique >= 0 (reçu %(recu)r)",
+                            id=identifiant, rang=rang, champ=champ, recu=ligne[champ]))
+                vus_lignes.append(ligne.get("line_id"))
+            doublons = sorted({
+                valeur for valeur in vus_lignes if vus_lignes.count(valeur) > 1})
+            if doublons:
+                griefs.append(_(
+                    "dossier %(id)s : line_id en double dans l'attente — %(ids)s",
+                    id=identifiant, ids=doublons))
+
+            vus_outbox = []
             for rang, projection in enumerate(attente.get("outbox") or [], start=1):
                 if not isinstance(projection, dict):
                     griefs.append(_(
@@ -518,6 +612,27 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
                     griefs.append(_(
                         "dossier %(id)s : projection %(rang)s incomplète — %(champs)s",
                         id=identifiant, rang=rang, champs=", ".join(creux)))
+                    continue
+                if not _entier_positif(projection["outbox_id"]):
+                    griefs.append(_(
+                        "dossier %(id)s : projection %(rang)s, outbox_id doit être un "
+                        "identifiant entier positif (reçu %(recu)r)",
+                        id=identifiant, rang=rang, recu=projection["outbox_id"]))
+                for champ in ("projection_type", "business_key", "state",
+                              "resource_reference"):
+                    if not _texte_renseigne(projection[champ]):
+                        griefs.append(_(
+                            "dossier %(id)s : projection %(rang)s, %(champ)s doit être "
+                            "renseigné (reçu %(recu)r)",
+                            id=identifiant, rang=rang, champ=champ,
+                            recu=projection[champ]))
+                vus_outbox.append(projection.get("outbox_id"))
+            doublons = sorted({
+                valeur for valeur in vus_outbox if vus_outbox.count(valeur) > 1})
+            if doublons:
+                griefs.append(_(
+                    "dossier %(id)s : outbox_id en double dans l'attente — %(ids)s",
+                    id=identifiant, ids=doublons))
         if griefs:
             raise UserError(_(
                 "Retrait refusé : l'empreinte attendue est incomplète.\n\n%s",
@@ -525,7 +640,26 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
         return True
 
     @api.model
-    def _verrouiller_cibles(self, shipment_ids):
+    def _exiger_manager(self):
+        """Le contrôle d'habilitation, volontairement placé après les verrous.
+
+        Vérifier le groupe lit `res.users` et `res.groups` : ce serait le
+        premier accès métier de la transaction, et donc lui qui figerait le
+        snapshot PostgreSQL sous REPEATABLE READ. Le premier accès doit être
+        le verrouillage, pour que tout ce qui est ensuite relu le soit sur un
+        état déjà figé par nos verrous.
+
+        Le risque concédé est étroit et assumé : un appelant non habilité peut
+        prendre brièvement des verrous par cette méthode privée. Il ne peut
+        muter quoi que ce soit — ce contrôle précède toute écriture — et le
+        savepoint relâche ses verrous en sortant.
+        """
+        if not self.env.user.has_group("dally_core.group_dally_manager"):
+            raise AccessError(_("Seul un Manager peut retirer une identité de collecte."))
+        return True
+
+    @api.model
+    def _verrouiller_cibles(self, shipment_ids, expected):
         """Fige les objets à muter, ou renonce — jamais d'attente.
 
         Les verrous existants du module sont des `pg_advisory_xact_lock`
@@ -571,7 +705,53 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
                     "périmètre. Le retrait est abandonné : relancez la "
                     "simulation, l'état audité n'est plus garanti.", quoi=libelle)
                 ) from erreur
+
+        self._pre_acquerir_verrous_colis(expected)
         return ids
+
+    @api.model
+    def _pre_acquerir_verrous_colis(self, expected):
+        """Prend d'avance, sans attendre, les verrous que `unlink` exigera.
+
+        ## Le piège que cela ferme
+
+        `dally.freight.consolidation.line.unlink()` prend un
+        `pg_advisory_xact_lock` **bloquant** par colis. Le retrait détiendrait
+        donc déjà ses verrous de lignes au moment de demander ce verrou-là. Une
+        transaction concurrente qui tiendrait le verrou colis et attendrait nos
+        lignes formerait un cycle : interblocage, ou au mieux une attente qui
+        contredit tout le contrat `NOWAIT`.
+
+        On demande donc le même verrou d'abord, et en `try` : s'il n'est pas
+        libre, on renonce immédiatement. Le savepoint relâche alors nos verrous
+        de lignes, ce qui débloque l'autre transaction — aucune attente
+        circulaire ne peut se former.
+
+        La clé est reprise au caractère près de `_lock_package` : deux formes
+        différentes seraient deux verrous différents, et la protection ne
+        vaudrait rien.
+
+        Les colis viennent de l'empreinte déclarée, jamais d'une découverte :
+        verrouiller ce qu'on trouve reviendrait à protéger un périmètre qu'on
+        n'a pas audité.
+        """
+        colis = sorted({
+            int(ligne["package_id"])
+            for attente in (expected or {}).values()
+            for ligne in (attente.get("loaded_lines") or [])
+            if isinstance(ligne, dict) and ligne.get("package_id") is not None
+        })
+        for package_id in colis:
+            self.env.cr.execute(
+                "SELECT pg_try_advisory_xact_lock(hashtextextended(%s, 0))",
+                ["consolidation-package:%s" % package_id],
+            )
+            if not self.env.cr.fetchone()[0]:
+                raise UserError(_(
+                    "Le colis %(colis)s est en cours de chargement ou de retrait "
+                    "par une autre transaction. Le retrait est abandonné sans "
+                    "attendre : relancez la simulation.", colis=package_id))
+        return colis
 
     @api.model
     def _apply_authorized_recovery(self, shipment_ids, expected, database):
@@ -597,8 +777,6 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
         l'exception le traverse, et PostgreSQL a déjà tout défait quand elle
         parvient à l'appelant.
         """
-        if not self.env.user.has_group("dally_core.group_dally_manager"):
-            raise AccessError(_("Seul un Manager peut retirer une identité de collecte."))
         if not database:
             raise UserError(_("Le nom de la base cible est obligatoire."))
         if database != self.env.cr.dbname:
@@ -629,8 +807,9 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
         modèles ici créerait une liste à tenir synchronisée avec `_inspect`, et
         en oublier un est exactement la panne contre laquelle on se protège.
         """
-        self._verrouiller_cibles(shipment_ids)
+        self._verrouiller_cibles(shipment_ids, expected)
         self.env.invalidate_all()
+        self._exiger_manager()
 
         rapport = self.simulate(shipment_ids, expected=expected)
         if not rapport["dry_run_pass"]:

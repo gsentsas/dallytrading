@@ -7,6 +7,8 @@ même référence papier est attribuée à un autre client dans le classeur. Le
 classeur ne peut plus se synchroniser tant que l'identité n'est pas rendue.
 """
 
+import ast
+import pathlib
 from unittest.mock import patch
 
 import psycopg2
@@ -129,9 +131,11 @@ class RecoveryFixtures(TransactionCase):
             "collection_sequence": shipment.collection_sequence,
             "sync_source_key": shipment.sync_source_key,
             "loaded_lines": [
-                {"line_id": ligne.id, "package_id": ligne.package_id.id,
+                {"line_id": ligne.id, "consolidation_id": ligne.consolidation_id.id,
+                 "package_id": ligne.package_id.id,
                  "quantity_loaded": ligne.quantity_loaded,
-                 "weight_loaded": ligne.weight_loaded}
+                 "weight_loaded": ligne.weight_loaded,
+                 "volume_loaded": ligne.volume_loaded}
                 for ligne in shipment.consolidation_line_ids
             ],
             # Ces tests tournent en `at_install`, avant le chargement de
@@ -669,9 +673,11 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self._divergence_refusee(
             consolidation, ops,
             lambda att: att.update({"loaded_lines": [{
-                "line_id": ligne.id, "package_id": ligne.package_id.id + 100000,
+                "line_id": ligne.id, "consolidation_id": ligne.consolidation_id.id,
+                "package_id": ligne.package_id.id + 100000,
                 "quantity_loaded": ligne.quantity_loaded,
-                "weight_loaded": ligne.weight_loaded}]}),
+                "weight_loaded": ligne.weight_loaded,
+                "volume_loaded": ligne.volume_loaded}]}),
             "colis")
         self.assertEqual(ops.collection_local_ref, "A052")
 
@@ -682,9 +688,11 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self._divergence_refusee(
             consolidation, ops,
             lambda att: att.update({"loaded_lines": [{
-                "line_id": ligne.id, "package_id": ligne.package_id.id,
+                "line_id": ligne.id, "consolidation_id": ligne.consolidation_id.id,
+                "package_id": ligne.package_id.id,
                 "quantity_loaded": ligne.quantity_loaded,
-                "weight_loaded": ligne.weight_loaded + 5.0}]}),
+                "weight_loaded": ligne.weight_loaded + 5.0,
+                "volume_loaded": ligne.volume_loaded}]}),
             "poids")
         self.assertEqual(ops.collection_local_ref, "A053")
 
@@ -695,9 +703,11 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self._divergence_refusee(
             consolidation, ops,
             lambda att: att.update({"loaded_lines": [{
-                "line_id": ligne.id, "package_id": ligne.package_id.id,
+                "line_id": ligne.id, "consolidation_id": ligne.consolidation_id.id,
+                "package_id": ligne.package_id.id,
                 "quantity_loaded": ligne.quantity_loaded + 7,
-                "weight_loaded": ligne.weight_loaded}]}),
+                "weight_loaded": ligne.weight_loaded,
+                "volume_loaded": ligne.volume_loaded}]}),
             "quantité")
         self.assertEqual(ops.collection_local_ref, "A054")
 
@@ -708,10 +718,12 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         ligne = ops.consolidation_line_ids[0]
         attendu = self._expected(ops, consolidation)
         attendu[ops.id]["loaded_lines"] = [{
-            "line_id": ligne.id, "package_id": ligne.package_id.id,
+            "line_id": ligne.id, "consolidation_id": ligne.consolidation_id.id,
+            "package_id": ligne.package_id.id,
             "quantity_loaded": ligne.quantity_loaded,
             # Un écart très en dessous du gramme : la même marchandise.
             "weight_loaded": ligne.weight_loaded + 0.00001,
+            "volume_loaded": ligne.volume_loaded,
         }]
 
         rapport = self.recovery.simulate([ops.id], expected=attendu)
@@ -817,7 +829,8 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
             return vrai_execute(query, params, *args, **kwargs)
 
         with patch.object(self.env.cr, "execute", espion):
-            self.recovery._verrouiller_cibles([ops.id])
+            self.recovery._verrouiller_cibles(
+                [ops.id], self._expected(ops, consolidation))
 
         # Fragments explicites : « dally_freight_consolidation » seul serait
         # satisfait par la table des lignes, et le test ne prouverait rien.
@@ -962,6 +975,331 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self.recovery._apply_authorized_recovery(
             [ops.id], attendu, self.env.cr.dbname)
         self.assertFalse(ops.planned_consolidation_id)
+
+    def test_a_line_loaded_on_another_departure_blocks_the_retirement(self):
+        """Une vraie ligne sur un autre départ, pas une attente falsifiée.
+
+        Un dossier peut porter des colis chargés sur plusieurs départs. Le
+        retrait ne vise que le départ prévu : délester un autre manifeste
+        ferait disparaître de la marchandise d'un départ qui la compte, sans
+        que son exploitation ait rien demandé.
+        """
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-601")
+        autre = self._consolidation("AIR-DSS-CDG-2099-602")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:autre-depart", "A080")
+
+        # Un second colis du MEME dossier, réellement chargé sur l'autre départ.
+        colis = self.env["dally.shipment.package"].create({
+            "shipment_id": ops.id,
+            "external_line_key": "ops:autre-depart|A|2",
+            "package_type": "parcel",
+            "description": "Colis charge ailleurs",
+            "goods_category": "Non alimentaire",
+            "quantity": 1,
+            "unit_weight_kg": 4.0,
+            "billing_method": "real",
+            "applied_unit_price_eur": 5.0,
+        })
+        ligne_ailleurs = self.env["dally.freight.consolidation.line"].create({
+            "consolidation_id": autre.id,
+            "package_id": colis.id,
+            "quantity_loaded": 1,
+        })
+        self.assertEqual(ligne_ailleurs.shipment_id, ops)
+        self.assertEqual(ligne_ailleurs.consolidation_id, autre)
+
+        attendu = self._expected(ops, consolidation)
+        rapport = self.recovery.simulate([ops.id], expected=attendu)
+
+        self.assertFalse(rapport["dry_run_pass"])
+        self.assertTrue(
+            any("autre départ" in motif for motif in rapport["blocking"]),
+            rapport["blocking"])
+        with self.assertRaises(UserError):
+            self.recovery._apply_authorized_recovery(
+                [ops.id], attendu, self.env.cr.dbname)
+
+        # Les deux départs sont intacts.
+        self.env.invalidate_all()
+        self.assertTrue(ligne_ailleurs.exists())
+        self.assertEqual(ligne_ailleurs.consolidation_id, autre)
+        self.assertEqual(ops.collection_local_ref, "A080")
+        self.assertEqual(ops.planned_consolidation_id, consolidation)
+        self.assertEqual(len(ops.consolidation_line_ids), 2)
+
+    def test_a_line_with_a_changed_volume_aborts(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-603")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-volume", "A081")
+        ligne = ops.consolidation_line_ids[0]
+        self._divergence_refusee(
+            consolidation, ops,
+            lambda att: att.update({"loaded_lines": [{
+                "line_id": ligne.id, "consolidation_id": ligne.consolidation_id.id,
+                "package_id": ligne.package_id.id,
+                "quantity_loaded": ligne.quantity_loaded,
+                "weight_loaded": ligne.weight_loaded,
+                "volume_loaded": ligne.volume_loaded + 0.5}]}),
+            "volume")
+        self.assertEqual(ops.collection_local_ref, "A081")
+
+    def test_a_falsified_consolidation_in_the_expectation_aborts(self):
+        """L'empreinte compare aussi le départ de chaque ligne."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-604")
+        autre = self._consolidation("AIR-DSS-CDG-2099-605")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:faux-depart", "A082")
+        ligne = ops.consolidation_line_ids[0]
+        self._divergence_refusee(
+            consolidation, ops,
+            lambda att: att.update({"loaded_lines": [{
+                "line_id": ligne.id, "consolidation_id": autre.id,
+                "package_id": ligne.package_id.id,
+                "quantity_loaded": ligne.quantity_loaded,
+                "weight_loaded": ligne.weight_loaded,
+                "volume_loaded": ligne.volume_loaded}]}),
+            "départ")
+        self.assertEqual(ops.collection_local_ref, "A082")
+
+    def test_a_wildcard_none_is_not_a_valid_expectation(self):
+        """`None` ne doit jamais valoir « n'importe quelle valeur »."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-606")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:jokers", "A083")
+        ligne = ops.consolidation_line_ids[0]
+        for champ in ("consolidation_id", "package_id", "quantity_loaded",
+                      "weight_loaded", "volume_loaded"):
+            with self.subTest(champ=champ):
+                attendu = self._expected(ops, consolidation)
+                attendu[ops.id]["loaded_lines"][0][champ] = None
+                with self.assertRaises(UserError) as capture:
+                    self.recovery._apply_authorized_recovery(
+                        [ops.id], attendu, self.env.cr.dbname)
+                self.assertIn(champ, str(capture.exception))
+        self.assertEqual(ops.collection_local_ref, "A083")
+        self.assertEqual(ligne.consolidation_id, consolidation)
+
+    def test_duplicate_ids_in_the_expectation_are_refused(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-607")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:doublons", "A084")
+        attendu = self._expected(ops, consolidation)
+        attendu[ops.id]["loaded_lines"] = (
+            attendu[ops.id]["loaded_lines"] + attendu[ops.id]["loaded_lines"])
+        with self.assertRaises(UserError) as capture:
+            self.recovery._apply_authorized_recovery(
+                [ops.id], attendu, self.env.cr.dbname)
+        self.assertIn("double", str(capture.exception))
+
+        attendu2 = self._expected(ops, consolidation)
+        projection = {
+            "outbox_id": 7, "projection_type": "freight_dossier",
+            "business_key": "ops:doublons", "state": "pending",
+            "resource_reference": "X",
+        }
+        attendu2[ops.id]["outbox"] = [projection, dict(projection)]
+        with self.assertRaises(UserError) as capture:
+            self.recovery._apply_authorized_recovery(
+                [ops.id], attendu2, self.env.cr.dbname)
+        self.assertIn("double", str(capture.exception))
+        self.assertEqual(ops.collection_local_ref, "A084")
+
+    def test_the_package_advisory_locks_are_pre_acquired_without_waiting(self):
+        """`unlink` prendra un verrou colis BLOQUANT : on le prend d'avance.
+
+        Sans cette pré-acquisition, le retrait détiendrait ses verrous de
+        lignes puis attendrait le verrou colis. Une transaction qui tiendrait
+        ce verrou et attendrait nos lignes formerait un cycle — interblocage,
+        ou au mieux une attente qui contredit le contrat NOWAIT.
+        """
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-701")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:verrou-colis", "A090")
+        attendu = self._expected(ops, consolidation)
+        colis_attendus = sorted(
+            ligne["package_id"] for ligne in attendu[ops.id]["loaded_lines"])
+        self.assertTrue(colis_attendus)
+        requetes = []
+        vrai_execute = self.env.cr.execute
+
+        def espion(query, params=None, *args, **kwargs):
+            if "advisory" in query:
+                requetes.append((query, list(params or [])))
+            return vrai_execute(query, params, *args, **kwargs)
+
+        with patch.object(self.env.cr, "execute", espion):
+            self.recovery._verrouiller_cibles([ops.id], attendu)
+
+        self.assertEqual(len(requetes), len(colis_attendus))
+        for requete, _params in requetes:
+            self.assertIn("pg_try_advisory_xact_lock", requete)
+            self.assertNotIn("pg_advisory_xact_lock(", requete,
+                             "le garde ne doit jamais prendre un verrou bloquant")
+        cles = [params[0] for _requete, params in requetes]
+        self.assertEqual(
+            cles,
+            ["consolidation-package:%s" % identifiant for identifiant in colis_attendus],
+            "memes cles que _lock_package, et ids tries",
+        )
+
+    def test_a_package_advisory_conflict_aborts_and_mutates_nothing(self):
+        """Un colis deja verrouille ailleurs : on renonce, on n'attend pas."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-702")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:colis-occupe", "A091")
+        attendu = self._expected(ops, consolidation)
+        lignes_avant = {
+            ligne.id: (ligne.package_id.id, ligne.quantity_loaded)
+            for ligne in ops.consolidation_line_ids
+        }
+        vrai_execute = self.env.cr.execute
+        vrai_fetchone = self.env.cr.fetchone
+        etat = {"try_lock": False}
+
+        def espion(query, params=None, *args, **kwargs):
+            etat["try_lock"] = "pg_try_advisory_xact_lock" in query
+            return vrai_execute(query, params, *args, **kwargs)
+
+        def fetchone_force():
+            # Le SQL est reellement execute ; seul le verdict est force, pour
+            # reproduire un colis deja tenu par une autre transaction.
+            if etat["try_lock"]:
+                etat["try_lock"] = False
+                return (False,)
+            return vrai_fetchone()
+
+        with patch.object(self.env.cr, "execute", espion), \
+                patch.object(self.env.cr, "fetchone", fetchone_force):
+            with self.assertRaises(UserError) as capture:
+                self.recovery._apply_authorized_recovery(
+                    [ops.id], attendu, self.env.cr.dbname)
+        self.assertIn("autre transaction", str(capture.exception))
+
+        self.env.invalidate_all()
+        self.assertEqual(ops.collection_local_ref, "A091")
+        self.assertEqual(ops.planned_consolidation_id, consolidation)
+        self.assertEqual(
+            {ligne.id: (ligne.package_id.id, ligne.quantity_loaded)
+             for ligne in ops.consolidation_line_ids},
+            lignes_avant,
+        )
+
+    def test_unlink_still_works_after_the_lock_is_pre_acquired(self):
+        """Le nominal doit rester nominal : re-prendre un verrou detenu est immediat."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-703")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:colis-nominal", "A092")
+        attendu = self._expected(ops, consolidation)
+
+        self.recovery._apply_authorized_recovery(
+            [ops.id], attendu, self.env.cr.dbname)
+
+        self.env.invalidate_all()
+        self.assertFalse(ops.consolidation_line_ids, "le dechargement doit avoir eu lieu")
+        self.assertFalse(ops.planned_consolidation_id)
+        self.assertEqual(
+            ops.collection_local_ref, _local_ref(ARCHIVE_SEQUENCE_OFFSET + ops.id))
+        self.assertTrue(ops.package_ids, "les colis restent")
+
+    # ------------------------------------------------------------------
+    # L'ordre des etapes, sous REPEATABLE READ
+    # ------------------------------------------------------------------
+
+    def test_the_locks_come_before_any_other_business_read(self):
+        """Le premier acces metier fige le snapshot : ce doit etre le verrou.
+
+        Odoo travaille en REPEATABLE READ. Le snapshot PostgreSQL est fige au
+        premier acces de la transaction ; si c'etait la lecture d'habilitation,
+        tout ce qui suit serait relu dans un snapshot pris AVANT nos verrous.
+        """
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-801")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:ordre", "A100")
+        attendu = self._expected(ops, consolidation)
+        journal = []
+        Service = type(self.recovery)
+        Env = type(self.env)
+        vrais = {
+            "verrous": Service._verrouiller_cibles,
+            "colis": Service._pre_acquerir_verrous_colis,
+            "manager": Service._exiger_manager,
+            "revalidation": Service.simulate,
+            "invalidation": Env.invalidate_all,
+        }
+
+        def tracer(nom, vrai, sur_env=False):
+            def enveloppe(*args, **kwargs):
+                journal.append(nom)
+                return vrai(*args, **kwargs)
+            return enveloppe
+
+        with patch.object(Service, "_verrouiller_cibles",
+                          tracer("verrous", vrais["verrous"])), \
+             patch.object(Service, "_pre_acquerir_verrous_colis",
+                          tracer("colis", vrais["colis"])), \
+             patch.object(Service, "_exiger_manager",
+                          tracer("manager", vrais["manager"])), \
+             patch.object(Service, "simulate",
+                          tracer("revalidation", vrais["revalidation"])), \
+             patch.object(Env, "invalidate_all",
+                          tracer("invalidation", vrais["invalidation"])):
+            self.recovery._apply_authorized_recovery(
+                [ops.id], attendu, self.env.cr.dbname)
+
+        # `_verrouiller_cibles` appelle lui-meme la pre-acquisition des colis.
+        self.assertEqual(journal[0], "verrous",
+                         "le verrouillage doit etre la premiere etape")
+        self.assertLess(journal.index("colis"), journal.index("invalidation"))
+        self.assertLess(journal.index("invalidation"), journal.index("manager"),
+                        "l'invalidation precede toute relecture")
+        self.assertLess(journal.index("manager"), journal.index("revalidation"),
+                        "l'habilitation precede la revalidation et les mutations")
+        self.assertLess(journal.index("colis"), journal.index("revalidation"),
+                        "les verrous colis precedent la revalidation")
+
+    def test_a_non_manager_cannot_mutate_even_after_taking_locks(self):
+        """Le risque concede est borne : des verrous, jamais une mutation."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-802")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:ordre-acl", "A101")
+        attendu = self._expected(ops, consolidation)
+        self.env.user.group_ids -= self.env.ref("dally_core.group_dally_manager")
+
+        with self.assertRaises(AccessError):
+            self.recovery._apply_authorized_recovery(
+                [ops.id], attendu, self.env.cr.dbname)
+
+        self.env.invalidate_all()
+        dossier = ops.sudo()
+        self.assertEqual(dossier.collection_local_ref, "A101")
+        self.assertTrue(dossier.planned_consolidation_id)
+        self.assertTrue(dossier.consolidation_line_ids)
+
+    def test_the_maintenance_script_discards_the_dry_run_transaction(self):
+        """Le script ne doit jamais appliquer dans la transaction du dry-run.
+
+        Sous REPEATABLE READ, `invalidate_all()` vide le cache ORM mais relit
+        le meme snapshot PostgreSQL. Seul un `rollback()` en ouvre un neuf.
+        On lit donc l'ordre reel des appels dans le source du script.
+        """
+        chemin = pathlib.Path(__file__).resolve().parent.parent / "scripts" / (
+            "retire_cancelled_intake_identity.py")
+        arbre = ast.parse(chemin.read_text(encoding="utf-8"))
+        principal = next(
+            noeud for noeud in arbre.body
+            if isinstance(noeud, ast.FunctionDef) and noeud.name == "principal")
+
+        appels = []
+        for noeud in ast.walk(principal):
+            if not isinstance(noeud, ast.Call):
+                continue
+            cible = noeud.func
+            if isinstance(cible, ast.Attribute):
+                appels.append(cible.attr)
+
+        for attendu_appel in ("rollback", "invalidate_all",
+                              "_apply_authorized_recovery", "commit"):
+            self.assertIn(attendu_appel, appels,
+                          "le script doit appeler %s" % attendu_appel)
+        self.assertLess(appels.index("rollback"),
+                        appels.index("_apply_authorized_recovery"),
+                        "le snapshot du dry-run doit etre jete AVANT l'application")
+        self.assertLess(appels.index("invalidate_all"),
+                        appels.index("_apply_authorized_recovery"))
+        self.assertLess(appels.index("_apply_authorized_recovery"),
+                        appels.index("commit"),
+                        "on ne committe qu'apres succes")
 
 
 @tagged("post_install", "-at_install")

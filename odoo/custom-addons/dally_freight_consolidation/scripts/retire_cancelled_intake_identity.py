@@ -47,8 +47,8 @@ CIBLES = {
         "sync_source_key": "ops:06f594a0-31dd-411f-a4ab-9181e85f58f0",
         # Colis 384 « Valise chaussures et vêtements ».
         "loaded_lines": [
-            {"line_id": 254, "package_id": 384,
-             "quantity_loaded": 1, "weight_loaded": 23.000},
+            {"line_id": 254, "consolidation_id": 3, "package_id": 384,
+             "quantity_loaded": 1, "weight_loaded": 23.000, "volume_loaded": 0.0},
         ],
         "outbox": [
             {"outbox_id": 3, "projection_type": "freight_dossier",
@@ -69,12 +69,12 @@ CIBLES = {
         "sync_source_key": "ops:dc122b5c-aedd-420f-b3a9-664f63ee301d",
         # Colis 385 Textile / 386 Vaisselle / 387 Vêtements.
         "loaded_lines": [
-            {"line_id": 255, "package_id": 385,
-             "quantity_loaded": 1, "weight_loaded": 21.300},
-            {"line_id": 256, "package_id": 386,
-             "quantity_loaded": 1, "weight_loaded": 9.050},
-            {"line_id": 257, "package_id": 387,
-             "quantity_loaded": 1, "weight_loaded": 15.350},
+            {"line_id": 255, "consolidation_id": 3, "package_id": 385,
+             "quantity_loaded": 1, "weight_loaded": 21.300, "volume_loaded": 0.0},
+            {"line_id": 256, "consolidation_id": 3, "package_id": 386,
+             "quantity_loaded": 1, "weight_loaded": 9.050, "volume_loaded": 0.0},
+            {"line_id": 257, "consolidation_id": 3, "package_id": 387,
+             "quantity_loaded": 1, "weight_loaded": 15.350, "volume_loaded": 0.0},
         ],
         "outbox": [
             {"outbox_id": 4, "projection_type": "freight_dossier",
@@ -144,6 +144,17 @@ def principal(env):
     if base != BASE_ATTENDUE:
         print("DALLY_RETIRE_DB doit valoir « %s » pour appliquer." % BASE_ATTENDUE)
         return 1
+
+    # Odoo travaille en REPEATABLE READ : le snapshot PostgreSQL est fige au
+    # premier acces de la transaction, et `invalidate_all()` ne le renouvelle
+    # pas — il ne vide que le cache ORM. Sans ce rollback, l'application
+    # relirait la base telle qu'elle etait au debut de la SIMULATION, verrous
+    # ou pas.
+    #
+    # Le rollback est volontaire et sans perte : la simulation n'ecrit rien. On
+    # se garde surtout de committer une transaction qui n'a rien a valider.
+    env.cr.rollback()
+    env.invalidate_all()
 
     resultat = service._apply_authorized_recovery(ids, cibles, BASE_ATTENDUE)
     env.cr.commit()

@@ -10,6 +10,20 @@ class TestFreightSyncService(TransactionCase):
         super().setUp()
         self.Sync = self.env["dally.freight.sync.service"]
 
+    def _force_stale_manual_standard_state(self, line):
+        line.flush_recordset(["pricing_type_snapshot", "manual_unit_price_eur", "pricing_reason"])
+        self.env.cr.execute(
+            """
+            UPDATE dally_shipment_package
+               SET pricing_type_snapshot = 'standard',
+                   manual_unit_price_eur = 5.0,
+                   pricing_reason = NULL
+             WHERE id = %s
+            """,
+            [line.id],
+        )
+        line.invalidate_recordset(["pricing_type_snapshot", "manual_unit_price_eur", "pricing_reason"])
+
     def _payload(self, **overrides):
         payload = {
             "external_reference": "A-SYNC-001",
@@ -226,6 +240,203 @@ class TestFreightSyncService(TransactionCase):
         self.assertAlmostEqual(line.applied_unit_price_eur, 2.0, places=2)
         self.assertAlmostEqual(line.transport_amount_eur, 20.0, places=2)
         self.assertFalse(line.tariff_rule_id)
+
+    def test_explicit_standard_clears_previous_manual_tariff(self):
+        payload = self._payload(lines=[{
+            "external_line_key": "A-SYNC-STANDARD-RESET|A|1",
+            "description": "Colis negocie",
+            "quantity": 1,
+            "exact_weight_kg": 10,
+            "billing_method": "real",
+            "tariff_family_code": "food",
+            "manual_unit_price_eur": 5.0,
+            "pricing_type": "special",
+            "pricing_reason": "Tarif negocie",
+        }])
+        _data, shipment = self.Sync.upsert(payload)
+        line = shipment.package_ids
+        self.assertEqual(line.pricing_type_snapshot, "special")
+        self.assertAlmostEqual(line.manual_unit_price_eur, 5.0, places=2)
+        self.assertEqual(line.pricing_reason, "Tarif negocie")
+
+        payload["lines"][0].pop("manual_unit_price_eur")
+        payload["lines"][0].pop("pricing_reason")
+        payload["lines"][0]["pricing_type"] = "standard"
+        data, shipment = self.Sync.upsert(payload)
+
+        line = shipment.package_ids
+        self.assertEqual(data["lines"][0]["pricing_status"], "automatic")
+        self.assertEqual(line.pricing_type_snapshot, "standard")
+        self.assertFalse(line.manual_unit_price_eur)
+        self.assertFalse(line.pricing_reason)
+
+    def test_explicit_standard_clears_stale_manual_price(self):
+        _data, shipment = self.Sync.upsert(self._payload(
+            external_reference="A-SYNC-STALE-STANDARD",
+            lines=[{
+                "external_line_key": "A-SYNC-STALE-STANDARD|A|1",
+                "description": "Marchandise non precisee",
+                "goods_category": "Non Alimentaires",
+                "quantity": 1,
+                "exact_weight_kg": 4.15,
+                "billing_method": "real",
+                "tariff_family_code": "non_food",
+            }],
+        ))
+        line = shipment.package_ids
+        self._force_stale_manual_standard_state(line)
+
+        data, shipment = self.Sync.upsert(self._payload(
+            external_reference="A-SYNC-STALE-STANDARD",
+            lines=[{
+                "external_line_key": "A-SYNC-STALE-STANDARD|A|1",
+                "description": "Marchandise non precisee",
+                "goods_category": "Non Alimentaires",
+                "quantity": 1,
+                "exact_weight_kg": 4.15,
+                "billing_method": "real",
+                "tariff_family_code": "non_food",
+                "pricing_type": "standard",
+            }],
+        ))
+
+        line = shipment.package_ids
+        self.assertEqual(data["lines"][0]["pricing_status"], "automatic")
+        self.assertEqual(line.pricing_type_snapshot, "standard")
+        self.assertFalse(line.manual_unit_price_eur)
+        self.assertFalse(line.pricing_reason)
+
+    def test_explicit_standard_without_rule_clears_applied_manual_tariff(self):
+        payload = self._payload(
+            external_reference="M-SYNC-STANDARD-NO-RULE",
+            transport_mode="sea",
+            lines=[{
+                "external_line_key": "M-SYNC-STANDARD-NO-RULE|A|1",
+                "description": "Colis negocie maritime",
+                "quantity": 1,
+                "exact_weight_kg": 4,
+                "unit_volume_cbm": 0.5,
+                "billing_method": "volumetric",
+                "tariff_family_code": "non_food",
+                "manual_unit_price_eur": 5.0,
+                "pricing_type": "special",
+                "pricing_reason": "Tarif negocie",
+            }],
+        )
+        _data, shipment = self.Sync.upsert(payload)
+        line = shipment.package_ids
+        line.write({"volumetric_ratio_kg_cbm": 10.0})
+
+        self.assertAlmostEqual(line.manual_unit_price_eur, 5.0, places=2)
+        self.assertAlmostEqual(line.applied_unit_price_eur, 5.0, places=2)
+        self.assertTrue(line.tariff_applied_on)
+        self.assertAlmostEqual(line.volumetric_ratio_kg_cbm, 10.0, places=2)
+        self.assertAlmostEqual(line.billable_weight_kg, 5.0, places=2)
+        self.assertAlmostEqual(line.transport_amount_eur, 25.0, places=2)
+
+        payload["lines"][0].pop("manual_unit_price_eur")
+        payload["lines"][0].pop("pricing_reason")
+        payload["lines"][0]["pricing_type"] = "standard"
+        data, shipment = self.Sync.upsert(payload)
+
+        line = shipment.package_ids
+        self.assertEqual(data["lines"][0]["pricing_status"], "manual_required")
+        self.assertEqual(line.pricing_type_snapshot, "standard")
+        self.assertFalse(line.manual_unit_price_eur)
+        self.assertFalse(line.pricing_reason)
+        self.assertFalse(line.applied_unit_price_eur)
+        self.assertFalse(line.tariff_rule_id)
+        self.assertFalse(line.tariff_applied_on)
+        self.assertFalse(line.volumetric_ratio_kg_cbm)
+        self.assertAlmostEqual(line.billable_weight_kg, 4.0, places=2)
+        self.assertAlmostEqual(line.transport_amount_eur, 0.0, places=2)
+
+    def test_special_manual_tariff_still_requires_reason(self):
+        payload = self._payload(lines=[{
+            "external_line_key": "A-SYNC-SPECIAL-NO-REASON|A|1",
+            "description": "Colis sans motif",
+            "quantity": 1,
+            "exact_weight_kg": 10,
+            "billing_method": "real",
+            "tariff_family_code": "food",
+            "manual_unit_price_eur": 5.0,
+            "pricing_type": "special",
+            "pricing_reason": None,
+        }])
+        with self.assertRaisesRegex(ValidationError, "manual freight price requires a reason"):
+            self.Sync.upsert(payload)
+
+    def test_valid_special_manual_tariff_is_preserved(self):
+        payload = self._payload(lines=[{
+            "external_line_key": "A-SYNC-SPECIAL-VALID|A|1",
+            "description": "Colis negocie",
+            "quantity": 1,
+            "exact_weight_kg": 10,
+            "billing_method": "real",
+            "tariff_family_code": "food",
+            "manual_unit_price_eur": 5.0,
+            "pricing_type": "special",
+            "pricing_reason": "Tarif negocie",
+        }])
+        data, shipment = self.Sync.upsert(payload)
+        line = shipment.package_ids
+        self.assertEqual(data["lines"][0]["pricing_status"], "manual")
+        self.assertEqual(line.pricing_type_snapshot, "special")
+        self.assertAlmostEqual(line.manual_unit_price_eur, 5.0, places=2)
+        self.assertEqual(line.pricing_reason, "Tarif negocie")
+
+    def test_standard_sync_is_idempotent_after_manual_reset(self):
+        payload = self._payload(
+            external_reference="A-SYNC-STANDARD-IDEMPOTENT",
+            lines=[{
+                "external_line_key": "A-SYNC-STANDARD-IDEMPOTENT|A|1",
+                "description": "Colis standard",
+                "quantity": 1,
+                "exact_weight_kg": 10,
+                "billing_method": "real",
+                "tariff_family_code": "food",
+                "pricing_type": "standard",
+            }],
+        )
+        _data, shipment = self.Sync.upsert(payload)
+        line = shipment.package_ids
+        self._force_stale_manual_standard_state(line)
+
+        self.Sync.upsert(payload)
+        self.Sync.upsert(payload)
+
+        self.assertEqual(line.pricing_type_snapshot, "standard")
+        self.assertFalse(line.manual_unit_price_eur)
+        self.assertFalse(line.pricing_reason)
+
+    def test_legacy_payload_without_pricing_type_preserves_manual_tariff(self):
+        payload = self._payload(lines=[{
+            "external_line_key": "A-SYNC-LEGACY-MANUAL|A|1",
+            "description": "Colis legacy",
+            "quantity": 1,
+            "exact_weight_kg": 10,
+            "billing_method": "real",
+            "tariff_family_code": "food",
+            "manual_unit_price_eur": 5.0,
+            "pricing_type": "special",
+            "pricing_reason": "Tarif legacy",
+        }])
+        _data, shipment = self.Sync.upsert(payload)
+        line = shipment.package_ids
+
+        legacy = self._payload(lines=[{
+            "external_line_key": "A-SYNC-LEGACY-MANUAL|A|1",
+            "description": "Colis legacy",
+            "quantity": 1,
+            "exact_weight_kg": 10,
+            "billing_method": "real",
+            "tariff_family_code": "food",
+        }])
+        self.Sync.upsert(legacy)
+
+        self.assertEqual(line.pricing_type_snapshot, "special")
+        self.assertAlmostEqual(line.manual_unit_price_eur, 5.0, places=2)
+        self.assertEqual(line.pricing_reason, "Tarif legacy")
 
     def test_partial_dossier_can_sync_before_weight_exists(self):
         payload = self._payload(

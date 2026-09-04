@@ -1,0 +1,647 @@
+# -*- coding: utf-8 -*-
+"""Le retrait d'une identité de collecte annulée, et ses refus.
+
+Le scénario reproduit exactement l'incident du 02/09/2026 : une collecte saisie
+depuis Ops réserve ``A034`` dans la consolidation, elle est annulée, puis la
+même référence papier est attribuée à un autre client dans le classeur. Le
+classeur ne peut plus se synchroniser tant que l'identité n'est pas rendue.
+"""
+
+from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.tests import TransactionCase, tagged
+
+from odoo.addons.dally_freight_consolidation.models.intake_identity_recovery import (
+    ARCHIVE_SEQUENCE_OFFSET,
+    _local_ref,
+)
+from odoo.addons.dally_freight_consolidation.models.shipment import (
+    _INTAKE_IDENTITY_TOKEN,
+    _PLANNED_RETIRE_TOKEN,
+)
+
+
+class RecoveryFixtures(TransactionCase):
+    """Tous les tests de cette classe vivent dans la société courante.
+
+    On n'hérite pas d'``AccountTestInvoicingCommon`` : il déplace la classe sur
+    une société qu'il crée lui-même, laquelle ne porte aucun journal dans cette
+    base — et le service de synchronisation, lui, travaille dans
+    ``env.company``. Le mélange des deux sociétés faisait échouer les gardes
+    financiers sur l'absence de journal, pas sur la règle testée.
+    """
+
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.env.user.group_ids += cls.env.ref("dally_core.group_dally_manager")
+        cls.company = cls.env.company
+        cls.sync = cls.env["dally.freight.sync.service"]
+        cls.recovery = cls.env["dally.freight.intake.identity.recovery"]
+        cls.ops_client = cls.env["res.partner"].create({
+            "name": "Client Ops Annulé", "company_type": "person",
+            "email": "ops-cancelled@test.invalid",
+        })
+        cls.sheet_client = cls.env["res.partner"].create({
+            "name": "Client Classeur Légitime", "company_type": "person",
+            "email": "sheet-legit@test.invalid",
+        })
+
+    # ------------------------------------------------------------------
+    # Fixtures
+    # ------------------------------------------------------------------
+
+    def _consolidation(self, name):
+        return self.env["dally.freight.consolidation"].create({
+            "name": name, "company_id": self.company.id,
+            "transport_mode": "air", "direction": "export",
+            "origin_country_id": self.env.ref("base.sn").id,
+            "origin_city": "Dakar", "origin_location": "DSS",
+            "destination_country_id": self.env.ref("base.fr").id,
+            "destination_city": "Paris", "destination_location": "CDG",
+            "state": "collecting",
+        })
+
+    def _payload(self, key, consolidation, local_ref, partner, source, external=None):
+        values = {
+            "sync_source_key": key,
+            "source": source,
+            "planned_consolidation_ref": consolidation.name,
+            "collection_local_ref": local_ref,
+            "transport_mode": "air",
+            "direction": "export",
+            "state": "goods_received",
+            "client": {"name": partner.name, "email": partner.email},
+            "origin": {"country_code": "SN", "city": "Dakar", "location": "DSS"},
+            "destination": {"country_code": "FR", "city": "Paris", "location": "CDG"},
+            "lines": [{
+                "external_line_key": "%s|A|1" % key,
+                "package_type": "parcel",
+                "description": "Valise test",
+                "goods_category": "Non alimentaire",
+                "quantity": 1,
+                "announced_weight_kg": 23.0,
+                "exact_weight_kg": 23.0,
+                "billing_method": "real",
+                "tariff_family_code": "non_food",
+                "customs_value_xof": 25000,
+            }],
+        }
+        if external:
+            values["external_reference"] = external
+        return values
+
+    def _cancelled_ops_dossier(self, consolidation, key, local_ref):
+        """Une collecte Ops qui a réservé `local_ref`, puis a été annulée."""
+        _result, shipment = self.sync.upsert(
+            self._payload(key, consolidation, local_ref, self.ops_client, "backoffice")
+        )
+        # On laisse délibérément les colis chargés dans la consolidation : c'est
+        # l'état réel de 842 et 843 en production, l'annulation d'un dossier ne
+        # déchargeant pas ses lignes. Les décharger ici rendrait le test plus
+        # facile que la réalité — et c'est ce qui avait masqué une assertion
+        # trop stricte.
+        self.assertTrue(shipment.consolidation_line_ids)
+        shipment.message_post(body="Réception saisie au comptoir.", subtype_xmlid="mail.mt_note")
+        shipment.action_cancel()
+        self.assertEqual(shipment.state, "cancelled")
+        return shipment
+
+    def _expected(self, shipment, consolidation):
+        return {shipment.id: {
+            "company_id": self.company.id,
+            "intake_consolidation_id": consolidation.id,
+            "external_reference": shipment.external_reference,
+            "collection_local_ref": shipment.collection_local_ref,
+            "collection_sequence": shipment.collection_sequence,
+            "sync_source_key": shipment.sync_source_key,
+        }}
+
+    def _archive_refs(self, shipment, consolidation):
+        sequence = ARCHIVE_SEQUENCE_OFFSET + shipment.id
+        local = _local_ref(sequence)
+        return sequence, local, "%s-%s" % (consolidation.name, local)
+
+    def _collection(self, shipment, key):
+        return self.env["dally.freight.collection"].create({
+            "external_payment_key": key,
+            "shipment_id": shipment.id,
+            "amount": 25000.0,
+            "currency_id": self.env.ref("base.XOF").id,
+            "payment_date": "2026-09-03",
+            "source_method": "wave",
+            "source": "google_sheets",
+        })
+
+    def _journal(self, kind):
+        """Un journal du type demandé, sans présumer de la société.
+
+        Ces deux gardes ont besoin de comptabilité, pas d'une société précise.
+        On cherche d'abord dans la société du dossier, puis n'importe où : une
+        base de test sans plan comptable installé n'a aucun journal, et il vaut
+        mieux le dire que faire échouer un test sur une cause étrangère à la
+        règle qu'il mesure.
+        """
+        Journal = self.env["account.journal"].sudo()
+        journal = Journal.search(
+            [("company_id", "=", self.company.id), ("type", "=", kind)], limit=1)
+        if not journal:
+            journal = Journal.search([("type", "=", kind)], limit=1)
+        if not journal:
+            self.skipTest("aucun journal %s : base de test sans comptabilité" % kind)
+        return journal
+
+    def _account_payment(self, shipment):
+        journal = self._journal("bank")
+        return self.env["account.payment"].sudo().create({
+            "payment_type": "inbound",
+            "partner_type": "customer",
+            "partner_id": shipment.partner_id.id,
+            "amount": 100.0,
+            "journal_id": journal.id,
+            "company_id": journal.company_id.id,
+        })
+
+    # ------------------------------------------------------------------
+    # Le scénario nominal, joué sur les deux références de l'incident
+    # ------------------------------------------------------------------
+
+    def _scenario(self, consolidation_name, local_ref, ops_key, sheet_key):
+        consolidation = self._consolidation(consolidation_name)
+        ops = self._cancelled_ops_dossier(consolidation, ops_key, local_ref)
+        ancienne_externe = ops.external_reference
+        messages_avant = len(ops.message_ids)
+        colis_avant = len(ops.package_ids)
+
+        # Avant réparation : le classeur ne peut pas reprendre la référence.
+        with self.assertRaises(ValidationError):
+            self.sync.upsert(self._payload(
+                sheet_key, consolidation, local_ref, self.sheet_client,
+                "google_sheets", external=ancienne_externe,
+            ))
+
+        sequence, local, externe = self._archive_refs(ops, consolidation)
+        rapport = self.recovery.simulate([ops.id], expected=self._expected(ops, consolidation))
+        self.assertTrue(rapport["dry_run_pass"], rapport["blocking"])
+        detail = rapport["shipments"][0]
+        self.assertEqual(detail["archive"]["collection_sequence"], sequence)
+        self.assertEqual(detail["archive"]["collection_local_ref"], local)
+        self.assertEqual(detail["archive"]["external_reference"], externe)
+        self.assertTrue(detail["archive"]["sequence_free"])
+        self.assertTrue(detail["archive"]["local_ref_free"])
+        self.assertTrue(detail["archive"]["external_reference_free"])
+
+        # La simulation n'écrit rien.
+        self.assertEqual(ops.external_reference, ancienne_externe)
+
+        self.recovery.apply(
+            [ops.id], expected=self._expected(ops, consolidation),
+            database=self.env.cr.dbname,
+        )
+
+        # L'ancien dossier est conservé, seulement déplacé.
+        self.assertTrue(ops.exists())
+        self.assertEqual(ops.state, "cancelled")
+        self.assertEqual(ops.sync_source_key, ops_key, "la clé source ne doit jamais être réécrite")
+        self.assertEqual(ops.intake_consolidation_id, consolidation)
+        self.assertEqual(ops.collection_local_ref, local)
+        self.assertEqual(ops.collection_sequence, sequence)
+        self.assertEqual(ops.external_reference, externe)
+        self.assertEqual(len(ops.package_ids), colis_avant, "aucun colis ne doit disparaître")
+        self.assertGreater(len(ops.message_ids), messages_avant, "la trace doit être ajoutée")
+        self.assertTrue(
+            any(ancienne_externe in (message.body or "") for message in ops.message_ids),
+            "le chatter doit conserver l'ancienne identité",
+        )
+        self.assertFalse(ops.sale_order_id)
+        self.assertFalse(ops.invoice_id)
+
+        # Le classeur peut désormais créer sa propre collecte sur la référence.
+        _result, sheet = self.sync.upsert(self._payload(
+            sheet_key, consolidation, local_ref, self.sheet_client, "google_sheets",
+        ))
+        self.assertNotEqual(sheet.id, ops.id, "aucun recyclage du record annulé")
+        self.assertEqual(sheet.collection_local_ref, local_ref)
+        self.assertEqual(sheet.external_reference, "%s-%s" % (consolidation.name, local_ref))
+        self.assertEqual(sheet.partner_id, self.sheet_client)
+        self.assertEqual(sheet.sync_source_key, sheet_key)
+        return ops, sheet
+
+
+class TestIntakeIdentityRecovery(RecoveryFixtures):
+    """Le retrait nominal et tous ses refus qui n'exigent pas de comptabilité."""
+
+    def test_a034_identity_is_recovered_for_the_sheet(self):
+        self._scenario(
+            "AIR-DSS-CDG-2099-034", "A034",
+            "ops:test-a034-owner", "sheets:test-a034-claimant",
+        )
+
+    def test_a035_identity_is_recovered_for_the_sheet(self):
+        self._scenario(
+            "AIR-DSS-CDG-2099-035", "A035",
+            "ops:test-a035-owner", "sheets:test-a035-claimant",
+        )
+
+    # ------------------------------------------------------------------
+    # Les refus
+    # ------------------------------------------------------------------
+
+    def test_a_live_dossier_is_never_retired(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-101")
+        _result, vivant = self.sync.upsert(self._payload(
+            "ops:test-live", consolidation, "A012", self.ops_client, "backoffice",
+        ))
+        self.assertNotEqual(vivant.state, "cancelled")
+
+        rapport = self.recovery.simulate([vivant.id], expected=self._expected(vivant, consolidation))
+        self.assertFalse(rapport["dry_run_pass"])
+        self.assertTrue(any("annulé" in motif for motif in rapport["blocking"]))
+        with self.assertRaises(UserError):
+            self.recovery.apply(
+                [vivant.id], expected=self._expected(vivant, consolidation),
+                database=self.env.cr.dbname,
+            )
+        self.assertEqual(vivant.collection_local_ref, "A012")
+
+    def test_a_dossier_carrying_a_collection_is_never_retired(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-102")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-money", "A013")
+        self._collection(ops, "test-money|P|1")
+
+        rapport = self.recovery.simulate([ops.id], expected=self._expected(ops, consolidation))
+        self.assertFalse(rapport["dry_run_pass"])
+        self.assertTrue(any("encaissement" in motif for motif in rapport["blocking"]))
+        with self.assertRaises(UserError):
+            self.recovery.apply(
+                [ops.id], expected=self._expected(ops, consolidation),
+                database=self.env.cr.dbname,
+            )
+        self.assertEqual(ops.collection_local_ref, "A013")
+
+
+    def test_a_dossier_carrying_a_sale_order_is_never_retired(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-103")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-order", "A014")
+        # `sudo` : l'utilisateur de test porte les groupes Dally, pas ceux de
+        # Ventes. Ce test porte sur le refus du retrait, pas sur les ACL Ventes.
+        order = self.env["sale.order"].sudo().create({"partner_id": ops.partner_id.id})
+        ops.sale_order_id = order.id
+
+        rapport = self.recovery.simulate([ops.id], expected=self._expected(ops, consolidation))
+        self.assertFalse(rapport["dry_run_pass"])
+        self.assertTrue(any("devis" in motif.lower() for motif in rapport["blocking"]))
+        self.assertEqual(ops.collection_local_ref, "A014")
+
+
+    def test_a_taken_archive_identity_is_refused(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-104")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-taken", "A015")
+        _sequence, _local, externe = self._archive_refs(ops, consolidation)
+        # Un dossier occupe déjà la référence globale d'archive visée.
+        self.env["dally.shipment"].create({
+            "partner_id": self.sheet_client.id,
+            "external_reference": externe,
+            "transport_mode": "air",
+            "direction": "export",
+        })
+
+        rapport = self.recovery.simulate([ops.id], expected=self._expected(ops, consolidation))
+        self.assertFalse(rapport["dry_run_pass"])
+        self.assertFalse(rapport["shipments"][0]["archive"]["external_reference_free"])
+        with self.assertRaises(UserError):
+            self.recovery.apply(
+                [ops.id], expected=self._expected(ops, consolidation),
+                database=self.env.cr.dbname,
+            )
+        self.assertEqual(ops.collection_local_ref, "A015")
+
+    def test_a_taken_archive_sequence_is_refused(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-111")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-sequence-taken", "A022")
+        sequence, local, _externe = self._archive_refs(ops, consolidation)
+        # Le modèle impose la cohérence séquence/référence locale : on ne peut
+        # pas occuper l'une sans l'autre. L'occupant porte donc la référence
+        # locale d'archive, et une référence globale volontairement différente
+        # pour que ce soit bien la séquence — et non la globale — qui bloque.
+        self.env["dally.shipment"].with_context(
+            _dally_intake_identity_token=_INTAKE_IDENTITY_TOKEN,
+        ).create({
+            "partner_id": self.sheet_client.id,
+            "company_id": self.company.id,
+            "external_reference": "AIR-DSS-CDG-2099-111-SQUAT",
+            "collection_local_ref": local,
+            "collection_sequence": sequence,
+            "intake_consolidation_id": consolidation.id,
+            "transport_mode": "air",
+            "direction": "export",
+        })
+
+        rapport = self.recovery.simulate([ops.id], expected=self._expected(ops, consolidation))
+        self.assertFalse(rapport["dry_run_pass"])
+        self.assertFalse(rapport["shipments"][0]["archive"]["sequence_free"])
+        with self.assertRaises(UserError):
+            self.recovery.apply(
+                [ops.id], expected=self._expected(ops, consolidation),
+                database=self.env.cr.dbname,
+            )
+        self.assertEqual(ops.collection_local_ref, "A022")
+
+    def test_a_diverging_expectation_aborts(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-105")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-diverge", "A016")
+        attendu = self._expected(ops, consolidation)
+        attendu[ops.id]["collection_local_ref"] = "A099"
+
+        rapport = self.recovery.simulate([ops.id], expected=attendu)
+        self.assertFalse(rapport["dry_run_pass"])
+        with self.assertRaises(UserError):
+            self.recovery.apply([ops.id], expected=attendu, database=self.env.cr.dbname)
+
+    def test_a_wrong_database_name_aborts(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-106")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-db", "A017")
+        with self.assertRaises(UserError):
+            self.recovery.apply(
+                [ops.id], expected=self._expected(ops, consolidation),
+                database="une-autre-base",
+            )
+        self.assertEqual(ops.collection_local_ref, "A017")
+
+    def test_a_non_manager_cannot_apply(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-107")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-acl", "A018")
+        # L'attente est calculée AVANT de retirer le groupe : sans le groupe
+        # Manager, l'utilisateur ne peut plus même lire le dossier, et le test
+        # échouerait sur la lecture au lieu de mesurer le refus.
+        attendu = self._expected(ops, consolidation)
+        self.env.user.group_ids -= self.env.ref("dally_core.group_dally_manager")
+        with self.assertRaises(AccessError):
+            self.recovery.apply([ops.id], expected=attendu, database=self.env.cr.dbname)
+        self.assertEqual(ops.sudo().collection_local_ref, "A018")
+
+    def test_loaded_packages_do_not_block_but_are_reported(self):
+        """Le chargement est l'état normal d'une entrée annulée : il se rapporte.
+
+        Le retrait ne touche ni `package_id` ni `quantity_loaded`. Bloquer
+        là-dessus refuserait exactement les deux dossiers réels à réparer.
+        """
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-112")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-loaded", "A023")
+        charge = sum(ops.consolidation_line_ids.mapped("quantity_loaded"))
+        self.assertGreater(charge, 0, "le colis doit rester chargé, comme en production")
+
+        rapport = self.recovery.simulate([ops.id], expected=self._expected(ops, consolidation))
+
+        self.assertTrue(rapport["dry_run_pass"], rapport["blocking"])
+        self.assertEqual(rapport["shipments"][0]["loaded_quantity_total"], charge)
+
+    def test_a_consolidation_no_longer_collecting_blocks_the_retirement(self):
+        """Un manifeste imprimé ne doit pas perdre la référence qu'il porte."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-113")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-departed", "A024")
+        # Par l'action métier : le statut d'une consolidation n'est pas
+        # écrivable directement, et un test qui forcerait l'état mesurerait
+        # autre chose que la réalité.
+        consolidation.action_close_collection()
+        self.assertNotEqual(consolidation.state, "collecting")
+
+        rapport = self.recovery.simulate([ops.id], expected=self._expected(ops, consolidation))
+
+        self.assertFalse(rapport["dry_run_pass"])
+        self.assertTrue(any("collecte" in motif for motif in rapport["blocking"]))
+        with self.assertRaises(UserError):
+            self.recovery.apply(
+                [ops.id], expected=self._expected(ops, consolidation),
+                database=self.env.cr.dbname,
+            )
+        self.assertEqual(ops.collection_local_ref, "A024")
+
+    def test_intake_identity_stays_immutable_outside_the_service(self):
+        """La réparation reste le seul chemin : l'ORM nu refuse toujours."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-108")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-immutable", "A019")
+        with self.assertRaises(AccessError):
+            ops.write({"collection_local_ref": "A900000", "collection_sequence": 900000})
+
+    # ------------------------------------------------------------------
+    # Le test qui compte : sortir de la composition du vrai départ
+    # ------------------------------------------------------------------
+
+    def test_the_retired_test_dossier_leaves_the_departure_composition(self):
+        """Reproduit la production : un faux dossier pollue un départ vivant.
+
+        Retirer la seule identité ne suffisait pas. Tant que le dossier annulé
+        reste planifié et chargé, `_expected_shipments()` le réclame,
+        `_departure_blockers()` exige qu'il soit « prête à partir » — ce qu'un
+        dossier annulé ne sera jamais — et son poids compte dans le manifeste.
+        """
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-300")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-manifeste", "A034")
+        colis_avant = ops.package_ids
+        poids_test = sum(ops.consolidation_line_ids.mapped("weight_loaded"))
+
+        # Avant : le faux dossier fait partie du départ, et pèse dans le manifeste.
+        self.assertIn(ops, consolidation._expected_shipments())
+        self.assertEqual(ops.planned_consolidation_id, consolidation)
+        self.assertGreater(poids_test, 0)
+        self.assertAlmostEqual(consolidation.client_weight_kg, poids_test, places=3)
+        self.assertTrue(
+            any(ops.external_reference in (motif or "")
+                for motif in consolidation._departure_blockers()),
+            "le dossier annulé doit bloquer le départ avant réparation",
+        )
+
+        attendu = self._expected(ops, consolidation)
+        rapport = self.recovery.simulate([ops.id], expected=attendu)
+        detail = rapport["shipments"][0]
+        self.assertTrue(rapport["dry_run_pass"], rapport["blocking"])
+        self.assertEqual(
+            sorted(detail["loaded_lines_to_remove"]),
+            sorted(ops.consolidation_line_ids.ids),
+        )
+        self.assertEqual(detail["planned_consolidation_to_clear"]["id"], consolidation.id)
+        self.assertEqual(detail["planned_consolidation_to_clear"]["state"], "collecting")
+        # La simulation n'a rien touché.
+        self.assertEqual(ops.planned_consolidation_id, consolidation)
+        self.assertTrue(ops.consolidation_line_ids)
+
+        self.recovery.apply([ops.id], expected=attendu, database=self.env.cr.dbname)
+
+        consolidation.invalidate_recordset()
+        # Le dossier survit, son historique aussi.
+        self.assertTrue(ops.exists())
+        self.assertEqual(ops.state, "cancelled")
+        self.assertEqual(ops.package_ids, colis_avant, "les colis doivent rester")
+        self.assertEqual(ops.intake_consolidation_id, consolidation,
+                         "la consolidation d'entrée reste l'historique de réception")
+        self.assertEqual(ops.sync_source_key, "ops:test-manifeste")
+
+        # Mais il quitte la composition du départ.
+        self.assertFalse(ops.consolidation_line_ids)
+        self.assertFalse(ops.planned_consolidation_id)
+        self.assertNotIn(ops, consolidation._expected_shipments())
+        self.assertAlmostEqual(consolidation.client_weight_kg, 0.0, places=3)
+        self.assertEqual(consolidation.client_package_count, 0)
+        self.assertFalse(
+            any(ops.external_reference in (motif or "")
+                for motif in consolidation._departure_blockers()),
+            "le dossier retiré ne doit plus bloquer le départ",
+        )
+        self.assertFalse(
+            any("A034" in (motif or "") for motif in consolidation._departure_blockers()),
+            "aucun blocage ne doit plus citer la référence libérée",
+        )
+
+        # Le vrai dossier du classeur peut alors prendre A034, seul.
+        _result, vrai = self.sync.upsert(self._payload(
+            "sheets:test-manifeste-vrai", consolidation, "A034",
+            self.sheet_client, "google_sheets",
+        ))
+        consolidation.invalidate_recordset()
+        self.assertNotEqual(vrai.id, ops.id)
+        self.assertEqual(vrai.collection_local_ref, "A034")
+        self.assertEqual(vrai.external_reference, "%s-A034" % consolidation.name)
+        self.assertEqual(ops.collection_local_ref, _local_ref(ARCHIVE_SEQUENCE_OFFSET + ops.id))
+        self.assertIn(vrai, consolidation._expected_shipments())
+        self.assertNotIn(ops, consolidation._expected_shipments())
+        # Aucun double comptage : seul le poids du vrai dossier reste.
+        self.assertAlmostEqual(
+            consolidation.client_weight_kg,
+            sum(vrai.consolidation_line_ids.mapped("weight_loaded")), places=3)
+
+    # ------------------------------------------------------------------
+    # Le chemin privé de retrait du départ prévu
+    # ------------------------------------------------------------------
+
+    def test_clearing_the_planned_departure_is_refused_without_the_token(self):
+        """Le comportement normal du modèle ne doit pas s'assouplir."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-301")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-jeton", "A040")
+        ops.consolidation_line_ids.unlink()
+        with self.assertRaises(ValidationError):
+            ops.write({"planned_consolidation_id": False})
+        self.assertEqual(ops.planned_consolidation_id, consolidation)
+
+    def test_the_token_alone_does_not_authorise_a_live_dossier(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-302")
+        _result, vivant = self.sync.upsert(self._payload(
+            "ops:test-jeton-vivant", consolidation, "A041", self.ops_client, "backoffice",
+        ))
+        vivant.consolidation_line_ids.unlink()
+        self.assertNotEqual(vivant.state, "cancelled")
+        with self.assertRaises(ValidationError):
+            vivant.with_context(
+                _dally_planned_retire_token=_PLANNED_RETIRE_TOKEN
+            ).write({"planned_consolidation_id": False})
+        self.assertEqual(vivant.planned_consolidation_id, consolidation)
+
+    def test_the_token_refuses_while_a_loading_line_remains(self):
+        """Le plan ne se vide qu'après le chargement, jamais avant."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-303")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-jeton-charge", "A042")
+        self.assertTrue(ops.consolidation_line_ids)
+        with self.assertRaises(ValidationError):
+            ops.with_context(
+                _dally_planned_retire_token=_PLANNED_RETIRE_TOKEN
+            ).write({"planned_consolidation_id": False})
+        self.assertEqual(ops.planned_consolidation_id, consolidation)
+
+    def test_the_token_refuses_a_dossier_carrying_money(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-304")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-jeton-argent", "A043")
+        ops.consolidation_line_ids.unlink()
+        self._collection(ops, "test-jeton-argent|P|1")
+        with self.assertRaises(ValidationError):
+            ops.with_context(
+                _dally_planned_retire_token=_PLANNED_RETIRE_TOKEN
+            ).write({"planned_consolidation_id": False})
+        self.assertEqual(ops.planned_consolidation_id, consolidation)
+
+    def test_the_token_refuses_when_the_departure_is_no_longer_collecting(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-305")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-jeton-ferme", "A044")
+        ops.consolidation_line_ids.unlink()
+        consolidation.action_close_collection()
+        with self.assertRaises(ValidationError):
+            ops.with_context(
+                _dally_planned_retire_token=_PLANNED_RETIRE_TOKEN
+            ).write({"planned_consolidation_id": False})
+        self.assertEqual(ops.planned_consolidation_id, consolidation)
+
+    def test_a_diverging_loaded_line_expectation_aborts(self):
+        """Les lignes à retirer sont déclarées, pas découvertes."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-306")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-lignes", "A045")
+        attendu = self._expected(ops, consolidation)
+        attendu[ops.id]["loaded_line_ids"] = [999999]
+
+        rapport = self.recovery.simulate([ops.id], expected=attendu)
+
+        self.assertFalse(rapport["dry_run_pass"])
+        self.assertTrue(any("chargement" in motif for motif in rapport["blocking"]))
+        with self.assertRaises(UserError):
+            self.recovery.apply([ops.id], expected=attendu, database=self.env.cr.dbname)
+        self.assertTrue(ops.consolidation_line_ids)
+
+    def test_a_diverging_planned_departure_expectation_aborts(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-307")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-plan", "A046")
+        attendu = self._expected(ops, consolidation)
+        attendu[ops.id]["planned_consolidation_id"] = 999999
+
+        rapport = self.recovery.simulate([ops.id], expected=attendu)
+
+        self.assertFalse(rapport["dry_run_pass"])
+        self.assertTrue(any("Départ prévu" in motif for motif in rapport["blocking"]))
+        self.assertEqual(ops.planned_consolidation_id, consolidation)
+
+
+@tagged("post_install", "-at_install")
+class TestIntakeIdentityRecoveryAccounting(RecoveryFixtures):
+    """Les deux gardes qui exigent de la comptabilité réelle.
+
+    Ces tests tournent en ``post_install`` : les journaux naissent avec le plan
+    comptable, à la fin de l'installation. Joués en ``at_install``, ils
+    échouaient sur l'absence de journal — donc sur une cause étrangère à la
+    règle mesurée — et non sur le refus qu'ils sont censés prouver.
+    """
+
+    def test_a_dossier_carrying_an_account_payment_is_never_retired(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-109")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-payment", "A020")
+        collection = self._collection(ops, "test-payment|P|1")
+        collection.write({"payment_id": self._account_payment(ops).id})
+
+        rapport = self.recovery.simulate([ops.id], expected=self._expected(ops, consolidation))
+        self.assertFalse(rapport["dry_run_pass"])
+        self.assertTrue(any("paiements comptables" in motif.lower() for motif in rapport["blocking"]))
+        with self.assertRaises(UserError):
+            self.recovery.apply(
+                [ops.id], expected=self._expected(ops, consolidation),
+                database=self.env.cr.dbname,
+            )
+        self.assertEqual(ops.collection_local_ref, "A020")
+
+    def test_a_dossier_carrying_an_invoice_is_never_retired(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-110")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-invoice", "A021")
+        journal = self._journal("sale")
+        invoice = self.env["account.move"].sudo().create({
+            "move_type": "out_invoice",
+            "partner_id": ops.partner_id.id,
+            "company_id": journal.company_id.id,
+            "journal_id": journal.id,
+            "invoice_date": "2026-09-03",
+        })
+        ops.invoice_id = invoice.id
+
+        rapport = self.recovery.simulate([ops.id], expected=self._expected(ops, consolidation))
+        self.assertFalse(rapport["dry_run_pass"])
+        self.assertTrue(any("facture" in motif.lower() for motif in rapport["blocking"]))
+        with self.assertRaises(UserError):
+            self.recovery.apply(
+                [ops.id], expected=self._expected(ops, consolidation),
+                database=self.env.cr.dbname,
+            )
+        self.assertEqual(ops.collection_local_ref, "A021")

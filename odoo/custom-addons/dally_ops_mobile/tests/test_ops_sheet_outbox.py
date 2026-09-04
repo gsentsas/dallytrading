@@ -23,6 +23,7 @@ import inspect
 import json
 import textwrap
 import uuid
+from unittest.mock import patch
 
 from odoo.exceptions import UserError
 from odoo.tests import HttpCase, tagged
@@ -176,6 +177,16 @@ class TestOpsSheetOutbox(AccountTestInvoicingCommon):
     def _shipment(self, reference):
         return self.env["dally.shipment"].sudo().search(
             [("external_reference", "=", reference)], limit=1)
+
+    def _recovery_expected(self, shipment):
+        return {shipment.id: {
+            "company_id": self.societe.id,
+            "intake_consolidation_id": shipment.intake_consolidation_id.id,
+            "external_reference": shipment.external_reference,
+            "collection_local_ref": shipment.collection_local_ref,
+            "collection_sequence": shipment.collection_sequence,
+            "sync_source_key": shipment.sync_source_key,
+        }}
 
     def _projeter(self, societe=None):
         """Un passage complet du transport, sans réseau."""
@@ -1020,6 +1031,224 @@ class TestOpsSheetOutbox(AccountTestInvoicingCommon):
         self.assertEqual(etats, ["delivered", "failed"])
         # La ligne en échec n'est plus servie : elle n'occupe plus le transport.
         self.assertEqual(self._projeter(), [])
+
+    def test_le_retrait_didentite_terminalise_loutbox_obsolete(self):
+        for etat in ("pending", "retry", "processing"):
+            with self.subTest(etat=etat):
+                self._boite().search([]).unlink()
+                reference = self._creer_dossier()
+                shipment = self._shipment(reference)
+                ancienne_reference = shipment.external_reference
+                ancienne_locale = shipment.collection_local_ref
+                ligne = self._lignes("freight_dossier")
+                self.assertEqual(len(ligne), 1)
+                ligne.write({"state": etat, "last_error": False})
+                if etat == "processing":
+                    ligne.write({"last_attempt_at": "2026-09-03 00:00:00"})
+                nombre_avant = len(self._lignes("freight_dossier"))
+                shipment.action_cancel()
+                messages_avant = len(shipment.message_ids)
+
+                self.env["dally.freight.intake.identity.recovery"].apply(
+                    [shipment.id],
+                    expected=self._recovery_expected(shipment),
+                    database=self.env.cr.dbname,
+                )
+
+                self.assertEqual(len(self._lignes("freight_dossier")), nombre_avant)
+                self.assertTrue(shipment.exists())
+                self.assertEqual(shipment.state, "cancelled")
+                self.assertEqual(ligne.state, "failed")
+                self.assertIn("intake_identity_retired:%s" % ancienne_reference, ligne.last_error)
+                self.assertGreater(len(shipment.message_ids), messages_avant)
+                self.assertEqual(self._projeter(), [])
+                projection = ligne._projection()
+                self.assertNotEqual(
+                    projection["identity"]["global_external_reference"],
+                    ancienne_reference,
+                )
+                self.assertNotEqual(projection["dossier"]["reference"], ancienne_locale)
+
+    def test_apply_rolls_back_every_change_when_late_step_fails(self):
+        """Une réparation partielle serait pire que pas de réparation.
+
+        Le service mute plusieurs choses : la boîte d'envoi, le chargement, le
+        plan de départ, l'identité, le chatter. Si l'une des dernières étapes
+        échoue, tout doit disparaître — un départ délesté de ses colis mais
+        gardant son identité d'origine serait un état que personne n'a voulu et
+        que rien ne décrit.
+
+        ## Trois précautions sans lesquelles ce test serait un faux vert
+
+        **La frontière de rollback.** `assertRaises` autour d'`apply` ne prouve
+        rien : l'exception serait capturée dans la même transaction et les
+        écritures resteraient. Le `savepoint` est donc le contexte le plus
+        interne, et l'exception doit en **sortir** avant d'être capturée — c'est
+        à sa sortie que PostgreSQL exécute le `ROLLBACK TO SAVEPOINT`. Le
+        `try/except` est ici volontairement explicite plutôt qu'un
+        `assertRaises` englobant : l'ordre est le sujet du test.
+
+        **La confirmation avant l'échec.** La fonction injectée vérifie que les
+        mutations sont réellement visibles avant de lever. Si `apply` échouait
+        plus tôt un jour, un test naïf verrait « rien n'a changé » et se
+        déclarerait vert sans rien prouver.
+
+        **La relecture.** Après le rollback, plus rien n'est lu depuis un
+        recordset ayant traversé la transaction : cache vidé, re-browse depuis
+        les identifiants capturés, et une lecture SQL brute qui court-circuite
+        entièrement l'ORM — seule preuve que c'est bien la base, et non le
+        cache, qui a retrouvé son état.
+        """
+        reference = self._creer_dossier()
+        shipment = self._shipment(reference)
+        ligne_outbox = self._lignes("freight_dossier")
+        self.assertEqual(len(ligne_outbox), 1)
+        shipment.action_cancel()
+
+        # L'état initial, en identifiants et en valeurs nues : rien ici ne doit
+        # dépendre d'un recordset qui vivra la transaction annulée.
+        shipment_id = shipment.id
+        outbox_id = ligne_outbox.id
+        avant = {
+            "outbox_state": ligne_outbox.state,
+            "outbox_error": ligne_outbox.last_error,
+            "planned": shipment.planned_consolidation_id.id,
+            "sequence": shipment.collection_sequence,
+            "local_ref": shipment.collection_local_ref,
+            "external_reference": shipment.external_reference,
+            "sync_source_key": shipment.sync_source_key,
+            "state": shipment.state,
+            "intake": shipment.intake_consolidation_id.id,
+            "lines": {
+                l.id: (l.package_id.id, l.quantity_loaded, l.weight_loaded)
+                for l in shipment.consolidation_line_ids
+            },
+            "packages": {
+                p.id: (p.description, p.quantity, p.total_weight_kg)
+                for p in shipment.package_ids
+            },
+            "message_ids": set(shipment.message_ids.ids),
+        }
+        self.assertTrue(avant["lines"], "le dossier doit être chargé, comme en production")
+        self.assertTrue(avant["planned"], "le dossier doit être planifié, comme en production")
+        self.assertTrue(avant["packages"], "le dossier doit porter au moins un colis")
+
+        observe = {}
+        late_failure_reached = []
+
+        def _echec_tardif(service, shipment_mute, archive, detail):
+            shipment_mute.invalidate_recordset()
+            observe["planned"] = shipment_mute.planned_consolidation_id.id
+            observe["lines"] = len(shipment_mute.consolidation_line_ids)
+            observe["local_ref"] = shipment_mute.collection_local_ref
+            observe["external_reference"] = shipment_mute.external_reference
+            observe["messages"] = len(shipment_mute.message_ids)
+            observe["outbox_state"] = (
+                self.env["dally.ops.sheet.outbox"].sudo()
+                .browse(outbox_id).read(["state"])[0]["state"])
+            # Confirmation AVANT de lever. Une AssertionError ici se distingue
+            # de l'échec injecté : le test tombera dessus au lieu de se croire
+            # vert sur une réparation qui n'aurait rien muté.
+            assert observe["planned"] is False, "le plan n'a pas été vidé avant l'échec"
+            assert observe["lines"] == 0, "le chargement n'a pas été retiré avant l'échec"
+            assert observe["local_ref"] != avant["local_ref"], (
+                "l'identité d'archive n'a pas été appliquée avant l'échec")
+            assert observe["external_reference"] != avant["external_reference"], (
+                "la référence globale n'a pas été réécrite avant l'échec")
+            assert observe["outbox_state"] == "failed", (
+                "l'outbox n'a pas été terminalisée avant l'échec")
+            assert observe["messages"] > len(avant["message_ids"]), (
+                "la trace chatter n'a pas été posée avant l'échec")
+            late_failure_reached.append(True)
+            raise UserError("échec injecté après toutes les mutations")
+
+        Service = type(self.env["dally.freight.intake.identity.recovery"])
+        attendu = self._recovery_expected(shipment)
+        sortie = None
+        with patch.object(Service, "_verifier_postconditions", _echec_tardif):
+            try:
+                # L'exception doit SORTIR de ce contexte : c'est à sa sortie que
+                # le ROLLBACK TO SAVEPOINT est émis.
+                with self.env.cr.savepoint():
+                    self.env["dally.freight.intake.identity.recovery"].apply(
+                        [shipment_id], expected=attendu, database=self.env.cr.dbname)
+            except UserError as erreur:
+                sortie = erreur
+
+        self.assertTrue(late_failure_reached, "le point d'échec tardif n'a jamais été atteint")
+        self.assertIsNotNone(sortie, "l'exception n'est pas sortie du savepoint")
+        self.assertIn("échec injecté", str(sortie))
+
+        # Relecture stricte : cache vidé, puis re-browse depuis les ids initiaux.
+        self.env.invalidate_all()
+        dossier = self.env["dally.shipment"].with_context(active_test=False).browse(shipment_id)
+        boite = self.env["dally.ops.sheet.outbox"].sudo().browse(outbox_id)
+        self.assertTrue(dossier.exists())
+        self.assertTrue(boite.exists())
+
+        self.assertEqual(dossier.state, avant["state"])
+        self.assertEqual(dossier.intake_consolidation_id.id, avant["intake"])
+        self.assertEqual(dossier.planned_consolidation_id.id, avant["planned"])
+        self.assertEqual(dossier.collection_sequence, avant["sequence"])
+        self.assertEqual(dossier.collection_local_ref, avant["local_ref"])
+        self.assertEqual(dossier.external_reference, avant["external_reference"])
+        self.assertEqual(dossier.sync_source_key, avant["sync_source_key"])
+        self.assertEqual(boite.state, avant["outbox_state"])
+        self.assertEqual(boite.last_error, avant["outbox_error"])
+
+        self.assertEqual(
+            {l.id: (l.package_id.id, l.quantity_loaded, l.weight_loaded)
+             for l in dossier.consolidation_line_ids},
+            avant["lines"],
+            "les lignes de chargement doivent revenir à l'identique, mêmes ids",
+        )
+        self.assertEqual(
+            {p.id: (p.description, p.quantity, p.total_weight_kg)
+             for p in dossier.package_ids},
+            avant["packages"],
+            "les colis doivent revenir à l'identique, mêmes ids",
+        )
+
+        # Le chatter est relu depuis mail.message, pas depuis le dossier.
+        messages = self.env["mail.message"].sudo().search([
+            ("model", "=", "dally.shipment"), ("res_id", "=", shipment_id),
+        ])
+        self.assertEqual(set(messages.ids), avant["message_ids"],
+                         "aucune trace de réparation ne doit subsister")
+        self.assertFalse(
+            any("identité de collecte" in (m.body or "").lower() for m in messages),
+            "le chatter ne doit porter aucune trace du retrait annulé",
+        )
+
+        # La preuve que c'est PostgreSQL qui a rollbacké, et non l'ORM qui
+        # relit une valeur restée en cache : on interroge la base directement.
+        self.env.cr.execute(
+            "SELECT planned_consolidation_id, collection_sequence, "
+            "collection_local_ref, external_reference, sync_source_key, state "
+            "FROM dally_shipment WHERE id = %s", (shipment_id,))
+        brut = self.env.cr.fetchone()
+        self.assertEqual(brut[0], avant["planned"])
+        self.assertEqual(brut[1], avant["sequence"])
+        self.assertEqual(brut[2], avant["local_ref"])
+        self.assertEqual(brut[3], avant["external_reference"])
+        self.assertEqual(brut[4], avant["sync_source_key"])
+        self.assertEqual(brut[5], avant["state"])
+        self.env.cr.execute(
+            "SELECT id FROM dally_freight_consolidation_line WHERE shipment_id = %s "
+            "ORDER BY id", (shipment_id,))
+        self.assertEqual(
+            [rangee[0] for rangee in self.env.cr.fetchall()],
+            sorted(avant["lines"]),
+            "les lignes doivent exister en base, pas seulement dans le cache",
+        )
+        self.env.cr.execute(
+            "SELECT state, last_error FROM dally_ops_sheet_outbox WHERE id = %s",
+            (outbox_id,))
+        brut_boite = self.env.cr.fetchone()
+        self.assertEqual(brut_boite[0], avant["outbox_state"])
+        # PostgreSQL rend `None` là où l'ORM rend `False` pour un Char vide :
+        # on compare l'absence de valeur, pas sa représentation.
+        self.assertEqual(brut_boite[1] or False, avant["outbox_error"] or False)
 
     def test_un_lot_est_borne(self):
         for _index in range(3):

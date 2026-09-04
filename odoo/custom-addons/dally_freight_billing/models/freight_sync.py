@@ -407,15 +407,20 @@ class DallyFreightSyncService(models.AbstractModel):
                 raise ValidationError(_("Unknown tariff_family_code '%s'.", family_code))
             values["tariff_family_id"] = family.id
 
-        if "manual_unit_price_eur" in item:
-            manual = self._number(item.get("manual_unit_price_eur"), "manual_unit_price_eur")
-            values["manual_unit_price_eur"] = manual or 0.0
-        if "pricing_reason" in item:
-            values["pricing_reason"] = self._text(item.get("pricing_reason"), 500)
+        pricing_type = False
         if "pricing_type" in item and item.get("pricing_type"):
-            values["pricing_type_snapshot"] = self._choice(
+            pricing_type = self._choice(
                 item.get("pricing_type"), VALID_PRICING_TYPES, "pricing_type"
             )
+            values["pricing_type_snapshot"] = pricing_type
+            if pricing_type == "standard":
+                values["manual_unit_price_eur"] = False
+                values["pricing_reason"] = False
+        if pricing_type != "standard" and "manual_unit_price_eur" in item:
+            manual = self._number(item.get("manual_unit_price_eur"), "manual_unit_price_eur")
+            values["manual_unit_price_eur"] = manual or 0.0
+        if pricing_type != "standard" and "pricing_reason" in item:
+            values["pricing_reason"] = self._text(item.get("pricing_reason"), 500)
         if "customs_value_xof" in item:
             customs = self._number(item.get("customs_value_xof"), "customs_value_xof")
             values["customs_value_xof"] = customs or 0.0

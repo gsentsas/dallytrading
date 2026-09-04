@@ -389,6 +389,63 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
         }
 
     @api.model
+    def _indexer_attentes(self, brut, champ_cle, libelle, exiger):
+        """Indexe une liste d'attentes par sa clé, sans jamais lever.
+
+        ``simulate`` est public et lit ce qu'on lui donne : une attente mal
+        formée doit y devenir un refus lisible, pas une ``KeyError`` remontée
+        crue à l'appelant. Le diagnostic doit rester utilisable **surtout**
+        quand l'entrée est douteuse — c'est précisément là qu'on s'en sert.
+
+        Rend ``None`` quand l'indexation est impossible ; l'appelant s'arrête
+        alors, le grief étant déjà consigné.
+        """
+        if not isinstance(brut, (list, tuple)):
+            exiger(False, _(
+                "Les %(quoi)s attendues doivent être une liste (reçu %(recu)s).",
+                quoi=libelle, recu=type(brut).__name__))
+            return None
+        indexees = {}
+        valide = True
+        for rang, element in enumerate(brut, start=1):
+            if not isinstance(element, dict):
+                exiger(False, _(
+                    "%(quoi)s %(rang)s : objet attendu, %(recu)s reçu.",
+                    quoi=libelle.capitalize(), rang=rang, recu=type(element).__name__))
+                valide = False
+                continue
+            if champ_cle not in element:
+                exiger(False, _(
+                    "%(quoi)s %(rang)s : %(champ)s absent.",
+                    quoi=libelle.capitalize(), rang=rang, champ=champ_cle))
+                valide = False
+                continue
+            brute = element[champ_cle]
+            if isinstance(brute, bool) or not isinstance(brute, (int, str)):
+                exiger(False, _(
+                    "%(quoi)s %(rang)s : %(champ)s doit être un identifiant "
+                    "(reçu %(recu)r).",
+                    quoi=libelle.capitalize(), rang=rang, champ=champ_cle, recu=brute))
+                valide = False
+                continue
+            try:
+                cle = int(brute)
+            except (TypeError, ValueError):
+                exiger(False, _(
+                    "%(quoi)s %(rang)s : %(champ)s n'est pas numérique (reçu %(recu)r).",
+                    quoi=libelle.capitalize(), rang=rang, champ=champ_cle, recu=brute))
+                valide = False
+                continue
+            if cle in indexees:
+                exiger(False, _(
+                    "%(quoi)s %(rang)s : %(champ)s %(cle)s en double.",
+                    quoi=libelle.capitalize(), rang=rang, champ=champ_cle, cle=cle))
+                valide = False
+                continue
+            indexees[cle] = element
+        return indexees if valide else None
+
+    @api.model
     def _exiger_empreinte_lignes(self, expected, lignes, exiger):
         """Compare le chargement ligne à ligne, pas seulement par identifiant.
 
@@ -399,7 +456,10 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
         """
         if "loaded_lines" not in expected:
             return
-        attendues = {int(ligne["line_id"]): ligne for ligne in expected["loaded_lines"]}
+        attendues = self._indexer_attentes(
+            expected["loaded_lines"], "line_id", "ligne de chargement", exiger)
+        if attendues is None:
+            return
         reelles = {ligne["line_id"]: ligne for ligne in lignes}
         if set(attendues) != set(reelles):
             exiger(False, _(
@@ -452,7 +512,10 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
         """
         if "outbox" not in expected:
             return
-        attendues = {int(ligne["outbox_id"]): ligne for ligne in expected["outbox"]}
+        attendues = self._indexer_attentes(
+            expected["outbox"], "outbox_id", "projection", exiger)
+        if attendues is None:
+            return
         reelles = {ligne["outbox_id"]: ligne for ligne in outbox}
         if set(attendues) != set(reelles):
             exiger(False, _(

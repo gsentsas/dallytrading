@@ -1301,6 +1301,94 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
                         appels.index("commit"),
                         "on ne committe qu'apres succes")
 
+    # ------------------------------------------------------------------
+    # simulate() est un diagnostic : il rapporte, il ne casse pas
+    # ------------------------------------------------------------------
+
+    def _simulate_tolere(self, ops, consolidation, mutation, extrait):
+        """Une attente malformee doit devenir un grief, jamais une exception."""
+        attendu = self._expected(ops, consolidation)
+        mutation(attendu[ops.id])
+        try:
+            rapport = self.recovery.simulate([ops.id], expected=attendu)
+        except Exception as erreur:  # noqa: BLE001 — c'est precisement le sujet
+            self.fail("simulate() a leve %s : %s" % (type(erreur).__name__, erreur))
+        self.assertFalse(rapport["dry_run_pass"])
+        self.assertTrue(
+            any(extrait in motif for motif in rapport["blocking"]),
+            "motif attendu « %s », obtenu %s" % (extrait, rapport["blocking"]))
+        # Et l'application, elle, reste stricte.
+        with self.assertRaises(UserError):
+            self.recovery._apply_authorized_recovery(
+                [ops.id], attendu, self.env.cr.dbname)
+        return rapport
+
+    def test_simulate_tolerates_a_loaded_line_without_line_id(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-901")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:tol-sans-id", "A110")
+
+        def amputer(attente):
+            for ligne in attente["loaded_lines"]:
+                ligne.pop("line_id")
+
+        self._simulate_tolere(ops, consolidation, amputer, "line_id absent")
+
+    def test_simulate_tolerates_a_non_dict_loaded_line(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-902")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:tol-nondict", "A111")
+        self._simulate_tolere(
+            ops, consolidation,
+            lambda att: att.update({"loaded_lines": ["pas un objet"]}),
+            "objet attendu")
+
+    def test_simulate_tolerates_a_non_numeric_line_id(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-903")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:tol-nonnum", "A112")
+
+        def falsifier(attente):
+            for ligne in attente["loaded_lines"]:
+                ligne["line_id"] = "A034"
+
+        self._simulate_tolere(ops, consolidation, falsifier, "n'est pas numérique")
+
+    def test_simulate_tolerates_a_loaded_lines_that_is_not_a_list(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-904")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:tol-nonliste", "A113")
+        self._simulate_tolere(
+            ops, consolidation,
+            lambda att: att.update({"loaded_lines": {"line_id": 1}}),
+            "doivent être une liste")
+
+    def test_simulate_tolerates_an_outbox_without_outbox_id(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-905")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:tol-outbox-id", "A114")
+        self._simulate_tolere(
+            ops, consolidation,
+            lambda att: att.update({"outbox": [{
+                "projection_type": "freight_dossier", "business_key": "k",
+                "state": "pending", "resource_reference": "R"}]}),
+            "outbox_id absent")
+
+    def test_simulate_tolerates_a_non_dict_outbox(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-906")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:tol-outbox-nondict", "A115")
+        self._simulate_tolere(
+            ops, consolidation,
+            lambda att: att.update({"outbox": [42]}),
+            "objet attendu")
+
+    def test_simulate_tolerates_a_boolean_masquerading_as_an_id(self):
+        """`True` est un `int` : il ne doit pas se faire passer pour l'id 1."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-907")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:tol-bool", "A116")
+
+        def falsifier(attente):
+            for ligne in attente["loaded_lines"]:
+                ligne["line_id"] = True
+
+        self._simulate_tolere(
+            ops, consolidation, falsifier, "doit être un identifiant")
+
 
 @tagged("post_install", "-at_install")
 class TestIntakeIdentityRecoveryAccounting(RecoveryFixtures):

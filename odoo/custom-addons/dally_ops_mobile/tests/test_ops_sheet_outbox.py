@@ -179,13 +179,33 @@ class TestOpsSheetOutbox(AccountTestInvoicingCommon):
             [("external_reference", "=", reference)], limit=1)
 
     def _recovery_expected(self, shipment):
+        """L'empreinte complete exigee par le service, projections comprises."""
+        detail = self.env["dally.freight.intake.identity.recovery"]._inspect(
+            shipment.id, {})
         return {shipment.id: {
             "company_id": self.societe.id,
+            "partner_id": shipment.partner_id.id,
+            "sync_source": shipment.sync_source,
             "intake_consolidation_id": shipment.intake_consolidation_id.id,
+            "planned_consolidation_id": shipment.planned_consolidation_id.id,
             "external_reference": shipment.external_reference,
             "collection_local_ref": shipment.collection_local_ref,
             "collection_sequence": shipment.collection_sequence,
             "sync_source_key": shipment.sync_source_key,
+            "loaded_lines": [
+                {"line_id": ligne.id, "package_id": ligne.package_id.id,
+                 "quantity_loaded": ligne.quantity_loaded,
+                 "weight_loaded": ligne.weight_loaded}
+                for ligne in shipment.consolidation_line_ids
+            ],
+            "outbox": [
+                {"outbox_id": ligne["outbox_id"],
+                 "projection_type": ligne["projection_type"],
+                 "business_key": ligne["business_key"],
+                 "state": ligne["state"],
+                 "resource_reference": ligne["resource_reference"]}
+                for ligne in detail["outbox"]
+            ],
         }}
 
     def _projeter(self, societe=None):
@@ -1049,7 +1069,7 @@ class TestOpsSheetOutbox(AccountTestInvoicingCommon):
                 shipment.action_cancel()
                 messages_avant = len(shipment.message_ids)
 
-                self.env["dally.freight.intake.identity.recovery"].apply(
+                self.env["dally.freight.intake.identity.recovery"]._apply_authorized_recovery(
                     [shipment.id],
                     expected=self._recovery_expected(shipment),
                     database=self.env.cr.dbname,
@@ -1080,13 +1100,11 @@ class TestOpsSheetOutbox(AccountTestInvoicingCommon):
 
         ## Trois précautions sans lesquelles ce test serait un faux vert
 
-        **La frontière de rollback.** `assertRaises` autour d'`apply` ne prouve
-        rien : l'exception serait capturée dans la même transaction et les
-        écritures resteraient. Le `savepoint` est donc le contexte le plus
-        interne, et l'exception doit en **sortir** avant d'être capturée — c'est
-        à sa sortie que PostgreSQL exécute le `ROLLBACK TO SAVEPOINT`. Le
-        `try/except` est ici volontairement explicite plutôt qu'un
-        `assertRaises` englobant : l'ordre est le sujet du test.
+        **La frontière de rollback appartient au service.** Un savepoint ouvert
+        par le test ne prouverait que la discipline du test. Ce test appelle donc
+        le service **sans aucun savepoint**, capture `UserError` comme le ferait
+        n'importe quel appelant, et vérifie que rien n'a survécu. C'est la seule
+        forme qui interdise à un appelant de conserver une réparation partielle.
 
         **La confirmation avant l'échec.** La fonction injectée vérifie que les
         mutations sont réellement visibles avant de lever. Si `apply` échouait
@@ -1167,16 +1185,17 @@ class TestOpsSheetOutbox(AccountTestInvoicingCommon):
         sortie = None
         with patch.object(Service, "_verifier_postconditions", _echec_tardif):
             try:
-                # L'exception doit SORTIR de ce contexte : c'est à sa sortie que
-                # le ROLLBACK TO SAVEPOINT est émis.
-                with self.env.cr.savepoint():
-                    self.env["dally.freight.intake.identity.recovery"].apply(
-                        [shipment_id], expected=attendu, database=self.env.cr.dbname)
+                # AUCUN savepoint ici : c'est tout l'objet du test. Le service
+                # doit garantir lui-même l'atomicité, faute de quoi un appelant
+                # qui capture `UserError` — un contrôleur, un cron, un script
+                # maladroit — conserverait une réparation à moitié faite.
+                self.env["dally.freight.intake.identity.recovery"]._apply_authorized_recovery(
+                    [shipment_id], attendu, self.env.cr.dbname)
             except UserError as erreur:
                 sortie = erreur
 
         self.assertTrue(late_failure_reached, "le point d'échec tardif n'a jamais été atteint")
-        self.assertIsNotNone(sortie, "l'exception n'est pas sortie du savepoint")
+        self.assertIsNotNone(sortie, "l'exception n'est pas remontée du service")
         self.assertIn("échec injecté", str(sortie))
 
         # Relecture stricte : cache vidé, puis re-browse depuis les ids initiaux.
@@ -1249,6 +1268,42 @@ class TestOpsSheetOutbox(AccountTestInvoicingCommon):
         # PostgreSQL rend `None` là où l'ORM rend `False` pour un Char vide :
         # on compare l'absence de valeur, pas sa représentation.
         self.assertEqual(brut_boite[1] or False, avant["outbox_error"] or False)
+
+    def test_the_recovery_lock_covers_the_projection_queue(self):
+        """Le verrou doit inclure la file, la ou elle existe.
+
+        Les tests du module consolidation tournent en `at_install`, avant le
+        chargement de `dally_ops_mobile` : la table des projections n'y existe
+        pas encore et le service la saute a juste titre. La couverture du
+        verrou correspondant se prouve donc ici, ou le modele est garanti.
+
+        Sans ce verrou, un transport pourrait passer la ligne en `processing`
+        entre l'assertion et la terminalisation, et la reparation ecraserait un
+        verdict qui ne lui appartient pas.
+        """
+        reference = self._creer_dossier()
+        shipment = self._shipment(reference)
+        shipment.action_cancel()
+        requetes = []
+        vrai_execute = self.env.cr.execute
+
+        def espion(query, params=None, *args, **kwargs):
+            if "FOR UPDATE NOWAIT" in query:
+                requetes.append(query)
+            return vrai_execute(query, params, *args, **kwargs)
+
+        with patch.object(self.env.cr, "execute", espion):
+            self.env["dally.freight.intake.identity.recovery"]._verrouiller_cibles(
+                [shipment.id])
+
+        jointes = " ".join(requetes)
+        self.assertIn("FROM dally_ops_sheet_outbox WHERE", jointes)
+        for fragment in ("FROM dally_shipment WHERE",
+                         "FROM dally_freight_consolidation WHERE",
+                         "FROM dally_freight_consolidation_line WHERE"):
+            self.assertIn(fragment, jointes)
+        for requete in requetes:
+            self.assertIn("ORDER BY id", requete)
 
     def test_un_lot_est_borne(self):
         for _index in range(3):

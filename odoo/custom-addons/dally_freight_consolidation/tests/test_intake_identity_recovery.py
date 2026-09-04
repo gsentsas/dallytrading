@@ -7,6 +7,10 @@ même référence papier est attribuée à un autre client dans le classeur. Le
 classeur ne peut plus se synchroniser tant que l'identité n'est pas rendue.
 """
 
+from unittest.mock import patch
+
+import psycopg2
+
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
@@ -108,13 +112,39 @@ class RecoveryFixtures(TransactionCase):
         return shipment
 
     def _expected(self, shipment, consolidation):
+        """La meme empreinte que celle figee dans le script de maintenance.
+
+        Un attendu plus pauvre que celui de production rendrait les tests plus
+        indulgents que la realite : un champ absent de l'attendu n'est jamais
+        confronte, et le test qui le modifie ne prouve rien.
+        """
         return {shipment.id: {
             "company_id": self.company.id,
+            "partner_id": shipment.partner_id.id,
+            "sync_source": shipment.sync_source,
             "intake_consolidation_id": consolidation.id,
+            "planned_consolidation_id": shipment.planned_consolidation_id.id,
             "external_reference": shipment.external_reference,
             "collection_local_ref": shipment.collection_local_ref,
             "collection_sequence": shipment.collection_sequence,
             "sync_source_key": shipment.sync_source_key,
+            "loaded_lines": [
+                {"line_id": ligne.id, "package_id": ligne.package_id.id,
+                 "quantity_loaded": ligne.quantity_loaded,
+                 "weight_loaded": ligne.weight_loaded}
+                for ligne in shipment.consolidation_line_ids
+            ],
+            # Ces tests tournent en `at_install`, avant le chargement de
+            # `dally_ops_mobile` : il n'y a alors aucune projection. La liste
+            # vide est une affirmation, pas une omission.
+            "outbox": [
+                {"outbox_id": ligne["outbox_id"],
+                 "projection_type": ligne["projection_type"],
+                 "business_key": ligne["business_key"],
+                 "state": ligne["state"],
+                 "resource_reference": ligne["resource_reference"]}
+                for ligne in self.recovery._inspect(shipment.id, {})["outbox"]
+            ],
         }}
 
     def _archive_refs(self, shipment, consolidation):
@@ -194,7 +224,7 @@ class RecoveryFixtures(TransactionCase):
         # La simulation n'écrit rien.
         self.assertEqual(ops.external_reference, ancienne_externe)
 
-        self.recovery.apply(
+        self.recovery._apply_authorized_recovery(
             [ops.id], expected=self._expected(ops, consolidation),
             database=self.env.cr.dbname,
         )
@@ -258,7 +288,7 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self.assertFalse(rapport["dry_run_pass"])
         self.assertTrue(any("annulé" in motif for motif in rapport["blocking"]))
         with self.assertRaises(UserError):
-            self.recovery.apply(
+            self.recovery._apply_authorized_recovery(
                 [vivant.id], expected=self._expected(vivant, consolidation),
                 database=self.env.cr.dbname,
             )
@@ -273,7 +303,7 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self.assertFalse(rapport["dry_run_pass"])
         self.assertTrue(any("encaissement" in motif for motif in rapport["blocking"]))
         with self.assertRaises(UserError):
-            self.recovery.apply(
+            self.recovery._apply_authorized_recovery(
                 [ops.id], expected=self._expected(ops, consolidation),
                 database=self.env.cr.dbname,
             )
@@ -310,7 +340,7 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self.assertFalse(rapport["dry_run_pass"])
         self.assertFalse(rapport["shipments"][0]["archive"]["external_reference_free"])
         with self.assertRaises(UserError):
-            self.recovery.apply(
+            self.recovery._apply_authorized_recovery(
                 [ops.id], expected=self._expected(ops, consolidation),
                 database=self.env.cr.dbname,
             )
@@ -341,7 +371,7 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self.assertFalse(rapport["dry_run_pass"])
         self.assertFalse(rapport["shipments"][0]["archive"]["sequence_free"])
         with self.assertRaises(UserError):
-            self.recovery.apply(
+            self.recovery._apply_authorized_recovery(
                 [ops.id], expected=self._expected(ops, consolidation),
                 database=self.env.cr.dbname,
             )
@@ -356,13 +386,13 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         rapport = self.recovery.simulate([ops.id], expected=attendu)
         self.assertFalse(rapport["dry_run_pass"])
         with self.assertRaises(UserError):
-            self.recovery.apply([ops.id], expected=attendu, database=self.env.cr.dbname)
+            self.recovery._apply_authorized_recovery([ops.id], expected=attendu, database=self.env.cr.dbname)
 
     def test_a_wrong_database_name_aborts(self):
         consolidation = self._consolidation("AIR-DSS-CDG-2099-106")
         ops = self._cancelled_ops_dossier(consolidation, "ops:test-db", "A017")
         with self.assertRaises(UserError):
-            self.recovery.apply(
+            self.recovery._apply_authorized_recovery(
                 [ops.id], expected=self._expected(ops, consolidation),
                 database="une-autre-base",
             )
@@ -377,7 +407,7 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         attendu = self._expected(ops, consolidation)
         self.env.user.group_ids -= self.env.ref("dally_core.group_dally_manager")
         with self.assertRaises(AccessError):
-            self.recovery.apply([ops.id], expected=attendu, database=self.env.cr.dbname)
+            self.recovery._apply_authorized_recovery([ops.id], expected=attendu, database=self.env.cr.dbname)
         self.assertEqual(ops.sudo().collection_local_ref, "A018")
 
     def test_loaded_packages_do_not_block_but_are_reported(self):
@@ -411,7 +441,7 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self.assertFalse(rapport["dry_run_pass"])
         self.assertTrue(any("collecte" in motif for motif in rapport["blocking"]))
         with self.assertRaises(UserError):
-            self.recovery.apply(
+            self.recovery._apply_authorized_recovery(
                 [ops.id], expected=self._expected(ops, consolidation),
                 database=self.env.cr.dbname,
             )
@@ -466,7 +496,7 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self.assertEqual(ops.planned_consolidation_id, consolidation)
         self.assertTrue(ops.consolidation_line_ids)
 
-        self.recovery.apply([ops.id], expected=attendu, database=self.env.cr.dbname)
+        self.recovery._apply_authorized_recovery([ops.id], expected=attendu, database=self.env.cr.dbname)
 
         consolidation.invalidate_recordset()
         # Le dossier survit, son historique aussi.
@@ -581,7 +611,7 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self.assertFalse(rapport["dry_run_pass"])
         self.assertTrue(any("chargement" in motif for motif in rapport["blocking"]))
         with self.assertRaises(UserError):
-            self.recovery.apply([ops.id], expected=attendu, database=self.env.cr.dbname)
+            self.recovery._apply_authorized_recovery([ops.id], expected=attendu, database=self.env.cr.dbname)
         self.assertTrue(ops.consolidation_line_ids)
 
     def test_a_diverging_planned_departure_expectation_aborts(self):
@@ -595,6 +625,343 @@ class TestIntakeIdentityRecovery(RecoveryFixtures):
         self.assertFalse(rapport["dry_run_pass"])
         self.assertTrue(any("Départ prévu" in motif for motif in rapport["blocking"]))
         self.assertEqual(ops.planned_consolidation_id, consolidation)
+
+    # ------------------------------------------------------------------
+    # L'empreinte de production : chaque champ audité doit correspondre
+    # ------------------------------------------------------------------
+
+    def _divergence_refusee(self, consolidation, ops, mutation, extrait):
+        """Applique une divergence à l'attendu et exige un refus net."""
+        attendu = self._expected(ops, consolidation)
+        mutation(attendu[ops.id])
+        rapport = self.recovery.simulate([ops.id], expected=attendu)
+        self.assertFalse(rapport["dry_run_pass"], "la divergence devait bloquer")
+        self.assertTrue(
+            any(extrait in motif for motif in rapport["blocking"]),
+            "motif attendu « %s », obtenu %s" % (extrait, rapport["blocking"]),
+        )
+        with self.assertRaises(UserError):
+            self.recovery._apply_authorized_recovery(
+                [ops.id], attendu, self.env.cr.dbname)
+        return attendu
+
+    def test_a_diverging_partner_aborts(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-401")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-partner", "A050")
+        self._divergence_refusee(
+            consolidation, ops,
+            lambda att: att.update({"partner_id": 999999}), "Client")
+        self.assertEqual(ops.collection_local_ref, "A050")
+
+    def test_a_diverging_sync_source_aborts(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-402")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-source", "A051")
+        self._divergence_refusee(
+            consolidation, ops,
+            lambda att: att.update({"sync_source": "legacy_xlsx"}), "sync_source")
+        self.assertEqual(ops.collection_local_ref, "A051")
+
+    def test_a_line_with_the_right_id_but_the_wrong_package_aborts(self):
+        """Un identifiant de ligne identique ne dit pas que le colis l'est."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-403")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-colis", "A052")
+        ligne = ops.consolidation_line_ids[0]
+        self._divergence_refusee(
+            consolidation, ops,
+            lambda att: att.update({"loaded_lines": [{
+                "line_id": ligne.id, "package_id": ligne.package_id.id + 100000,
+                "quantity_loaded": ligne.quantity_loaded,
+                "weight_loaded": ligne.weight_loaded}]}),
+            "colis")
+        self.assertEqual(ops.collection_local_ref, "A052")
+
+    def test_a_line_with_a_changed_weight_aborts(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-404")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-poids", "A053")
+        ligne = ops.consolidation_line_ids[0]
+        self._divergence_refusee(
+            consolidation, ops,
+            lambda att: att.update({"loaded_lines": [{
+                "line_id": ligne.id, "package_id": ligne.package_id.id,
+                "quantity_loaded": ligne.quantity_loaded,
+                "weight_loaded": ligne.weight_loaded + 5.0}]}),
+            "poids")
+        self.assertEqual(ops.collection_local_ref, "A053")
+
+    def test_a_line_with_a_changed_quantity_aborts(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-405")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-quantite", "A054")
+        ligne = ops.consolidation_line_ids[0]
+        self._divergence_refusee(
+            consolidation, ops,
+            lambda att: att.update({"loaded_lines": [{
+                "line_id": ligne.id, "package_id": ligne.package_id.id,
+                "quantity_loaded": ligne.quantity_loaded + 7,
+                "weight_loaded": ligne.weight_loaded}]}),
+            "quantité")
+        self.assertEqual(ops.collection_local_ref, "A054")
+
+    def test_a_weight_within_the_business_precision_is_accepted(self):
+        """La comparaison ne doit pas se briser sur la représentation binaire."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-406")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-precision", "A055")
+        ligne = ops.consolidation_line_ids[0]
+        attendu = self._expected(ops, consolidation)
+        attendu[ops.id]["loaded_lines"] = [{
+            "line_id": ligne.id, "package_id": ligne.package_id.id,
+            "quantity_loaded": ligne.quantity_loaded,
+            # Un écart très en dessous du gramme : la même marchandise.
+            "weight_loaded": ligne.weight_loaded + 0.00001,
+        }]
+
+        rapport = self.recovery.simulate([ops.id], expected=attendu)
+
+        self.assertTrue(rapport["dry_run_pass"], rapport["blocking"])
+
+    # ------------------------------------------------------------------
+    # La surface mutante : privée, et sans complaisance
+    # ------------------------------------------------------------------
+
+    def test_the_mutating_entry_point_is_not_public(self):
+        """Une maintenance ne doit pas offrir de second chemin public."""
+        service = self.env["dally.freight.intake.identity.recovery"]
+        self.assertFalse(hasattr(service, "apply"),
+                         "aucune méthode `apply` publique ne doit subsister")
+        self.assertTrue(hasattr(service, "_apply_authorized_recovery"))
+        self.assertTrue(hasattr(service, "simulate"), "la simulation reste publique")
+
+    def test_the_mutating_entry_point_refuses_missing_expectations(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-407")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-sans-attente", "A056")
+        for attentes in ({}, None, {999999: {"company_id": self.company.id}}):
+            with self.assertRaises(UserError):
+                self.recovery._apply_authorized_recovery(
+                    [ops.id], attentes, self.env.cr.dbname)
+        self.assertEqual(ops.collection_local_ref, "A056")
+
+    def test_the_mutating_entry_point_refuses_a_missing_database(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-408")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-sans-base", "A057")
+        attendu = self._expected(ops, consolidation)
+        for base in (None, "", "une-autre-base"):
+            with self.assertRaises(UserError):
+                self.recovery._apply_authorized_recovery([ops.id], attendu, base)
+        self.assertEqual(ops.collection_local_ref, "A057")
+
+    def test_the_final_revalidation_cannot_trust_a_stale_cache(self):
+        """Le verrou ne vaut rien si la revalidation relit le cache d'avant.
+
+        L'appelant simule presque toujours avant d'autoriser, et cette lecture
+        peuple le cache ORM. On modifie donc la base en SQL brut — donc sans
+        toucher au cache — entre la simulation et le retrait : si le service
+        relisait le cache, il ne verrait rien et appliquerait sur un instantané
+        périmé.
+        """
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-411")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-cache", "A060")
+        attendu = self._expected(ops, consolidation)
+
+        # 1. La simulation passe, et peuple le cache.
+        rapport = self.recovery.simulate([ops.id], expected=attendu)
+        self.assertTrue(rapport["dry_run_pass"], rapport["blocking"])
+        self.assertEqual(ops.partner_id, self.ops_client)
+
+        # 2. La base bouge sous nos pieds, hors ORM : le cache garde l'ancien.
+        self.env.cr.execute(
+            "UPDATE dally_shipment SET partner_id = %s WHERE id = %s",
+            (self.sheet_client.id, ops.id))
+        self.assertEqual(ops.partner_id, self.ops_client,
+                         "le cache doit encore porter l'ancienne valeur")
+
+        # 2 bis. Le discriminant du test : la simulation, elle, se laisse
+        # tromper par ce cache. C'est precisement pourquoi une simulation ne
+        # vaut jamais autorisation — et cela prouve qu'au moment du retrait, le
+        # cache EST perime. Sans cette assertion, le test passerait aussi bien
+        # si le service ne relisait rien.
+        self.assertTrue(
+            self.recovery.simulate([ops.id], expected=attendu)["dry_run_pass"],
+            "le cache doit encore tromper la simulation a ce stade",
+        )
+
+        # 3. Le retrait doit relire sous verrou, voir la divergence et refuser.
+        with self.assertRaises(UserError) as capture:
+            self.recovery._apply_authorized_recovery(
+                [ops.id], attendu, self.env.cr.dbname)
+        self.assertIn("Client", str(capture.exception))
+
+        self.env.invalidate_all()
+        self.assertEqual(ops.collection_local_ref, "A060")
+        self.assertEqual(ops.planned_consolidation_id, consolidation)
+        self.assertTrue(ops.consolidation_line_ids)
+
+    def test_the_targets_are_locked_without_waiting(self):
+        """Le verrou doit renoncer, pas attendre — et couvrir tout le périmètre.
+
+        Une maintenance qui attend son tour reprend la main sur un état qu'elle
+        n'a pas audité : ses assertions portent alors sur un instantané périmé.
+        On vérifie donc la forme exacte des verrous pris.
+
+        La contention réelle n'est pas simulable ici : `TransactionCase` ne
+        committe jamais, et un second curseur ne voit pas le dossier — il ne
+        peut donc pas entrer en conflit. Ce test contrôle les requêtes émises,
+        le suivant contrôle la réaction au conflit.
+        """
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-409")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-verrou", "A058")
+        requetes = []
+        vrai_execute = self.env.cr.execute
+
+        def espion(query, params=None, *args, **kwargs):
+            if "FOR UPDATE NOWAIT" in query:
+                requetes.append((query, params))
+            return vrai_execute(query, params, *args, **kwargs)
+
+        with patch.object(self.env.cr, "execute", espion):
+            self.recovery._verrouiller_cibles([ops.id])
+
+        # Fragments explicites : « dally_freight_consolidation » seul serait
+        # satisfait par la table des lignes, et le test ne prouverait rien.
+        tables = [
+            "FROM dally_shipment WHERE",
+            "FROM dally_freight_consolidation WHERE",
+            "FROM dally_freight_consolidation_line WHERE",
+        ]
+        if "dally.ops.sheet.outbox" in self.env:
+            # Ces tests tournent en `at_install` pour ce module, donc avant le
+            # chargement de `dally_ops_mobile` : la table des projections
+            # n'existe pas encore et le service la saute a juste titre. Le
+            # verrou correspondant est couvert cote `dally_ops_mobile`.
+            tables.append("FROM dally_ops_sheet_outbox WHERE")
+        jointes = " ".join(requete for requete, _params in requetes)
+        for table in tables:
+            self.assertIn(table, jointes, "le verrou doit couvrir %s" % table)
+        self.assertEqual(len(requetes), len(tables),
+                         "un verrou par table ciblee, ni plus ni moins")
+        for requete, _params in requetes:
+            self.assertIn("FOR UPDATE NOWAIT", requete)
+            self.assertIn("ORDER BY id", requete,
+                          "l'ordre fixe evite tout interblocage entre maintenances")
+
+    def test_a_lock_conflict_aborts_and_mutates_nothing(self):
+        """Un conflit de verrou doit devenir un refus lisible, pas une attente."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-410")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:test-conflit", "A059")
+        attendu = self._expected(ops, consolidation)
+        vrai_execute = self.env.cr.execute
+
+        def espion_en_conflit(query, params=None, *args, **kwargs):
+            if "FOR UPDATE NOWAIT" in query:
+                raise psycopg2.errors.LockNotAvailable("conflit simule")
+            return vrai_execute(query, params, *args, **kwargs)
+
+        with patch.object(self.env.cr, "execute", espion_en_conflit):
+            with self.assertRaises(UserError) as capture:
+                self.recovery._apply_authorized_recovery(
+                    [ops.id], attendu, self.env.cr.dbname)
+        self.assertIn("autre transaction", str(capture.exception))
+
+        self.env.invalidate_all()
+        self.assertEqual(ops.collection_local_ref, "A059")
+        self.assertEqual(ops.planned_consolidation_id, consolidation)
+        self.assertTrue(ops.consolidation_line_ids)
+
+    # ------------------------------------------------------------------
+    # L'attente doit être complète, pas seulement présente
+    # ------------------------------------------------------------------
+
+    def _attente_creuse_refusee(self, ops, mutation, extrait):
+        """Ampute l'attente d'un champ et exige un refus avant toute mutation."""
+        attendu = self._expected(ops, ops.intake_consolidation_id)
+        mutation(attendu[ops.id])
+        with self.assertRaises(UserError) as capture:
+            self.recovery._apply_authorized_recovery(
+                [ops.id], attendu, self.env.cr.dbname)
+        self.assertIn("incomplète", str(capture.exception))
+        self.assertIn(extrait, str(capture.exception))
+        # Rien n'a bougé : le refus précède le verrou et la mutation.
+        self.env.invalidate_all()
+        self.assertTrue(ops.consolidation_line_ids)
+        self.assertTrue(ops.planned_consolidation_id)
+
+    def test_an_empty_expectation_is_refused(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-501")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:schema-vide", "A070")
+        with self.assertRaises(UserError):
+            self.recovery._apply_authorized_recovery(
+                [ops.id], {ops.id: {}}, self.env.cr.dbname)
+        self.assertEqual(ops.collection_local_ref, "A070")
+
+    def test_a_missing_partner_expectation_is_refused(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-502")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:schema-partner", "A071")
+        self._attente_creuse_refusee(
+            ops, lambda att: att.pop("partner_id"), "partner_id")
+
+    def test_a_missing_sync_source_expectation_is_refused(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-503")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:schema-source", "A072")
+        self._attente_creuse_refusee(
+            ops, lambda att: att.pop("sync_source"), "sync_source")
+
+    def test_a_missing_loaded_lines_expectation_is_refused(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-504")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:schema-lignes", "A073")
+        self._attente_creuse_refusee(
+            ops, lambda att: att.pop("loaded_lines"), "loaded_lines")
+
+    def test_a_missing_outbox_expectation_is_refused(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-505")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:schema-outbox", "A074")
+        self._attente_creuse_refusee(
+            ops, lambda att: att.pop("outbox"), "outbox")
+
+    def test_a_missing_planned_consolidation_expectation_is_refused(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-506")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:schema-plan", "A075")
+        self._attente_creuse_refusee(
+            ops, lambda att: att.pop("planned_consolidation_id"),
+            "planned_consolidation_id")
+
+    def test_a_loaded_line_without_package_id_is_refused(self):
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-507")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:schema-colis", "A076")
+
+        def amputer(attente):
+            for ligne in attente["loaded_lines"]:
+                ligne.pop("package_id")
+
+        self._attente_creuse_refusee(ops, amputer, "package_id")
+
+    def test_an_outbox_expectation_without_business_key_is_refused(self):
+        """La clé métier identifie la projection : l'omettre la rend anonyme."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-508")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:schema-cle", "A077")
+        attendu = self._expected(ops, consolidation)
+        # `at_install` ne porte aucune projection : on en déclare une, amputée.
+        attendu[ops.id]["outbox"] = [{
+            "outbox_id": 1, "projection_type": "freight_dossier",
+            "state": "pending", "resource_reference": "X",
+        }]
+        with self.assertRaises(UserError) as capture:
+            self.recovery._apply_authorized_recovery(
+                [ops.id], attendu, self.env.cr.dbname)
+        self.assertIn("business_key", str(capture.exception))
+        self.assertEqual(ops.collection_local_ref, "A077")
+
+    def test_an_empty_list_is_a_valid_expectation(self):
+        """Déclarer « aucune projection » doit rester possible et suffisant."""
+        consolidation = self._consolidation("AIR-DSS-CDG-2099-509")
+        ops = self._cancelled_ops_dossier(consolidation, "ops:schema-liste", "A078")
+        attendu = self._expected(ops, consolidation)
+        self.assertEqual(attendu[ops.id]["outbox"], [],
+                         "aucune projection en at_install")
+
+        rapport = self.recovery.simulate([ops.id], expected=attendu)
+
+        self.assertTrue(rapport["dry_run_pass"], rapport["blocking"])
+        self.recovery._apply_authorized_recovery(
+            [ops.id], attendu, self.env.cr.dbname)
+        self.assertFalse(ops.planned_consolidation_id)
 
 
 @tagged("post_install", "-at_install")
@@ -617,7 +984,7 @@ class TestIntakeIdentityRecoveryAccounting(RecoveryFixtures):
         self.assertFalse(rapport["dry_run_pass"])
         self.assertTrue(any("paiements comptables" in motif.lower() for motif in rapport["blocking"]))
         with self.assertRaises(UserError):
-            self.recovery.apply(
+            self.recovery._apply_authorized_recovery(
                 [ops.id], expected=self._expected(ops, consolidation),
                 database=self.env.cr.dbname,
             )
@@ -640,7 +1007,7 @@ class TestIntakeIdentityRecoveryAccounting(RecoveryFixtures):
         self.assertFalse(rapport["dry_run_pass"])
         self.assertTrue(any("facture" in motif.lower() for motif in rapport["blocking"]))
         with self.assertRaises(UserError):
-            self.recovery.apply(
+            self.recovery._apply_authorized_recovery(
                 [ops.id], expected=self._expected(ops, consolidation),
                 database=self.env.cr.dbname,
             )

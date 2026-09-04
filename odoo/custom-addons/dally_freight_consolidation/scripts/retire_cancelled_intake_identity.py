@@ -25,30 +25,63 @@ import json
 import os
 import sys
 
-# Les cibles, et ce que l'audit du 03/09/2026 a établi de chacune. Chaque
-# valeur est une assertion : le service refuse si la base en diffère.
+# Les cibles, et ce que le relevé du 04/09/2026 a établi de chacune, en
+# lecture seule sur la production. Chaque valeur est une assertion : le service
+# refuse si la base en diffère d'un seul élément.
+#
+# L'état de la file de projection est inclus délibérément. Il bouge tout seul :
+# un transport peut passer une ligne en `processing` entre l'audit et la
+# réparation, et terminaliser une ligne qu'un autre a prise en charge
+# écraserait un verdict qui ne nous appartient pas. Il a donc été relevé une
+# dernière fois juste avant d'être figé ici.
 CIBLES = {
     842: {
         "company_id": 1,
+        "partner_id": 3791,
+        "sync_source": "backoffice",
         "intake_consolidation_id": 3,
         "planned_consolidation_id": 3,
         "external_reference": "AIR-DSS-CDG-2026-002-A034",
         "collection_local_ref": "A034",
         "collection_sequence": 34,
         "sync_source_key": "ops:06f594a0-31dd-411f-a4ab-9181e85f58f0",
-        # Colis 384 « Valise chaussures et vêtements », 23,000 kg.
-        "loaded_line_ids": [254],
+        # Colis 384 « Valise chaussures et vêtements ».
+        "loaded_lines": [
+            {"line_id": 254, "package_id": 384,
+             "quantity_loaded": 1, "weight_loaded": 23.000},
+        ],
+        "outbox": [
+            {"outbox_id": 3, "projection_type": "freight_dossier",
+             "business_key": "ops:06f594a0-31dd-411f-a4ab-9181e85f58f0",
+             "state": "pending",
+             "resource_reference": "AIR-DSS-CDG-2026-002-A034"},
+        ],
     },
     843: {
         "company_id": 1,
+        "partner_id": 3792,
+        "sync_source": "backoffice",
         "intake_consolidation_id": 3,
         "planned_consolidation_id": 3,
         "external_reference": "AIR-DSS-CDG-2026-002-A035",
         "collection_local_ref": "A035",
         "collection_sequence": 35,
         "sync_source_key": "ops:dc122b5c-aedd-420f-b3a9-664f63ee301d",
-        # Colis 385 Textile 21,300 / 386 Vaisselle 9,050 / 387 Vêtements 15,350.
-        "loaded_line_ids": [255, 256, 257],
+        # Colis 385 Textile / 386 Vaisselle / 387 Vêtements.
+        "loaded_lines": [
+            {"line_id": 255, "package_id": 385,
+             "quantity_loaded": 1, "weight_loaded": 21.300},
+            {"line_id": 256, "package_id": 386,
+             "quantity_loaded": 1, "weight_loaded": 9.050},
+            {"line_id": 257, "package_id": 387,
+             "quantity_loaded": 1, "weight_loaded": 15.350},
+        ],
+        "outbox": [
+            {"outbox_id": 4, "projection_type": "freight_dossier",
+             "business_key": "ops:dc122b5c-aedd-420f-b3a9-664f63ee301d",
+             "state": "pending",
+             "resource_reference": "AIR-DSS-CDG-2026-002-A035"},
+        ],
     },
 }
 
@@ -112,7 +145,7 @@ def principal(env):
         print("DALLY_RETIRE_DB doit valoir « %s » pour appliquer." % BASE_ATTENDUE)
         return 1
 
-    resultat = service.apply(ids, expected=cibles, database=BASE_ATTENDUE)
+    resultat = service._apply_authorized_recovery(ids, cibles, BASE_ATTENDUE)
     env.cr.commit()
     print(json.dumps(resultat, indent=2, ensure_ascii=False, default=str))
     print("\nAPPLIED=YES")

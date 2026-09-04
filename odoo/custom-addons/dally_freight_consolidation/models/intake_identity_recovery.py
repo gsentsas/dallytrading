@@ -49,12 +49,44 @@ laisse une trace lisible dans le chatter du dossier.
 
 import logging
 
+import psycopg2
+
 from odoo import _, api, models
 from odoo.exceptions import AccessError, UserError
+from odoo.tools import float_compare
 
 from .shipment import _INTAKE_IDENTITY_TOKEN, _PLANNED_RETIRE_TOKEN
 
 _logger = logging.getLogger(__name__)
+
+#: La précision des poids et volumes chargés, telle que la base les stocke.
+#:
+#: Comparer des flottants à l'identité binaire ferait échouer la maintenance
+#: sur un chiffre de représentation, jamais sur un écart réel. On compare donc
+#: à la précision métier — celle qui figure sur le manifeste.
+PRECISION_CHARGEMENT = 3
+
+#: Les champs qu'une attente doit porter pour qu'un retrait soit possible.
+#:
+#: Une attente partielle rendrait le service « adaptatif » : les champs qu'elle
+#: ne déclare pas ne sont jamais confrontés, et la maintenance appliquerait
+#: alors ce qu'elle trouve. Rendre la méthode privée empêche l'appel fortuit ;
+#: ce schéma empêche l'appel volontaire mais négligent — le plus dangereux des
+#: deux, parce qu'il a l'air informé.
+CHAMPS_ATTENDUS = (
+    "company_id", "partner_id",
+    "intake_consolidation_id", "planned_consolidation_id",
+    "external_reference", "collection_local_ref", "collection_sequence",
+    "sync_source", "sync_source_key",
+    "loaded_lines", "outbox",
+)
+
+#: Une liste vide est une affirmation — « ce dossier ne porte aucun
+#: chargement » —, une clé absente n'en est pas une. Les deux ne doivent jamais
+#: se confondre, d'où l'exigence de la clé et non d'un contenu.
+CHAMPS_LIGNE_ATTENDUE = ("line_id", "package_id", "quantity_loaded", "weight_loaded")
+CHAMPS_OUTBOX_ATTENDUE = (
+    "outbox_id", "projection_type", "business_key", "state", "resource_reference")
 
 #: Le décalage qui place une identité d'archive hors d'atteinte.
 #:
@@ -164,6 +196,14 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
             exiger(reelles == sorted(expected["loaded_line_ids"]),
                    _("Lignes de chargement %s attendues, %s en base.",
                      sorted(expected["loaded_line_ids"]), reelles))
+        if "partner_id" in expected:
+            exiger(shipment.partner_id.id == expected["partner_id"],
+                   _("Client %s attendu, %s en base.",
+                     expected["partner_id"], shipment.partner_id.id))
+        if "sync_source" in expected:
+            exiger(shipment.sync_source == expected["sync_source"],
+                   _("sync_source « %s » attendu, « %s » en base.",
+                     expected["sync_source"], shipment.sync_source))
 
         # Les invariants qui ne se négocient pas, quelle que soit l'attente
         # déclarée par l'opérateur.
@@ -261,6 +301,9 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
             for ligne in boite
         ]
 
+        self._exiger_empreinte_lignes(expected, lignes, exiger)
+        self._exiger_empreinte_outbox(expected, outbox, exiger)
+
         archive = self._archive_identity(shipment, consolidation, echecs)
 
         return {
@@ -298,6 +341,72 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
             "outbox": outbox,
             "failed_assertions": echecs,
         }
+
+    @api.model
+    def _exiger_empreinte_lignes(self, expected, lignes, exiger):
+        """Compare le chargement ligne à ligne, pas seulement par identifiant.
+
+        Des identifiants identiques ne disent pas que le chargement est le
+        même : un colis peut avoir été réaffecté, une quantité corrigée, un
+        poids repesé. Ce sont précisément les valeurs qui décideront de ce qui
+        quitte le manifeste, donc celles qu'il faut confronter.
+        """
+        if "loaded_lines" not in expected:
+            return
+        attendues = {int(ligne["line_id"]): ligne for ligne in expected["loaded_lines"]}
+        reelles = {ligne["line_id"]: ligne for ligne in lignes}
+        if set(attendues) != set(reelles):
+            exiger(False, _(
+                "Lignes de chargement %(attendu)s attendues, %(reel)s en base.",
+                attendu=sorted(attendues), reel=sorted(reelles)))
+            return
+        for line_id, attendue in sorted(attendues.items()):
+            reelle = reelles[line_id]
+            if attendue.get("package_id") is not None:
+                exiger(reelle["package_id"] == int(attendue["package_id"]), _(
+                    "Ligne %(id)s : colis %(attendu)s attendu, %(reel)s en base.",
+                    id=line_id, attendu=attendue["package_id"], reel=reelle["package_id"]))
+            if attendue.get("quantity_loaded") is not None:
+                exiger(reelle["quantity_loaded"] == attendue["quantity_loaded"], _(
+                    "Ligne %(id)s : quantité %(attendu)s attendue, %(reel)s en base.",
+                    id=line_id, attendu=attendue["quantity_loaded"],
+                    reel=reelle["quantity_loaded"]))
+            if attendue.get("weight_loaded") is not None:
+                exiger(float_compare(
+                    reelle["weight_loaded"], float(attendue["weight_loaded"]),
+                    precision_digits=PRECISION_CHARGEMENT) == 0, _(
+                    "Ligne %(id)s : poids %(attendu)s attendu, %(reel)s en base.",
+                    id=line_id, attendu=attendue["weight_loaded"],
+                    reel=reelle["weight_loaded"]))
+
+    @api.model
+    def _exiger_empreinte_outbox(self, expected, outbox, exiger):
+        """Confronte la file de projection à ce que l'audit y avait vu.
+
+        L'état d'une ligne d'outbox bouge tout seul : un transport peut la
+        passer en `processing` entre l'audit et la réparation. Terminaliser une
+        ligne qu'un autre a déjà prise en charge, c'est écraser un verdict qui
+        ne nous appartient pas.
+        """
+        if "outbox" not in expected:
+            return
+        attendues = {int(ligne["outbox_id"]): ligne for ligne in expected["outbox"]}
+        reelles = {ligne["outbox_id"]: ligne for ligne in outbox}
+        if set(attendues) != set(reelles):
+            exiger(False, _(
+                "Projections %(attendu)s attendues, %(reel)s en base.",
+                attendu=sorted(attendues), reel=sorted(reelles)))
+            return
+        for outbox_id, attendue in sorted(attendues.items()):
+            reelle = reelles[outbox_id]
+            for champ in ("projection_type", "business_key", "state", "resource_reference"):
+                if attendue.get(champ) is None:
+                    continue
+                exiger(reelle[champ] == attendue[champ], _(
+                    "Projection %(id)s : %(champ)s « %(attendu)s » attendu, "
+                    "« %(reel)s » en base.",
+                    id=outbox_id, champ=champ,
+                    attendu=attendue[champ], reel=reelle[champ]))
 
     @api.model
     def _archive_identity(self, shipment, consolidation, echecs):
@@ -360,20 +469,168 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
     # ------------------------------------------------------------------
 
     @api.model
-    def apply(self, shipment_ids, expected=None, database=None):
+    def _valider_schema_attentes(self, shipment_ids, expected):
+        """Refuse une attente incomplète, avant tout verrou et toute mutation.
+
+        Vérifier la seule présence d'une entrée par dossier ne suffit pas : une
+        attente réduite à un champ laisserait tous les autres hors contrôle, et
+        le service redeviendrait capable de s'adapter à ce qu'il trouve. Le
+        schéma est donc exigé en entier, jusqu'au détail de chaque ligne de
+        chargement et de chaque projection.
+
+        La clé est exigée, jamais une valeur : un dossier peut légitimement
+        n'avoir aucun départ prévu, aucun chargement ou aucune projection.
+        Déclarer une liste vide est une affirmation ; omettre la clé n'en est
+        pas une, et c'est cette différence que le schéma protège.
+        """
+        expected = expected or {}
+        griefs = []
+        for identifiant in shipment_ids:
+            attente = expected.get(int(identifiant))
+            if not isinstance(attente, dict) or not attente:
+                griefs.append(_("dossier %s : aucune attente déclarée", identifiant))
+                continue
+            absents = [champ for champ in CHAMPS_ATTENDUS if champ not in attente]
+            if absents:
+                griefs.append(_(
+                    "dossier %(id)s : champ(s) obligatoire(s) absent(s) — %(champs)s",
+                    id=identifiant, champs=", ".join(absents)))
+            for rang, ligne in enumerate(attente.get("loaded_lines") or [], start=1):
+                if not isinstance(ligne, dict):
+                    griefs.append(_(
+                        "dossier %(id)s : ligne de chargement %(rang)s invalide",
+                        id=identifiant, rang=rang))
+                    continue
+                creux = [champ for champ in CHAMPS_LIGNE_ATTENDUE if champ not in ligne]
+                if creux:
+                    griefs.append(_(
+                        "dossier %(id)s : ligne %(rang)s incomplète — %(champs)s",
+                        id=identifiant, rang=rang, champs=", ".join(creux)))
+            for rang, projection in enumerate(attente.get("outbox") or [], start=1):
+                if not isinstance(projection, dict):
+                    griefs.append(_(
+                        "dossier %(id)s : projection %(rang)s invalide",
+                        id=identifiant, rang=rang))
+                    continue
+                creux = [
+                    champ for champ in CHAMPS_OUTBOX_ATTENDUE if champ not in projection]
+                if creux:
+                    griefs.append(_(
+                        "dossier %(id)s : projection %(rang)s incomplète — %(champs)s",
+                        id=identifiant, rang=rang, champs=", ".join(creux)))
+        if griefs:
+            raise UserError(_(
+                "Retrait refusé : l'empreinte attendue est incomplète.\n\n%s",
+                "\n".join(griefs)))
+        return True
+
+    @api.model
+    def _verrouiller_cibles(self, shipment_ids):
+        """Fige les objets à muter, ou renonce — jamais d'attente.
+
+        Les verrous existants du module sont des `pg_advisory_xact_lock`
+        bloquants : ils sérialisent deux écritures concurrentes. Ce n'est pas ce
+        qu'il faut ici. Une maintenance qui attend son tour reprend la main sur
+        un état qu'elle n'a pas audité, et ses assertions portent alors sur un
+        instantané périmé. `FOR UPDATE NOWAIT` renonce immédiatement : mieux
+        vaut refaire le dry-run que réparer à l'aveugle.
+
+        L'ordre des verrous est fixe — dossiers, départs, lignes, projections,
+        chacun trié par identifiant — pour qu'aucun interblocage ne puisse
+        naître de deux maintenances lancées en parallèle.
+
+        Le verrou est pris AVANT la revalidation finale : entre l'assertion et
+        la mutation, plus rien ne peut bouger.
+        """
+        cr = self.env.cr
+        ids = sorted({int(identifiant) for identifiant in shipment_ids})
+        requetes = [
+            ("dossiers", "SELECT id FROM dally_shipment WHERE id = ANY(%s) "
+                         "ORDER BY id FOR UPDATE NOWAIT"),
+            ("départs prévus",
+             "SELECT id FROM dally_freight_consolidation WHERE id IN ("
+             "  SELECT DISTINCT planned_consolidation_id FROM dally_shipment"
+             "   WHERE id = ANY(%s) AND planned_consolidation_id IS NOT NULL)"
+             " ORDER BY id FOR UPDATE NOWAIT"),
+            ("lignes de chargement",
+             "SELECT id FROM dally_freight_consolidation_line "
+             "WHERE shipment_id = ANY(%s) ORDER BY id FOR UPDATE NOWAIT"),
+        ]
+        if "dally.ops.sheet.outbox" in self.env:
+            requetes.append((
+                "projections",
+                "SELECT id FROM dally_ops_sheet_outbox "
+                "WHERE resource_model = 'dally.shipment' AND resource_id = ANY(%s) "
+                "ORDER BY id FOR UPDATE NOWAIT"))
+        for libelle, requete in requetes:
+            try:
+                cr.execute(requete, (ids,))
+            except psycopg2.errors.LockNotAvailable as erreur:
+                raise UserError(_(
+                    "Une autre transaction travaille sur les %(quoi)s de ce "
+                    "périmètre. Le retrait est abandonné : relancez la "
+                    "simulation, l'état audité n'est plus garanti.", quoi=libelle)
+                ) from erreur
+        return ids
+
+    @api.model
+    def _apply_authorized_recovery(self, shipment_ids, expected, database):
         """Applique le retrait, après avoir rejoué toutes les assertions.
 
-        La simulation n'est jamais une autorisation : la base a pu bouger entre
-        les deux. Chaque assertion est rejouée ici, et une seule divergence
-        annule l'ensemble — pas seulement le dossier fautif. Une réparation
-        partielle laisserait un départ à moitié réparé, plus difficile à lire
-        qu'un départ non réparé.
+        ## Pourquoi cette méthode est privée
+
+        Ce n'est pas une API métier, c'est un outil de maintenance. Le script
+        restreint ses cibles à une liste fermée, mais une méthode publique
+        offrirait un second chemin, sans cette restriction, à qui sait appeler
+        un modèle. Le nom privé et les trois arguments obligatoires font que
+        l'appel ne peut être qu'intentionnel.
+
+        `expected` doit décrire **chaque** dossier visé : un retrait qui
+        s'adapterait à ce qu'il trouve n'est plus une réparation, c'est une
+        écriture aveugle.
+
+        ## Pourquoi le savepoint est ici, et pas chez l'appelant
+
+        Un appelant qui capture `UserError` — un contrôleur, un cron, un script
+        maladroit — conserverait sinon une réparation à moitié faite. La
+        garantie doit appartenir au service : le savepoint est ouvert ici,
+        l'exception le traverse, et PostgreSQL a déjà tout défait quand elle
+        parvient à l'appelant.
         """
         if not self.env.user.has_group("dally_core.group_dally_manager"):
             raise AccessError(_("Seul un Manager peut retirer une identité de collecte."))
-        if database and database != self.env.cr.dbname:
+        if not database:
+            raise UserError(_("Le nom de la base cible est obligatoire."))
+        if database != self.env.cr.dbname:
             raise UserError(_(
                 "Base « %s » attendue, « %s » ouverte.", database, self.env.cr.dbname))
+        if not shipment_ids:
+            raise UserError(_("Aucun dossier ciblé."))
+        if not expected:
+            raise UserError(_("Les valeurs attendues sont obligatoires."))
+        self._valider_schema_attentes(shipment_ids, expected)
+
+        with self.env.cr.savepoint():
+            return self._appliquer_sous_verrou(shipment_ids, expected)
+
+    @api.model
+    def _appliquer_sous_verrou(self, shipment_ids, expected):
+        """Verrouille, oublie, revalide, mute — dans cet ordre et sans relâche.
+
+        L'oubli n'est pas une précaution de style. L'appelant a presque
+        toujours lancé une simulation avant d'autoriser le retrait, et cette
+        lecture a peuplé le cache ORM. Revalider sans vider ce cache relirait
+        les valeurs d'avant le verrou : le verrou ne protégerait plus rien, et
+        la maintenance travaillerait sur un instantané qu'elle croit frais.
+
+        L'invalidation est globale plutôt que ciblée. L'empreinte couvre le
+        dossier, le départ prévu, les lignes de chargement, les projections,
+        les encaissements, les pièces comptables et les devis : énumérer ces
+        modèles ici créerait une liste à tenir synchronisée avec `_inspect`, et
+        en oublier un est exactement la panne contre laquelle on se protège.
+        """
+        self._verrouiller_cibles(shipment_ids)
+        self.env.invalidate_all()
 
         rapport = self.simulate(shipment_ids, expected=expected)
         if not rapport["dry_run_pass"]:

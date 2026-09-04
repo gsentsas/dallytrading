@@ -306,6 +306,51 @@ class TestFreightSyncService(TransactionCase):
         self.assertFalse(line.manual_unit_price_eur)
         self.assertFalse(line.pricing_reason)
 
+    def test_explicit_standard_without_rule_clears_applied_manual_tariff(self):
+        payload = self._payload(
+            external_reference="M-SYNC-STANDARD-NO-RULE",
+            transport_mode="sea",
+            lines=[{
+                "external_line_key": "M-SYNC-STANDARD-NO-RULE|A|1",
+                "description": "Colis negocie maritime",
+                "quantity": 1,
+                "exact_weight_kg": 4,
+                "unit_volume_cbm": 0.5,
+                "billing_method": "volumetric",
+                "tariff_family_code": "non_food",
+                "manual_unit_price_eur": 5.0,
+                "pricing_type": "special",
+                "pricing_reason": "Tarif negocie",
+            }],
+        )
+        _data, shipment = self.Sync.upsert(payload)
+        line = shipment.package_ids
+        line.write({"volumetric_ratio_kg_cbm": 10.0})
+
+        self.assertAlmostEqual(line.manual_unit_price_eur, 5.0, places=2)
+        self.assertAlmostEqual(line.applied_unit_price_eur, 5.0, places=2)
+        self.assertTrue(line.tariff_applied_on)
+        self.assertAlmostEqual(line.volumetric_ratio_kg_cbm, 10.0, places=2)
+        self.assertAlmostEqual(line.billable_weight_kg, 5.0, places=2)
+        self.assertAlmostEqual(line.transport_amount_eur, 25.0, places=2)
+
+        payload["lines"][0].pop("manual_unit_price_eur")
+        payload["lines"][0].pop("pricing_reason")
+        payload["lines"][0]["pricing_type"] = "standard"
+        data, shipment = self.Sync.upsert(payload)
+
+        line = shipment.package_ids
+        self.assertEqual(data["lines"][0]["pricing_status"], "manual_required")
+        self.assertEqual(line.pricing_type_snapshot, "standard")
+        self.assertFalse(line.manual_unit_price_eur)
+        self.assertFalse(line.pricing_reason)
+        self.assertFalse(line.applied_unit_price_eur)
+        self.assertFalse(line.tariff_rule_id)
+        self.assertFalse(line.tariff_applied_on)
+        self.assertFalse(line.volumetric_ratio_kg_cbm)
+        self.assertAlmostEqual(line.billable_weight_kg, 4.0, places=2)
+        self.assertAlmostEqual(line.transport_amount_eur, 0.0, places=2)
+
     def test_special_manual_tariff_still_requires_reason(self):
         payload = self._payload(lines=[{
             "external_line_key": "A-SYNC-SPECIAL-NO-REASON|A|1",

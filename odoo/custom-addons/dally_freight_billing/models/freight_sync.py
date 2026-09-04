@@ -416,6 +416,10 @@ class DallyFreightSyncService(models.AbstractModel):
             if pricing_type == "standard":
                 values["manual_unit_price_eur"] = False
                 values["pricing_reason"] = False
+                values["applied_unit_price_eur"] = False
+                values["tariff_rule_id"] = False
+                values["tariff_applied_on"] = False
+                values["volumetric_ratio_kg_cbm"] = False
         if pricing_type != "standard" and "manual_unit_price_eur" in item:
             manual = self._number(item.get("manual_unit_price_eur"), "manual_unit_price_eur")
             values["manual_unit_price_eur"] = manual or 0.0

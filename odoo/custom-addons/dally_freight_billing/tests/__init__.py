@@ -13,3 +13,5 @@ from . import test_cash_operations
 from . import test_cash_endpoint
 from . import test_freight_invoice_report
 from . import test_controller_method_isolation
+from . import test_freight_posted_invoice_supplement
+from . import test_freight_payment_supplement_endpoint

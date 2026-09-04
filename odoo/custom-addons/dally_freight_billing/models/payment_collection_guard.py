@@ -5,6 +5,9 @@ from odoo.exceptions import UserError
 
 IMMUTABLE_REGISTERED_FIELDS = frozenset({
     "external_payment_key",
+    # Rediriger un encaissement deja comptabilise vers une autre piece
+    # deplacerait de l'argent entre deux factures sans ecriture pour le dire.
+    "target_invoice_id",
     "shipment_id",
     "amount",
     "currency_id",

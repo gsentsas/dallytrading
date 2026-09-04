@@ -9,6 +9,10 @@ from odoo.addons.dally_api.controllers.main import DallyApiController, DallyApiE
 ALLOWED_FIELDS = frozenset({
     "request_uuid",
     "external_payment_key",
+    # Facultatif. Absent, la cible reste la facture principale du dossier —
+    # exactement le comportement historique. Present, il est valide piece par
+    # piece dans `_resolve_target_invoice`.
+    "invoice_id",
     "external_reference",
     "shipment_id",
     "amount",
@@ -124,9 +128,14 @@ class DallyFreightPaymentController(DallyApiController):
             "collected_by_id": collector.id or False,
             "collected_by_name": collector_name or False,
         }
+        cible = self._resolve_target_invoice(env, shipment, payload)
+        if cible:
+            values["target_invoice_id"] = cible.id
         collection, created = env["dally.freight.collection"].upsert_from_sync(values)
 
-        invoice = shipment.invoice_id
+        # La reponse expose la piece REELLEMENT soldee, pas celle du dossier :
+        # le classeur doit pouvoir verifier qu'il a vise la bonne.
+        invoice = collection.target_invoice_id or collection.invoice_id
         data = {
             "collection_id": collection.id,
             "external_payment_key": collection.external_payment_key,
@@ -224,6 +233,56 @@ class DallyFreightPaymentController(DallyApiController):
             "_record": shipment,
         }
         return data, 200
+
+    @staticmethod
+    def _resolve_target_invoice(env, shipment, payload):
+        """La facture visee, si le classeur en nomme une.
+
+        Absente, on ne decide rien : le moteur solde la facture principale,
+        exactement comme avant. Presente, elle est verifiee sur quatre points —
+        nature, societe, client, appartenance au dossier — parce qu'un
+        encaissement dirige vers la mauvaise piece est un ecart comptable que
+        rien ne rattrape automatiquement.
+
+        L'appartenance se lit par les lignes : une facture complementaire ne
+        porte pas `dally_freight_shipment_id`, et l'exiger la rejetterait
+        toujours.
+        """
+        brut = payload.get("invoice_id")
+        if brut in (None, "", False):
+            return env["account.move"].browse()
+        try:
+            invoice_id = int(brut)
+        except (TypeError, ValueError) as exc:
+            raise DallyApiError(
+                422, "invalid_invoice_id", _("invoice_id must be an integer.")) from exc
+
+        invoice = env["account.move"].browse(invoice_id).exists()
+        if not invoice:
+            raise DallyApiError(404, "invoice_not_found", _("Invoice not found."))
+        if invoice.move_type != "out_invoice":
+            raise DallyApiError(
+                422, "invalid_invoice_type", _("Only a customer invoice can be targeted."))
+        if invoice.company_id != shipment.company_id:
+            raise DallyApiError(
+                409, "invoice_company_mismatch", _("Invoice belongs to another company."))
+        if invoice.partner_id != shipment.partner_id:
+            raise DallyApiError(
+                409, "invoice_partner_mismatch", _("Invoice belongs to another customer."))
+
+        if invoice == shipment.invoice_id:
+            return invoice
+        # `sudo` : l'utilisateur d'integration ne lit pas `sale.order.line`.
+        # Sans cela la traversee rend une liste vide et TOUTE facture
+        # complementaire serait rejetee comme etrangere au dossier.
+        rattachee = invoice.sudo().invoice_line_ids.mapped(
+            "sale_line_ids.dally_freight_package_id.shipment_id")
+        if shipment not in rattachee:
+            raise DallyApiError(
+                409,
+                "invoice_shipment_mismatch",
+                _("Invoice does not belong to this freight file."))
+        return invoice
 
     @staticmethod
     def _source(value):

@@ -14,6 +14,6 @@ class DallyFreightSyncService(models.AbstractModel):
         # a harmless network retry and must stay harmless: do not resolve the
         # *current* tariff again because the tariff table may have changed since
         # the invoice snapshot was produced.
-        if line.shipment_id.billing_locked:
+        if line.shipment_id.billing_locked and not line._supplement_pricing_allowed():
             return "locked"
         return super()._price_line_if_ready(line)

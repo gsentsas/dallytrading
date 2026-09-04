@@ -43,7 +43,7 @@ class DallyFreightSyncService(models.AbstractModel):
     def _price_line_if_ready(self, line):
         # After invoice generation an idempotent replay may re-send the exact
         # same row. Do not refresh tariff timestamps or touch pricing snapshots.
-        if line.shipment_id.billing_locked:
+        if line.shipment_id.billing_locked and not line._supplement_pricing_allowed():
             return "locked"
         return super()._price_line_if_ready(line)
 

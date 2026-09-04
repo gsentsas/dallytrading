@@ -13,6 +13,8 @@ import re
 
 from odoo import api, fields, models, _
 from odoo.exceptions import ConcurrencyError, UserError, ValidationError
+
+from .billing_lock import SUPPLEMENT_CREATE_CONTEXT, SUPPLEMENT_PRICING_CONTEXT
 from psycopg2 import IntegrityError
 
 
@@ -431,10 +433,24 @@ class DallyFreightSyncService(models.AbstractModel):
 
         if line:
             line.write(values)
+            tarifiable = line
         else:
-            line = Package.create(values)
+            # Le contexte n'est ouvert que sur ce chemin — jamais sur le
+            # `write` ci-dessus. Corriger un colis deja facture reste interdit ;
+            # seule l'arrivee d'un colis NOUVEAU justifie un complement, et
+            # `billing_lock` revalide lui-meme les preconditions.
+            line = Package.with_context(
+                **{SUPPLEMENT_CREATE_CONTEXT: True}
+            ).create(values)
+            # Un colis complementaire doit etre tarife comme n'importe quel
+            # autre, sans quoi la piece complementaire sortirait a 0,00 EUR. Le
+            # contexte nomme son `id` : il n'autorise que celui-la, et seulement
+            # pour les colonnes tarifaires.
+            tarifiable = line.with_context(
+                **{SUPPLEMENT_PRICING_CONTEXT: line.id}
+            )
 
-        pricing_status = self._price_line_if_ready(line)
+        pricing_status = self._price_line_if_ready(tarifiable)
         return line, created, pricing_status
 
     @api.model

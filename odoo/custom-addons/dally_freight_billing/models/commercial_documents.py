@@ -134,8 +134,63 @@ class DallyShipment(models.Model):
             )
         return True
 
-    def action_prepare_native_freight_invoice(self):
-        """Create at most one native SO and one *draft* customer invoice.
+    def _invoiced_package_ids(self):
+        """Les colis deja portes par une ligne de commande generee.
+
+        C'est la seule source de verite : un colis est facture s'il a produit
+        une `sale.order.line`, principale ou complementaire. Se fier a
+        `invoice_id` ne dirait rien des complements, qui ne s'y rattachent pas.
+        """
+        self.ensure_one()
+        if not self.package_ids:
+            return self.env["dally.shipment.package"].browse()
+        lignes = self.env["sale.order.line"].sudo().search([
+            ("dally_freight_package_id", "in", self.package_ids.ids),
+            ("state", "!=", "cancel"),
+        ])
+        return lignes.mapped("dally_freight_package_id")
+
+    def _pending_packages(self):
+        """Les colis arrives apres la derniere piece emise."""
+        self.ensure_one()
+        return self.package_ids - self._invoiced_package_ids()
+
+    def _supplement_orders(self):
+        """Les commandes complementaires de ce dossier, les plus recentes d'abord.
+
+        Elles ne portent pas `dally_freight_shipment_id` — cette relation est
+        unique et appartient a la commande principale. On les retrouve donc par
+        leurs lignes, qui pointent les colis du dossier.
+        """
+        self.ensure_one()
+        if not self.package_ids:
+            return self.env["sale.order"].browse()
+        lignes = self.env["sale.order.line"].sudo().search([
+            ("dally_freight_package_id", "in", self.package_ids.ids),
+        ])
+        commandes = lignes.mapped("order_id").filtered(
+            lambda order: order != self.sale_order_id and order.state != "cancel")
+        return commandes.sorted(key=lambda order: order.id, reverse=True)
+
+    def _supplement_invoices(self):
+        """Les factures complementaires, les plus recentes d'abord."""
+        self.ensure_one()
+        factures = self._supplement_orders().mapped("invoice_ids").filtered(
+            lambda move: move.move_type == "out_invoice" and move.state != "cancel")
+        return factures.sorted(key=lambda move: move.id, reverse=True)
+
+    def _supplement_draft_invoice(self):
+        """Le complement brouillon en cours, s'il existe.
+
+        Un seul peut exister a la fois : tant qu'il n'est ni poste ni annule,
+        il fige un perimetre que la marchandise ne doit pas depasser.
+        """
+        self.ensure_one()
+        return self._supplement_invoices().filtered(
+            lambda move: move.state == "draft")[:1]
+
+    def _prepare_freight_invoice(self):
+        """Rend ``(facture, creee, nature)`` — « primary » ou « supplement ».
 
         Business idempotence is anchored on ``dally.shipment`` itself, not only
         on the HTTP request UUID.  A second Apps Script call with a fresh UUID
@@ -157,7 +212,17 @@ class DallyShipment(models.Model):
         self.invalidate_recordset(["sale_order_id", "invoice_id", "billing_locked"])
 
         if self.invoice_id:
-            return self.invoice_id
+            # Facture principale comptabilisee : la marchandise arrivee depuis
+            # se facture a part. Tant qu'elle est brouillon, on ne cree rien —
+            # une seule piece suffit, et la corriger reste possible.
+            if self.invoice_id.state == "posted":
+                pending = self._pending_packages()
+                if pending:
+                    return self._prepare_supplement_invoice(pending)
+                dernier = self._supplement_invoices()[:1]
+                if dernier:
+                    return dernier, False, "supplement"
+            return self.invoice_id, False, "primary"
 
         self._check_ready_for_native_invoice()
 
@@ -199,7 +264,104 @@ class DallyShipment(models.Model):
             "invoice_id": invoice.id,
             "billing_locked": True,
         })
+        return invoice, bool(not existing), "primary"
+
+    def action_prepare_native_freight_invoice(self):
+        """Compatibilite : rend le seul enregistrement, comme avant.
+
+        Les appelants existants attendent une facture, pas un triplet. Changer
+        leur contrat pour un besoin nouveau les casserait tous ; le nom public
+        reste donc ce qu'il etait, et la nature de la piece se lit par
+        `_prepare_freight_invoice`.
+        """
+        invoice, _created, _kind = self._prepare_freight_invoice()
         return invoice
+
+    def _invoice_covered_line_keys(self, invoice):
+        """Les cles article que cette facture couvre, et elles seules.
+
+        Le classeur doit pouvoir ecrire les references de facturation sur les
+        bonnes lignes sans toucher aux anciennes. La liste se lit donc depuis
+        la piece elle-meme, en remontant ligne de facture -> ligne de commande
+        -> colis, plutot que depuis le dossier.
+
+        La traversee passe par `sudo` — l'utilisateur d'integration ne lit pas
+        `sale.order.line`, et sans cela la liste sortirait vide. Le resultat est
+        donc reduit aux colis de CE dossier avant d'etre rendu : une piece qui
+        ne serait pas la sienne ne peut pas faire fuiter les cles d'un autre
+        client par cette methode.
+        """
+        self.ensure_one()
+        if not invoice:
+            return []
+        colis = invoice.sudo().invoice_line_ids.mapped(
+            "sale_line_ids.dally_freight_package_id")
+        colis = colis.filtered(lambda paquet: paquet.shipment_id == self)
+        return sorted(cle for cle in colis.mapped("external_line_key") if cle)
+
+    def _prepare_supplement_invoice(self, pending):
+        """Une commande et une facture brouillon pour la marchandise tardive.
+
+        ## Ce que ce complement ne fait pas
+
+        Il ne touche ni `sale_order_id` ni `invoice_id` : ceux-la designent les
+        pieces principales, et leurs contraintes d'unicite les protegent. Il
+        ne porte donc pas `dally_freight_shipment_id`, qui est unique par
+        dossier — la tracabilite passe par les lignes, jusqu'au colis.
+
+        Il ne refacture aucun frais de dossier ni autres frais : ils ont ete
+        portes par la piece principale, et les repeter ferait payer deux fois
+        un service rendu une seule.
+        """
+        self.ensure_one()
+        pricelist = self.env.ref("dally_freight_billing.pricelist_freight_eur")
+        transport = self.env.ref(
+            "dally_freight_billing.product_freight_transport_template"
+        ).product_variant_id
+        reference = self.external_reference or self.reference
+
+        order = self.env["sale.order"].create({
+            "partner_id": self.partner_id.id,
+            "company_id": self.company_id.id,
+            "pricelist_id": pricelist.id,
+            "origin": "%s / SUPPLEMENT" % reference,
+            "client_order_ref": self.external_reference or False,
+        })
+
+        mode_label = dict(self._fields["transport_mode"].selection).get(
+            self.transport_mode, self.transport_mode)
+        sequence = 10
+        for package in pending.sorted(key=lambda line: (line.sequence, line.id)):
+            self.env["sale.order.line"].create({
+                "order_id": order.id,
+                "sequence": sequence,
+                "product_id": transport.id,
+                "product_uom_id": self.env.ref("uom.product_uom_kgm").id,
+                "product_uom_qty": package.billable_weight_kg,
+                "price_unit": package.applied_unit_price_eur,
+                "name": _(
+                    "%(mode)s — %(description)s",
+                    mode=mode_label,
+                    description=package.description or self.goods_description or _("Freight"),
+                ),
+                "dally_freight_package_id": package.id,
+            })
+            sequence += 10
+
+        order.action_confirm()
+        if order.state != "sale":
+            raise UserError(_(
+                "Freight supplement order %s is not in a confirmable state.",
+                order.display_name))
+        invoices = order._create_invoices()
+        invoice = invoices.filtered(
+            lambda move: move.move_type == "out_invoice")[:1]
+        if not invoice:
+            raise UserError(_("Odoo did not create a supplement invoice."))
+        if invoice.state != "draft":
+            raise UserError(_(
+                "Supplement invoice %s is not draft.", invoice.display_name))
+        return invoice, True, "supplement"
 
     def _create_native_freight_sale_order(self):
         self.ensure_one()

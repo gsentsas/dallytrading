@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 
 import { readOpsSession } from '@/lib/auth/auth';
 import { OpsGatewayError } from '@/lib/auth/odoo-ops';
-import { newCorrelationId } from '@/lib/logger';
+import { contexteErreur } from '@/lib/error-context';
+import { logger, newCorrelationId } from '@/lib/logger';
 import { activityEvent, fetchIntakeActivity } from '@/lib/ops/activity';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +29,7 @@ export async function GET(
   if (!session) return response({ success: false, error: 'Session expirée.' }, 401);
   const { reference } = await context.params;
   const correlation = newCorrelationId();
+  const depart = Date.now();
   try {
     const data = await fetchIntakeActivity(reference, {
       limit,
@@ -45,6 +47,14 @@ export async function GET(
     if (error instanceof OpsGatewayError && error.code === 'invalid_request') {
       return response({ success: false, error: 'Filtre invalide.' }, 400);
     }
+    // La référence du dossier ne descend pas dans le journal : elle désigne un
+    // client. `route` suffit à savoir d'où vient l'erreur.
+    logger.error('ops.intake-activity.error', {
+      correlationId: correlation,
+      route: 'intake_activity',
+      durationMs: Date.now() - depart,
+      ...contexteErreur(error),
+    });
     return response({ success: false, error: 'Service momentanément indisponible.' }, 503);
   }
 }

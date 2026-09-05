@@ -25,8 +25,8 @@ export interface ContexteErreur {
   readonly issueCount?: number;
   /** Code d'anomalie Zod (`invalid_type`, `too_small`…), jamais une valeur. */
   readonly firstIssueCode?: string;
-  /** Chemin dans le schéma (`events.0.summary`) : des noms de champs à nous. */
-  readonly firstIssuePath?: string;
+  /** Profondeur du chemin fautif. Un nombre : il ne peut rien citer. */
+  readonly firstIssueDepth?: number;
 }
 
 /**
@@ -44,6 +44,13 @@ export interface ContexteErreur {
  *   son contenu n'est pas une union fermée côté TypeScript. Tant que rien ne le
  *   prouve, il reste dehors.
  * - `issue.received` / `issue.expected` — la valeur reçue, précisément.
+ * - `error.name` — il s'écrit (`e.name = …`) et survit à `instanceof Error`.
+ *   Un appelant peut donc y placer n'importe quel texte. Le type générique est
+ *   donc la constante `'Error'` : moins précis, mais il ne cite rien.
+ * - le chemin de l'anomalie Zod — avec `z.record` ou `.catchall`, un segment du
+ *   chemin **est** une clé fournie par les données : `meta.<clé du client>`.
+ *   Ce module est générique et servira d'autres schémas ; seule la profondeur
+ *   sort, parce qu'un nombre ne peut rien citer.
  */
 export function contexteErreur(error: unknown): ContexteErreur {
   if (error instanceof OpsGatewayError) {
@@ -60,15 +67,12 @@ export function contexteErreur(error: unknown): ContexteErreur {
       errorType: 'ZodError',
       issueCount: error.issues.length,
       ...(premiere
-        ? {
-            firstIssueCode: premiere.code,
-            firstIssuePath: premiere.path.map((cle) => String(cle)).join('.'),
-          }
+        ? { firstIssueCode: premiere.code, firstIssueDepth: premiere.path.length }
         : {}),
     };
   }
   if (error instanceof Error) {
-    return { errorClass: 'ERROR', errorType: error.name };
+    return { errorClass: 'ERROR', errorType: 'Error' };
   }
   return { errorClass: 'UNKNOWN', errorType: 'UnknownError' };
 }

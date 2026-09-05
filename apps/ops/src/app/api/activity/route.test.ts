@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import type { ActivityPage } from '@/lib/ops/activity';
 
@@ -156,16 +157,48 @@ describe('un 503 activité se diagnostique sans se trahir', () => {
     });
     expect(contexteJournalise()).not.toContain(CLE_SENSIBLE);
     expect(contexteJournalise()).not.toContain(SESSION_SENTINELLE);
+    expect(Object.keys(contexte()).sort()).toEqual([
+      'correlationId', 'durationMs', 'errorClass', 'errorType',
+      'firstIssueCode', 'firstIssueDepth', 'issueCount', 'route',
+    ]);
   });
 
-  it('ne recopie pas le message d\'une erreur générique', async () => {
-    vi.mocked(fetchActivity).mockRejectedValue(
-      new Error(`échec brut portant ${CLE_SENSIBLE}`));
+  it('ne recopie ni le message ni le nom d\'une erreur générique', async () => {
+    // `name` s'écrit, et l'erreur reste une Error : un appelant peut donc y
+    // glisser n'importe quel texte. Le type journalisé est une constante.
+    const brute = new Error(`échec brut portant ${CLE_SENSIBLE}`);
+    brute.name = CLE_SENSIBLE;
+    expect(brute instanceof Error).toBe(true);
+    vi.mocked(fetchActivity).mockRejectedValue(brute);
 
     const response = await activityGet(new Request('https://ops.test/api/activity'));
 
     expect(response.status).toBe(503);
     expect(contexte()).toMatchObject({ errorClass: 'ERROR', errorType: 'Error' });
+    expect(contexteJournalise()).not.toContain(CLE_SENSIBLE);
+    expect(Object.keys(contexte()).sort()).toEqual([
+      'correlationId', 'durationMs', 'errorClass', 'errorType', 'route',
+    ]);
+  });
+
+  it('ne laisse pas fuir une clé de données par le chemin Zod', async () => {
+    // `contexteErreur` est générique : un schéma à clés dynamiques (`z.record`,
+    // `.catchall`) met la clé du client *dans* le chemin de l'anomalie.
+    const dynamique = z.object({ meta: z.record(z.string(), z.number()) });
+    let zod: unknown;
+    try { dynamique.parse({ meta: { [CLE_SENSIBLE]: 'pas un nombre' } }); }
+    catch (e) { zod = e; }
+    // Contrôle de la valeur du test : la sentinelle est bien dans le chemin brut.
+    expect((zod as { issues: { path: PropertyKey[] }[] }).issues[0]!.path.map(String))
+      .toContain(CLE_SENSIBLE);
+    vi.mocked(fetchActivity).mockRejectedValue(zod);
+
+    const response = await activityGet(new Request('https://ops.test/api/activity'));
+
+    expect(response.status).toBe(503);
+    expect(contexte()).toMatchObject({
+      errorClass: 'VALIDATION', errorType: 'ZodError', firstIssueDepth: 2,
+    });
     expect(contexteJournalise()).not.toContain(CLE_SENSIBLE);
   });
 

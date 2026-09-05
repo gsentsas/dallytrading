@@ -143,12 +143,17 @@ test('aucune donnée comptable ne descend dans la page', async ({ page }) => {
   await page.getByRole('button', { name: 'CONFIRMER L’ENCAISSEMENT' }).click();
   await expect(page.getByTestId('paiement')).toHaveCount(1);
 
-  const html = await page.content();
+  const html = (await page.content()).toLowerCase();
   for (const interdit of ['journal_id', 'payment_method_line', 'account_payment',
                           'invoice_id', 'collection_id', 'external_payment_key',
-                          'error_message', 'ops:']) {
-    expect(html.toLowerCase()).not.toContain(interdit.toLowerCase());
+                          'error_message']) {
+    expect(html).not.toContain(interdit.toLowerCase());
   }
+  // La clé de source Ops se cherche à sa forme réelle, `ops:<uuid>`, et non par
+  // la sous-chaîne « ops: » : celle-ci apparaît dans les références de
+  // déduplication React Flight de Next (`$4:props:children:…`), où elle n'est
+  // que la fin de « props: ». Le test signalait une fuite là où il n'y en a pas.
+  expect(html).not.toMatch(/ops:[0-9a-f]{8}/);
 });
 
 test('un encaissement autonome part de l’accueil et retrouve le dossier par la recherche',

@@ -201,9 +201,12 @@ test('aucun identifiant Odoo ne descend dans la page', async ({ page }) => {
   const html = (await page.content()).toLowerCase();
   for (const interdit of ['partner_id', 'shipment_id', 'invoice_id', 'company_id',
                           'collection_id', 'account_payment', 'journal_id',
-                          'external_payment_key', 'error_message', 'ops:']) {
+                          'external_payment_key', 'error_message']) {
     expect(html).not.toContain(interdit.toLowerCase());
   }
+  // Voir `paiements.spec.ts` : « ops: » nu entre en collision avec « props: »
+  // des références React Flight. La clé de source a une forme, on la cherche.
+  expect(html).not.toMatch(/ops:[0-9a-f]{8}/);
 });
 
 test('un visiteur anonyme n’atteint aucune route d’encaissement', async ({ request }) => {

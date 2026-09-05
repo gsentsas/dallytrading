@@ -1,41 +1,40 @@
 # Contrat Apps Script — compléments de fret
 
-Cette note décrit les deux changements que le connecteur devra porter une fois
-le support serveur des compléments déployé. **Elle ne les implémente pas** :
-cette phase est serveur uniquement, et le Google Sheet n'est pas touché.
+Cette note décrit le contrat entre le connecteur et l'API des compléments.
+Le miroir Git **a été mis à jour** pour l'honorer ; le classeur, lui, n'est pas
+touché.
+
+```
+APPS_SCRIPT_SOURCE_UPDATED=YES
+APPS_SCRIPT_LIVE_DEPLOYED=NO
+SHEET_MUTATED=NO
+```
 
 ## Où vit le code concerné
 
-Contrairement à ce qui a pu être supposé, le script bound **est** versionné :
+Le script bound est versionné :
 
 ```
 integrations/google-sheets/freight-sync/Code.gs
 ```
 
-`prepareInvoice_()` s'y trouve à la ligne 430, `syncPayments_()` à la ligne 453.
-Ce fichier est un miroir du projet Apps Script lié au classeur ; le pousser vers
-le classeur reste une opération manuelle et distincte.
+Ce fichier est un miroir du projet Apps Script lié au classeur. Le pousser vers
+le classeur reste une opération manuelle et distincte, volontairement exclue de
+cette phase : le serveur doit accepter le nouveau contrat avant que le
+connecteur ne commence à l'utiliser.
 
 ## A. `prepareInvoice_()` — n'écrire que sur les lignes couvertes
 
-### Le défaut actuel
+### Le défaut corrigé
 
-```js
-rows.forEach(row => {
-  setCell_(sheet, row.row, DALLY.columns.saleOrderId, data.sale_order_id || '');
-  setCell_(sheet, row.row, DALLY.columns.invoiceId, data.invoice_id || '');
-  setCell_(sheet, row.row, DALLY.columns.invoiceNumber, data.invoice_number || 'Brouillon');
-});
-```
-
-L'écriture porte sur **toutes** les lignes du dossier. Tant qu'une seule facture
+L'écriture portait sur **toutes** les lignes du dossier. Tant qu'une seule facture
 existait, c'était correct. Avec un complément, cela écraserait les références de
 la facture principale sur les colis déjà facturés — le classeur affirmerait que
 d'anciennes marchandises appartiennent à une pièce qui ne les contient pas.
 
-### Le contrat attendu
+### Le contrat, désormais implémenté
 
-L'API rend désormais deux champs supplémentaires :
+L'API rend deux champs supplémentaires :
 
 | champ | valeur |
 |---|---|
@@ -54,37 +53,50 @@ Se fier au seul `invoice_kind` pour deviner les lignes serait fragile : c'est
 `covered_line_keys` qui fait foi, parce qu'elle est calculée depuis la pièce
 elle-même, en remontant ligne de facture → ligne de commande → colis.
 
+Si une réponse `supplement` arrive **sans** `covered_line_keys`, le connecteur
+lève une erreur et n'écrit rien. Écrire partout serait pire que ne rien écrire.
+
 ## B. `syncPayments_()` — viser la bonne pièce
 
-### Le défaut actuel
+### Trois états, pas deux
 
-Le payload envoyé à `/api/v1/freight/payment` ne porte pas d'`invoice_id` :
+C'est l'invariant central de ce contrat, et le plus facile à casser.
 
-```js
-const payload = {
-  external_payment_key: key,
-  ...
-  payment_date: ...,
-  payment_method: method,
-};
-```
+| État du payload | Sens | Effet serveur |
+|---|---|---|
+| `invoice_id` **absent** | l'appelant ne dit rien | la cible existante n'est pas touchée |
+| `invoice_id: <id>` | l'appelant vise une pièce | `target_invoice_id = <id>` après validation |
+| `invoice_id: ""` | l'appelant retire la cible | `target_invoice_id = False`, retour à la principale |
 
-Le serveur solde alors la facture principale du dossier. Un encaissement destiné
-au complément irait donc réduire le solde de la mauvaise pièce.
+Confondre « absent » et « vide » est un défaut silencieux : un rejeu conserverait
+un complément que le classeur vient justement de retirer, et l'encaissement
+partirait sur la mauvaise pièce dès qu'il deviendrait comptabilisable.
 
-### Le contrat attendu
-
-Quand la ligne de paiement porte un **Odoo Invoice ID**, l'ajouter au payload :
+Le connecteur transmet donc toujours la colonne **Odoo Invoice ID**, y compris
+vide. Son nettoyage générique de payload supprime les chaînes vides — il épargne
+`invoice_id`, et lui seul :
 
 ```js
-...(invoiceIdDeLaLigne ? {invoice_id: invoiceIdDeLaLigne} : {}),
+Object.keys(payload).forEach(k => {
+  if (typeof payload[k] === 'undefined') delete payload[k];
+  else if (payload[k] === '' && k !== 'invoice_id') delete payload[k];
+});
 ```
 
-Absent, le comportement reste strictement celui d'aujourd'hui — la cible est la
-facture principale. Présent, le serveur vérifie quatre points avant d'accepter :
-nature `out_invoice`, même société, même client, et appartenance au dossier
-(lue par les lignes, puisqu'un complément ne porte pas `dally_freight_shipment_id`).
-En cas d'écart, il répond 409 ou 422 plutôt que d'imputer au hasard.
+### Ce que le serveur vérifie
+
+Une valeur présente est validée avant d'être acceptée : nature `out_invoice`,
+état non `cancel`, même société, même client, et appartenance au dossier (lue par
+les lignes, puisqu'un complément ne porte pas `dally_freight_shipment_id`). En
+cas d'écart, il répond 404, 409 ou 422 plutôt que d'imputer au hasard.
+
+Une facture `draft` **reste** une cible valide : l'encaissement peut précéder la
+comptabilisation du complément, la collection attend, et `action_post` la
+réveille. Une facture `cancel` est refusée — elle ne sera jamais comptabilisée,
+et la collection resterait en attente pour toujours.
+
+Une fois l'encaissement rattaché à un `account.payment`, la cible est figée :
+ni redirection ni effacement.
 
 La réponse expose la facture **effectivement** ciblée, ce qui permet au classeur
 de vérifier qu'il a visé juste plutôt que de le supposer.
@@ -92,5 +104,18 @@ de vérifier qu'il a visé juste plutôt que de le supposer.
 ## Ordre de déploiement
 
 Le serveur d'abord, le connecteur ensuite. L'inverse enverrait un `invoice_id` à
-une API qui l'ignore : le paiement irait silencieusement sur la facture
-principale, et l'erreur ne se verrait qu'au rapprochement.
+une API qui le rejette en `422 unknown_fields`, et toute synchronisation de
+paiement échouerait.
+
+Le miroir Git porte déjà les deux changements. Les pousser vers le projet Apps
+Script lié au classeur est une opération manuelle, distincte, et volontairement
+hors de cette phase : elle ne doit avoir lieu qu'après l'upgrade du module en
+production.
+
+## Vérification
+
+`scripts/test_freight_sheet_supplement_contract.js` charge le vrai `Code.gs`
+sans Google et prouve les quatre points : un complément n'écrit que sur
+`covered_line_keys`, une principale garde son comportement, un complément sans
+`covered_line_keys` refuse d'écrire, et `invoice_id: ""` survit au nettoyage du
+payload alors que les autres champs vides en sont retirés.

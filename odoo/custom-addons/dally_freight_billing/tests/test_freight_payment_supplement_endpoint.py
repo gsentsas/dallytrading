@@ -252,6 +252,151 @@ class TestFreightPaymentSupplementEndpoint(HttpCase):
         self.assertEqual(collection.target_invoice_id, principale)
 
     # ------------------------------------------------------------------
+    # Absent, renseigné, vidé — trois états, pas deux
+    # ------------------------------------------------------------------
+
+    def _collection_ciblant_le_supplement(self, reference, cle):
+        shipment, principale = self._dossier(reference)
+        supplement = self._complement(shipment, reference)
+        premier = self._post(shipment_id=shipment.id, invoice_id=supplement.id,
+                             external_payment_key=cle)
+        self.assertEqual(premier.status_code, 201)
+        collection = self.env["dally.freight.collection"].browse(
+            self._data(premier)["collection_id"])
+        self.assertEqual(collection.target_invoice_id, supplement)
+        return shipment, principale, supplement, collection
+
+    def test_an_absent_invoice_id_leaves_the_existing_target_alone(self):
+        """TEST A — la clé absente ne dit rien, donc ne change rien."""
+        cle = "HSUP-ABSENT"
+        shipment, _principale, supplement, collection = \
+            self._collection_ciblant_le_supplement("HTTPSUP-ABS", cle)
+
+        rejeu = self._post(shipment_id=shipment.id, external_payment_key=cle)
+
+        self.assertEqual(rejeu.status_code, 200)
+        self.assertFalse(self._data(rejeu)["created"])
+        self.assertEqual(self._data(rejeu)["collection_id"], collection.id)
+        self.assertEqual(collection.target_invoice_id, supplement,
+                         "un rejeu muet ne doit pas retargeter")
+        self.assertEqual(self.env["dally.freight.collection"].search_count(
+            [("external_payment_key", "=", cle)]), 1)
+
+    def test_an_empty_invoice_id_resets_the_target_to_the_primary(self):
+        """TEST B — la clé vide est une instruction : « efface la cible »."""
+        cle = "HSUP-VIDE"
+        shipment, principale, _supplement, collection = \
+            self._collection_ciblant_le_supplement("HTTPSUP-VIDE", cle)
+
+        remise = self._post(shipment_id=shipment.id, invoice_id="",
+                            external_payment_key=cle)
+
+        self.assertEqual(remise.status_code, 200)
+        self.assertFalse(self._data(remise)["created"])
+        self.assertFalse(collection.target_invoice_id,
+                         "la cible doit être effacée, pas conservée")
+        self.assertEqual(self._data(remise)["invoice_id"], principale.id,
+                         "la réponse expose désormais la principale")
+        self.assertEqual(self.env["dally.freight.collection"].search_count(
+            [("external_payment_key", "=", cle)]), 1)
+
+    def test_an_empty_invoice_id_on_a_primary_collection_stays_primary(self):
+        """TEST C — effacer une cible déjà primaire ne casse rien."""
+        shipment, principale = self._dossier("HTTPSUP-VIDE2")
+        cle = "HSUP-VIDE2"
+        premier = self._post(shipment_id=shipment.id, invoice_id=principale.id,
+                             external_payment_key=cle)
+        self.assertEqual(premier.status_code, 201)
+        collection = self.env["dally.freight.collection"].browse(
+            self._data(premier)["collection_id"])
+
+        remise = self._post(shipment_id=shipment.id, invoice_id="",
+                            external_payment_key=cle)
+
+        self.assertEqual(remise.status_code, 200)
+        self.assertFalse(collection.target_invoice_id)
+        self.assertEqual(self._data(remise)["invoice_id"], principale.id)
+
+    def test_clearing_the_target_of_a_registered_collection_is_refused(self):
+        """TEST D — l'immuabilité protège aussi l'effacement."""
+        cle = "HSUP-FIGE"
+        shipment, _principale, supplement, collection = \
+            self._collection_ciblant_le_supplement("HTTPSUP-FIGE", cle)
+
+        journal = self.env["account.journal"].sudo().search(
+            [("type", "=", "bank")], limit=1)
+        if not journal:
+            self.skipTest("aucun journal de banque disponible")
+        paiement = self.env["account.payment"].sudo().create({
+            "payment_type": "inbound", "partner_type": "customer",
+            "partner_id": shipment.partner_id.id, "amount": 6.0,
+            "journal_id": journal.id, "company_id": journal.company_id.id,
+        })
+        collection.sudo().write({"payment_id": paiement.id})
+        self.env.flush_all()
+
+        efface = self._post(shipment_id=shipment.id, invoice_id="",
+                            external_payment_key=cle)
+
+        self.assertGreaterEqual(efface.status_code, 400)
+        self.assertEqual(collection.target_invoice_id, supplement,
+                         "la cible d'un encaissement comptabilisé ne s'efface pas")
+
+    # ------------------------------------------------------------------
+    # Une pièce annulée n'est jamais une cible
+    # ------------------------------------------------------------------
+
+    def test_a_cancelled_primary_invoice_is_refused(self):
+        """TEST E — annulée, elle ne sera jamais comptabilisée."""
+        shipment, principale = self._dossier("HTTPSUP-CANC1")
+        principale.button_draft()
+        principale.button_cancel()
+        self.assertEqual(principale.state, "cancel")
+
+        response = self._post(shipment_id=shipment.id, invoice_id=principale.id)
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(self._erreur(response), "invoice_cancelled")
+
+    def test_a_cancelled_supplement_invoice_is_refused(self):
+        """TEST F — même verdict pour une pièce complémentaire."""
+        shipment, _principale = self._dossier("HTTPSUP-CANC2")
+        supplement = self._complement(shipment, "HTTPSUP-CANC2")
+        supplement.button_cancel()
+        self.assertEqual(supplement.state, "cancel")
+
+        response = self._post(shipment_id=shipment.id, invoice_id=supplement.id)
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(self._erreur(response), "invoice_cancelled")
+
+    def test_a_draft_supplement_invoice_is_still_accepted(self):
+        """TEST G — le brouillon reste ouvert : `action_post` réveillera l'encaissement."""
+        shipment, _principale = self._dossier("HTTPSUP-DRAFT")
+        supplement = self._complement(shipment, "HTTPSUP-DRAFT")
+        self.assertEqual(supplement.state, "draft")
+
+        response = self._post(shipment_id=shipment.id, invoice_id=supplement.id)
+
+        self.assertEqual(response.status_code, 201)
+        collection = self.env["dally.freight.collection"].browse(
+            self._data(response)["collection_id"])
+        self.assertEqual(collection.target_invoice_id, supplement)
+        self.assertEqual(collection.state, "pending")
+
+    def test_a_posted_supplement_invoice_is_still_accepted(self):
+        """TEST H — et le comportement d'une pièce comptabilisée ne bouge pas."""
+        shipment, _principale = self._dossier("HTTPSUP-POSTED")
+        supplement = self._complement(shipment, "HTTPSUP-POSTED")
+        supplement.action_post()
+        self.assertEqual(supplement.state, "posted")
+
+        response = self._post(shipment_id=shipment.id, invoice_id=supplement.id)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self._data(response)["invoice_id"], supplement.id)
+
+    # ------------------------------------------------------------------
     # Le réveil après comptabilisation du complément
     # ------------------------------------------------------------------
 

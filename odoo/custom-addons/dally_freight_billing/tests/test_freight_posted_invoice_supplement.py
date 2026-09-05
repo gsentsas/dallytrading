@@ -441,6 +441,79 @@ class TestFreightPostedInvoiceSupplement(AccountTestInvoicingCommon):
         self.assertAlmostEqual(second.amount_untaxed, 4.0 * 3.50, places=2)
 
     # ------------------------------------------------------------------
+    # Un colis non facturable n'entraîne aucune pièce complémentaire
+    # ------------------------------------------------------------------
+
+    def _colis_non_tarifable(self, shipment, reference, index, ligne):
+        """Ajoute un colis que le sync laisse volontairement sans tarif.
+
+        Toujours par le chemin métier : c'est `_price_line_if_ready` qui
+        renonce à tarifer, pas un write artificiel qui contournerait le verrou.
+        """
+        payload = self._payload(reference, lines=[ligne])
+        _data, meme = self.Sync.upsert(payload)
+        self.assertEqual(meme, shipment)
+        return shipment.package_ids.filtered(
+            lambda p: p.external_line_key == ligne["external_line_key"])
+
+    def _refus_de_complement(self, shipment, principale, colis):
+        """Le complément est refusé, et il ne laisse rien derrière lui."""
+        self.assertFalse(colis.tariff_applied_on)
+        with self.assertRaises(UserError):
+            shipment._prepare_freight_invoice()
+
+        # Atomicité : le garde passe avant toute création.
+        self.assertFalse(shipment._supplement_orders(),
+                         "aucune commande complémentaire ne doit subsister")
+        self.assertFalse(shipment._supplement_invoices(),
+                         "aucune facture complémentaire ne doit subsister")
+        self.assertEqual(shipment.invoice_id, principale)
+        self.assertEqual(principale.state, "posted")
+        self.assertAlmostEqual(principale.amount_total, 35.0, places=2)
+
+    def test_a_quote_package_blocks_the_supplement(self):
+        """TEST I — « sur devis » n'a pas de prix : rien ne peut être facturé."""
+        shipment, principale = self._dossier_avec_facture_postee("SUPP-QUOTE")
+        ligne = self._line("SUPP-QUOTE", 2, 6.0)
+        ligne["billing_method"] = "quote"
+        colis = self._colis_non_tarifable(shipment, "SUPP-QUOTE", 2, ligne)
+        self.assertEqual(colis.billing_method, "quote")
+        self._refus_de_complement(shipment, principale, colis)
+
+    def test_an_untariffed_package_blocks_the_supplement(self):
+        """TEST J — sans famille tarifaire, le sync ne pose aucun tarif."""
+        shipment, principale = self._dossier_avec_facture_postee("SUPP-NOFAM")
+        ligne = self._line("SUPP-NOFAM", 2, 6.0)
+        ligne.pop("tariff_family_code")
+        colis = self._colis_non_tarifable(shipment, "SUPP-NOFAM", 2, ligne)
+        self.assertFalse(colis.tariff_family_id)
+        self.assertAlmostEqual(colis.applied_unit_price_eur, 0.0, places=2)
+        self._refus_de_complement(shipment, principale, colis)
+
+    def test_a_zero_weight_package_blocks_the_supplement(self):
+        """TEST K — un poids nul ne produit aucune quantité facturable."""
+        shipment, principale = self._dossier_avec_facture_postee("SUPP-ZERO")
+        ligne = self._line("SUPP-ZERO", 2, 0.0)
+        colis = self._colis_non_tarifable(shipment, "SUPP-ZERO", 2, ligne)
+        self.assertAlmostEqual(colis.billable_weight_kg, 0.0, places=2)
+        self._refus_de_complement(shipment, principale, colis)
+
+    def test_the_guard_does_not_break_the_nominal_supplement(self):
+        """TEST L — le chemin nominal reste intact : 6 kg × 3,50 = 21,00."""
+        shipment, principale = self._dossier_avec_facture_postee("SUPP-GUARD-OK")
+        colis = self._ajouter_colis(shipment, "SUPP-GUARD-OK", 2, 6.0)
+        self.assertTrue(colis.tariff_applied_on)
+
+        complement, created, kind = shipment._prepare_freight_invoice()
+
+        self.assertTrue(created)
+        self.assertEqual(kind, "supplement")
+        self.assertAlmostEqual(colis.applied_unit_price_eur, 3.50, places=2)
+        self.assertAlmostEqual(colis.billable_weight_kg, 6.0, places=2)
+        self.assertAlmostEqual(complement.amount_untaxed, 21.00, places=2)
+        self.assertAlmostEqual(principale.amount_total, 35.0, places=2)
+
+    # ------------------------------------------------------------------
     # 14 à 18 — le routage du paiement
     # ------------------------------------------------------------------
 

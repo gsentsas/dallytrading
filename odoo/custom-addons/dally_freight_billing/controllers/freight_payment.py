@@ -128,9 +128,15 @@ class DallyFreightPaymentController(DallyApiController):
             "collected_by_id": collector.id or False,
             "collected_by_name": collector_name or False,
         }
-        cible = self._resolve_target_invoice(env, shipment, payload)
-        if cible:
-            values["target_invoice_id"] = cible.id
+        # Trois etats, pas deux. `upsert_from_sync` lit l'ABSENCE de la cle
+        # comme « ne touche pas a la cible existante » ; envoyer la cle a False
+        # dit au contraire « reviens a la principale ». Confondre les deux
+        # laisserait un rejeu conserver un complement que le classeur vient
+        # justement de retirer, et l'encaissement irait sur la mauvaise piece
+        # des qu'il deviendrait comptabilisable.
+        if "invoice_id" in payload:
+            cible = self._resolve_target_invoice(env, shipment, payload)
+            values["target_invoice_id"] = cible.id or False
         collection, created = env["dally.freight.collection"].upsert_from_sync(values)
 
         # La reponse expose la piece REELLEMENT soldee, pas celle du dossier :
@@ -263,6 +269,14 @@ class DallyFreightPaymentController(DallyApiController):
         if invoice.move_type != "out_invoice":
             raise DallyApiError(
                 422, "invalid_invoice_type", _("Only a customer invoice can be targeted."))
+        # `draft` reste accepte : un encaissement peut precede la
+        # comptabilisation du complement, la collection attend, et
+        # `action_post` la reveille. `cancel` n'a pas cette issue — la piece ne
+        # sera jamais comptabilisee, et la collection resterait `pending` pour
+        # toujours en donnant l'illusion d'un paiement pris en compte.
+        if invoice.state == "cancel":
+            raise DallyApiError(
+                422, "invoice_cancelled", _("A cancelled invoice cannot be targeted."))
         if invoice.company_id != shipment.company_id:
             raise DallyApiError(
                 409, "invoice_company_mismatch", _("Invoice belongs to another company."))

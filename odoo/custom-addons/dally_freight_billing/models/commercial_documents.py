@@ -113,7 +113,18 @@ class DallyShipment(models.Model):
                 % {"order": self.sale_order_id.display_name}
             )
 
-        incomplete = self.package_ids.filtered(
+        return self._check_packages_ready_for_native_invoice(self.package_ids)
+
+    @api.model
+    def _check_packages_ready_for_native_invoice(self, packages):
+        """Refuse d'emettre une piece pour un colis qui n'est pas facturable.
+
+        Extrait du garde du dossier pour que le complement applique exactement
+        la meme regle — mais sur son propre perimetre. Valider tout le dossier
+        ferait echouer un complement legitime a cause d'un colis historique
+        deja facture dont la donnee ne satisferait plus un garde d'aujourd'hui.
+        """
+        incomplete = packages.filtered(
             lambda line: (
                 line.billing_method == "quote"
                 or not line.tariff_applied_on
@@ -314,6 +325,12 @@ class DallyShipment(models.Model):
         un service rendu une seule.
         """
         self.ensure_one()
+        # AVANT toute creation. Un colis non tarife produirait une ligne a
+        # 0,00 EUR, et l'echec plus loin laisserait derriere lui une commande
+        # et une facture complementaires vides qu'il faudrait nettoyer a la
+        # main. Refuser ici ne laisse rien.
+        self._check_packages_ready_for_native_invoice(pending)
+
         pricelist = self.env.ref("dally_freight_billing.pricelist_freight_eur")
         transport = self.env.ref(
             "dally_freight_billing.product_freight_transport_template"

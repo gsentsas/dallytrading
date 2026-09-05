@@ -1,8 +1,8 @@
 # E-commerce Pro — architecture et roadmap
 
 E-commerce Pro poursuit le socle boutique DallyTrading après Freight Pro. Les Lots
-A et B sont validés et fusionnés dans `main`. Le Lot C est développé sur
-`feature/ecommerce-pro-lot-c`.
+A, B et C sont validés et fusionnés dans `main`. Le prochain lot fonctionnel est
+le Lot D — Paiement.
 
 ## 1. Architecture
 
@@ -79,7 +79,7 @@ picking, ni facture, ni paiement.
 RC validée sur pile isolée : frontend 831/831, Odoo 199 tests, canaris Lot B,
 régressions Freight/Vehicle/Groupage/Shop et audit des journaux.
 
-### Lot C — Livraison — EN RECETTE
+### Lot C — Livraison — VALIDÉ
 
 Le Lot C ajoute :
 
@@ -117,6 +117,16 @@ Les commandes historiques de livraison qui n'avaient pas d'adresse exploitable n
 sont pas bloquées définitivement : l'opérateur peut compléter leur snapshot par
 l'action dédiée avant l'autorisation de préparation, sans ouvrir l'écriture libre
 de `sale.order`.
+
+Validation finale du 5 septembre 2026 : le frontend Lot C passe 861/861 tests
+(42 fichiers), typecheck, ESLint et build de production ; la campagne Odoo
+`dally_shop` passe avec 0 échec et 0 erreur (271 tests comptabilisés). Les smokes
+production confirment `/boutique` et `/boutique/panier` en 200, les deux méthodes
+`pickup` et `delivery_to_confirm` actives, et `dally_shop` installé en 19.0.1.7.0.
+La recette a également corrigé un test devenu faux positif : la recherche textuelle
+de la valeur numérique d'un `partner.id` confondait l'identifiant avec le préfixe
+téléphonique `+221`. Le contrôle porte désormais sur la forme des clés techniques,
+sans modification du code métier.
 
 ### Lot D — Paiement
 

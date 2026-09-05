@@ -117,6 +117,17 @@ class DallyFreightCollection(models.Model):
         store=True,
         readonly=True,
     )
+    target_invoice_id = fields.Many2one(
+        "account.move",
+        string="Facture ciblee",
+        copy=False,
+        index=True,
+        ondelete="restrict",
+        help=(
+            "La piece que cet encaissement solde. Vide, il solde la facture "
+            "principale du dossier ; renseignee, une facture complementaire."
+        ),
+    )
     partner_id = fields.Many2one(
         "res.partner",
         related="shipment_id.partner_id",
@@ -180,6 +191,15 @@ class DallyFreightCollection(models.Model):
                 "payment_date": values.get("payment_date"),
                 "source_method": values.get("source_method"),
             }
+            # La cible ne se compare que si l'appelant en exprime une. Absente
+            # du payload, rien n'est demande et rien ne change — c'est le
+            # comportement historique. Presente et differente, la refuser ici
+            # est la SEULE protection : la sortie anticipee ci-dessous
+            # n'ecrit rien, donc la garde ORM ne verrait jamais passer le
+            # champ et l'API repondrait 200 sans avoir redirige quoi que ce
+            # soit. Le classeur croirait la redirection faite.
+            if "target_invoice_id" in values:
+                immutable["target_invoice_id"] = values.get("target_invoice_id")
             for field_name, new_value in immutable.items():
                 current = existing[field_name]
                 current_value = current.id if hasattr(current, "id") else current
@@ -240,7 +260,10 @@ class DallyFreightCollection(models.Model):
                 collection.write({"state": "registered", "error_message": False})
                 continue
 
-            invoice = collection.invoice_id
+            # La cible explicite prime. Un complement ne se rattache pas au
+            # dossier — s'en tenir a `invoice_id` solderait la facture
+            # principale avec l'argent d'une autre piece.
+            invoice = collection.target_invoice_id or collection.invoice_id
             if not invoice or invoice.state != "posted":
                 collection.write({
                     "state": "pending",
@@ -319,14 +342,23 @@ class AccountMove(models.Model):
 
     def action_post(self):
         result = super().action_post()
-        freight_invoices = self.filtered(
-            lambda move: move.move_type == "out_invoice" and move.dally_freight_shipment_id
-        )
-        if freight_invoices:
+        sorties = self.filtered(lambda move: move.move_type == "out_invoice")
+        if sorties:
+            # Une facture complementaire ne porte pas `dally_freight_shipment_id` :
+            # filtrer dessus laisserait ses encaissements en attente pour
+            # toujours. On reveille donc tout ce qui vise CETTE piece, par le
+            # lien historique comme par la cible explicite.
             collections = self.env["dally.freight.collection"].search([
-                ("invoice_id", "in", freight_invoices.ids),
+                "&",
                 ("payment_id", "=", False),
+                "&",
                 ("state", "!=", "cancelled"),
+                "|",
+                ("target_invoice_id", "in", sorties.ids),
+                "&",
+                ("target_invoice_id", "=", False),
+                ("invoice_id", "in", sorties.ids),
             ])
-            collections._try_register_native_payment()
+            if collections:
+                collections._try_register_native_payment()
         return result

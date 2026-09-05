@@ -441,7 +441,24 @@ function prepareInvoice_(sheet, rows, cfg, force) {
   const payload = shipmentId ? {shipment_id: shipmentId} : {};
   if (globalRef) payload.external_reference = globalRef;
   const data = apiPost_('/api/v1/freight/invoice', 'DALLY_FREIGHT_BILLING_API_KEY', payload, cfg);
+
+  // Une facture complémentaire ne couvre que la marchandise arrivée depuis la
+  // principale. Écrire ses références sur toutes les lignes du dossier ferait
+  // dire au classeur que d'anciens colis appartiennent à une pièce qui ne les
+  // contient pas. `covered_line_keys` fait foi : elle est calculée depuis la
+  // pièce elle-même, alors que `invoice_kind` ne dit que sa nature.
+  let couvertes = null;
+  if (data.invoice_kind === 'supplement') {
+    if (!Array.isArray(data.covered_line_keys) || !data.covered_line_keys.length) {
+      throw new Error(
+        'Facture complémentaire sans covered_line_keys : écriture refusée pour ' +
+        'ne pas écraser les références de la facture principale.');
+    }
+    couvertes = new Set(data.covered_line_keys.map(String));
+  }
+
   rows.forEach(row => {
+    if (couvertes && !couvertes.has(String(articleKey_(row)))) return;
     setCell_(sheet, row.row, DALLY.columns.saleOrderId, data.sale_order_id || '');
     setCell_(sheet, row.row, DALLY.columns.invoiceId, data.invoice_id || '');
     setCell_(sheet, row.row, DALLY.columns.invoiceNumber, data.invoice_number || 'Brouillon');
@@ -489,8 +506,17 @@ function syncPayments_(sheet, rows, cfg, force) {
       payment_method: method,
       collected_by: display_(row, DALLY.columns.collectedBy),
       source: source,
+      // La pièce visée. Renseignée, elle dirige l'encaissement vers le
+      // complément ; vidée, elle le ramène explicitement à la principale.
+      invoice_id: display_(row, DALLY.columns.invoiceId),
     };
-    Object.keys(payload).forEach(k => { if (typeof payload[k] === 'undefined' || payload[k] === '') delete payload[k]; });
+    // `invoice_id` échappe au nettoyage générique : pour lui, la chaîne vide
+    // n'est pas une absence mais une instruction — « efface la cible ». La
+    // supprimer laisserait le serveur conserver l'ancien complément.
+    Object.keys(payload).forEach(k => {
+      if (typeof payload[k] === 'undefined') delete payload[k];
+      else if (payload[k] === '' && k !== 'invoice_id') delete payload[k];
+    });
     const data = apiPost_('/api/v1/freight/payment', 'DALLY_FREIGHT_BILLING_API_KEY', payload, cfg);
     appendMessage_(sheet, [row], 'Paiement ' + data.collection_state + ' • ' + data.amount + ' ' + data.currency);
     if (data.invoice_id) {

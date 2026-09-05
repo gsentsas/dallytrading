@@ -42,8 +42,15 @@ class DallyFreightSyncService(models.AbstractModel):
     @api.model
     def _price_line_if_ready(self, line):
         # After invoice generation an idempotent replay may re-send the exact
-        # same row. Do not refresh tariff timestamps or touch pricing snapshots.
-        if line.shipment_id.billing_locked:
+        # same row. Do not refresh tariff timestamps or touch pricing snapshots:
+        # the tariff table may have moved since the invoice snapshot was taken,
+        # and a harmless network retry must stay harmless.
+        #
+        # Garde unique de la chaine. Chaque override appelle `super()`, donc
+        # celui-ci s'execute quel que soit l'ordre de chargement ; le dupliquer
+        # ailleurs relancerait pour rien le `search_count` de
+        # `_deja_porte_par_une_commande`.
+        if line.shipment_id.billing_locked and not line._supplement_pricing_allowed():
             return "locked"
         return super()._price_line_if_ready(line)
 

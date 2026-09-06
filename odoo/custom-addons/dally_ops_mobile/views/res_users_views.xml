@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_users_form_dally_ops_access" model="ir.ui.view">
+        <field name="name">res.users.form.dally.ops.access</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='access_rights']" position="inside">
+                <group string="Dally Ops" groups="base.group_erp_manager">
+                    <field name="dally_ops_access_role"/>
+                    <field name="dally_ops_cash_actor"
+                           invisible="dally_ops_access_role == 'none'"
+                           required="dally_ops_access_role != 'none'"/>
+                    <div class="text-muted" colspan="2">
+                        Le rôle ouvre uniquement l’application terrain. L’acteur de caisse
+                        doit reprendre exactement le nom utilisé dans les encaissements,
+                        dépenses et transferts (ex. Gilles, Dalanda).
+                    </div>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_users_list_dally_ops_access" model="ir.ui.view">
+        <field name="name">res.users.list.dally.ops.access</field>
+        <field name="model">res.users</field>
+        <field name="arch" type="xml">
+            <list string="Opérateurs Dally Ops">
+                <field name="name"/>
+                <field name="login"/>
+                <field name="dally_ops_access_role"/>
+                <field name="dally_ops_cash_actor"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_dally_ops_users" model="ir.actions.act_window">
+        <field name="name">Opérateurs Dally Ops</field>
+        <field name="res_model">res.users</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_users_list_dally_ops_access"/>
+        <field name="domain" eval="[('group_ids', 'in', [ref('group_dally_ops_logistician'), ref('group_dally_ops_supervisor')])]"/>
+        <field name="context" eval="{'is_action_res_users': True, 'default_group_ids': [(4, ref('group_dally_ops_logistician'))]}"/>
+    </record>
+
+    <menuitem id="menu_dally_ops_users"
+              name="Opérateurs Dally Ops"
+              parent="base.menu_users"
+              action="action_dally_ops_users"
+              groups="base.group_erp_manager"
+              sequence="15"/>
+</odoo>

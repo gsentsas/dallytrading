@@ -64,6 +64,57 @@ class ResUsers(models.Model):
         copy=False,
     )
 
+    dally_ops_access_role = fields.Selection(
+        selection=[
+            ("none", "Aucun accès"),
+            ("logistician", "Logisticien"),
+            ("supervisor", "Responsable opérations"),
+        ],
+        string="Rôle Dally Ops",
+        compute="_compute_dally_ops_access_role",
+        inverse="_inverse_dally_ops_access_role",
+        groups="base.group_erp_manager",
+        help="Façade d'administration des deux groupes Dally Ops. Ce champ "
+             "n'accorde aucun droit supplémentaire en dehors des groupes "
+             "Ops existants.",
+    )
+
+    @api.depends("group_ids")
+    def _compute_dally_ops_access_role(self):
+        logisticien = self.env.ref("dally_ops_mobile.group_dally_ops_logistician")
+        responsable = self.env.ref("dally_ops_mobile.group_dally_ops_supervisor")
+        for utilisateur in self:
+            if responsable in utilisateur.group_ids:
+                utilisateur.dally_ops_access_role = "supervisor"
+            elif logisticien in utilisateur.group_ids:
+                utilisateur.dally_ops_access_role = "logistician"
+            else:
+                utilisateur.dally_ops_access_role = "none"
+
+    def _inverse_dally_ops_access_role(self):
+        self._dally_ops_check_access_role_write()
+        logisticien = self.env.ref("dally_ops_mobile.group_dally_ops_logistician")
+        responsable = self.env.ref("dally_ops_mobile.group_dally_ops_supervisor")
+        for utilisateur in self:
+            role = utilisateur.dally_ops_access_role or "none"
+            commandes = [(3, responsable.id), (3, logisticien.id)]
+            if role == "logistician":
+                commandes.append((4, logisticien.id))
+            elif role == "supervisor":
+                commandes.append((4, responsable.id))
+            elif role != "none":
+                raise UserError(_("Rôle Dally Ops invalide."))
+            utilisateur.write({"group_ids": commandes})
+
+    def _dally_ops_check_access_role_write(self):
+        """Seul un administrateur des droits peut attribuer un rôle Ops."""
+        if self.env.su or self.env.uid == SUPERUSER_ID:
+            return True
+        if self.env.user.has_group("base.group_erp_manager"):
+            return True
+        raise AccessError(_(
+            "Seul un administrateur des droits peut modifier l'accès Dally Ops."))
+
     def _dally_ops_actor(self):
         """Le nom d'acteur de cet utilisateur, ou une erreur explicite."""
         self.ensure_one()

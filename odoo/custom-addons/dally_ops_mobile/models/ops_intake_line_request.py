@@ -31,7 +31,14 @@ class DallyOpsIntakeLineRequest(models.Model):
     request_uuid = fields.Char(required=True, index=True, readonly=True, copy=False)
     company_id = fields.Many2one("res.company", required=True, index=True, readonly=True)
     operation = fields.Selection(
-        [("add", "Ajout d'article"), ("update", "Correction d'article")],
+        [
+            ("add", "Ajout d'article"),
+            ("update", "Correction d'article"),
+            # Distinct d'`add` : le geste n'a pas les mêmes préconditions ni
+            # les mêmes conséquences comptables, et l'audit doit pouvoir les
+            # séparer sans relire la charge utile.
+            ("add_late", "Ajout d'article après facturation"),
+        ],
         required=True, readonly=True,
     )
     #: SHA-256 de la demande normalisée. Aucune donnée personnelle.

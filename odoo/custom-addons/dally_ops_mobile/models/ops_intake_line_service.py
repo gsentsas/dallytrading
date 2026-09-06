@@ -136,6 +136,103 @@ class DallyOpsIntakeLineService(models.AbstractModel):
             return dto
 
     # ------------------------------------------------------------------
+    # Ajout tardif, après facturation
+    # ------------------------------------------------------------------
+
+    @api.model
+    def add_late_line(self, reference, payload):
+        """Ajoute un colis arrivé APRÈS la comptabilisation de la facture.
+
+        ## Pourquoi une entrée distincte
+
+        `add_line` refuse un dossier verrouillé, et c'est bien ainsi : le verrou
+        existe pour qu'une correction ne réécrive jamais une pièce comptable.
+        Le desserrer globalement rouvrirait aussi les corrections, ce que
+        personne ne demande.
+
+        Ce chemin-ci répond à un cas différent : de la marchandise réellement
+        arrivée après la facture. Le colis est réel, il partira avec le départ,
+        et le refuser laisse la base plus fausse que la facture ne l'était.
+
+        ## Ce qu'il ne fait pas
+
+        Il ne touche ni la facture principale, ni ses lignes, ni les anciens
+        colis. Il n'émet rien : il ajoute un colis, que Freight comptera comme
+        « en attente ». La pièce complémentaire s'émet ensuite, par le chemin
+        de facturation, sous le contrôle d'un responsable.
+
+        La facture principale doit être `posted`. Tant qu'elle est brouillon,
+        le bon geste reste de la réinitialiser — Freight refuserait de toute
+        façon d'ouvrir un complément.
+        """
+        self._exiger_role_ops()
+        if not isinstance(payload, dict) or set(payload) != CHAMPS_AJOUT:
+            raise DallyOpsError(_("Demande d'ajout invalide."))
+
+        request_uuid = self._service_intake()._uuid(
+            payload.get("request_uuid"), "request_uuid")
+        ligne = self._service_intake().valider_ligne(payload.get("line") or {})
+
+        shipment = self._resoudre_dossier(reference)
+        empreinte = self._empreinte({
+            "operation": "add_late", "intake": reference, "line": ligne,
+        })
+
+        with self.env.cr.savepoint():
+            # Le verrou d'abord, le rejeu ensuite : deux appareils qui envoient
+            # le même geste au même instant passent l'un après l'autre, et le
+            # second lit le registre au lieu de créer un doublon.
+            self._verrouiller("ops-intake-line-request:%s" % request_uuid)
+            rejeu = self._rejeu(request_uuid, empreinte)
+            if rejeu is not None:
+                return rejeu
+
+            self._exiger_complement_possible(shipment)
+            consolidation = self._consolidation_ouverte(shipment)
+
+            if self._colis_par_uuid(shipment, ligne["line_uuid"]):
+                raise DallyOpsConflict(
+                    _("Cet article existe déjà dans ce dossier."),
+                    code="line_reference_conflict",
+                )
+
+            resultat, _dossier = self._appeler_freight(shipment, consolidation, [ligne])
+            colis = self._colis_par_uuid(shipment, ligne["line_uuid"])
+            if not colis:
+                raise DallyOpsInternal(_("L'article n'a pas été enregistré."))
+            self._verifier_pricing(resultat)
+            self._verifier_projection(colis, consolidation)
+
+            dto = {"status": "added_late", "intake": self._detail(shipment),
+                   "line": self._ligne(colis, ligne["line_uuid"])}
+            self._inscrire(request_uuid, "add_late", empreinte, shipment, colis,
+                           ligne["line_uuid"], dto)
+            self._journaliser("intake_line_added_late", colis, request_uuid)
+            self.env["dally.ops.sheet.outbox"].enqueue_dossier(colis.shipment_id)
+            return dto
+
+    @api.model
+    def _exiger_complement_possible(self, shipment):
+        """Les conditions d'un ajout tardif, relues en base à chaque appel.
+
+        Le rôle Ops dit qui appelle ; ces conditions disent si le dossier s'y
+        prête. Les deux sont nécessaires.
+        """
+        dossier = shipment.sudo()
+        if not shipment.billing_locked:
+            raise DallyOpsConflict(
+                _("Ce dossier n'est pas encore facturé : ajoutez l'article "
+                  "normalement."),
+                code="intake_not_billed",
+            )
+        if not dossier.invoice_id or dossier.invoice_id.state != "posted":
+            raise DallyOpsConflict(
+                _("La facture de ce dossier n'est pas comptabilisée. "
+                  "Réinitialisez la facturation brouillon."),
+                code="primary_invoice_not_posted",
+            )
+
+    # ------------------------------------------------------------------
     # Correction
     # ------------------------------------------------------------------
 
@@ -683,6 +780,10 @@ class DallyOpsIntakeLineService(models.AbstractModel):
             # que le serveur refuserait.
             "allowed_transitions": self.env[
                 "dally.ops.intake.state.service"].allowed_transitions(shipment),
+            # L'état CRM / tableur / facturation, calculé côté serveur. La
+            # fiche l'affiche ; elle ne recompte rien.
+            "reconciliation": self.env[
+                "dally.ops.reconciliation.service"].summary_for(shipment),
             "lines": lignes,
             "totals": {
                 "lines_count": len(lignes),

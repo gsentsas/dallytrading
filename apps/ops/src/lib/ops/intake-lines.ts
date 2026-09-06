@@ -76,6 +76,61 @@ const ligneLue = z
   })
   .strict();
 
+/**
+ * L'état CRM / tableur / facturation, tel que le serveur le calcule.
+ *
+ * Aucun montant n'est recalculé ici : `invoice_amount` vient d'Odoo, qui seul
+ * sait ce qu'une pièce comptabilisée porte. Sommer les colis dans React
+ * donnerait un nombre plausible et faux le jour où un frais s'ajoute.
+ */
+const reconciliation = z
+  .object({
+    crm: z
+      .object({
+        state: z.literal('recorded'),
+        reference: z.string().min(1),
+      })
+      .strict(),
+    sheet: z
+      .object({
+        state: z.enum(['synced', 'pending', 'retry', 'failed', 'absent']),
+        // Un message écrit pour l'opérateur. Jamais l'erreur de transport.
+        operator_message: z.string().min(1),
+        pending_count: z.number().int().nonnegative(),
+        failed_count: z.number().int().nonnegative(),
+        last_synced_at: z.string().nullable(),
+      })
+      .strict(),
+    billing: z
+      .object({
+        currency: z.string().min(1),
+        invoice_number: z.string().nullable(),
+        invoice_state: z.string().min(1),
+        invoice_amount: z.number(),
+        paid_amount: z.number(),
+        remaining_amount: z.number(),
+        unbilled_lines_count: z.number().int().nonnegative(),
+        unbilled_amount: z.number(),
+        supplement_count: z.number().int().nonnegative(),
+        supplement_amount: z.number(),
+        supplements: z.array(
+          z
+            .object({
+              invoice_number: z.string().nullable(),
+              invoice_state: z.string().min(1),
+              amount: z.number(),
+            })
+            .strict(),
+        ),
+      })
+      .strict(),
+    // Ce que le serveur autorise. L'écran n'en propose pas d'autres.
+    allowed_actions: z.array(
+      z.enum(['add_late_package', 'prepare_supplement', 'resync_sheet']),
+    ),
+  })
+  .strict();
+
 const dossier = z
   .object({
     reference: z.string().min(1),
@@ -110,13 +165,16 @@ const dossier = z
     payment_summary: z.array(
       z.object({ currency_code: z.string(), amount: z.number() }).strict(),
     ),
+    reconciliation,
   })
   .strict();
 
 const detail = z.object({ intake: dossier }).strict();
 const mutation = z
   .object({
-    status: z.enum(['added', 'updated']),
+    // `added_late` : un colis arrivé après la comptabilisation de la facture.
+    // Le serveur le distingue, l'écran doit pouvoir le lire.
+    status: z.enum(['added', 'updated', 'added_late']),
     intake: dossier,
     line: ligneLue,
   })
@@ -124,6 +182,7 @@ const mutation = z
 
 export type LigneLue = z.infer<typeof ligneLue>;
 export type Dossier = z.infer<typeof dossier>;
+export type Reconciliation = z.infer<typeof reconciliation>;
 export type SaisieLigne = z.infer<typeof saisieLigne>;
 export type Mutation = z.infer<typeof mutation>;
 

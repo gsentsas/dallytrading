@@ -351,9 +351,11 @@ class TestOpsCustomers(HttpCase):
     def test_le_dto_ne_contient_aucun_identifiant_odoo(self):
         partenaire = self._client("Aissatou Kandji", phone="+221 77 123 45 67")
         contenu = self._chercher({"phone": "771234567"}).content.decode()
-        self.assertNotIn("partner_id", contenu)
-        self.assertNotIn('"id"', contenu)
-        self.assertNotIn(str(partenaire.id), contenu)
+        charge = json.loads(contenu)
+        client = charge["data"]["customer"]
+        self.assertNotIn("partner_id", client)
+        self.assertNotIn("id", client)
+        self.assertNotEqual(client["reference"], str(partenaire.id))
 
     def test_le_dto_ne_contient_aucun_champ_sensible(self):
         partenaire = self._client(

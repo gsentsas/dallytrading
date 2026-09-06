@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_users_form_dally_ops_access" model="ir.ui.view">
+        <field name="name">res.users.form.dally.ops.access</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='access_rights']" position="inside">
+                <group string="Dally Ops" groups="base.group_erp_manager">
+                    <field name="dally_ops_access_role"/>
+                    <field name="dally_ops_cash_actor"
+                           invisible="dally_ops_access_role == 'none'"
+                           required="dally_ops_access_role != 'none'"/>
+                    <div class="text-muted" colspan="2">
+                        Le rôle ouvre uniquement l’application terrain. L’acteur de caisse
+                        doit reprendre exactement le nom utilisé dans les encaissements,
+                        dépenses et transferts (ex. Gilles, Dalanda).
+                    </div>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

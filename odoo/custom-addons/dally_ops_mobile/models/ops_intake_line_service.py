@@ -376,15 +376,27 @@ class DallyOpsIntakeLineService(models.AbstractModel):
         ]
 
     @api.model
+    @api.model
+    def consolidation_est_ouverte(self, shipment):
+        """La consolidation accepte-t-elle encore de la marchandise ?
+
+        Prédicat public parce que la réconciliation en a besoin pour ne pas
+        annoncer une action que ce garde refusera juste après. Une seconde
+        copie de ces conditions finirait par diverger de celle-ci.
+        """
+        consolidation = shipment.intake_consolidation_id
+        return bool(
+            consolidation
+            and consolidation.company_id == self.env.company
+            and consolidation.active
+            and consolidation.state == "collecting"
+            and consolidation.transport_mode in ("air", "sea")
+        )
+
+    @api.model
     def _consolidation_ouverte(self, shipment):
         consolidation = shipment.intake_consolidation_id
-        if (
-            not consolidation
-            or consolidation.company_id != self.env.company
-            or not consolidation.active
-            or consolidation.state != "collecting"
-            or consolidation.transport_mode not in ("air", "sea")
-        ):
+        if not self.consolidation_est_ouverte(shipment):
             raise DallyOpsConflict(
                 _("Cette consolidation n'est plus ouverte à la réception."),
                 code="consolidation_not_open",

@@ -104,11 +104,17 @@ const reconciliation = z
     billing: z
       .object({
         currency: z.string().min(1),
-        invoice_number: z.string().nullable(),
-        invoice_state: z.string().min(1),
-        invoice_amount: z.number(),
-        paid_amount: z.number(),
-        remaining_amount: z.number(),
+        // La pièce principale, nommée comme telle.
+        primary_invoice_number: z.string().nullable(),
+        primary_invoice_state: z.string().min(1),
+        primary_invoice_amount: z.number(),
+        primary_paid_amount: z.number(),
+        primary_remaining_amount: z.number(),
+        // Le dossier entier : principale + compléments COMPTABILISÉS. Un
+        // brouillon n'est pas encore dû, une pièce annulée ne l'est plus.
+        total_invoiced_amount: z.number(),
+        total_paid_amount: z.number(),
+        total_remaining_amount: z.number(),
         unbilled_lines_count: z.number().int().nonnegative(),
         unbilled_amount: z.number(),
         supplement_count: z.number().int().nonnegative(),

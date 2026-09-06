@@ -63,8 +63,11 @@ const DOSSIER = {
       pending_count: 0, failed_count: 0, last_synced_at: '2026-08-28T10:00:00',
     },
     billing: {
-      currency: 'EUR', invoice_number: null, invoice_state: 'none',
-      invoice_amount: 0, paid_amount: 0, remaining_amount: 0,
+      currency: 'EUR',
+      primary_invoice_number: null, primary_invoice_state: 'none',
+      primary_invoice_amount: 0, primary_paid_amount: 0,
+      primary_remaining_amount: 0,
+      total_invoiced_amount: 0, total_paid_amount: 0, total_remaining_amount: 0,
       unbilled_lines_count: 1, unbilled_amount: 67.5,
       supplement_count: 0, supplement_amount: 0, supplements: [],
     },
@@ -279,9 +282,12 @@ describe('état CRM / tableur / facturation', () => {
         reconciliation: {
           ...DOSSIER.reconciliation,
           billing: {
-            currency: 'EUR', invoice_number: 'FAC/2099/00001',
-            invoice_state: 'posted', invoice_amount: 17.75,
-            paid_amount: 0, remaining_amount: 17.75,
+            currency: 'EUR',
+            primary_invoice_number: 'FAC/2099/00001',
+            primary_invoice_state: 'posted', primary_invoice_amount: 17.75,
+            primary_paid_amount: 0, primary_remaining_amount: 17.75,
+            total_invoiced_amount: 17.75, total_paid_amount: 0,
+            total_remaining_amount: 17.75,
             unbilled_lines_count: 1, unbilled_amount: 5,
             supplement_count: 1, supplement_amount: 5,
             supplements: [
@@ -295,8 +301,8 @@ describe('état CRM / tableur / facturation', () => {
 
     const dossier = await fetchIntake('AIR-DSS-CDG-2026-002-A001', 'session', 'cid');
 
-    expect(dossier.reconciliation.billing.invoice_number).toBe('FAC/2099/00001');
-    expect(dossier.reconciliation.billing.invoice_amount).toBe(17.75);
+    expect(dossier.reconciliation.billing.primary_invoice_number).toBe('FAC/2099/00001');
+    expect(dossier.reconciliation.billing.primary_invoice_amount).toBe(17.75);
     expect(dossier.reconciliation.billing.unbilled_amount).toBe(5);
     expect(dossier.reconciliation.allowed_actions).toEqual(['add_late_package']);
   });

@@ -152,12 +152,24 @@ class DallyOpsSheetOutbox(models.Model):
         """
         if not shipment:
             return self.browse()
-        cle = (shipment.sync_source_key or shipment.external_reference or "").strip()
+        cle = self.business_key_for(shipment)
         if not cle:
             return self.browse()
         return self.enqueue(
             "freight_dossier", cle, shipment,
             reference=shipment.external_reference or shipment.collection_local_ref or "")
+
+    @api.model
+    def business_key_for(self, shipment):
+        """La clé métier d'un dossier, décidée en un seul endroit.
+
+        `enqueue_dossier` l'écrit, la réconciliation la relit : deux copies de
+        cette expression finiraient par diverger, et la seconde chercherait
+        alors des projections que la première n'a jamais inscrites.
+        """
+        if not shipment:
+            return ""
+        return (shipment.sync_source_key or shipment.external_reference or "").strip()
 
     # ------------------------------------------------------------------
     # Lecture par le transport

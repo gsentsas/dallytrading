@@ -42,7 +42,8 @@ export function SynchronisationDossier(
   { etat }: { readonly etat: Reconciliation },
 ): React.JSX.Element {
   const { crm, sheet, billing } = etat;
-  const facture = LIBELLE_FACTURE[billing.invoice_state] ?? billing.invoice_state;
+  const facture =
+    LIBELLE_FACTURE[billing.primary_invoice_state] ?? billing.primary_invoice_state;
 
   return (
     <section aria-labelledby="synchronisation-titre" data-testid="synchronisation-dossier">
@@ -67,22 +68,23 @@ export function SynchronisationDossier(
 
       <section className="carte" data-testid="etat-facturation">
         <h3 style={{ margin: 0, fontSize: '0.85rem' }}>Facturation</h3>
-        {billing.invoice_number === null ? (
+        {billing.primary_invoice_number === null ? (
           <p className="attenue" style={{ margin: '0.25rem 0 0' }}>
             Aucune facture émise pour ce dossier.
           </p>
         ) : (
           <>
             <p style={{ margin: '0.25rem 0 0', fontWeight: 600 }}>
-              {billing.invoice_number}
+              {billing.primary_invoice_number}
             </p>
             <p style={{ margin: '0.2rem 0 0' }}>
-              {montant(billing.invoice_amount, billing.currency)}
+              {montant(billing.primary_invoice_amount, billing.currency)}
             </p>
             <p className="attenue" style={{ margin: '0.2rem 0 0' }}>{facture}</p>
-            {billing.remaining_amount > 0 ? (
+            {billing.total_remaining_amount > 0 ? (
               <p className="attenue" style={{ margin: '0.2rem 0 0' }}>
-                Reste à payer&nbsp;: {montant(billing.remaining_amount, billing.currency)}
+                Reste à payer sur le dossier&nbsp;:{' '}
+                {montant(billing.total_remaining_amount, billing.currency)}
               </p>
             ) : null}
           </>

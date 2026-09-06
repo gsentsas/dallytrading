@@ -86,17 +86,21 @@ class DallyOpsReconciliationService(models.AbstractModel):
         lui-même, ses lignes, ses encaissements. L'opérateur n'a pas à les
         démêler : on retient la plus grave.
         """
+        # L'identité autoritaire d'une projection est le triplet sous contrainte
+        # UNIQUE du modèle : société, type, clé métier. Chercher sur la seule
+        # référence lisible laisserait deux sociétés qui portent la même
+        # référence se contaminer — et `sudo()` retire justement le filtre qui
+        # l'aurait évité.
+        cle = self.env["dally.ops.sheet.outbox"].business_key_for(shipment)
+        if not cle:
+            return self._projection_absente()
         lignes = self.env["dally.ops.sheet.outbox"].sudo().search([
-            ("resource_reference", "=", shipment.external_reference),
+            ("company_id", "=", shipment.company_id.id),
+            ("projection_type", "=", "freight_dossier"),
+            ("business_key", "=", cle),
         ])
         if not lignes:
-            return {
-                "state": "absent",
-                "operator_message": MESSAGE_PROJECTION["absent"](),
-                "pending_count": 0,
-                "failed_count": 0,
-                "last_synced_at": None,
-            }
+            return self._projection_absente()
 
         etats = [ETAT_PROJECTION.get(ligne.state, "pending") for ligne in lignes]
         pire = next((etat for etat in GRAVITE if etat in etats), "synced")
@@ -107,6 +111,16 @@ class DallyOpsReconciliationService(models.AbstractModel):
             "pending_count": sum(1 for etat in etats if etat in ("pending", "retry")),
             "failed_count": sum(1 for etat in etats if etat == "failed"),
             "last_synced_at": max(livrees).isoformat() if livrees else None,
+        }
+
+    @api.model
+    def _projection_absente(self):
+        return {
+            "state": "absent",
+            "operator_message": MESSAGE_PROJECTION["absent"](),
+            "pending_count": 0,
+            "failed_count": 0,
+            "last_synced_at": None,
         }
 
     # ------------------------------------------------------------------
@@ -126,22 +140,41 @@ class DallyOpsReconciliationService(models.AbstractModel):
         complements = dossier._supplement_invoices()
         en_attente = dossier._pending_packages()
 
-        montant_attente = sum(
-            colis.billable_weight_kg * colis.applied_unit_price_eur
-            for colis in en_attente
-        )
+        # `transport_amount_eur` est le champ autoritaire de la facturation :
+        # il est stocké, calculé par Freight, et sait déjà qu'un article « sur
+        # devis » ne vaut rien tant qu'il n'est pas chiffré. Refaire ici la
+        # multiplication donnerait un montant pour un devis — un deuxième
+        # moteur de valorisation, et une divergence le jour où la règle bouge.
+        montant_attente = sum(en_attente.mapped("transport_amount_eur"))
         devise = (principale.currency_id.name if principale else None) or "EUR"
+
+        # Deux niveaux, nommés pour ce qu'ils sont. Un champ « reste à payer »
+        # qui ne parlerait que de la principale mentirait dès qu'un complément
+        # comptabilisé reste impayé — et c'est précisément le cas que cette
+        # phase introduit.
+        #
+        # Les totaux ne comptent que les pièces COMPTABILISÉES : un brouillon
+        # n'est pas encore dû, une pièce annulée ne l'est plus.
+        postees = complements.filtered(lambda piece: piece.state == "posted")
+        pieces = (principale if principale.state == "posted" else
+                  principale.browse()) | postees
 
         return {
             "currency": devise,
-            "invoice_number": principale.name if principale else None,
-            "invoice_state": principale.state if principale else "none",
-            "invoice_amount": round(principale.amount_total, 2) if principale else 0.0,
-            "paid_amount": round(
+            "primary_invoice_number": principale.name if principale else None,
+            "primary_invoice_state": principale.state if principale else "none",
+            "primary_invoice_amount": round(
+                principale.amount_total, 2) if principale else 0.0,
+            "primary_paid_amount": round(
                 principale.amount_total - principale.amount_residual, 2
             ) if principale else 0.0,
-            "remaining_amount": round(
+            "primary_remaining_amount": round(
                 principale.amount_residual, 2) if principale else 0.0,
+            "total_invoiced_amount": round(sum(pieces.mapped("amount_total")), 2),
+            "total_paid_amount": round(
+                sum(pieces.mapped("amount_total")) - sum(pieces.mapped("amount_residual")),
+                2),
+            "total_remaining_amount": round(sum(pieces.mapped("amount_residual")), 2),
             "unbilled_lines_count": len(en_attente),
             "unbilled_amount": round(montant_attente, 2),
             "supplement_count": len(complements),
@@ -175,17 +208,25 @@ class DallyOpsReconciliationService(models.AbstractModel):
         # Le colis tardif : réservé au dossier déjà facturé, dont la pièce est
         # comptabilisée. Tant qu'elle est brouillon, le bon geste reste de la
         # réinitialiser, et Freight le refuserait de toute façon.
+        # La consolidation doit aussi être ouverte : `add_late_line` l'exige, et
+        # annoncer l'action sans elle promettrait un geste que l'API refuse
+        # aussitôt par `consolidation_not_open`. Le prédicat est celui du
+        # service de ligne, pas une copie.
         if (
             shipment.billing_locked
             and shipment.sudo().invoice_id
             and shipment.sudo().invoice_id.state == "posted"
             and capacites.get("intake_create")
+            and self.env["dally.ops.intake.line.service"].consolidation_est_ouverte(
+                shipment)
         ):
             actions.append("add_late_package")
 
         # Émettre le complément : seulement s'il y a quelque chose à facturer.
-        if facturation["unbilled_lines_count"] and capacites.get("supervise"):
-            actions.append("prepare_supplement")
+        # `prepare_supplement` n'est pas publiée : l'écran n'a pas encore de
+        # quoi l'exécuter, et annoncer une action que l'opérateur ne peut pas
+        # déclencher est pire que ne rien annoncer. Elle reviendra avec son
+        # formulaire.
 
         # Relancer la projection : un geste de responsable, et seulement quand
         # la projection est effectivement en peine.

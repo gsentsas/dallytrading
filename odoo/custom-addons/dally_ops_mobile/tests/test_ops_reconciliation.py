@@ -146,8 +146,8 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
 
         self.assertEqual(resume["crm"]["state"], "recorded")
         self.assertEqual(resume["crm"]["reference"], shipment.external_reference)
-        self.assertEqual(resume["billing"]["invoice_state"], "none")
-        self.assertIsNone(resume["billing"]["invoice_number"])
+        self.assertEqual(resume["billing"]["primary_invoice_state"], "none")
+        self.assertIsNone(resume["billing"]["primary_invoice_number"])
         self.assertEqual(resume["billing"]["supplement_count"], 0)
         # Un colis reçu et non encore facturé est bien compté comme tel.
         self.assertEqual(resume["billing"]["unbilled_lines_count"], 1)
@@ -171,12 +171,12 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
 
         resume = self._resume(shipment)
 
-        self.assertEqual(resume["billing"]["invoice_state"], "posted")
-        self.assertEqual(resume["billing"]["invoice_number"], facture.name)
+        self.assertEqual(resume["billing"]["primary_invoice_state"], "posted")
+        self.assertEqual(resume["billing"]["primary_invoice_number"], facture.name)
         self.assertAlmostEqual(
-            resume["billing"]["invoice_amount"], facture.amount_total, places=2)
+            resume["billing"]["primary_invoice_amount"], facture.amount_total, places=2)
         self.assertAlmostEqual(
-            resume["billing"]["remaining_amount"], facture.amount_residual, places=2)
+            resume["billing"]["primary_remaining_amount"], facture.amount_residual, places=2)
         # Tout est facturé : plus rien en attente.
         self.assertEqual(resume["billing"]["unbilled_lines_count"], 0)
         self.assertAlmostEqual(resume["billing"]["unbilled_amount"], 0.0, places=2)
@@ -206,19 +206,38 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
                 "%s doit se dire %s" % (etat_outbox, attendu))
             self.assertTrue(resume["sheet"]["operator_message"])
 
-    def test_the_worst_projection_speaks_for_the_dossier(self):
-        """Une projection en échec parmi dix réussies : le dossier est en échec."""
+    def test_one_projection_per_dossier_and_company(self):
+        """Le modèle garantit l'unicité ; la lecture s'appuie dessus.
+
+        `UNIQUE(company_id, projection_type, business_key)` interdit une
+        seconde projection `freight_dossier` pour le même dossier. L'agrégation
+        « la pire parle » reste dans le service — elle protège le jour où
+        d'autres types de projection entreront dans la lecture — mais elle n'a
+        aujourd'hui qu'une seule ligne à considérer, et ce test le fixe.
+        """
         _reference, shipment = self._creer_dossier()
-        premiere = self._projection(shipment, "delivered")
-        seconde = premiere.sudo().copy({
-            "state": "failed", "business_key": "recon:%s" % uuid.uuid4().hex,
+        ligne = self._projection(shipment, "delivered")
+
+        with self.assertRaises(Exception):
+            with self.env.cr.savepoint():
+                ligne.sudo().copy({"state": "failed"})
+
+        self.assertEqual(self._resume(shipment)["sheet"]["state"], "synced")
+
+    def test_a_projection_of_another_type_never_speaks_for_the_dossier(self):
+        """Seules les projections de dossier comptent pour l'état du dossier."""
+        _reference, shipment = self._creer_dossier()
+        self._projection(shipment, "delivered")
+        cle = self.env["dally.ops.sheet.outbox"].business_key_for(shipment)
+        self.env["dally.ops.sheet.outbox"].sudo().create({
+            "company_id": shipment.company_id.id,
+            "projection_type": "cash_expense",
+            "business_key": cle,
+            "resource_model": "dally.shipment", "resource_id": shipment.id,
+            "resource_reference": shipment.external_reference, "state": "failed",
         })
-        self.assertEqual(seconde.state, "failed")
 
-        resume = self._resume(shipment)
-
-        self.assertEqual(resume["sheet"]["state"], "failed")
-        self.assertEqual(resume["sheet"]["failed_count"], 1)
+        self.assertEqual(self._resume(shipment)["sheet"]["state"], "synced")
 
     def test_a_transport_error_never_reaches_the_operator(self):
         _reference, shipment = self._creer_dossier()
@@ -315,8 +334,8 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
         resume = self._resume(shipment)
         self.assertEqual(resume["billing"]["unbilled_lines_count"], 1)
         self.assertAlmostEqual(resume["billing"]["unbilled_amount"], 5.0, places=2)
-        self.assertEqual(resume["billing"]["invoice_number"], principale.name)
-        self.assertAlmostEqual(resume["billing"]["invoice_amount"], 17.75, places=2)
+        self.assertEqual(resume["billing"]["primary_invoice_number"], principale.name)
+        self.assertAlmostEqual(resume["billing"]["primary_invoice_amount"], 17.75, places=2)
 
     def test_the_supplement_carries_only_the_late_package(self):
         reference, shipment, principale = self._dossier_facture()
@@ -403,3 +422,138 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
             ancien.write({"unit_weight_kg": 99.0})
         with self.assertRaises(Exception):
             ancien.unlink()
+
+    # ------------------------------------------------------------------
+    # L'isolation entre sociétés
+    # ------------------------------------------------------------------
+
+    def test_two_companies_sharing_a_reference_never_contaminate_each_other(self):
+        """Deux dossiers homonymes dans deux sociétés restent étrangers.
+
+        `sudo()` retire le filtre de société : sans le triplet autoritaire
+        (société, type, clé métier), la projection de l'une parlerait pour
+        l'autre. Le test le prouve dans les deux sens.
+        """
+        Outbox = self.env["dally.ops.sheet.outbox"].sudo()
+        autre_societe = self.env["res.company"].create({"name": "Recon Autre"})
+        reference = "AIR-DSS-CDG-RECON-HOMONYME"
+
+        # `sync_source_key` est réservé au service métier : on ne le force pas.
+        # Sans lui, la clé métier retombe sur la référence globale — et c'est
+        # précisément le cas homonyme le plus dangereux, puisque les deux
+        # sociétés partagent alors la même clé.
+        dossiers = {}
+        for societe, etat in ((self.societe, "delivered"), (autre_societe, "failed")):
+            dossier = self.env["dally.shipment"].sudo().create({
+                "partner_id": self.partner.id, "company_id": societe.id,
+                "external_reference": reference,
+                "transport_mode": "air", "direction": "export",
+            })
+            self.assertEqual(
+                Outbox.business_key_for(dossier), reference,
+                "les deux dossiers doivent bien partager la même clé métier")
+            Outbox.create({
+                "company_id": societe.id, "projection_type": "freight_dossier",
+                "business_key": reference,
+                "resource_model": "dally.shipment", "resource_id": dossier.id,
+                "resource_reference": reference, "state": etat,
+            })
+            dossiers[etat] = dossier
+
+        self.assertEqual(self._resume(dossiers["delivered"])["sheet"]["state"], "synced")
+        self.assertEqual(self._resume(dossiers["failed"])["sheet"]["state"], "failed")
+
+    def test_a_dossier_without_business_key_reports_no_projection(self):
+        dossier = self.env["dally.shipment"].sudo().create({
+            "partner_id": self.partner.id, "company_id": self.societe.id,
+            "external_reference": "", "transport_mode": "air", "direction": "export",
+        })
+        self.assertEqual(self._resume(dossier)["sheet"]["state"], "absent")
+
+    # ------------------------------------------------------------------
+    # Les montants : principale et dossier, nommés pour ce qu'ils sont
+    # ------------------------------------------------------------------
+
+    def test_a_posted_supplement_enters_the_dossier_total(self):
+        reference, shipment, principale = self._dossier_facture()
+        self._service_ligne().add_late_line(reference, self._ligne_tardive())
+        complement, _cree, _n = shipment.sudo()._prepare_freight_invoice()
+
+        # Tant que le complément est brouillon, il n'est pas dû.
+        resume = self._resume(shipment)
+        self.assertAlmostEqual(resume["billing"]["total_invoiced_amount"], 17.75, places=2)
+        self.assertAlmostEqual(resume["billing"]["total_remaining_amount"], 17.75, places=2)
+
+        complement.action_post()
+
+        resume = self._resume(shipment)
+        self.assertAlmostEqual(
+            resume["billing"]["primary_remaining_amount"], 17.75, places=2)
+        self.assertAlmostEqual(
+            resume["billing"]["total_invoiced_amount"], 22.75, places=2)
+        self.assertAlmostEqual(
+            resume["billing"]["total_remaining_amount"], 22.75, places=2,
+            msg="le complément comptabilisé doit entrer dans le reste à payer")
+
+    def test_a_cancelled_supplement_leaves_the_total_alone(self):
+        reference, shipment, _principale = self._dossier_facture()
+        self._service_ligne().add_late_line(reference, self._ligne_tardive())
+        complement, _cree, _n = shipment.sudo()._prepare_freight_invoice()
+        complement.button_cancel()
+
+        resume = self._resume(shipment)
+
+        self.assertAlmostEqual(resume["billing"]["total_invoiced_amount"], 17.75, places=2)
+        self.assertAlmostEqual(resume["billing"]["total_remaining_amount"], 17.75, places=2)
+
+    # ------------------------------------------------------------------
+    # La valorisation : celle de la facturation, pas une seconde
+    # ------------------------------------------------------------------
+
+    def test_the_unbilled_amount_uses_the_billing_valuation(self):
+        """Aucune divergence entre Ops et le champ autoritaire de Freight."""
+        reference, shipment, _principale = self._dossier_facture()
+        self._service_ligne().add_late_line(reference, self._ligne_tardive())
+
+        en_attente = shipment.sudo()._pending_packages()
+        resume = self._resume(shipment)
+
+        self.assertAlmostEqual(
+            resume["billing"]["unbilled_amount"],
+            sum(en_attente.mapped("transport_amount_eur")), places=2)
+
+    def test_a_quote_package_is_worth_nothing_until_it_is_priced(self):
+        """Un « sur devis » n'a pas de prix : le compter serait inventer."""
+        reference, shipment, _principale = self._dossier_facture()
+        demande = self._ligne_tardive()
+        demande["line"]["billing_method"] = "quote"
+        self._service_ligne().add_late_line(reference, demande)
+
+        resume = self._resume(shipment)
+
+        self.assertEqual(resume["billing"]["unbilled_lines_count"], 1)
+        self.assertAlmostEqual(resume["billing"]["unbilled_amount"], 0.0, places=2)
+
+    # ------------------------------------------------------------------
+    # Aucune action impossible n'est annoncée
+    # ------------------------------------------------------------------
+
+    def test_no_action_is_published_without_a_screen_to_run_it(self):
+        reference, shipment, _principale = self._dossier_facture()
+        self._service_ligne().add_late_line(reference, self._ligne_tardive())
+
+        for utilisateur in (self.gilles, self.responsable):
+            actions = self._resume(shipment, utilisateur)["allowed_actions"]
+            self.assertNotIn("prepare_supplement", actions)
+
+    def test_no_late_package_is_offered_once_the_consolidation_closes(self):
+        """Annoncer un geste que l'API refusera aussitôt serait une promesse vide."""
+        _reference, shipment, _principale = self._dossier_facture()
+        self.assertIn("add_late_package", self._resume(shipment)["allowed_actions"])
+
+        # Par l'action métier : l'état d'une consolidation ne s'écrit pas
+        # directement, et le test n'a pas à contourner ce garde.
+        self.depart.sudo().action_close_collection()
+
+        self.assertNotIn("add_late_package", self._resume(shipment)["allowed_actions"])
+        # Pas de remise en état : chaque test Odoo est annulé en fin de course.

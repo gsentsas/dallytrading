@@ -169,10 +169,21 @@ class TestShopDelivery(TransactionCase):
         self.assertIn("delivery", projection)
         self.assertIsNone(projection["delivery"]["fee"]["amount"])
         self.assertIsNone(projection["grandTotal"])
-        payload = json.dumps(projection, default=str)
-        self.assertNotIn("partner_id", payload)
-        self.assertNotIn("delivery_method_id", payload)
-        self.assertNotIn(str(self.partner.id), payload)
+        def projection_keys(value):
+            if isinstance(value, dict):
+                for key, nested in value.items():
+                    yield key
+                    yield from projection_keys(nested)
+            elif isinstance(value, (list, tuple)):
+                for nested in value:
+                    yield from projection_keys(nested)
+
+        keys = set(projection_keys(projection))
+        leaked_keys = sorted(
+            key for key in keys
+            if key == "id" or key.endswith("_id") or key.endswith("Id")
+        )
+        self.assertEqual(leaked_keys, [])
 
     def test_cotation_frais_ne_confirme_toujours_pas_la_vente(self):
         order = self._order("delivery_to_confirm")

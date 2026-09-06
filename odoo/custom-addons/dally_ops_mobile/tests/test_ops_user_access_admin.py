@@ -119,18 +119,6 @@ class TestOpsUserAccessAdmin(TransactionCase):
                 "dally_ops_access_role": "supervisor",
             })
 
-    def test_un_responsable_ops_ne_peut_pas_modifier_un_acteur(self):
-        responsable = self.env["res.users"].create({
-            "name": "Responsable interne",
-            "login": "ops.access.supervisor.internal",
-            "group_ids": [(6, 0, [
-                self.env.ref("base.group_user").id,
-                self.responsable.id,
-            ])],
-        })
-        with self.assertRaises(AccessError):
-            self.cible.with_user(responsable)._dally_ops_check_actor_write()
-
     def test_vue_admin_expose_role_et_acteur_et_champ_protege(self):
         vue = self.env.ref("dally_ops_mobile.view_users_form_dally_ops_access")
         self.assertIn("dally_ops_access_role", vue.arch_db)

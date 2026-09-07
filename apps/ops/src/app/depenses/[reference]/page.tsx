@@ -10,25 +10,12 @@ import { Reessayer } from '@/features/reception/Reessayer';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Les dépenses d'un départ.
- *
- * L'écran relit la liste à chaque chargement plutôt que de conserver un état
- * local : ce qui est affiché doit être ce qu'Odoo détient, y compris quand un
- * collègue a saisi une dépense depuis un autre téléphone.
- */
-export default async function PageDepensesDepart({
-  params,
-}: {
-  params: Promise<{ reference: string }>;
-}) {
+export default async function PageDepensesDepart({ params }: { params: Promise<{ reference: string }> }) {
   const correlationId = newCorrelationId();
   const { reference } = await params;
-
   const identite = await currentIdentity(correlationId).catch(() => null);
   if (!identite) redirect('/connexion');
   if (identite.capabilities.expense_create !== true) redirect('/');
-
   const session = await readOpsSession();
   if (!session) redirect('/connexion');
 
@@ -44,10 +31,16 @@ export default async function PageDepensesDepart({
   }
 
   return (
-    <main>
-      <Link className="retour" href="/depenses">← Départs</Link>
-      <h1>Dépenses du départ</h1>
-      <p className="reference">{reference}</p>
+    <main className="ops-operation-page ops-expense-detail-page">
+      <Link className="retour ops-back-link" href="/depenses">← Départs</Link>
+      <header className="ops-operation-heading">
+        <span className="ops-operation-heading-icon tone-red" aria-hidden="true">●●</span>
+        <div>
+          <p className="ops-eyebrow">CAISSE</p>
+          <h1>Dépenses du départ</h1>
+          <p className="reference">{reference}</p>
+        </div>
+      </header>
 
       {introuvable ? (
         <p className="erreur" role="alert">Ce départ est introuvable.</p>

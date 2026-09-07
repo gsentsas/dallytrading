@@ -74,7 +74,15 @@ export function FormulaireRecherche() {
   return (
     <section className="ops-search-workspace">
       <label className="ops-search-label" htmlFor={identifiant}>Nom, téléphone ou référence</label>
-      <div className="ops-search-input-row">
+      <div
+        className="ops-search-input-row"
+        style={{
+          display: 'flex',
+          gap: '0.55rem',
+          alignItems: 'stretch',
+          marginTop: '0.35rem',
+        }}
+      >
         <span className="ops-search-icon" aria-hidden="true">⌕</span>
         <input
           id={identifiant}
@@ -87,12 +95,14 @@ export function FormulaireRecherche() {
           value={saisie}
           onChange={(evenement) => setSaisie(evenement.target.value)}
           placeholder="Mayram, 77 123 45 67, A012…"
+          style={{ flex: '1 1 0', minWidth: 0, width: 'auto', marginTop: 0 }}
         />
         <button
           type="button"
           className="secondaire ops-search-clear"
           onClick={() => { setSaisie(''); champ.current?.focus(); }}
           disabled={saisie === ''}
+          style={{ flex: '0 0 auto', width: 'auto', whiteSpace: 'nowrap' }}
         >
           Effacer
         </button>

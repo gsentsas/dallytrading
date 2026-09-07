@@ -194,6 +194,12 @@ class SocleReconciliation(AccountTestInvoicingCommon):
 
 @tagged("post_install", "-at_install", "dally")
 class TestOpsReconciliation(SocleReconciliation):
+    """L'état CRM / tableur / facturation d'un dossier, cas par cas.
+
+    Le décor vient de `SocleReconciliation`, partagé avec la supervision : deux
+    montages parallèles finiraient par diverger, et un test passerait sur un
+    monde que l'autre ne connaît pas.
+    """
 
     def test_a_fresh_dossier_reports_recorded_and_unbilled(self):
         """Vérifie le scénario « a fresh dossier reports recorded and unbilled »."""

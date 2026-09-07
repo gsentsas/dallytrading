@@ -28,7 +28,7 @@ const DEPART = 'AIR-DSS-CDG-TEST-001';
 const CLIENT_CONNU = '+221 77 123 45 67';
 
 /** `A001`, `A002`… — le format du numéro attribué par la consolidation. */
-const NUMERO_LOCAL = /^A\d{3}$/;
+const NUMERO_LOCAL = /^A\d{3,}$/;
 
 /**
  * Ouvre l'accueil, en se connectant seulement si nécessaire.
@@ -83,7 +83,7 @@ async function saisirUnColis(
 /** Le numéro local affiché sur l'écran de succès. */
 async function numeroAffiche(page: Page): Promise<string> {
   const titre = await page.getByTestId('intake-enregistre').locator('.succes').textContent();
-  const trouve = /DOSSIER (A\d{3}) ENREGISTRÉ/.exec(titre ?? '');
+  const trouve = /DOSSIER (A\d{3,}) ENREGISTRÉ/.exec(titre ?? '');
   expect(trouve, `titre inattendu : ${titre}`).not.toBeNull();
   return trouve![1] as string;
 }

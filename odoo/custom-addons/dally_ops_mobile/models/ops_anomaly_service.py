@@ -59,13 +59,33 @@ GRAVITE = {
 #: L'ordre d'affichage : ce qui bloque un départ ou fausse une facture d'abord.
 ORDRE = {"high": 0, "medium": 1, "low": 2}
 
-#: Le plafond. Une liste sans borne finirait par transporter la base entière le
-#: jour d'une panne de projection, et l'écran deviendrait illisible au moment
-#: précis où il sert.
+#: Le plafond d'affichage. Une liste sans borne finirait par transporter la base
+#: entière le jour d'une panne de projection, et l'écran deviendrait illisible au
+#: moment précis où il sert.
 PLAFOND = 50
+
+#: La fenêtre d'examen : les N dossiers les plus récents.
+#:
+#: Elle existe parce qu'une base porte des milliers de dossiers et que les
+#: parcourir tous à chaque ouverture d'écran coûterait cher pour ne rien
+#: apprendre — un dossier clos depuis six mois ne demande plus de décision.
+#:
+#: L'ordre est nommé explicitement plutôt que laissé au `_order` du modèle.
+#: Celui de `dally.shipment` est bien `create_date desc, id desc`, donc déjà
+#: le bon ; mais une fenêtre bornée dont l'ordre dépend d'un défaut hérité
+#: cesserait d'être juste le jour où ce défaut change, et le symptôme serait
+#: un écran vide — le plus difficile à relier à sa cause.
+FENETRE = 300
 
 
 class DallyOpsAnomalyService(models.AbstractModel):
+    """Le service de lecture de l'écran « À traiter ».
+
+    Abstrait : il ne stocke rien. Il interroge la facturation, l'outbox et les
+    départs, et traduit leurs états en une liste d'anomalies. Aucune méthode
+    n'écrit — un écran de supervision constate, il ne corrige pas.
+    """
+
     _name = "dally.ops.anomaly.service"
     _description = "DallyTrading Ops — ce qui demande une décision"
 
@@ -124,7 +144,7 @@ class DallyOpsAnomalyService(models.AbstractModel):
         lignes = self.env["dally.ops.sheet.outbox"].sudo().search([
             ("company_id", "=", self.env.company.id),
             ("state", "in", ("failed", "retry")),
-        ], limit=PLAFOND * 2)
+        ], order="id desc", limit=FENETRE)
         return [
             self._anomalie(
                 "SHEET_PROJECTION_FAILED" if ligne.state == "failed"
@@ -146,9 +166,22 @@ class DallyOpsAnomalyService(models.AbstractModel):
     def _colis_non_factures(self):
         """De la marchandise réelle qu'aucune pièce ne couvre encore."""
         dossiers = self._dossiers_factures()
+        colis = dossiers.mapped("package_ids")
+        if not colis:
+            return []
+
+        # La couverture se lit sur `sale.order.line` — seule source de vérité,
+        # parce qu'un complément ne se rattache pas à `invoice_id`. Une requête
+        # pour toute la fenêtre, plutôt qu'une par dossier.
+        lignes = self.env["sale.order.line"].sudo().search([
+            ("dally_freight_package_id", "in", colis.ids),
+            ("state", "!=", "cancel"),
+        ])
+        couverts = set(lignes.mapped("dally_freight_package_id").ids)
+
         anomalies = []
         for dossier in dossiers:
-            en_attente = dossier._pending_packages()
+            en_attente = [c for c in dossier.package_ids if c.id not in couverts]
             if not en_attente:
                 continue
             anomalies.append(self._anomalie(
@@ -169,23 +202,22 @@ class DallyOpsAnomalyService(models.AbstractModel):
         recopier ici en ferait une seconde version, qui divergerait.
         """
         Ligne = self.env["dally.ops.intake.line.service"]
-        anomalies = []
-        for dossier in self._dossiers_ops():
-            manquants = [
-                colis for colis in dossier.package_ids
-                if Ligne._statut_pricing(colis) == "manual_required"
-            ]
-            if not manquants:
-                continue
-            anomalies.append(self._anomalie(
+        par_dossier = {}
+        for colis in self._dossiers_ops().mapped("package_ids"):
+            if Ligne._statut_pricing(colis) == "manual_required":
+                par_dossier.setdefault(colis.shipment_id, []).append(colis)
+
+        return [
+            self._anomalie(
                 "MISSING_TARIFF",
                 dossier.external_reference,
                 _("Tarif à valider"),
                 _("%(nombre)s article(s) attendent un prix. La facture ne "
                   "peut pas être émise sans lui.", nombre=len(manquants)),
                 dossier.external_reference,
-            ))
-        return anomalies
+            )
+            for dossier, manquants in par_dossier.items()
+        ]
 
     @api.model
     def _paiements_a_verifier(self):
@@ -193,7 +225,7 @@ class DallyOpsAnomalyService(models.AbstractModel):
         collections = self.env["dally.freight.collection"].sudo().search([
             ("company_id", "=", self.env.company.id),
             ("state", "=", "error"),
-        ], limit=PLAFOND * 2)
+        ], order="id desc", limit=FENETRE)
         return [
             self._anomalie(
                 "PAYMENT_REVIEW_REQUIRED",
@@ -220,7 +252,7 @@ class DallyOpsAnomalyService(models.AbstractModel):
             ("consolidation_id", "!=", False),
             ("consolidation_state", "in", ("closed", "in_transit")),
             ("ready_for_departure", "=", False),
-        ], limit=PLAFOND * 2)
+        ], order="id desc", limit=FENETRE)
         return [
             self._anomalie(
                 "INCOMPLETE_BEFORE_DEPARTURE",
@@ -262,7 +294,7 @@ class DallyOpsAnomalyService(models.AbstractModel):
             ("company_id", "=", self.env.company.id),
             ("intake_consolidation_id", "!=", False),
             ("external_reference", "!=", False),
-        ], limit=PLAFOND * 4)
+        ], order="id desc", limit=FENETRE)
 
     @api.model
     def _dossiers_factures(self):
@@ -272,5 +304,9 @@ class DallyOpsAnomalyService(models.AbstractModel):
         simplement pas encore été facturé. Confondre les deux ferait sonner
         chaque saisie en cours.
         """
-        return self._dossiers_ops().filtered(
-            lambda dossier: dossier.invoice_id and dossier.invoice_id.state == "posted")
+        return self.env["dally.shipment"].sudo().search([
+            ("company_id", "=", self.env.company.id),
+            ("intake_consolidation_id", "!=", False),
+            ("external_reference", "!=", False),
+            ("invoice_id.state", "=", "posted"),
+        ], order="id desc", limit=FENETRE)

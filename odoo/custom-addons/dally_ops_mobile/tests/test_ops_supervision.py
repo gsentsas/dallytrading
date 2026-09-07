@@ -19,8 +19,12 @@ première.
 """
 import uuid
 
+from unittest.mock import patch
+
 from odoo.exceptions import AccessError
 from odoo.tests import tagged
+
+from odoo.addons.dally_ops_mobile.models import ops_anomaly_service
 
 from .test_ops_reconciliation import CLES_INTERDITES, SocleReconciliation
 
@@ -223,6 +227,36 @@ class TestOpsSupervision(SocleReconciliation):
 
         gravites = [a["severity"] for a in self._anomalies()["anomalies"]]
         self.assertEqual(gravites, sorted(gravites, key=["high", "medium", "low"].index))
+
+    def test_a_recent_anomaly_is_not_lost_behind_older_dossiers(self):
+        """La fenêtre d'examen part des dossiers les plus récents.
+
+        Ce que ce test fige : une fenêtre bornée doit examiner les dossiers
+        **récents**. Elle le fait aujourd'hui parce que le `_order` de
+        `dally.shipment` est `create_date desc, id desc` ; le service le
+        répète explicitement, et ce test protège les deux — si l'un ou l'autre
+        change, l'écran se viderait sans rien dire de sa cause.
+
+        La fenêtre est rétrécie le temps du test : en fabriquer trois cents
+        coûterait des minutes pour prouver la même chose.
+        """
+        # Deux dossiers plus anciens, **eux aussi facturés** : sans facture
+        # comptabilisée ils seraient écartés du balayage et ne disputeraient
+        # pas la place, ce qui laisserait passer le défaut.
+        self._dossier_facture()
+        self._dossier_facture()
+        # Puis le dossier qui, lui, porte un colis non couvert.
+        reference, shipment, _facture = self._dossier_facture()
+        self._service_ligne().add_late_line(reference, self._ligne_tardive())
+
+        with patch.object(ops_anomaly_service, "FENETRE", 1):
+            resultat = self._anomalies()
+
+        signalees = [a["reference"] for a in resultat["anomalies"]
+                     if a["type"] == "UNBILLED_PACKAGE"]
+        self.assertIn(
+            shipment.external_reference, signalees,
+            "la fenêtre d'examen doit partir des dossiers les plus récents")
 
     def test_the_list_says_when_it_is_truncated(self):
         """Une liste tronquée doit le dire, sinon elle ment par omission."""

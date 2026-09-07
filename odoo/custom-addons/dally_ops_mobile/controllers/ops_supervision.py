@@ -18,6 +18,13 @@ _logger = logging.getLogger(__name__)
 
 
 class DallyOpsSupervisionController(DallyOpsController):
+    """Les deux routes de supervision, toutes deux en lecture seule.
+
+    Elles partagent le même refus : un compte sans rôle Ops reçoit le 403
+    générique de la base, et un opérateur sans capacité `supervise` reçoit
+    exactement le même — dire « vous avez un rôle, mais pas celui-là »
+    renseignerait sur la structure des droits.
+    """
 
     @http.route(
         "/api/v1/ops/anomalies", type="http", auth="user", readonly=True,

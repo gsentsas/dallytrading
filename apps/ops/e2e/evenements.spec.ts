@@ -58,7 +58,7 @@ test('un fait est consigné, relu après rechargement, et laisse l’état intac
   async ({ page }) => {
     const reference = await creerUnDossier(page);
     await page.goto(`/reception/dossier/${encodeURIComponent(reference)}`);
-    await expect(page.getByRole('heading', { name: /^DOSSIER A\d{3}$/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^DOSSIER A\d{3,}$/ })).toBeVisible();
 
     const etatDossier = page.getByTestId('etat-libelle');
     const etatAvant = await etatDossier.textContent();

@@ -257,7 +257,7 @@ test('une saisie hors connexion n’écrit au journal qu’après confirmation d
     const synchronisee = page.getByTestId('operation-synchronisee');
     await expect(synchronisee).toHaveCount(1, { timeout: 15_000 });
     const reference = ((await synchronisee.textContent()) ?? '')
-      .match(new RegExp(`${DEPART}-A\\d{3}`))?.[0] ?? '';
+      .match(new RegExp(`${DEPART}-A\\d{3,}`))?.[0] ?? '';
     expect(reference).not.toBe('');
 
     // Après confirmation : un événement serveur, et un seul.

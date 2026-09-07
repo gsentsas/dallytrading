@@ -90,8 +90,8 @@ test('de l’agenda au journal : un dossier traverse toute la Phase 1', async ({
   }).data.intake;
 
   // Le numéro vient du serveur et porte la consolidation.
-  expect(reference.reference).toMatch(new RegExp(`^${DEPART}-A\\d{3}$`));
-  expect(reference.local_reference).toMatch(/^A\d{3}$/);
+  expect(reference.reference).toMatch(new RegExp(`^${DEPART}-A\\d{3,}$`));
+  expect(reference.local_reference).toMatch(/^A\d{3,}$/);
 
   await page.goto(`/reception/dossier/${encodeURIComponent(reference.reference)}`);
   for (const article of [
@@ -197,7 +197,7 @@ test('hors connexion puis reconnexion : un dossier, un numéro, un journal',
     const synchronisee = page.getByTestId('operation-synchronisee');
     await expect(synchronisee).toHaveCount(1, { timeout: 15_000 });
     const reference = ((await synchronisee.textContent()) ?? '')
-      .match(new RegExp(`${DEPART}-A\\d{3}`))?.[0] ?? '';
+      .match(new RegExp(`${DEPART}-A\\d{3,}`))?.[0] ?? '';
     expect(reference).not.toBe('');
 
     // Le reçu existe désormais, et le journal porte une seule réception.

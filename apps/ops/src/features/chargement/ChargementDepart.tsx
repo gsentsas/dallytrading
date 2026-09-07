@@ -85,7 +85,7 @@ export function ChargementDepart({ reference }: { reference: string }) {
 
   return (
     <section className="ops-loading-workflow" aria-labelledby="chargement-titre" data-testid="chargement-depart">
-      <h2 className="sr-only" id="chargement-titre">Pile du départ</h2>
+      <h2 className="sr-only" id="chargement-titre">PILE DU DÉPART</h2>
 
       <div className="ops-stepper" aria-label="Étapes du chargement">
         <div className="is-current"><span>1</span><strong>Sélection</strong></div>

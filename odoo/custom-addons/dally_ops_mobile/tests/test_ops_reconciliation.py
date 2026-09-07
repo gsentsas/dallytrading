@@ -21,6 +21,8 @@ seulement quand elle est réellement en peine.
 import uuid
 
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
+from odoo.addons.dally_ops_mobile.models.ops_errors import DallyOpsConflict
+from odoo.exceptions import UserError
 from odoo.tests import tagged
 
 #: Ce qu'un DTO d'opérateur ne doit jamais porter.
@@ -433,12 +435,12 @@ class TestOpsReconciliation(SocleReconciliation):
         self._service_ligne().add_late_line(
             reference, self._ligne_tardive(uuid_ligne=uuid_ligne))
 
-        with self.assertRaises(Exception) as capture:
+        with self.assertRaises(DallyOpsConflict) as capture:
             self._service_ligne().add_late_line(
                 reference, self._ligne_tardive(
                     description="Autre", uuid_ligne=uuid_ligne))
 
-        self.assertIn("existe déjà", str(capture.exception))
+        self.assertEqual(capture.exception.code, "line_reference_conflict")
         self.assertEqual(len(shipment.sudo().package_ids), 2)
 
     def test_a_late_add_is_refused_while_the_invoice_is_draft(self):
@@ -446,30 +448,39 @@ class TestOpsReconciliation(SocleReconciliation):
         reference, shipment = self._creer_dossier(poids=3.55)
         shipment.action_prepare_native_freight_invoice()
 
-        with self.assertRaises(Exception) as capture:
+        with self.assertRaises(DallyOpsConflict) as capture:
             self._service_ligne().add_late_line(reference, self._ligne_tardive())
 
-        self.assertIn("comptabilis", str(capture.exception).lower())
+        self.assertEqual(capture.exception.code, "primary_invoice_not_posted")
         self.assertEqual(len(shipment.sudo().package_ids), 1)
 
     def test_a_late_add_is_refused_on_a_dossier_never_billed(self):
         """Vérifie le scénario « a late add is refused on a dossier never billed »."""
         reference, shipment = self._creer_dossier(poids=3.55)
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(DallyOpsConflict) as capture:
             self._service_ligne().add_late_line(reference, self._ligne_tardive())
 
+        self.assertEqual(capture.exception.code, "intake_not_billed")
         self.assertEqual(len(shipment.sudo().package_ids), 1)
 
     def test_an_old_invoiced_package_stays_untouchable(self):
         """L'ouverture au colis tardif ne rouvre pas les anciens."""
         reference, shipment, _principale = self._dossier_facture()
-        ancien = shipment.sudo().package_ids[0]
+        ancien = shipment.sudo().package_ids[0].with_context(lang="en_US")
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(UserError) as ecriture:
             ancien.write({"unit_weight_kg": 99.0})
-        with self.assertRaises(Exception):
+        self.assertIn(
+            "Cannot change invoiced freight article data while billing is locked",
+            str(ecriture.exception),
+        )
+        with self.assertRaises(UserError) as suppression:
             ancien.unlink()
+        self.assertIn(
+            "Cannot delete freight lines while billing is locked",
+            str(suppression.exception),
+        )
 
     # ------------------------------------------------------------------
     # L'isolation entre sociétés

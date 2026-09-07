@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
+import Link from 'next/link';
 
+import { DallyTradingBrand } from '@/features/brand/DallyTradingBrand';
 import { OpsShell } from '@/features/shell/OpsShell';
 
 import './globals.css';
@@ -41,11 +43,31 @@ export const viewport: Viewport = {
   themeColor: '#16365B',
 };
 
+function BrandHeader() {
+  return (
+    <header className="ops-brand-header">
+      <DallyTradingBrand />
+      <Link className="ops-notification" href="/traitement" aria-label="Ouvrir les éléments à traiter">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M7 10a5 5 0 0 1 10 0c0 4 1.8 5.1 2.2 5.6H4.8C5.2 15.1 7 14 7 10ZM10 19h4"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.9"
+          />
+        </svg>
+      </Link>
+    </header>
+  );
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
       <body>
-        <OpsShell>{children}</OpsShell>
+        <OpsShell brandHeader={<BrandHeader />}>{children}</OpsShell>
       </body>
     </html>
   );

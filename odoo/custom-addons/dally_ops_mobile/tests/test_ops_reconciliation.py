@@ -31,15 +31,30 @@ CLES_INTERDITES = frozenset({
 })
 
 
-@tagged("post_install", "-at_install", "dally")
-class TestOpsReconciliation(AccountTestInvoicingCommon):
+class SocleReconciliation(AccountTestInvoicingCommon):
+    """Le décor partagé : une société, deux opérateurs, un départ, un tarif.
+
+    Sans méthode `test_`, donc sans test à lui. Il existe pour que la
+    réconciliation et la supervision travaillent sur le même montage : deux
+    décors parallèles finiraient par diverger, et un test passerait sur un
+    monde que l'autre ne connaît pas.
+    """
 
     @classmethod
     def setUpClass(cls):
+        """Prépare les fixtures communes aux scénarios de réconciliation."""
         super().setUpClass()
         cls.env.user.group_ids += cls.env.ref("dally_core.group_dally_manager")
         cls.env.user.group_ids += cls.env.ref("sales_team.group_sale_salesman")
         cls.env.user.group_ids += cls.env.ref("account.group_account_invoice")
+
+        # Une base installée sans données de démonstration laisse l'euro
+        # inactif, et Odoo refuse alors de comptabiliser une pièce libellée
+        # dans cette devise. Ces tests posent des factures : ils doivent donc
+        # préparer eux-mêmes ce dont ils dépendent, plutôt que d'exiger un banc
+        # préparé à la main — un test qui ne passe que sur une base particulière
+        # ne dit plus rien sur le code.
+        cls.env.ref("base.EUR").active = True
 
         cls.societe = cls.env.company
         cls.gilles = cls._compte(
@@ -74,6 +89,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
 
     @classmethod
     def _compte(cls, prefixe, groupe):
+        """Crée un compte de test avec le rôle Ops demandé."""
         return cls.env["res.users"].create({
             "name": prefixe, "login": "%s.%s" % (prefixe, uuid.uuid4().hex[:6]),
             "group_ids": [(6, 0, [cls.env.ref(groupe).id])],
@@ -84,6 +100,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
 
     @classmethod
     def _consolidation(cls, reference):
+        """Crée une consolidation de test dans l'état demandé."""
         return cls.env["dally.freight.consolidation"].create({
             "name": reference, "state": "collecting", "active": True,
             "company_id": cls.env.company.id,
@@ -95,6 +112,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
         })
 
     def _creer_dossier(self, poids=3.55):
+        """Crée un dossier synthétique destiné aux scénarios de réconciliation."""
         resultat = (self.env["dally.ops.intake.service"]
                     .with_user(self.gilles).with_company(self.societe)
                     .create_intake({
@@ -118,7 +136,38 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
         return reference, self.env["dally.shipment"].sudo().search(
             [("external_reference", "=", reference)], limit=1)
 
+    def _ligne_tardive(self, description="Crème cheveux", poids=1.0, uuid_ligne=None):
+        """Construit une charge synthétique d'article tardif."""
+        return {
+            "request_uuid": str(uuid.uuid4()),
+            "line": {
+                "line_uuid": uuid_ligne or str(uuid.uuid4()),
+                "package_type": "parcel", "goods_category": "Non alimentaire",
+                "description": description, "quantity": 1,
+                "announced_weight_kg": None, "exact_weight_kg": poids,
+                "length_cm": None, "width_cm": None, "height_cm": None,
+                "billing_method": "real",
+                "tariff_family_code": self.famille.code,
+                "customs_value_xof": 5000,
+            },
+        }
+
+    def _service_ligne(self, utilisateur=None):
+        """Retourne le service de mutation des lignes sous l'utilisateur de test."""
+        return (self.env["dally.ops.intake.line.service"]
+                .with_user(utilisateur or self.gilles).with_company(self.societe))
+
+    def _dossier_facture(self):
+        """Un dossier scénario tardif synthétique : 3,55 kg à 5 €/kg = 17,75 €, comptabilisé."""
+        reference, shipment = self._creer_dossier(poids=3.55)
+        facture = shipment.action_prepare_native_freight_invoice()
+        facture.action_post()
+        self.assertEqual(facture.state, "posted")
+        self.assertAlmostEqual(facture.amount_total, 17.75, places=2)
+        return reference, shipment, facture
+
     def _resume(self, shipment, utilisateur=None):
+        """Retourne le résumé de réconciliation du dossier de test."""
         return (self.env["dally.ops.reconciliation.service"]
                 .with_user(utilisateur or self.gilles)
                 .summary_for(shipment))
@@ -130,17 +179,22 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
         if isinstance(noeud, dict):
             for cle, valeur in noeud.items():
                 vues.add(cle)
-                TestOpsReconciliation._cles(valeur, vues)
+                SocleReconciliation._cles(valeur, vues)
         elif isinstance(noeud, list):
             for element in noeud:
-                TestOpsReconciliation._cles(element, vues)
+                SocleReconciliation._cles(element, vues)
         return vues
 
     # ------------------------------------------------------------------
     # Le dossier neuf
     # ------------------------------------------------------------------
 
+
+@tagged("post_install", "-at_install", "dally")
+class TestOpsReconciliation(SocleReconciliation):
+
     def test_a_fresh_dossier_reports_recorded_and_unbilled(self):
+        """Vérifie le scénario « a fresh dossier reports recorded and unbilled »."""
         _reference, shipment = self._creer_dossier()
         resume = self._resume(shipment)
 
@@ -165,6 +219,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
     # ------------------------------------------------------------------
 
     def test_a_posted_invoice_is_reported_by_number_and_amount(self):
+        """Vérifie le scénario « a posted invoice is reported by number and amount »."""
         _reference, shipment = self._creer_dossier()
         facture = shipment.action_prepare_native_freight_invoice()
         facture.action_post()
@@ -194,6 +249,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
         return ligne
 
     def test_the_outbox_vocabulary_is_translated_for_the_operator(self):
+        """Vérifie le scénario « the outbox vocabulary is translated for the operator »."""
         _reference, shipment = self._creer_dossier()
         for etat_outbox, attendu in (
             ("delivered", "synced"), ("pending", "pending"),
@@ -240,6 +296,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
         self.assertEqual(self._resume(shipment)["sheet"]["state"], "synced")
 
     def test_a_transport_error_never_reaches_the_operator(self):
+        """Vérifie le scénario « a transport error never reaches the operator »."""
         _reference, shipment = self._creer_dossier()
         self._projection(
             shipment, "failed",
@@ -257,15 +314,30 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
     # Les actions autorisées
     # ------------------------------------------------------------------
 
-    def test_relaunching_a_projection_belongs_to_the_supervisor(self):
-        _reference, shipment = self._creer_dossier()
-        self._projection(shipment, "failed")
+    def test_no_projection_relaunch_is_published_without_a_route_to_run_it(self):
+        """`resync_sheet` n'est annoncée à personne — pas même au responsable.
 
-        self.assertNotIn("resync_sheet", self._resume(shipment, self.gilles)["allowed_actions"])
-        self.assertIn(
-            "resync_sheet", self._resume(shipment, self.responsable)["allowed_actions"])
+        Elle l'était, et c'était le défaut : aucune route ne l'expose. Relancer
+        une projection est une mutation, et la surface mutante de l'API Ops
+        attend d'abord sa protection inter-origine. Annoncer l'action donnerait
+        à l'écran un bouton sans destination.
+
+        Le test vaut pour les deux rôles : c'est la disponibilité du geste qui
+        manque, pas le droit de le faire.
+        """
+        _reference, shipment = self._creer_dossier()
+        self.env["dally.ops.sheet.outbox"].enqueue_dossier(shipment)
+        ligne = self.env["dally.ops.sheet.outbox"].sudo().search(
+            [("company_id", "=", self.societe.id)], order="id desc", limit=1)
+        ligne.write({"state": "failed"})
+
+        for utilisateur in (self.gilles, self.responsable):
+            self.assertNotIn(
+                "resync_sheet",
+                self._resume(shipment, utilisateur)["allowed_actions"])
 
     def test_a_healthy_projection_offers_no_relaunch(self):
+        """Vérifie le scénario « a healthy projection offers no relaunch »."""
         _reference, shipment = self._creer_dossier()
         self._projection(shipment, "delivered")
 
@@ -273,6 +345,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
             "resync_sheet", self._resume(shipment, self.responsable)["allowed_actions"])
 
     def test_a_late_package_is_offered_only_once_the_invoice_is_posted(self):
+        """Vérifie le scénario « a late package is offered only once the invoice is posted »."""
         _reference, shipment = self._creer_dossier()
         # Tant que rien n'est facturé, le colis s'ajoute par le chemin normal.
         self.assertNotIn("add_late_package", self._resume(shipment)["allowed_actions"])
@@ -286,36 +359,8 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
         self.assertIn("add_late_package", self._resume(shipment)["allowed_actions"])
 
     # ------------------------------------------------------------------
-    # L'ajout tardif, après comptabilisation — le cas A004-like
+    # L'ajout tardif, après comptabilisation — le cas scénario tardif synthétique
     # ------------------------------------------------------------------
-
-    def _ligne_tardive(self, description="Crème cheveux", poids=1.0, uuid_ligne=None):
-        return {
-            "request_uuid": str(uuid.uuid4()),
-            "line": {
-                "line_uuid": uuid_ligne or str(uuid.uuid4()),
-                "package_type": "parcel", "goods_category": "Non alimentaire",
-                "description": description, "quantity": 1,
-                "announced_weight_kg": None, "exact_weight_kg": poids,
-                "length_cm": None, "width_cm": None, "height_cm": None,
-                "billing_method": "real",
-                "tariff_family_code": self.famille.code,
-                "customs_value_xof": 5000,
-            },
-        }
-
-    def _service_ligne(self, utilisateur=None):
-        return (self.env["dally.ops.intake.line.service"]
-                .with_user(utilisateur or self.gilles).with_company(self.societe))
-
-    def _dossier_facture(self):
-        """Un dossier A004-like : 3,55 kg à 5 €/kg = 17,75 €, comptabilisé."""
-        reference, shipment = self._creer_dossier(poids=3.55)
-        facture = shipment.action_prepare_native_freight_invoice()
-        facture.action_post()
-        self.assertEqual(facture.state, "posted")
-        self.assertAlmostEqual(facture.amount_total, 17.75, places=2)
-        return reference, shipment, facture
 
     def test_a_late_package_never_touches_the_posted_invoice(self):
         """TEST 1 et 2 : 17,75 € reste 17,75 €, et le tardif vaut 5 €."""
@@ -338,6 +383,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
         self.assertAlmostEqual(resume["billing"]["primary_invoice_amount"], 17.75, places=2)
 
     def test_the_supplement_carries_only_the_late_package(self):
+        """Vérifie le scénario « the supplement carries only the late package »."""
         reference, shipment, principale = self._dossier_facture()
         self._service_ligne().add_late_line(reference, self._ligne_tardive())
 
@@ -396,6 +442,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
         self.assertEqual(len(shipment.sudo().package_ids), 2)
 
     def test_a_late_add_is_refused_while_the_invoice_is_draft(self):
+        """Vérifie le scénario « a late add is refused while the invoice is draft »."""
         reference, shipment = self._creer_dossier(poids=3.55)
         shipment.action_prepare_native_freight_invoice()
 
@@ -406,6 +453,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
         self.assertEqual(len(shipment.sudo().package_ids), 1)
 
     def test_a_late_add_is_refused_on_a_dossier_never_billed(self):
+        """Vérifie le scénario « a late add is refused on a dossier never billed »."""
         reference, shipment = self._creer_dossier(poids=3.55)
 
         with self.assertRaises(Exception):
@@ -464,6 +512,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
         self.assertEqual(self._resume(dossiers["failed"])["sheet"]["state"], "failed")
 
     def test_a_dossier_without_business_key_reports_no_projection(self):
+        """Vérifie le scénario « a dossier without business key reports no projection »."""
         dossier = self.env["dally.shipment"].sudo().create({
             "partner_id": self.partner.id, "company_id": self.societe.id,
             "external_reference": "", "transport_mode": "air", "direction": "export",
@@ -475,6 +524,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
     # ------------------------------------------------------------------
 
     def test_a_posted_supplement_enters_the_dossier_total(self):
+        """Vérifie le scénario « a posted supplement enters the dossier total »."""
         reference, shipment, principale = self._dossier_facture()
         self._service_ligne().add_late_line(reference, self._ligne_tardive())
         complement, _cree, _n = shipment.sudo()._prepare_freight_invoice()
@@ -496,6 +546,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
             msg="le complément comptabilisé doit entrer dans le reste à payer")
 
     def test_a_cancelled_supplement_leaves_the_total_alone(self):
+        """Vérifie le scénario « a cancelled supplement leaves the total alone »."""
         reference, shipment, _principale = self._dossier_facture()
         self._service_ligne().add_late_line(reference, self._ligne_tardive())
         complement, _cree, _n = shipment.sudo()._prepare_freight_invoice()
@@ -539,6 +590,7 @@ class TestOpsReconciliation(AccountTestInvoicingCommon):
     # ------------------------------------------------------------------
 
     def test_no_action_is_published_without_a_screen_to_run_it(self):
+        """Vérifie le scénario « no action is published without a screen to run it »."""
         reference, shipment, _principale = self._dossier_facture()
         self._service_ligne().add_late_line(reference, self._ligne_tardive())
 

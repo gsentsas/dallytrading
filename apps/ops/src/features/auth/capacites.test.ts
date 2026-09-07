@@ -26,9 +26,10 @@ describe('entrées de l’accueil', () => {
   });
 
   it('couvre les huit capacités déclarées par Odoo', () => {
-    // L'égalité porte sur l'ensemble entier : ouvrir une capacité de plus doit
-    // être une décision, et non l'effet de bord d'un écran ajouté.
-    expect(ENTREES_ACCUEIL.map((entree) => entree.capacite).sort()).toEqual([
+    // Une capacité peut ouvrir plusieurs écrans : `supervise` mène maintenant
+    // à l'activité ET à « À traiter ». On vérifie donc l'ensemble des
+    // capacités couvertes, pas une fausse bijection écran ↔ capacité.
+    expect([...new Set(ENTREES_ACCUEIL.map((entree) => entree.capacite))].sort()).toEqual([
       'appointment_manage',
       'consolidation_load',
       'expense_create',
@@ -38,6 +39,13 @@ describe('entrées de l’accueil', () => {
       'supervise',
       'transfer_create',
     ]);
+  });
+
+  it('donne un identifiant unique à chaque entrée, même si une capacité se répète', () => {
+    const ids = ENTREES_ACCUEIL.map((entree) => entree.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ENTREES_ACCUEIL.filter((entree) => entree.capacite === 'supervise'))
+      .toHaveLength(2);
   });
 
   it('le chargement d’un départ ouvre son écran', () => {

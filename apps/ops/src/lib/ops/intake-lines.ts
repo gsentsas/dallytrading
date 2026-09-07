@@ -130,10 +130,14 @@ const reconciliation = z
         ),
       })
       .strict(),
-    // Ce que le serveur autorise. L'écran n'en propose pas d'autres.
-    allowed_actions: z.array(
-      z.enum(['add_late_package', 'prepare_supplement', 'resync_sheet']),
-    ),
+    /**
+     * Ce que le serveur autorise. L'écran n'en propose pas d'autres — et
+     * réciproquement, le vocabulaire ne contient que des gestes qu'un écran
+     * sait exécuter. `prepare_supplement` et `resync_sheet` en sont absents
+     * tant qu'aucun formulaire ne les déclenche : annoncer une action que
+     * l'opérateur ne peut pas mener est pire que ne rien annoncer.
+     */
+    allowed_actions: z.array(z.enum(['add_late_package'])),
   })
   .strict();
 
@@ -210,6 +214,27 @@ export async function addLine(
 ): Promise<Mutation> {
   const brut = await opsPost<unknown>(
     `intakes/${reference}/lines`, demande, sessionId, correlationId);
+  return mutation.parse(brut);
+}
+
+/**
+ * Ajoute un article arrivé APRÈS la comptabilisation de la facture.
+ *
+ * Chemin distinct de `addLine`, et c'est voulu : `/lines` refuse un dossier
+ * verrouillé, ce qui est la bonne règle pour une correction. Les confondre
+ * rouvrirait aussi les corrections sur une pièce comptable.
+ *
+ * Le navigateur ne choisit pas entre les deux d'après `billing_locked` ou
+ * l'état de la facture : il suit `allowed_actions`, que le serveur calcule.
+ */
+export async function addLateLine(
+  reference: string,
+  demande: z.infer<typeof demandeAjout>,
+  sessionId: string,
+  correlationId: string,
+): Promise<Mutation> {
+  const brut = await opsPost<unknown>(
+    `intakes/${reference}/late-lines`, demande, sessionId, correlationId);
   return mutation.parse(brut);
 }
 

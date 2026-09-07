@@ -71,7 +71,7 @@ class DallyOpsReconciliationService(models.AbstractModel):
             "crm": {"state": "recorded", "reference": shipment.external_reference},
             "sheet": projection,
             "billing": facturation,
-            "allowed_actions": self._actions(shipment, projection, facturation),
+            "allowed_actions": self._actions(shipment),
         }
 
     # ------------------------------------------------------------------
@@ -115,6 +115,7 @@ class DallyOpsReconciliationService(models.AbstractModel):
 
     @api.model
     def _projection_absente(self):
+        """Construit le résumé métier quand aucune projection Sheet n'existe."""
         return {
             "state": "absent",
             "operator_message": MESSAGE_PROJECTION["absent"](),
@@ -195,12 +196,16 @@ class DallyOpsReconciliationService(models.AbstractModel):
     # ------------------------------------------------------------------
 
     @api.model
-    def _actions(self, shipment, projection, facturation):
+    def _actions(self, shipment):
         """Les gestes ouverts sur ce dossier, décidés ici.
 
         Un écran qui déduirait lui-même la suite finirait par promettre une
         action que le serveur refuse. La liste sort du serveur, l'écran
-        l'affiche.
+        l'affiche — et elle ne contient que des gestes qu'un écran sait
+        exécuter aujourd'hui.
+
+        Ni la projection ni la facturation n'entrent dans cette décision : les
+        conditions se relisent sur le dossier, en base, au moment de répondre.
         """
         capacites = self.env.user._dally_ops_capabilities()
         actions = []
@@ -222,15 +227,15 @@ class DallyOpsReconciliationService(models.AbstractModel):
         ):
             actions.append("add_late_package")
 
-        # Émettre le complément : seulement s'il y a quelque chose à facturer.
-        # `prepare_supplement` n'est pas publiée : l'écran n'a pas encore de
-        # quoi l'exécuter, et annoncer une action que l'opérateur ne peut pas
-        # déclencher est pire que ne rien annoncer. Elle reviendra avec son
-        # formulaire.
-
-        # Relancer la projection : un geste de responsable, et seulement quand
-        # la projection est effectivement en peine.
-        if projection["state"] in ("failed", "retry") and capacites.get("supervise"):
-            actions.append("resync_sheet")
+        # Deux gestes attendus ne sont pas publiés, et pour la même raison.
+        #
+        # `prepare_supplement` : aucun écran ne sait encore l'exécuter.
+        # `resync_sheet` : aucune route ne l'expose — la relance d'une
+        # projection est une mutation, et la surface mutante de l'API Ops
+        # attend d'abord sa protection inter-origine.
+        #
+        # Annoncer une action que l'opérateur ne peut pas déclencher est pire
+        # que ne rien annoncer : l'écran promettrait un bouton qui échoue, ou
+        # pire, n'existe pas. Les deux reviendront avec ce qui les exécute.
 
         return actions

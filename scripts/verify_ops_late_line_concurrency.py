@@ -1,27 +1,36 @@
 # -*- coding: utf-8 -*-
 """Sonde de concurrence DEV pour l'ajout d'un colis tardif.
 
-Ce qu'aucun test transactionnel ne peut montrer : deux appareils qui envoient le
-meme ajout au meme instant. Odoo execute chaque test dans une transaction unique
-et annulee ; `pg_advisory_xact_lock` ne s'y oppose donc a personne, et une
-contrainte d'unicite ne se declenche qu'au commit. Il faut de vrais curseurs, de
-vrais commits, et une barriere.
+Ce qu'aucun test transactionnel ne peut montrer : deux appareils qui envoient
+le même geste au même instant. Odoo exécute chaque test dans une transaction
+unique et annulée ; `pg_advisory_xact_lock` ne s'y oppose donc à personne, une
+contrainte d'unicité ne se déclenche qu'au commit, et surtout un seul
+instantané PostgreSQL est en jeu — or c'est précisément la coexistence de deux
+instantanés qui fait le défaut. Il faut de vrais curseurs, de vrais commits, et
+une barrière.
 
-Deux questions, deux reponses attendues :
+## Le contrat éprouvé
 
-1. Le meme geste envoye deux fois en parallele - reprise reseau, double appui -
-   n'ajoute qu'un colis, n'inscrit qu'un registre de rejeu, et rend le meme
-   resultat aux deux appelants.
+Ce n'est pas seulement « la base reste juste ». C'est aussi « les deux
+appelants reçoivent une réponse qu'ils comprennent » :
 
-2. Deux gestes de `request_uuid` DIFFERENTS visant la meme ligne ne creent
-   jamais deux colis. Le verrou consultatif ne protege pas ce cas : il est pris
-   sur le `request_uuid`, qui differe. Ce qui protege, c'est
-   `UNIQUE(external_line_key)` sur `dally.shipment.package`, plus le controle
-   metier `_colis_par_uuid`. La sonde le prouve au lieu de l'affirmer.
+1. **Même `request_uuid`, même charge** — reprise réseau, double appui. Un
+   colis, un registre, et **les deux appelants reçoivent le même résultat** :
+   le second rejoue celui du premier. Pas une erreur interne.
 
-Et, pour chacune, qu'aucun complement en double n'en decoule.
+2. **Même `request_uuid`, charge différente** — deux gestes distincts qui
+   réutilisent un identifiant. Un colis, et le perdant reçoit
+   `idempotency_conflict` : sa demande n'est pas celle qui a été traitée.
 
-A lancer dans un shell Odoo, sur une base de banc - jamais en production.
+3. **`request_uuid` différents, même `line_uuid`** — deux appareils qui
+   décrivent le même article. Le verrou consultatif ne protège pas ce cas : il
+   porte sur le `request_uuid`, qui diffère. C'est `UNIQUE(external_line_key)`
+   qui tranche, et le perdant doit recevoir `line_reference_conflict` — un
+   conflit métier, pas une panne.
+
+4. Et, pour chacun, qu'aucun **complément en double** n'en découle.
+
+À lancer dans un shell Odoo, sur une base de banc — jamais en production.
 """
 
 from threading import Barrier, Thread
@@ -41,13 +50,22 @@ societe = env.company
 registre = env.registry
 base = env.cr.dbname
 
+# Une base sans donnees de demonstration peut laisser EUR inactive. La sonde
+# doit etre autonome : elle active temporairement la devise dont ses factures
+# ont besoin, puis restaure l'etat initial au nettoyage.
+euro = env.ref("base.EUR")
+euro_etait_active = bool(euro.active)
+if not euro_etait_active:
+    euro.active = True
+    env.cr.commit()
+
 
 # ----------------------------------------------------------------------
 # Le decor : un dossier facture, comptabilise
 # ----------------------------------------------------------------------
 
 def preparer():
-    """Un dossier A004-like : une facture posted, et rien d'autre en attente.
+    """Un dossier scénario tardif synthétique : une facture posted, et rien d'autre en attente.
 
     Chaque appel tire son propre depart : deux sondes successives ne doivent
     pas se disputer le meme nom de consolidation.
@@ -110,13 +128,15 @@ def preparer():
     return reference, dossier, operateur, famille, facture
 
 
-def charge(request_uuid, line_uuid, famille):
+def charge(request_uuid, line_uuid, famille, poids=1.0):
+    """La demande d'ajout tardif. `poids` distingue deux charges par ailleurs
+    identiques — c'est ce qui fait du cas 2 un conflit d'empreinte."""
     return {
         "request_uuid": request_uuid,
         "line": {
             "line_uuid": line_uuid, "package_type": "parcel",
             "goods_category": "Non alimentaire", "description": "Creme cheveux",
-            "quantity": 1, "announced_weight_kg": None, "exact_weight_kg": 1.0,
+            "quantity": 1, "announced_weight_kg": None, "exact_weight_kg": poids,
             "length_cm": None, "width_cm": None, "height_cm": None,
             "billing_method": "real", "tariff_family_code": famille.code,
             "customs_value_xof": 5000,
@@ -130,10 +150,12 @@ def en_parallele(reference, operateur, charges):
     issues = []
 
     def executer(corps):
+        """Exécute un appel concurrent dans son propre curseur et sa propre transaction."""
         with Registry(base).cursor() as cr:
             local = api.Environment(cr, operateur.id, {"allowed_company_ids": [societe.id]})
 
             def geste():
+                """Effectue l'ajout tardif sous l'utilisateur de sonde courant."""
                 return (local["dally.ops.intake.line.service"]
                         .with_company(societe).add_late_line(reference, corps))
 
@@ -142,7 +164,10 @@ def en_parallele(reference, operateur, charges):
                 issues.append(("ok", retrying(geste, local)))
                 cr.commit()
             except Exception as erreur:                     # noqa: BLE001
-                issues.append(("refus", type(erreur).__name__))
+                # Le code metier, quand il y en a un : c'est lui qui dit si le
+                # refus est comprehensible par l'appelant ou s'il est une panne.
+                issues.append(("refus", getattr(erreur, "code", None)
+                               or type(erreur).__name__))
                 cr.rollback()
 
     fils = [Thread(target=executer, args=(corps,)) for corps in charges]
@@ -159,11 +184,16 @@ def compter(dossier):
     # pas - il ne vide que le cache ORM. Sans ce rollback, on relirait la base
     # telle qu'elle etait AVANT les commits des deux fils, et la sonde
     # conclurait que rien ne s'est passe.
+    """Relit les compteurs métier après commit avec un instantané PostgreSQL neuf."""
     env.cr.rollback()
     env.invalidate_all()
     frais = dossier.sudo().package_ids
     return {
         "colis": len(frais),
+        "tardifs": len(frais) - 1,          # le dossier nait avec un colis
+        "registres_tardifs": env["dally.ops.intake.line.request"].sudo()
+        .search_count([("shipment_id", "=", dossier.id),
+                       ("operation", "=", "add_late")]),
         "registres": env["dally.ops.intake.line.request"].sudo().search_count(
             [("shipment_id", "=", dossier.id)]),
         "so_complement": len(dossier.sudo()._supplement_orders()),
@@ -172,64 +202,111 @@ def compter(dossier):
 
 
 # ----------------------------------------------------------------------
-# Sonde 1 — meme request_uuid
+# Le verdict, cas par cas
 # ----------------------------------------------------------------------
 
-reference, dossier, operateur, famille, principale = preparer()
-uuid_geste = str(uuid4())
-uuid_ligne = str(uuid4())
-issues = en_parallele(
-    reference, operateur,
-    [charge(uuid_geste, uuid_ligne, famille), charge(uuid_geste, uuid_ligne, famille)])
-etat = compter(dossier)
-reussites = [i for i in issues if i[0] == "ok"]
-refuses = [i for i in issues if i[0] == "refus"]
-print("sonde 1 - meme request_uuid : colis=%s reussites=%s refus=%s"
-      % (etat["colis"], len(reussites), [i[1] for i in refuses]))
-# L'invariant qui compte : la base ne porte jamais deux colis pour une ligne.
-assert etat["colis"] == 2, etat
-assert len(reussites) >= 1, issues
-if reussites:
-    refs = {i[1]["line"]["reference"] for i in reussites}
-    assert refs == {uuid_ligne}, refs
-print("sonde 1 OK - 1 seul colis tardif en base")
+resume = {}
 
-# ----------------------------------------------------------------------
-# Sonde 2 — request_uuid differents, meme line_uuid
-# ----------------------------------------------------------------------
 
-reference2, dossier2, operateur2, famille2, principale2 = preparer()
-uuid_ligne2 = str(uuid4())
-issues2 = en_parallele(
-    reference2, operateur2,
-    [charge(str(uuid4()), uuid_ligne2, famille2),
-     charge(str(uuid4()), uuid_ligne2, famille2)])
-etat2 = compter(dossier2)
-ok2 = [i for i in issues2 if i[0] == "ok"]
-refuses2 = [i for i in issues2 if i[0] == "refus"]
-print("sonde 2 - request_uuid differents : colis=%s reussites=%s refus=%s"
-      % (etat2["colis"], len(ok2), [i[1] for i in refuses2]))
-assert etat2["colis"] == 2, etat2          # jamais deux colis pour une ligne
-assert len(ok2) >= 1, issues2
-print("sonde 2 OK - 1 seul colis malgre deux gestes distincts")
+#: Les pièces comptabilisées par la sonde, à défaire avant de rendre la main.
+PIECES = []
 
-# ----------------------------------------------------------------------
-# Et aucun complement en double n'en decoule
-# ----------------------------------------------------------------------
 
-for etiquette, cible in (("sonde 1", dossier), ("sonde 2", dossier2)):
+def sonde(nom, etiquette, charges, refus_attendu, reussites_attendues):
+    """Joue un cas, rend son verdict, et vérifie le contrat plutôt que le hasard."""
+    reference, dossier, operateur, famille, facture = preparer()
+    PIECES.append(facture)
+    issues = en_parallele(reference, operateur, charges(famille))
+    etat = compter(dossier)
+    reussites = [i for i in issues if i[0] == "ok"]
+    refus = [i[1] for i in issues if i[0] == "refus"]
+
+    print("%s : tardifs=%s registres=%s reussites=%s refus=%s"
+          % (etiquette, etat["tardifs"], etat["registres_tardifs"],
+             len(reussites), refus))
+    resume[nom] = (etat, len(reussites), refus)
+
+    # Un seul article, quoi qu'il arrive : c'est l'invariant de base.
+    assert etat["tardifs"] == 1, (etiquette, etat)
+    assert etat["registres_tardifs"] == 1, (etiquette, etat)
+    # Et le contrat de reponse : ni erreur interne, ni panne deguisee.
+    assert len(reussites) == reussites_attendues, (etiquette, issues)
+    assert refus == refus_attendu, (etiquette, refus)
+    assert "DallyOpsInternal" not in refus, (etiquette, refus)
+    return dossier
+
+
+# 1. Meme geste, meme charge : les DEUX appelants doivent reussir, le second
+#    en rejouant le resultat du premier.
+uuid1, ligne1 = str(uuid4()), str(uuid4())
+dossier1 = sonde(
+    "same_request_same_payload", "cas 1 - meme uuid, meme charge",
+    lambda f: [charge(uuid1, ligne1, f), charge(uuid1, ligne1, f)],
+    refus_attendu=[], reussites_attendues=2)
+
+# 2. Meme geste, charge differente : le perdant doit savoir POURQUOI.
+uuid2, ligne2 = str(uuid4()), str(uuid4())
+dossier2 = sonde(
+    "same_request_different_payload", "cas 2 - meme uuid, charge differente",
+    lambda f: [charge(uuid2, ligne2, f, poids=1.0),
+               charge(uuid2, ligne2, f, poids=2.5)],
+    refus_attendu=["idempotency_conflict"], reussites_attendues=1)
+
+# 3. Gestes distincts, meme article : conflit metier, pas erreur interne.
+ligne3 = str(uuid4())
+dossier3 = sonde(
+    "different_request_same_line", "cas 3 - uuid differents, meme article",
+    lambda f: [charge(str(uuid4()), ligne3, f), charge(str(uuid4()), ligne3, f)],
+    refus_attendu=["line_reference_conflict"], reussites_attendues=1)
+
+# 4. Et aucun complement en double n'en decoule, dans les trois cas.
+for etiquette, cible in (("cas 1", dossier1), ("cas 2", dossier2),
+                         ("cas 3", dossier3)):
     cible.sudo()._prepare_freight_invoice()
     env.cr.commit()
     final = compter(cible)
+    print("%s - complements : SO=%s facture=%s"
+          % (etiquette, final["so_complement"], final["factures_complement"]))
     assert final["so_complement"] == 1, (etiquette, final)
     assert final["factures_complement"] == 1, (etiquette, final)
-print("sonde 3 OK - un seul complement et une seule facture de chaque cote")
 
 # ----------------------------------------------------------------------
 # Nettoyage
 # ----------------------------------------------------------------------
 
-for cible in (dossier, dossier2):
-    cible.sudo()._supplement_invoices().button_cancel()
+# La sonde commite : ce qu'elle laisse derrière elle vit sur le banc. Une
+# facture comptabilisée en euros suffit à rendre la devise « déjà utilisée en
+# comptabilité », ce qui fait échouer un test d'identité sans rapport, joué
+# plus tard. Défaire les pièces n'est donc pas de la politesse : c'est éviter
+# de fabriquer un rouge que la campagne suivante mettrait sur le dos du code.
+pieces = env["account.move"].sudo().browse([])
+for cible in (dossier1, dossier2, dossier3):
+    pieces |= cible.sudo()._supplement_invoices()
+for facture in PIECES:
+    pieces |= facture
+pieces.filtered(lambda piece: piece.state == "posted").button_draft()
+pieces.filtered(lambda piece: piece.state != "cancel").button_cancel()
+pieces.unlink()
 env.cr.commit()
-print("SONDES AJOUT TARDIF : 3/3 OK")
+if not euro_etait_active:
+    euro.active = False
+    env.cr.commit()
+restantes = env["account.move.line"].sudo().search_count(
+    [("currency_id.name", "=", "EUR")])
+print("nettoyage : %s ligne(s) comptable(s) en EUR restantes" % restantes)
+
+print()
+print("SAME_REQUEST_SAME_PAYLOAD=%s reussites, refus=%s, colis tardifs=%s"
+      % (resume["same_request_same_payload"][1],
+         resume["same_request_same_payload"][2] or "aucun",
+         resume["same_request_same_payload"][0]["tardifs"]))
+print("SAME_REQUEST_DIFFERENT_PAYLOAD=%s reussite, refus=%s, colis tardifs=%s"
+      % (resume["same_request_different_payload"][1],
+         resume["same_request_different_payload"][2],
+         resume["same_request_different_payload"][0]["tardifs"]))
+print("DIFFERENT_REQUEST_SAME_LINE=%s reussite, refus=%s, colis tardifs=%s"
+      % (resume["different_request_same_line"][1],
+         resume["different_request_same_line"][2],
+         resume["different_request_same_line"][0]["tardifs"]))
+print("SUPPLEMENTS=SO 1, facture 1 pour les trois")
+print("SONDES AJOUT TARDIF : 4/4 OK")

@@ -68,11 +68,11 @@ export default async function PageAccueil() {
         // Une entrée sans écran reste une carte inerte : mieux vaut annoncer
         // ce qui existe que masquer ce qui viendra.
         return entree.href ? (
-          <Link className="carte carte-lien" href={entree.href} key={entree.capacite}>
+          <Link className="carte carte-lien" href={entree.href} key={entree.id}>
             {contenu}
           </Link>
         ) : (
-          <section className="carte" key={entree.capacite}>{contenu}</section>
+          <section className="carte" key={entree.id}>{contenu}</section>
         );
       })}
 

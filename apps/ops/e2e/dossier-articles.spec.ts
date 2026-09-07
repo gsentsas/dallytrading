@@ -188,3 +188,39 @@ test('un visiteur anonyme n’atteint ni la page ni les routes', async ({ page, 
   });
   expect(ajout.status()).toBe(401);
 });
+
+test('un article tardif rejoint un dossier facturé sans toucher à la facture principale', async ({ page }) => {
+  const reference = process.env.OPS_E2E_LATE_REFERENCE ?? 'AIR-DSS-CDG-TEST-LATE-A001';
+  await ouvrirLAccueil(page);
+  await ouvrirLeDossier(page, reference);
+
+  const avantResponse = await page.request.get(
+    `/api/intakes/${encodeURIComponent(reference)}`);
+  expect(avantResponse.status()).toBe(200);
+  const avant = (await avantResponse.json()).data.intake;
+  const factureAvant = avant.reconciliation.billing.primary_invoice_number;
+  const montantAvant = avant.reconciliation.billing.primary_invoice_amount;
+  const nonFacturesAvant = avant.reconciliation.billing.unbilled_lines_count;
+  const articlesAvant = avant.lines.length;
+
+  expect(factureAvant).toBeTruthy();
+  expect(montantAvant).toBe(17.75);
+  await expect(page.getByTestId('ajout-tardif')).toBeVisible();
+  await page.getByRole('button', { name: '+ AJOUTER UN ARTICLE TARDIF' }).click();
+
+  const designation = `Crème cheveux E2E ${Date.now()}`;
+  await remplirArticle(page, { designation, poids: '1' });
+  await page.getByRole('button', { name: 'ENREGISTRER L’ARTICLE TARDIF' }).click();
+
+  await expect(page.getByTestId('article')).toHaveCount(articlesAvant + 1);
+  await expect(page.getByTestId('article').filter({ hasText: designation })).toHaveCount(1);
+
+  const apresResponse = await page.request.get(
+    `/api/intakes/${encodeURIComponent(reference)}`);
+  expect(apresResponse.status()).toBe(200);
+  const apres = (await apresResponse.json()).data.intake;
+  expect(apres.reconciliation.billing.primary_invoice_number).toBe(factureAvant);
+  expect(apres.reconciliation.billing.primary_invoice_amount).toBe(montantAvant);
+  expect(apres.reconciliation.billing.unbilled_lines_count).toBe(nonFacturesAvant + 1);
+  expect(apres.lines).toHaveLength(articlesAvant + 1);
+});

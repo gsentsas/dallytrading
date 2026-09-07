@@ -33,6 +33,7 @@ attente. Une projection est idempotente par construction — elle décrit un
 """
 
 from odoo import _, api, fields, models
+from odoo.exceptions import AccessError
 
 #: Ce que le classeur sait recevoir, et rien d'autre.
 #:
@@ -152,12 +153,83 @@ class DallyOpsSheetOutbox(models.Model):
         """
         if not shipment:
             return self.browse()
-        cle = (shipment.sync_source_key or shipment.external_reference or "").strip()
+        cle = self.business_key_for(shipment)
         if not cle:
             return self.browse()
         return self.enqueue(
             "freight_dossier", cle, shipment,
             reference=shipment.external_reference or shipment.collection_local_ref or "")
+
+    @api.model
+    def supervision_summary(self):
+        """L'état du transport Odoo → tableur, dit en compteurs.
+
+        ## Pourquoi des compteurs et non des lignes
+
+        Un responsable veut savoir si le tableur suit, pas lire trente lignes
+        de file. Et une ligne d'outbox porte `last_error` — un message écrit
+        pour un journal, qui peut contenir une URL, une trace ou un
+        identifiant de connexion. Ne rendre que des nombres et une phrase
+        rédigée pour l'opérateur ferme la question : il n'y a rien à filtrer,
+        donc rien à laisser passer par oubli.
+
+        ## Ce que cette file n'est pas
+
+        Elle n'est pas la file d'attente de l'appareil. Celle-là vit dans
+        IndexedDB, dans le navigateur, et porte les gestes qu'un téléphone
+        n'a pas encore réussi à transmettre. Celle-ci vit dans Odoo et porte
+        les projections que le tableur n'a pas encore reçues. Deux systèmes,
+        deux pannes, deux remèdes — les additionner produirait un nombre qui
+        ne veut rien dire.
+
+        Réservé au responsable : les compteurs traversent toute la société.
+        """
+        if not self.env.user._dally_ops_capabilities().get("supervise"):
+            raise AccessError(_("Accès réservé au responsable."))
+
+        compte = {"pending": 0, "retry": 0, "failed": 0, "synced": 0}
+        groupes = self.sudo()._read_group(
+            [("company_id", "=", self.env.company.id)],
+            groupby=["state"], aggregates=["__count"])
+        for etat, nombre in groupes:
+            # `processing` rejoint `pending` : qu'un envoi soit en vol ou en
+            # file d'attente ne change rien pour le comptoir.
+            lisible = {"delivered": "synced", "processing": "pending"}.get(etat, etat)
+            if lisible in compte:
+                compte[lisible] += nombre
+
+        derniere = self.sudo().search(
+            [("company_id", "=", self.env.company.id),
+             ("delivered_at", "!=", False)],
+            order="delivered_at desc", limit=1)
+
+        if compte["failed"]:
+            message = _("Des dossiers ne sont pas arrivés dans le tableur. "
+                        "Prévenez le responsable de la synchronisation.")
+        elif compte["retry"]:
+            message = _("Une nouvelle tentative d'envoi est prévue.")
+        elif compte["pending"]:
+            message = _("Des envois sont en attente de traitement.")
+        else:
+            message = _("Tout est arrivé dans le tableur.")
+
+        return {
+            "counts": compte,
+            "operator_message": message,
+            "last_synced_at": (derniere.delivered_at.isoformat()
+                               if derniere.delivered_at else None),
+        }
+
+    def business_key_for(self, shipment):
+        """La clé métier d'un dossier, décidée en un seul endroit.
+
+        `enqueue_dossier` l'écrit, la réconciliation la relit : deux copies de
+        cette expression finiraient par diverger, et la seconde chercherait
+        alors des projections que la première n'a jamais inscrites.
+        """
+        if not shipment:
+            return ""
+        return (shipment.sync_source_key or shipment.external_reference or "").strip()
 
     # ------------------------------------------------------------------
     # Lecture par le transport
@@ -265,6 +337,7 @@ class DallyOpsSheetOutbox(models.Model):
 
     @api.model
     def _prochaine_tentative(self, tentatives):
+        """Calcule l'échéance de la prochaine tentative de projection."""
         minutes = PALIERS_MINUTES[min(tentatives, len(PALIERS_MINUTES) - 1)]
         return fields.Datetime.add(fields.Datetime.now(), minutes=minutes)
 
@@ -311,6 +384,7 @@ class DallyOpsSheetOutbox(models.Model):
         return {"air": "Saisie aérien", "sea": "Saisie maritime"}.get(mode or "")
 
     def _projection_dossier(self, shipment):
+        """Construit la projection Sheet autoritaire d'un dossier Freight."""
         onglet = self._onglet(shipment.transport_mode)
         if not onglet:
             return None
@@ -380,6 +454,7 @@ class DallyOpsSheetOutbox(models.Model):
         return "Brouillon"
 
     def _article(self, colis):
+        """Sérialise un article dans le format de projection Sheet attendu."""
         return {
             "article_key": colis.external_line_key or "",
             "goods_category": colis.goods_category or "",
@@ -455,6 +530,7 @@ class DallyOpsSheetOutbox(models.Model):
         return collection.external_payment_key or ""
 
     def _projection_depense(self, depense):
+        """Construit la projection Sheet d'une dépense Ops."""
         return {
             "projection_type": "cash_expense",
             "business_key": self.business_key,
@@ -484,6 +560,7 @@ class DallyOpsSheetOutbox(models.Model):
         }
 
     def _projection_transfert(self, transfert):
+        """Construit la projection Sheet d'un transfert de caisse."""
         return {
             "projection_type": "cash_transfer",
             "business_key": self.business_key,
@@ -505,6 +582,7 @@ class DallyOpsSheetOutbox(models.Model):
 
     @staticmethod
     def _date(valeur):
+        """Normalise une date pour le contrat de projection Sheet."""
         return valeur.isoformat() if valeur else ""
 
 

@@ -52,7 +52,7 @@ async function creerUnDossier(page: Page): Promise<string> {
 
 async function ouvrirLeDossier(page: Page, reference: string) {
   await page.goto(`/reception/dossier/${encodeURIComponent(reference)}`);
-  await expect(page.getByRole('heading', { name: /^DOSSIER A\d{3}$/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^DOSSIER A\d{3,}$/ })).toBeVisible();
 }
 
 test('un dossier neuf n’a aucun paiement', async ({ page }) => {
@@ -177,7 +177,7 @@ test('un encaissement autonome part de l’accueil et retrouve le dossier par la
     await expect(resultat).toBeVisible();
     await resultat.click();
 
-    await expect(page.getByRole('heading', { name: /^DOSSIER A\d{3}$/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^DOSSIER A\d{3,}$/ })).toBeVisible();
 
     await page.getByRole('button', { name: '+ ENREGISTRER UN PAIEMENT' }).click();
     await page.getByLabel('Mode de paiement').selectOption('cash|EUR');

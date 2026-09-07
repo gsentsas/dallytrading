@@ -34,9 +34,12 @@ mauvais réseau.
 
 import hashlib
 import json
+from contextlib import contextmanager
+
+import psycopg2.errors
 
 from odoo import _, api, fields, models
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, ConcurrencyError
 
 from .ops_errors import DallyOpsConflict, DallyOpsError, DallyOpsInternal, DallyOpsNotFound
 
@@ -48,6 +51,18 @@ CHAMPS_PHYSIQUES = ("quantity", "exact_weight_kg", "length_cm", "width_cm", "hei
 
 #: Les clés acceptées à la racine d'une demande d'ajout.
 CHAMPS_AJOUT = frozenset({"request_uuid", "line"})
+
+#: Les contraintes d'unicité qui, violées, ne signalent pas une faute de
+#: l'opérateur mais une course perdue contre un autre appareil.
+#:
+#: `external_line_key` porte l'identité d'un article. Deux gestes distincts qui
+#: visent la même ligne au même instant ne se voient pas l'un l'autre — chacun
+#: lit un instantané figé avant le commit du voisin — et c'est cette contrainte
+#: qui tranche. La violation dit donc « quelqu'un est passé avant toi », pas
+#: « ta demande est mal formée » : elle mérite une reprise, pas une erreur 500.
+CONTRAINTES_DE_COURSE = frozenset({
+    "dally_shipment_package_external_line_key_unique",
+})
 
 #: Idem pour une correction, qui annonce en plus la version qu'elle a lue.
 CHAMPS_CORRECTION = frozenset({"request_uuid", "expected_revision", "line"})
@@ -61,6 +76,60 @@ CHAMPS_AUDIT_CORRECTION = (
     "announced_weight_kg", "exact_weight_kg", "length_cm", "width_cm",
     "height_cm", "billing_method", "tariff_family_code", "customs_value_xof",
 )
+
+
+def est_une_course(erreur):
+    """Cette violation d'unicité vient-elle d'une course, ou d'un vrai défaut ?
+
+    Seules les contraintes de `CONTRAINTES_DE_COURSE` comptent. Élargir ce
+    test transformerait un vrai défaut en boucle de reprise silencieuse.
+    """
+    diagnostic = getattr(erreur, "diag", None)
+    return bool(diagnostic) and diagnostic.constraint_name in CONTRAINTES_DE_COURSE
+
+
+@contextmanager
+def course_traduite():
+    """Traduit une violation d'unicité due à une course en signal de reprise.
+
+    ## Le cas que ce traducteur couvre
+
+    Deux gestes de `request_uuid` **différents** qui visent le même article.
+    L'élection par le registre ne les sépare pas — leurs `request_uuid`
+    diffèrent, donc les deux revendications réussissent — et le contrôle
+    métier `_colis_par_uuid` ne voit pas davantage le colis du voisin, figé
+    hors de l'instantané. C'est `UNIQUE(external_line_key)` qui tranche, au
+    flush, par une violation.
+
+    Cette violation dit « quelqu'un est passé avant toi ». Traduite en
+    `ConcurrencyError`, elle fait rejouer la requête sur un instantané neuf,
+    où `_colis_par_uuid` voit enfin le colis du gagnant et lève le conflit
+    métier ordinaire — `line_reference_conflict`, le même que hors
+    concurrence. Le second appelant reçoit donc un refus qu'il comprend, et
+    non une erreur interne.
+
+    Aucune règle métier n'est dupliquée pour le cas concurrent : la reprise
+    remet simplement le code sur le chemin qu'il sait déjà parcourir.
+
+    ## Ce qu'il ne masque pas
+
+    Seules les contraintes de `CONTRAINTES_DE_COURSE`. Toute autre violation
+    d'unicité ressort intacte : l'attraper transformerait un vrai défaut en
+    boucle de reprise silencieuse, et `retrying()` finirait par rendre une
+    erreur cinq fois plus lente sans rien expliquer.
+
+    Ce gestionnaire enveloppe le `savepoint` **par l'extérieur** : il doit
+    voir l'exception une fois le point de reprise déjà défait, sur une
+    transaction que `retrying()` pourra annuler proprement.
+    """
+    try:
+        yield
+    except psycopg2.errors.UniqueViolation as erreur:
+        if not est_une_course(erreur):
+            raise
+        raise ConcurrencyError(
+            "Un autre appareil a créé cet article ; reprise sur un "
+            "instantané neuf.") from erreur
 
 
 class DallyOpsIntakeLineService(models.AbstractModel):
@@ -104,11 +173,15 @@ class DallyOpsIntakeLineService(models.AbstractModel):
             "operation": "add", "intake": reference, "line": ligne,
         })
 
-        with self.env.cr.savepoint():
+        with course_traduite(), self.env.cr.savepoint():
             self._verrouiller("ops-intake-line-request:%s" % request_uuid)
             rejeu = self._rejeu(request_uuid, empreinte)
             if rejeu is not None:
                 return rejeu
+            # Rien dans mon instantané ne dit qu'un concurrent n'a pas déjà
+            # commité le sien : c'est la base qui élit le gagnant.
+            registre = self._revendiquer(
+                request_uuid, "add", empreinte, shipment, ligne["line_uuid"])
 
             self._exiger_mutable(shipment)
             consolidation = self._consolidation_ouverte(shipment)
@@ -129,11 +202,110 @@ class DallyOpsIntakeLineService(models.AbstractModel):
 
             dto = {"status": "added", "intake": self._detail(shipment),
                    "line": self._ligne(colis, ligne["line_uuid"])}
-            self._inscrire(request_uuid, "add", empreinte, shipment, colis,
-                           ligne["line_uuid"], dto)
+            self._completer(registre, colis, dto)
             self._journaliser("intake_line_added", colis, request_uuid)
             self.env["dally.ops.sheet.outbox"].enqueue_dossier(colis.shipment_id)
             return dto
+
+    # ------------------------------------------------------------------
+    # Ajout tardif, après facturation
+    # ------------------------------------------------------------------
+
+    @api.model
+    def add_late_line(self, reference, payload):
+        """Ajoute un colis arrivé APRÈS la comptabilisation de la facture.
+
+        ## Pourquoi une entrée distincte
+
+        `add_line` refuse un dossier verrouillé, et c'est bien ainsi : le verrou
+        existe pour qu'une correction ne réécrive jamais une pièce comptable.
+        Le desserrer globalement rouvrirait aussi les corrections, ce que
+        personne ne demande.
+
+        Ce chemin-ci répond à un cas différent : de la marchandise réellement
+        arrivée après la facture. Le colis est réel, il partira avec le départ,
+        et le refuser laisse la base plus fausse que la facture ne l'était.
+
+        ## Ce qu'il ne fait pas
+
+        Il ne touche ni la facture principale, ni ses lignes, ni les anciens
+        colis. Il n'émet rien : il ajoute un colis, que Freight comptera comme
+        « en attente ». La pièce complémentaire s'émet ensuite, par le chemin
+        de facturation, sous le contrôle d'un responsable.
+
+        La facture principale doit être `posted`. Tant qu'elle est brouillon,
+        le bon geste reste de la réinitialiser — Freight refuserait de toute
+        façon d'ouvrir un complément.
+        """
+        self._exiger_role_ops()
+        if not isinstance(payload, dict) or set(payload) != CHAMPS_AJOUT:
+            raise DallyOpsError(_("Demande d'ajout invalide."))
+
+        request_uuid = self._service_intake()._uuid(
+            payload.get("request_uuid"), "request_uuid")
+        ligne = self._service_intake().valider_ligne(payload.get("line") or {})
+
+        shipment = self._resoudre_dossier(reference)
+        empreinte = self._empreinte({
+            "operation": "add_late", "intake": reference, "line": ligne,
+        })
+
+        with course_traduite(), self.env.cr.savepoint():
+            # Le verrou d'abord, le rejeu ensuite : deux appareils qui envoient
+            # le même geste au même instant passent l'un après l'autre, et le
+            # second lit le registre au lieu de créer un doublon.
+            self._verrouiller("ops-intake-line-request:%s" % request_uuid)
+            rejeu = self._rejeu(request_uuid, empreinte)
+            if rejeu is not None:
+                return rejeu
+            # Rien dans mon instantané ne dit qu'un concurrent n'a pas déjà
+            # commité le sien : c'est la base qui élit le gagnant.
+            registre = self._revendiquer(
+                request_uuid, "add_late", empreinte, shipment, ligne["line_uuid"])
+
+            self._exiger_complement_possible(shipment)
+            consolidation = self._consolidation_ouverte(shipment)
+
+            if self._colis_par_uuid(shipment, ligne["line_uuid"]):
+                raise DallyOpsConflict(
+                    _("Cet article existe déjà dans ce dossier."),
+                    code="line_reference_conflict",
+                )
+
+            resultat, _dossier = self._appeler_freight(shipment, consolidation, [ligne])
+            colis = self._colis_par_uuid(shipment, ligne["line_uuid"])
+            if not colis:
+                raise DallyOpsInternal(_("L'article n'a pas été enregistré."))
+            self._verifier_pricing(resultat)
+            self._verifier_projection(colis, consolidation)
+
+            dto = {"status": "added_late", "intake": self._detail(shipment),
+                   "line": self._ligne(colis, ligne["line_uuid"])}
+            self._completer(registre, colis, dto)
+            self._journaliser("intake_line_added_late", colis, request_uuid)
+            self.env["dally.ops.sheet.outbox"].enqueue_dossier(colis.shipment_id)
+            return dto
+
+    @api.model
+    def _exiger_complement_possible(self, shipment):
+        """Les conditions d'un ajout tardif, relues en base à chaque appel.
+
+        Le rôle Ops dit qui appelle ; ces conditions disent si le dossier s'y
+        prête. Les deux sont nécessaires.
+        """
+        dossier = shipment.sudo()
+        if not shipment.billing_locked:
+            raise DallyOpsConflict(
+                _("Ce dossier n'est pas encore facturé : ajoutez l'article "
+                  "normalement."),
+                code="intake_not_billed",
+            )
+        if not dossier.invoice_id or dossier.invoice_id.state != "posted":
+            raise DallyOpsConflict(
+                _("La facture de ce dossier n'est pas comptabilisée. "
+                  "Réinitialisez la facturation brouillon."),
+                code="primary_invoice_not_posted",
+            )
 
     # ------------------------------------------------------------------
     # Correction
@@ -168,6 +340,10 @@ class DallyOpsIntakeLineService(models.AbstractModel):
             rejeu = self._rejeu(request_uuid, empreinte)
             if rejeu is not None:
                 return rejeu
+            # Rien dans mon instantané ne dit qu'un concurrent n'a pas déjà
+            # commité le sien : c'est la base qui élit le gagnant.
+            registre = self._revendiquer(
+                request_uuid, "update", empreinte, shipment, line_uuid)
 
             self._exiger_mutable(shipment)
             consolidation = self._consolidation_ouverte(shipment)
@@ -215,8 +391,7 @@ class DallyOpsIntakeLineService(models.AbstractModel):
             apres = self._ligne(colis, line_uuid)
             dto = {"status": "updated", "intake": self._detail(shipment),
                    "line": apres}
-            self._inscrire(request_uuid, "update", empreinte, shipment, colis,
-                           line_uuid, dto)
+            self._completer(registre, colis, dto)
             self._journaliser(
                 "intake_line_updated", colis, request_uuid,
                 changes=self._changements(avant, apres))
@@ -229,15 +404,18 @@ class DallyOpsIntakeLineService(models.AbstractModel):
 
     @api.model
     def _exiger_role_ops(self):
+        """Refuse l'appel si l'utilisateur courant n'a aucun rôle Ops."""
         if not self.env["res.users"]._dally_ops_role():
             raise AccessError(_("Accès réservé aux opérateurs terrain."))
 
     @api.model
     def _service_intake(self):
+        """Retourne le service d'intake qui porte les règles métier partagées."""
         return self.env["dally.ops.intake.service"]
 
     @api.model
     def _verrouiller(self, cle):
+        """Prend le verrou transactionnel associé à la clé d'idempotence."""
         self.env.cr.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", [cle])
 
@@ -279,15 +457,27 @@ class DallyOpsIntakeLineService(models.AbstractModel):
         ]
 
     @api.model
-    def _consolidation_ouverte(self, shipment):
+    def consolidation_est_ouverte(self, shipment):
+        """La consolidation accepte-t-elle encore de la marchandise ?
+
+        Prédicat public parce que la réconciliation en a besoin pour ne pas
+        annoncer une action que ce garde refusera juste après. Une seconde
+        copie de ces conditions finirait par diverger de celle-ci.
+        """
         consolidation = shipment.intake_consolidation_id
-        if (
-            not consolidation
-            or consolidation.company_id != self.env.company
-            or not consolidation.active
-            or consolidation.state != "collecting"
-            or consolidation.transport_mode not in ("air", "sea")
-        ):
+        return bool(
+            consolidation
+            and consolidation.company_id == self.env.company
+            and consolidation.active
+            and consolidation.state == "collecting"
+            and consolidation.transport_mode in ("air", "sea")
+        )
+
+    @api.model
+    def _consolidation_ouverte(self, shipment):
+        """Retourne la consolidation seulement si elle accepte encore une réception."""
+        consolidation = shipment.intake_consolidation_id
+        if not self.consolidation_est_ouverte(shipment):
             raise DallyOpsConflict(
                 _("Cette consolidation n'est plus ouverte à la réception."),
                 code="consolidation_not_open",
@@ -350,6 +540,7 @@ class DallyOpsIntakeLineService(models.AbstractModel):
 
     @api.model
     def _colis_par_uuid(self, shipment, line_uuid):
+        """Résout un colis par son UUID public sans exposer d'identifiant Odoo."""
         cle = self._cle_ligne(shipment, line_uuid)
         colis = shipment.sudo().package_ids.filtered(
             lambda paquet: paquet.external_line_key == cle)
@@ -470,11 +661,23 @@ class DallyOpsIntakeLineService(models.AbstractModel):
             return Moteur.upsert(charge)
         except DallyOpsError:
             raise
+        except psycopg2.errors.UniqueViolation as erreur:
+            # Une course perdue n'est pas une panne du moteur. L'aplatir ici en
+            # « erreur interne » privait l'appelant du seul refus qu'il puisse
+            # comprendre : c'est ce que faisait le `except Exception` ci-dessous,
+            # et c'est pourquoi deux appareils décrivant le même article
+            # recevaient un 500. On la laisse remonter jusqu'à
+            # `course_traduite`, qui la change en reprise.
+            if not est_une_course(erreur):
+                raise DallyOpsInternal(
+                    _("L'article n'a pas pu être enregistré.")) from erreur
+            raise
         except Exception as erreur:
             raise DallyOpsInternal(_("L'article n'a pas pu être enregistré.")) from erreur
 
     @api.model
     def _verifier_pricing(self, resultat):
+        """Valide le résultat de tarification avant de publier le DTO."""
         for ligne in resultat.get("lines") or []:
             statut = ligne.get("pricing_status")
             if statut not in ("automatic", "manual_required", "quote"):
@@ -513,6 +716,7 @@ class DallyOpsIntakeLineService(models.AbstractModel):
 
     @staticmethod
     def _empreinte(donnees):
+        """Calcule l'empreinte canonique utilisée par le registre de rejeu."""
         return hashlib.sha256(
             json.dumps(donnees, sort_keys=True, ensure_ascii=False, default=str)
             .encode("utf-8"),
@@ -520,6 +724,7 @@ class DallyOpsIntakeLineService(models.AbstractModel):
 
     @api.model
     def _rejeu(self, request_uuid, empreinte):
+        """Relit un résultat idempotent existant et détecte les charges divergentes."""
         ligne = self.env["dally.ops.intake.line.request"].sudo().search([
             ("company_id", "=", self.env.company.id),
             ("request_uuid", "=", request_uuid),
@@ -539,22 +744,86 @@ class DallyOpsIntakeLineService(models.AbstractModel):
         return dto
 
     @api.model
-    def _inscrire(self, request_uuid, operation, empreinte, shipment, colis, line_uuid, dto):
-        self.env["dally.ops.intake.line.request"].sudo().create({
-            "request_uuid": request_uuid,
-            "company_id": self.env.company.id,
-            "operation": operation,
-            "payload_hash": empreinte,
-            "shipment_id": shipment.id,
-            "package_id": colis.id,
-            "line_uuid": line_uuid,
+    def _revendiquer(self, request_uuid, operation, empreinte, shipment, line_uuid):
+        """Élit un gagnant dans la base, et non dans un instantané.
+
+        ## Le défaut que cette méthode répare
+
+        Le verrou consultatif sérialise bien deux appelants — le second attend
+        que le premier ait commité. Mais Odoo travaille en `REPEATABLE READ`,
+        et l'instantané PostgreSQL du second a été figé **avant** ce commit.
+        Le second reprend donc la main, relit le registre… et ne voit rien. Il
+        refaisait alors le travail et se heurtait à l'unicité, rendant une
+        erreur interne là où le contrat promet un rejeu.
+
+        Ni `invalidate_all()` ni le verrou n'y peuvent quoi que ce soit : seul
+        un `rollback` ouvre un instantané neuf, et une requête en cours ne peut
+        pas s'en offrir un sans perdre son travail.
+
+        ## Ce qui tranche à sa place
+
+        `INSERT … ON CONFLICT DO NOTHING` ne consulte pas l'instantané : il
+        consulte l'index. Il ne lève pas non plus — il n'insère simplement
+        rien et ne rend aucune ligne. Aucune ligne rendue veut donc dire, de
+        façon certaine, qu'un concurrent a déjà revendiqué ce `request_uuid`.
+
+        Le perdant lève alors `ConcurrencyError`, que `retrying()` traite en
+        rejouant **toute** la requête après un `rollback` — donc sur un
+        instantané neuf, où le registre du gagnant est enfin visible et où le
+        chemin de rejeu ordinaire rend le bon résultat. Aucune logique métier
+        n'est dupliquée pour le cas concurrent : c'est la même.
+
+        `ConcurrencyError` est documentée comme de bas niveau, à n'employer que
+        si toutes les alternatives sont pires. Elles le sont : un
+        `except IntegrityError` masquerait aussi les vraies violations, et
+        `retrying()` refuse de rejouer une `IntegrityError` — il la traduit en
+        `ValidationError`, ce qui est exactement le mauvais message.
+
+        ## Pourquoi la revendication est posée avant le travail
+
+        Elle doit être visible des concurrents dès qu'elle est acquise, donc
+        écrite tôt. Son instantané de résultat reste vide jusqu'à
+        `_completer` ; cela n'expose rien, car la ligne ne devient visible
+        qu'au commit, et le moindre échec en amont la fait disparaître avec le
+        `savepoint` qui l'englobe.
+
+        Le SQL est direct : l'ORM n'exprime pas `ON CONFLICT DO NOTHING`, et
+        cette élection ne peut pas se permettre de lever.
+        """
+        self.env.cr.execute(
+            """
+            INSERT INTO dally_ops_intake_line_request
+                (company_id, shipment_id, package_id, operator_user_id,
+                 create_uid, write_uid, request_uuid, operation, payload_hash,
+                 line_uuid, result_snapshot, created_at, create_date, write_date)
+            VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, '',
+                    now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC',
+                    now() AT TIME ZONE 'UTC')
+            ON CONFLICT (company_id, request_uuid) DO NOTHING
+            RETURNING id
+            """,
+            [self.env.company.id, shipment.id, self.env.uid, self.env.uid,
+             self.env.uid, request_uuid, operation, empreinte, line_uuid],
+        )
+        gagne = self.env.cr.fetchone()
+        if gagne is None:
+            raise ConcurrencyError(
+                "Un autre appareil a revendiqué cette demande ; reprise "
+                "sur un instantané neuf.")
+        return self.env["dally.ops.intake.line.request"].sudo().browse(gagne[0])
+
+    @api.model
+    def _completer(self, registre, colis, dto):
+        """Referme la revendication sur le résultat réellement obtenu."""
+        registre.write({
+            "package_id": colis.id if colis else False,
             # Le nom du client a sa place dans la réponse, pas dans une
             # table de plus : on le retire de l'instantané et on le remet au
             # moment de rejouer.
             "result_snapshot": json.dumps(
                 self._sans_client(dto), ensure_ascii=False),
-            "operator_user_id": self.env.uid,
         })
+
 
     @staticmethod
     def _sans_client(dto):
@@ -565,6 +834,7 @@ class DallyOpsIntakeLineService(models.AbstractModel):
 
     @api.model
     def _journaliser(self, action, colis, request_uuid, changes=None):
+        """Ajoute l'événement d'audit métier correspondant à la mutation."""
         self.env["dally.ops.audit.event"].sudo().create({
             "company_id": self.env.company.id,
             "operator_user_id": self.env.uid,
@@ -616,6 +886,7 @@ class DallyOpsIntakeLineService(models.AbstractModel):
 
     @api.model
     def _ligne(self, colis, line_uuid):
+        """Transforme un colis en DTO Ops sans identifiant interne."""
         statut = self._statut_pricing(colis)
         tarife = statut == "automatic"
         return {
@@ -683,6 +954,10 @@ class DallyOpsIntakeLineService(models.AbstractModel):
             # que le serveur refuserait.
             "allowed_transitions": self.env[
                 "dally.ops.intake.state.service"].allowed_transitions(shipment),
+            # L'état CRM / tableur / facturation, calculé côté serveur. La
+            # fiche l'affiche ; elle ne recompte rien.
+            "reconciliation": self.env[
+                "dally.ops.reconciliation.service"].summary_for(shipment),
             "lines": lignes,
             "totals": {
                 "lines_count": len(lignes),

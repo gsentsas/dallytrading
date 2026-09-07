@@ -169,6 +169,30 @@ class DallyOpsIntakesController(DallyOpsController):
         )
 
     @http.route(
+        "/api/v1/ops/intakes/<string:reference>/late-lines",
+        type="http",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+        save_session=False,
+    )
+    def ops_intake_late_line_add(self, reference, **kwargs):
+        """Ajoute un colis arrivé après la comptabilisation de la facture.
+
+        Chemin distinct de `lines` à dessein : le verrou de facturation reste
+        entier pour les corrections, et seul ce geste-ci — de la marchandise
+        réellement tardive — ouvre une pièce complémentaire.
+        """
+        corps = self._corps()
+        if corps is None:
+            return self._erreur("invalid_request", _("Corps de requête illisible."), 400)
+        return self._servir(
+            lambda: request.env[
+                "dally.ops.intake.line.service"].add_late_line(reference, corps),
+            "ops/intakes/late-lines",
+        )
+
+    @http.route(
         "/api/v1/ops/intakes/<string:reference>/lines/<string:line_uuid>",
         type="http",
         auth="user",

@@ -54,6 +54,25 @@ const DOSSIER = {
   },
   payments: [],
   payment_summary: [],
+  // Le serveur envoie toujours cet état : le contrat est strict, et une fiche
+  // sans lui serait refusée — ce que ce fichier vérifie ailleurs.
+  reconciliation: {
+    crm: { state: 'recorded', reference: 'AIR-DSS-CDG-2026-002-A001' },
+    sheet: {
+      state: 'synced', operator_message: 'Synchronisé avec le tableur.',
+      pending_count: 0, failed_count: 0, last_synced_at: '2026-08-28T10:00:00',
+    },
+    billing: {
+      currency: 'EUR',
+      primary_invoice_number: null, primary_invoice_state: 'none',
+      primary_invoice_amount: 0, primary_paid_amount: 0,
+      primary_remaining_amount: 0,
+      total_invoiced_amount: 0, total_paid_amount: 0, total_remaining_amount: 0,
+      unbilled_lines_count: 1, unbilled_amount: 67.5,
+      supplement_count: 0, supplement_amount: 0, supplements: [],
+    },
+    allowed_actions: [],
+  },
 };
 
 beforeEach(() => {
@@ -192,5 +211,99 @@ describe('mutations', () => {
     await expect(addLine('AIR-1', {
       request_uuid: '11111111-2222-4333-8444-555555555555', line: LIGNE,
     }, 'sX', 'corr')).rejects.toThrow();
+  });
+});
+
+/*
+ * Le contrat de réconciliation.
+ *
+ * Il est strict à dessein : c'est lui qui empêche un identifiant Odoo ou un
+ * message de transport de descendre un jour sans que personne ne s'en aperçoive.
+ */
+describe('état CRM / tableur / facturation', () => {
+  it('refuse une fiche sans état de réconciliation', async () => {
+    const sans = { ...DOSSIER } as Record<string, unknown>;
+    delete sans.reconciliation;
+    vi.mocked(opsGet).mockResolvedValue({ intake: sans });
+
+    await expect(fetchIntake('AIR-DSS-CDG-2026-002-A001', 'session', 'cid'))
+      .rejects.toThrow();
+  });
+
+  it('refuse un identifiant Odoo glissé dans l’état', async () => {
+    vi.mocked(opsGet).mockResolvedValue({
+      intake: {
+        ...DOSSIER,
+        reconciliation: {
+          ...DOSSIER.reconciliation,
+          billing: { ...DOSSIER.reconciliation.billing, invoice_id: 58 },
+        },
+      },
+    });
+
+    await expect(fetchIntake('AIR-DSS-CDG-2026-002-A001', 'session', 'cid'))
+      .rejects.toThrow();
+  });
+
+  it('refuse un message d’erreur de transport', async () => {
+    vi.mocked(opsGet).mockResolvedValue({
+      intake: {
+        ...DOSSIER,
+        reconciliation: {
+          ...DOSSIER.reconciliation,
+          sheet: { ...DOSSIER.reconciliation.sheet, last_error: 'Traceback…' },
+        },
+      },
+    });
+
+    await expect(fetchIntake('AIR-DSS-CDG-2026-002-A001', 'session', 'cid'))
+      .rejects.toThrow();
+  });
+
+  it('refuse un état de projection inconnu', async () => {
+    vi.mocked(opsGet).mockResolvedValue({
+      intake: {
+        ...DOSSIER,
+        reconciliation: {
+          ...DOSSIER.reconciliation,
+          sheet: { ...DOSSIER.reconciliation.sheet, state: 'processing' },
+        },
+      },
+    });
+
+    await expect(fetchIntake('AIR-DSS-CDG-2026-002-A001', 'session', 'cid'))
+      .rejects.toThrow();
+  });
+
+  it('lit une facture comptabilisée et son supplément', async () => {
+    vi.mocked(opsGet).mockResolvedValue({
+      intake: {
+        ...DOSSIER,
+        reconciliation: {
+          ...DOSSIER.reconciliation,
+          billing: {
+            currency: 'EUR',
+            primary_invoice_number: 'FAC/2099/00001',
+            primary_invoice_state: 'posted', primary_invoice_amount: 17.75,
+            primary_paid_amount: 0, primary_remaining_amount: 17.75,
+            total_invoiced_amount: 17.75, total_paid_amount: 0,
+            total_remaining_amount: 17.75,
+            unbilled_lines_count: 1, unbilled_amount: 5,
+            supplement_count: 1, supplement_amount: 5,
+            supplements: [
+              { invoice_number: null, invoice_state: 'draft', amount: 5 },
+            ],
+          },
+          allowed_actions: ['add_late_package'],
+        },
+      },
+    });
+
+    const dossier = await fetchIntake('AIR-DSS-CDG-2026-002-A001', 'session', 'cid');
+
+    expect(dossier.reconciliation.billing.primary_invoice_number).toBe('FAC/2099/00001');
+    expect(dossier.reconciliation.billing.primary_invoice_amount).toBe(17.75);
+    expect(dossier.reconciliation.billing.unbilled_amount).toBe(5);
+    expect(dossier.reconciliation.allowed_actions).toEqual(['add_late_package']);
   });
 });

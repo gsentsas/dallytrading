@@ -100,7 +100,7 @@ test('la reconnexion synchronise et fait apparaître le vrai numéro',
     const synchronisee = page.getByTestId('operation-synchronisee');
     await expect(synchronisee).toHaveCount(1, { timeout: 15_000 });
     // Le numéro affiché vient du serveur, et ressemble à un vrai `Axxx`.
-    await expect(synchronisee).toContainText(new RegExp(`${DEPART}-A\\d{3}`));
+    await expect(synchronisee).toContainText(new RegExp(`${DEPART}-A\\d{3,}`));
     await expect(page.getByTestId('operation-file')).toHaveCount(0);
   });
 
@@ -167,7 +167,7 @@ test('un silence après écriture serveur ne crée pas deux dossiers',
     expect(new Set(identifiants).size).toBe(1);
 
     const reference = await synchronisee.locator('.reference').textContent();
-    expect(reference?.trim()).toMatch(new RegExp(`^${DEPART}-A\\d{3}$`));
+    expect(reference?.trim()).toMatch(new RegExp(`^${DEPART}-A\\d{3,}$`));
 
     // Et le CRM n'a bien qu'un dossier portant cette désignation.
     const dossier = await page.request.get(

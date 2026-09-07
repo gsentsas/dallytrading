@@ -10,6 +10,7 @@ import { newCorrelationId } from '@/lib/logger';
 import { ActivityTimeline } from '@/features/activity/ActivityTimeline';
 import { DossierArticles } from '@/features/reception/DossierArticles';
 import { EtatDossier } from '@/features/reception/EtatDossier';
+import { SynchronisationDossier } from '@/features/reception/SynchronisationDossier';
 import { PhotosDossier } from '@/features/reception/PhotosDossier';
 import { EvenementsDossier } from '@/features/reception/EvenementsDossier';
 
@@ -97,6 +98,7 @@ export default async function PageDossier({
         peutGerer={identite.capabilities.photo_manage === true}
       />
 
+      <SynchronisationDossier etat={dossier.reconciliation} />
       <section aria-labelledby="activite-dossier-titre">
         <h2 id="activite-dossier-titre">ACTIVITÉ</h2>
         {activite ? (

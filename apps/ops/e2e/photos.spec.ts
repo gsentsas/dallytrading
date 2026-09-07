@@ -67,7 +67,7 @@ async function creerUnDossier(page: Page): Promise<string> {
 
 async function ouvrirLeDossier(page: Page, reference: string) {
   await page.goto(`/reception/dossier/${encodeURIComponent(reference)}`);
-  await expect(page.getByRole('heading', { name: /^DOSSIER A\d{3}$/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^DOSSIER A\d{3,}$/ })).toBeVisible();
   await expect(page.getByTestId('photos-dossier')).toBeVisible();
 }
 

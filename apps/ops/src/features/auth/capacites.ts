@@ -8,6 +8,15 @@
  */
 
 export interface EntreeAccueil {
+  /**
+   * L'identité de l'entrée dans la liste.
+   *
+   * Distincte de la capacité depuis qu'une même capacité ouvre deux écrans :
+   * `supervise` mène à l'activité de l'équipe et à « À traiter ». Garder la
+   * capacité comme clé donnerait deux entrées de même clé, et React n'en
+   * rendrait qu'une.
+   */
+  readonly id: string;
   readonly capacite: string;
   readonly titre: string;
   readonly description: string;
@@ -17,24 +26,28 @@ export interface EntreeAccueil {
 
 export const ENTREES_ACCUEIL: readonly EntreeAccueil[] = [
   {
+    id: 'recherche',
     capacite: 'intake_search',
     titre: 'Rechercher un dossier',
     description: 'Retrouver un dossier par nom, téléphone ou référence.',
     href: '/recherche',
   },
   {
+    id: 'reception',
     capacite: 'intake_create',
     titre: 'Réceptionner un colis',
     description: 'Enregistrer un colis sur un départ ouvert.',
     href: '/reception',
   },
   {
+    id: 'chargement',
     capacite: 'consolidation_load',
     titre: 'Charger un départ',
     description: 'Vérifier ce qui part, et compléter la pile.',
     href: '/chargement',
   },
   {
+    id: 'encaissement',
     capacite: 'payment_create',
     titre: 'Encaissement',
     description: 'Saisir un paiement reçu d’un client.',
@@ -44,28 +57,39 @@ export const ENTREES_ACCUEIL: readonly EntreeAccueil[] = [
     href: '/recherche',
   },
   {
+    id: 'depenses',
     capacite: 'expense_create',
     titre: 'Dépense de caisse',
     description: 'Déclarer une dépense engagée sur le terrain.',
     href: '/depenses',
   },
   {
+    id: 'transferts',
     capacite: 'transfer_create',
     titre: 'Transfert de caisse',
     description: 'Transmettre des espèces à un autre opérateur.',
     href: '/caisse/transferts',
   },
   {
+    id: 'agenda',
     capacite: 'appointment_manage',
     titre: 'Agenda',
     description: 'Organiser les passages de la journée.',
     href: '/agenda',
   },
   {
+    id: 'supervision',
     capacite: 'supervise',
     titre: 'Supervision',
     description: 'Suivre l’activité de l’équipe.',
     href: '/activite',
+  },
+  {
+    id: 'traitement',
+    capacite: 'supervise',
+    titre: 'À traiter',
+    description: 'Ce que le CRM signale et qui demande une décision.',
+    href: '/traitement',
   },
 ];
 

@@ -76,6 +76,71 @@ const ligneLue = z
   })
   .strict();
 
+/**
+ * L'état CRM / tableur / facturation, tel que le serveur le calcule.
+ *
+ * Aucun montant n'est recalculé ici : `invoice_amount` vient d'Odoo, qui seul
+ * sait ce qu'une pièce comptabilisée porte. Sommer les colis dans React
+ * donnerait un nombre plausible et faux le jour où un frais s'ajoute.
+ */
+const reconciliation = z
+  .object({
+    crm: z
+      .object({
+        state: z.literal('recorded'),
+        reference: z.string().min(1),
+      })
+      .strict(),
+    sheet: z
+      .object({
+        state: z.enum(['synced', 'pending', 'retry', 'failed', 'absent']),
+        // Un message écrit pour l'opérateur. Jamais l'erreur de transport.
+        operator_message: z.string().min(1),
+        pending_count: z.number().int().nonnegative(),
+        failed_count: z.number().int().nonnegative(),
+        last_synced_at: z.string().nullable(),
+      })
+      .strict(),
+    billing: z
+      .object({
+        currency: z.string().min(1),
+        // La pièce principale, nommée comme telle.
+        primary_invoice_number: z.string().nullable(),
+        primary_invoice_state: z.string().min(1),
+        primary_invoice_amount: z.number(),
+        primary_paid_amount: z.number(),
+        primary_remaining_amount: z.number(),
+        // Le dossier entier : principale + compléments COMPTABILISÉS. Un
+        // brouillon n'est pas encore dû, une pièce annulée ne l'est plus.
+        total_invoiced_amount: z.number(),
+        total_paid_amount: z.number(),
+        total_remaining_amount: z.number(),
+        unbilled_lines_count: z.number().int().nonnegative(),
+        unbilled_amount: z.number(),
+        supplement_count: z.number().int().nonnegative(),
+        supplement_amount: z.number(),
+        supplements: z.array(
+          z
+            .object({
+              invoice_number: z.string().nullable(),
+              invoice_state: z.string().min(1),
+              amount: z.number(),
+            })
+            .strict(),
+        ),
+      })
+      .strict(),
+    /**
+     * Ce que le serveur autorise. L'écran n'en propose pas d'autres — et
+     * réciproquement, le vocabulaire ne contient que des gestes qu'un écran
+     * sait exécuter. `prepare_supplement` et `resync_sheet` en sont absents
+     * tant qu'aucun formulaire ne les déclenche : annoncer une action que
+     * l'opérateur ne peut pas mener est pire que ne rien annoncer.
+     */
+    allowed_actions: z.array(z.enum(['add_late_package'])),
+  })
+  .strict();
+
 const dossier = z
   .object({
     reference: z.string().min(1),
@@ -110,13 +175,16 @@ const dossier = z
     payment_summary: z.array(
       z.object({ currency_code: z.string(), amount: z.number() }).strict(),
     ),
+    reconciliation,
   })
   .strict();
 
 const detail = z.object({ intake: dossier }).strict();
 const mutation = z
   .object({
-    status: z.enum(['added', 'updated']),
+    // `added_late` : un colis arrivé après la comptabilisation de la facture.
+    // Le serveur le distingue, l'écran doit pouvoir le lire.
+    status: z.enum(['added', 'updated', 'added_late']),
     intake: dossier,
     line: ligneLue,
   })
@@ -124,6 +192,7 @@ const mutation = z
 
 export type LigneLue = z.infer<typeof ligneLue>;
 export type Dossier = z.infer<typeof dossier>;
+export type Reconciliation = z.infer<typeof reconciliation>;
 export type SaisieLigne = z.infer<typeof saisieLigne>;
 export type Mutation = z.infer<typeof mutation>;
 
@@ -145,6 +214,27 @@ export async function addLine(
 ): Promise<Mutation> {
   const brut = await opsPost<unknown>(
     `intakes/${reference}/lines`, demande, sessionId, correlationId);
+  return mutation.parse(brut);
+}
+
+/**
+ * Ajoute un article arrivé APRÈS la comptabilisation de la facture.
+ *
+ * Chemin distinct de `addLine`, et c'est voulu : `/lines` refuse un dossier
+ * verrouillé, ce qui est la bonne règle pour une correction. Les confondre
+ * rouvrirait aussi les corrections sur une pièce comptable.
+ *
+ * Le navigateur ne choisit pas entre les deux d'après `billing_locked` ou
+ * l'état de la facture : il suit `allowed_actions`, que le serveur calcule.
+ */
+export async function addLateLine(
+  reference: string,
+  demande: z.infer<typeof demandeAjout>,
+  sessionId: string,
+  correlationId: string,
+): Promise<Mutation> {
+  const brut = await opsPost<unknown>(
+    `intakes/${reference}/late-lines`, demande, sessionId, correlationId);
   return mutation.parse(brut);
 }
 

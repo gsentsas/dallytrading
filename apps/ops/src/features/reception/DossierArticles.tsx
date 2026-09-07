@@ -14,6 +14,7 @@ import { FormulaireColis, type IssueSoumission } from '@/features/reception/Form
 type Vue =
   | { nom: 'liste' }
   | { nom: 'ajout' }
+  | { nom: 'ajout-tardif' }
   | { nom: 'correction'; ligne: LigneLue }
   | { nom: 'paiement' }
   | { nom: 'wave'; contexte: ContexteWave };
@@ -69,6 +70,9 @@ export function DossierArticles({
   const router = useRouter();
   const [vue, setVue] = useState<Vue>({ nom: 'liste' });
   const [erreurWave, setErreurWave] = useState<string | null>(null);
+  // Le serveur a déjà tranché ; l'écran lit sa décision.
+  const peutAjouterTardif = dossier.reconciliation.allowed_actions
+    .includes('add_late_package');
 
   async function envoyer(
     url: string,
@@ -163,6 +167,23 @@ export function DossierArticles({
         onAnnuler={() => setVue({ nom: 'liste' })}
         soumettre={(ligne, requestUuid) => envoyer(
           `/api/intakes/${encodeURIComponent(dossier.reference)}/lines`,
+          'POST',
+          { request_uuid: requestUuid, line: ligne },
+        )}
+      />
+    );
+  }
+
+  if (vue.nom === 'ajout-tardif') {
+    return (
+      <FormulaireColis
+        consolidation={dossier.consolidation_reference}
+        customer=""
+        familles={familles}
+        libelleBouton="ENREGISTRER L’ARTICLE TARDIF"
+        onAnnuler={() => setVue({ nom: 'liste' })}
+        soumettre={(ligne, requestUuid) => envoyer(
+          `/api/intakes/${encodeURIComponent(dossier.reference)}/late-lines`,
           'POST',
           { request_uuid: requestUuid, line: ligne },
         )}
@@ -329,6 +350,33 @@ export function DossierArticles({
             : 'Ce dossier n’est plus modifiable.'}
         </p>
       )}
+
+      {/*
+        L'ajout tardif — de la marchandise réellement arrivée après la
+        facture. La condition est `allowed_actions`, et rien d'autre : l'écran
+        ne relit ni `billing_locked`, ni l'état de la facture, ni l'ouverture
+        du départ. Ces trois conditions se combinent, changent avec le métier,
+        et se relisent en base à chaque appel — les recopier ici fabriquerait
+        un bouton qui promet ce que le serveur refuse, ou qui cache ce qu'il
+        autorise.
+      */}
+      {peutAjouterTardif ? (
+        <section className="carte" data-testid="ajout-tardif" style={{ marginTop: '1rem' }}>
+          <p style={{ margin: 0 }}>
+            Un article est arrivé après la facture&nbsp;?
+          </p>
+          <p className="attenue" style={{ margin: '0.25rem 0 0.6rem' }}>
+            Il sera ajouté au dossier sans toucher à la facture déjà émise, et
+            facturé à part.
+          </p>
+          <button
+            type="button"
+            onClick={() => setVue({ nom: 'ajout-tardif' })}
+          >
+            + AJOUTER UN ARTICLE TARDIF
+          </button>
+        </section>
+      ) : null}
 
       <button
         type="button"

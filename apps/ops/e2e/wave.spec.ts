@@ -60,7 +60,7 @@ async function creerUnDossier(page: Page, designation: string): Promise<string> 
 
 async function ouvrirLeDossier(page: Page, reference: string) {
   await page.goto(`/reception/dossier/${encodeURIComponent(reference)}`);
-  await expect(page.getByRole('heading', { name: /^DOSSIER A\d{3}$/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^DOSSIER A\d{3,}$/ })).toBeVisible();
 }
 
 async function encaisser(

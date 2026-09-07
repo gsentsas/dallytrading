@@ -35,3 +35,4 @@ from . import ops_expense_service
 from . import ops_cash_actor_service
 from . import ops_transfer_service
 from . import ops_appointment_service
+from . import ops_http

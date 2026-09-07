@@ -10,20 +10,10 @@ import { Reessayer } from '@/features/reception/Reessayer';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Le choix du départ à préparer.
- *
- * Il ne répond qu'à une question : « où en sont mes départs ? ». La liste et
- * son ordre viennent du serveur ; l'écran n'offre aucun moyen d'ouvrir, de
- * clore ou de faire partir un départ — cela reste une décision de
- * back-office.
- */
 export default async function PageChargement() {
   const correlationId = newCorrelationId();
   const identite = await currentIdentity(correlationId).catch(() => null);
   if (!identite) redirect('/connexion');
-
-  // La capacité, pas le rôle : c'est Odoo qui décide qui prépare un départ.
   if (identite.capabilities.consolidation_load !== true) redirect('/');
 
   const session = await readOpsSession();
@@ -43,20 +33,29 @@ export default async function PageChargement() {
   }
 
   return (
-    <main>
-      <Link className="retour" href="/">← Accueil</Link>
-      <h1>Charger un départ</h1>
+    <main className="ops-operation-page">
+      <Link className="retour ops-back-link" href="/">← Accueil</Link>
+      <header className="ops-operation-heading">
+        <span className="ops-operation-heading-icon tone-orange" aria-hidden="true">▣</span>
+        <div>
+          <p className="ops-eyebrow">DÉPARTS</p>
+          <h1>Charger un départ</h1>
+          <p>Sélectionnez un départ et vérifiez les colis à expédier sur le terrain.</p>
+        </div>
+      </header>
 
       {departs === null ? (
         <>
-          {/* Aucun détail technique : ni modèle, ni code, ni trace. */}
           <p className="erreur" role="alert">Impossible de charger les départs.</p>
           <Reessayer />
         </>
       ) : departs.length === 0 ? (
-        <p className="attenue" data-testid="aucun-depart">
-          Aucun départ à préparer pour le moment.
-        </p>
+        <section className="ops-empty-state">
+          <span aria-hidden="true">✓</span>
+          <p className="attenue" data-testid="aucun-depart">
+            Aucun départ à préparer pour le moment.
+          </p>
+        </section>
       ) : (
         <ListeChargements consolidations={departs} />
       )}

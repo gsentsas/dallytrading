@@ -27,6 +27,7 @@ un dossier, ni d'émettre une facture, ni de toucher à la caisse.
 from odoo import _, http
 
 from odoo.addons.dally_api.controllers.main import DallyApiController, DallyApiError
+from odoo.addons.dally_ops_mobile.models.ops_sheet_outbox import MOTIF_IDENTITE_RETIREE
 
 #: Le groupe technique déjà porté par les identités de synchronisation.
 BILLING_GROUP = "dally_freight_billing.group_dally_freight_billing_api"
@@ -118,6 +119,17 @@ class DallyOpsSheetOutboxController(DallyApiController):
                 raise DallyApiError(
                     422, "unknown_field",
                     _("Unsupported field in result: %s") % ", ".join(sorted(inconnus)),
+                )
+            # Le motif de retrait d'identité appartient au chemin interne : il
+            # déclare qu'Odoo a renoncé à une projection, ce qu'un transport ne
+            # peut pas décider. L'accepter donnerait au connecteur le pouvoir
+            # de soustraire un vrai échec à la supervision. On le refuse ici
+            # pour que le connecteur l'apprenne ; le modèle le neutralise de
+            # toute façon, quel que soit l'appelant.
+            if str(resultat.get("error") or "").startswith(MOTIF_IDENTITE_RETIREE):
+                raise DallyApiError(
+                    422, "reserved_error_marker",
+                    _("`error` must not use the reserved internal marker."),
                 )
         compte = env["dally.ops.sheet.outbox"].acknowledge(env.company, resultats)
         return compte, 200

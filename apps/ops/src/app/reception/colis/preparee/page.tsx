@@ -20,5 +20,19 @@ export default async function PageReceptionPreparee() {
     fetchConsolidations(session.odooSessionId, correlation),
     fetchTariffFamilies(session.odooSessionId, correlation),
   ]);
-  return <main><Link className="retour" href="/agenda">← Rendez-vous</Link><ReceptionPreparee consolidations={consolidations} families={families} /></main>;
+
+  return (
+    <main className="ops-operation-page ops-prepared-reception-page">
+      <Link className="retour ops-back-link" href="/agenda">← Rendez-vous</Link>
+      <header className="ops-operation-heading">
+        <span className="ops-operation-heading-icon tone-green" aria-hidden="true">◇</span>
+        <div>
+          <p className="ops-eyebrow">AGENDA → RÉCEPTION</p>
+          <h2 className="ops-visual-title">Réception préparée</h2>
+          <p>Les informations du rendez-vous sont prêtes pour la saisie terrain.</p>
+        </div>
+      </header>
+      <ReceptionPreparee consolidations={consolidations} families={families} />
+    </main>
+  );
 }

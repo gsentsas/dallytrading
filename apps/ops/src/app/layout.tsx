@@ -8,6 +8,7 @@ import './ui-shell.css';
 import './ui-forms.css';
 import './ui-operations.css';
 import './ui-reception.css';
+import './ui-detail.css';
 
 export const metadata: Metadata = {
   title: 'Dally Ops',

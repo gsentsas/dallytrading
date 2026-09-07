@@ -64,6 +64,25 @@ PALIERS_MINUTES = (0, 2, 10, 30, 120, 360)
 #: assez peu pour qu'un passage d'Apps Script tienne dans son quota.
 LOT_MAXIMAL = 50
 
+#: Une identité Ops retirée est une projection volontairement neutralisée,
+#: pas une panne du transport vers le tableur. Le mécanisme de récupération
+#: d'identité l'inscrit comme refus permanent pour qu'elle ne reparte jamais.
+#:
+#: **Ce motif est réservé au chemin interne.** Il ne décrit pas ce qui s'est
+#: passé sur le réseau : il déclare qu'Odoo a lui-même renoncé à cette
+#: projection. Un connecteur qui pourrait l'écrire pourrait donc faire
+#: disparaître un vrai échec de la supervision — d'où `retire_projections`,
+#: qui est le seul chemin par lequel il s'inscrit, et le filtre d'`acknowledge`
+#: qui empêche un accusé externe de le fabriquer.
+MOTIF_IDENTITE_RETIREE = "intake_identity_retired:"
+
+#: Ce qu'on inscrit à la place quand un accusé externe tente le motif réservé.
+#:
+#: On n'ignore pas l'échec et on ne le masque pas : la ligne reste `failed`
+#: avec un message qui, lui, n'est pas réservé — elle continue donc de compter
+#: et de s'afficher en supervision, ce qui est exactement le but.
+MOTIF_REFUSE_EXTERNE = "external_ack_reserved_marker"
+
 
 class DallyOpsSheetOutbox(models.Model):
     _name = "dally.ops.sheet.outbox"
@@ -189,7 +208,8 @@ class DallyOpsSheetOutbox(models.Model):
 
         compte = {"pending": 0, "retry": 0, "failed": 0, "synced": 0}
         groupes = self.sudo()._read_group(
-            [("company_id", "=", self.env.company.id)],
+            [("company_id", "=", self.env.company.id)]
+            + self._domaine_hors_identite_retiree(),
             groupby=["state"], aggregates=["__count"])
         for etat, nombre in groupes:
             # `processing` rejoint `pending` : qu'un envoi soit en vol ou en
@@ -219,6 +239,74 @@ class DallyOpsSheetOutbox(models.Model):
             "last_synced_at": (derniere.delivered_at.isoformat()
                                if derniere.delivered_at else None),
         }
+
+    @api.model
+    def _domaine_hors_identite_retiree(self):
+        """Le domaine qui écarte les projections volontairement neutralisées.
+
+        Elles restent dans l'outbox pour l'audit, mais ne demandent aucune
+        intervention : l'ancien dossier a été renuméroté précisément pour que
+        cette projection ne parte jamais au tableur.
+
+        C'est un domaine et non une liste d'identifiants. Une liste devrait
+        d'abord lire toutes les lignes retirées pour les exclure ensuite —
+        elle grossirait indéfiniment, puisque ces lignes sont conservées
+        exprès, et finirait par transporter la table entière dans un `not in`.
+        Ici, PostgreSQL fait le tri.
+
+        La négation porte sur la **conjonction** : seule une ligne à la fois
+        `failed` et porteuse du motif réservé est écartée. Un vrai échec sans
+        message — `last_error` à NULL — reste donc compté : vérifié plutôt que
+        supposé, car `NULL LIKE 'x%'` vaut NULL en SQL et une négation mal
+        formée l'aurait fait disparaître.
+        """
+        return [
+            "!", "&",
+            ("state", "=", "failed"),
+            ("last_error", "=like", MOTIF_IDENTITE_RETIREE + "%"),
+        ]
+
+    @api.model
+    def retire_projections(self, company, outbox_ids, ancienne_reference):
+        """Neutralise définitivement des projections devenues invalides.
+
+        ## Pourquoi une méthode plutôt qu'un accusé fabriqué
+
+        Le retrait d'identité passait par `acknowledge`, en se faisant passer
+        pour un refus permanent venu du transport. Cela avait l'élégance de ne
+        rien ajouter au modèle, mais cela rendait le motif réservé
+        **atteignable depuis l'API** : un connecteur défectueux qui aurait
+        envoyé ce motif sur un vrai échec l'aurait fait disparaître de la
+        supervision. Un cas interne qui emprunte la porte externe finit par
+        ouvrir la porte externe sur le cas interne.
+
+        Ce chemin-ci n'est pas une porte : il ne lit aucun message fourni, il
+        écrit le sien.
+
+        ## Ce qu'elle ne fait pas
+
+        Elle ne touche ni `attempt_count` ni `last_attempt_at` : aucune
+        tentative de transport n'a eu lieu, et en simuler une fausserait la
+        lecture d'un incident réel. Elle ne repositionne pas non plus
+        `next_attempt_at` — la ligne ne repartira jamais.
+
+        Seules les projections encore en vol sont retirées ; une ligne déjà
+        `delivered` a été écrite dans le classeur, et prétendre l'annuler ici
+        serait mentir sur ce que le tableur contient.
+        """
+        lignes = self.sudo().search([
+            ("id", "in", [int(i) for i in outbox_ids or []]),
+            ("company_id", "=", company.id),
+            ("state", "in", ("pending", "retry", "processing")),
+        ])
+        if not lignes:
+            return 0
+        lignes.write({
+            "state": "failed",
+            "last_error": "%s%s" % (
+                MOTIF_IDENTITE_RETIREE, ancienne_reference or ""),
+        })
+        return len(lignes)
 
     def business_key_for(self, shipment):
         """La clé métier d'un dossier, décidée en un seul endroit.
@@ -319,7 +407,7 @@ class DallyOpsSheetOutbox(models.Model):
                 })
                 compte["delivered"] += 1
                 continue
-            message = str(resultat.get("error") or "")[:200]
+            message = self._message_externe(resultat.get("error"))
             permanent = bool(resultat.get("permanent"))
             if permanent:
                 # Une projection invalide reste visible et cesse d'occuper le
@@ -334,6 +422,29 @@ class DallyOpsSheetOutbox(models.Model):
             })
             compte["retried"] += 1
         return compte
+
+    @api.model
+    def _message_externe(self, message):
+        """Le message d'un accusé venu du transport, jamais un motif réservé.
+
+        `acknowledge` est la porte du connecteur : tout ce qui la franchit est
+        fourni par un tiers, même authentifié. Le motif de retrait d'identité
+        déclare qu'Odoo a renoncé à une projection — un transport ne peut pas
+        décider cela, et le laisser l'écrire lui donnerait le pouvoir de
+        soustraire un vrai échec à la supervision.
+
+        On ne rejette pas l'accusé pour autant : l'échec est réel et doit être
+        enregistré. On remplace seulement le motif, et la ligne reste `failed`
+        avec un message non réservé — donc toujours comptée et affichée.
+
+        Le contrôleur refuse déjà cette charge en amont, avec un code d'erreur
+        explicite. Ce filtre-ci est la garantie : il tient quel que soit
+        l'appelant, y compris un futur chemin qui n'existe pas encore.
+        """
+        texte = str(message or "")[:200]
+        if texte.startswith(MOTIF_IDENTITE_RETIREE):
+            return MOTIF_REFUSE_EXTERNE
+        return texte
 
     @api.model
     def _prochaine_tentative(self, tentatives):

@@ -1079,21 +1079,26 @@ class DallyFreightIntakeIdentityRecovery(models.AbstractModel):
         faire ici.
 
         Reste qu'une projection d'archive écrirait dans le classeur une ligne
-        « A900842 » que personne n'a demandée. On la termine donc par
-        ``acknowledge`` en refus permanent — le chemin que le modèle prévoit
-        pour une projection devenue invalide : la ligne reste visible, porte
-        son motif, et cesse d'occuper le transport. Aucun état n'est forcé en
-        SQL, aucune méthode n'est ajoutée au modèle.
+        « A900842 » que personne n'a demandée. On la retire donc par
+        ``retire_projections``, le chemin interne que le modèle expose pour
+        cela : la ligne reste visible, porte son motif, et cesse d'occuper le
+        transport.
+
+        Ce retrait empruntait auparavant ``acknowledge`` en se faisant passer
+        pour un refus permanent venu du transport. C'était élégant — rien à
+        ajouter au modèle — mais cela rendait le motif de retrait
+        **atteignable depuis l'API du connecteur** : un accusé externe portant
+        ce motif aurait soustrait un vrai échec à la supervision. Un cas
+        interne qui emprunte la porte externe finit par ouvrir la porte
+        externe sur le cas interne.
+
+        Le modèle filtre les états lui-même : c'est lui qui sait qu'une
+        projection déjà livrée ne se retire pas.
         """
         if not lignes or "dally.ops.sheet.outbox" not in self.env:
             return
-        motif = "intake_identity_retired:%s" % (ancienne["external_reference"] or "")
-        self.env["dally.ops.sheet.outbox"].sudo().acknowledge(
+        self.env["dally.ops.sheet.outbox"].sudo().retire_projections(
             shipment.company_id,
-            [
-                {"outbox_id": ligne["outbox_id"], "ok": False,
-                 "permanent": True, "error": motif}
-                for ligne in lignes
-                if ligne["state"] in ("pending", "retry", "processing")
-            ],
+            [ligne["outbox_id"] for ligne in lignes],
+            ancienne["external_reference"] or "",
         )

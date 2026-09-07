@@ -1457,6 +1457,39 @@ class TestOpsSheetOutboxEndpoint(HttpCase):
         self.assertEqual(reponse.status_code, 200)
         self.assertEqual(json.loads(reponse.content)["data"]["unknown"], 1)
 
+    def test_un_accuse_ne_peut_pas_reutiliser_le_motif_interne(self):
+        """Le connecteur ne décide pas qu'Odoo a renoncé à une projection.
+
+        Le motif de retrait d'identité sort une ligne de la supervision. S'il
+        était acceptable depuis l'API, un connecteur défectueux — ou compromis,
+        mais autorisé — pourrait rendre un vrai échec invisible en le déguisant
+        en retrait volontaire. La route le refuse, avec le code d'erreur que le
+        reste du contrat utilise déjà pour une charge hors contrat.
+        """
+        reponse = self._post("/api/v1/freight/sheet-outbox/ack", {
+            "request_uuid": str(uuid.uuid4()),
+            "results": [{"outbox_id": 1, "ok": False, "permanent": True,
+                         "error": "intake_identity_retired:FAKE"}],
+        })
+        self.assertEqual(reponse.status_code, 422, reponse.content[:400])
+        charge = json.loads(reponse.content)
+        self.assertFalse(charge["success"])
+        self.assertEqual(charge["error"]["code"], "reserved_error_marker")
+
+    def test_un_accuse_en_echec_reel_reste_accepte(self):
+        """Le contre-test : seul le motif réservé est refusé.
+
+        Sans lui, le test précédent passerait aussi si la route avait cessé
+        d'accepter les échecs permanents — ce qui casserait le transport.
+        """
+        reponse = self._post("/api/v1/freight/sheet-outbox/ack", {
+            "request_uuid": str(uuid.uuid4()),
+            "results": [{"outbox_id": 999999999, "ok": False,
+                         "permanent": True, "error": "HTTP 500 upstream"}],
+        })
+        self.assertEqual(reponse.status_code, 200, reponse.content[:400])
+        self.assertTrue(json.loads(reponse.content)["success"])
+
     def test_la_reponse_ne_contient_aucun_secret(self):
         contenu = self._get("/api/v1/freight/sheet-outbox").content.decode().lower()
         for interdit in ("api_key", "password", "secret", "bearer", "private_key",

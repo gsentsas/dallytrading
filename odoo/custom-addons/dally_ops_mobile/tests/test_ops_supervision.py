@@ -151,6 +151,152 @@ class TestOpsSupervision(SocleReconciliation):
         self.assertNotIn("projection.invalid", signalee["operator_message"])
         self.assertNotIn("HTTP 500", signalee["operator_message"])
 
+    def _projection_en_vol(self, shipment):
+        """Une ligne d'outbox du dossier, encore en attente d'envoi."""
+        self.env["dally.ops.sheet.outbox"].enqueue_dossier(shipment)
+        return self.env["dally.ops.sheet.outbox"].sudo().search(
+            [("company_id", "=", self.societe.id)], order="id desc", limit=1)
+
+    def test_a_retired_identity_is_not_reported_as_a_sheet_failure(self):
+        """Une projection neutralisée volontairement ne demande aucune action.
+
+        Le retrait passe par le chemin interne du modèle, pas par un accusé
+        fabriqué : c'est ce chemin-là que la supervision doit savoir ignorer.
+        """
+        reference, shipment = self._creer_dossier()
+        ligne = self._projection_en_vol(shipment)
+        avant = self._projection()["counts"]["failed"]
+
+        retirees = self.env["dally.ops.sheet.outbox"].sudo().retire_projections(
+            self.societe, ligne.ids, reference)
+        self.assertEqual(retirees, 1)
+
+        resultat = self._anomalies()
+        self.assertNotIn(
+            reference, [a["reference"] for a in resultat["anomalies"]])
+        self.assertEqual(self._projection()["counts"]["failed"], avant)
+
+    def test_a_retired_projection_stays_in_the_outbox_for_audit(self):
+        """Elle disparaît de la supervision, pas de la base.
+
+        L'invariant tient en trois points : la ligne existe encore, elle porte
+        `failed`, et son motif nomme la référence retirée. Relue depuis la base
+        après invalidation du cache — un `write` suivi d'une lecture en mémoire
+        ne prouverait pas que la valeur a été écrite.
+        """
+        reference, shipment = self._creer_dossier()
+        ligne = self._projection_en_vol(shipment)
+        identifiant = ligne.id
+
+        self.env["dally.ops.sheet.outbox"].sudo().retire_projections(
+            self.societe, ligne.ids, reference)
+        self.env.invalidate_all()
+
+        relue = self.env["dally.ops.sheet.outbox"].sudo().browse(identifiant)
+        self.assertTrue(relue.exists(), "la ligne doit rester en base")
+        self.assertEqual(relue.state, "failed")
+        self.assertEqual(relue.last_error, "intake_identity_retired:%s" % reference)
+        # Aucune tentative de transport n'a eu lieu : en simuler une fausserait
+        # la lecture d'un incident réel.
+        self.assertEqual(relue.attempt_count, 0)
+        self.assertFalse(relue.last_attempt_at)
+
+    def test_a_delivered_projection_is_never_retired(self):
+        """Une ligne déjà écrite dans le classeur ne se retire pas.
+
+        Prétendre l'annuler ici mentirait sur ce que le tableur contient.
+        """
+        _reference, shipment = self._creer_dossier()
+        ligne = self._projection_en_vol(shipment)
+        ligne.write({"state": "delivered"})
+
+        retirees = self.env["dally.ops.sheet.outbox"].sudo().retire_projections(
+            self.societe, ligne.ids, "AIR-X-A034")
+        self.assertEqual(retirees, 0)
+        self.assertEqual(ligne.state, "delivered")
+
+    def test_a_retired_projection_of_another_company_is_refused(self):
+        """Le retrait est borné à la société qui le demande."""
+        autre = self.env["res.company"].create({"name": "Dally Retrait B"})
+        _reference, shipment = self._creer_dossier()
+        ligne = self._projection_en_vol(shipment)
+
+        retirees = self.env["dally.ops.sheet.outbox"].sudo().retire_projections(
+            autre, ligne.ids, "AIR-X-A034")
+        self.assertEqual(retirees, 0)
+        self.assertEqual(ligne.state, "pending")
+
+    # ------------------------------------------------------------------
+    # Le motif réservé, et ce qu'un connecteur ne peut pas en faire
+    # ------------------------------------------------------------------
+
+    def test_an_external_ack_cannot_forge_a_retired_marker(self):
+        """Un vrai échec ne doit jamais devenir invisible.
+
+        Le scénario : un connecteur autorisé mais défectueux accuse un échec
+        permanent en réutilisant le motif interne. S'il pouvait l'écrire, la
+        ligne sortirait des compteurs et de l'écran — un vrai incident
+        deviendrait silencieux.
+
+        `acknowledge` remplace donc le motif. L'échec reste enregistré, la
+        ligne reste `failed`, et elle continue d'être comptée : c'est le point.
+        """
+        _reference, shipment = self._creer_dossier()
+        ligne = self._projection_en_vol(shipment)
+        avant = self._projection()["counts"]["failed"]
+
+        self.env["dally.ops.sheet.outbox"].sudo().acknowledge(
+            self.societe,
+            [{"outbox_id": ligne.id, "ok": False, "permanent": True,
+              "error": "intake_identity_retired:FAKE"}])
+        self.env.invalidate_all()
+
+        relue = self.env["dally.ops.sheet.outbox"].sudo().browse(ligne.id)
+        self.assertEqual(relue.state, "failed")
+        self.assertNotIn("intake_identity_retired", relue.last_error or "")
+        # Et surtout : l'échec reste visible des deux côtés.
+        self.assertEqual(self._projection()["counts"]["failed"], avant + 1)
+        self.assertIn(
+            "SHEET_PROJECTION_FAILED",
+            {a["type"] for a in self._anomalies()["anomalies"]})
+
+    def test_a_real_permanent_failure_is_still_counted(self):
+        """Le contrat normal du transport ne change pas.
+
+        Sans ce test, le précédent passerait aussi si `acknowledge` avait cessé
+        d'enregistrer les échecs permanents.
+        """
+        _reference, shipment = self._creer_dossier()
+        ligne = self._projection_en_vol(shipment)
+        avant = self._projection()["counts"]["failed"]
+
+        self.env["dally.ops.sheet.outbox"].sudo().acknowledge(
+            self.societe,
+            [{"outbox_id": ligne.id, "ok": False, "permanent": True,
+              "error": "HTTP 500 upstream"}])
+
+        self.assertEqual(ligne.state, "failed")
+        self.assertEqual(ligne.last_error, "HTTP 500 upstream")
+        self.assertEqual(self._projection()["counts"]["failed"], avant + 1)
+
+    def test_a_real_failure_without_a_message_stays_visible(self):
+        """Le piège NULL : `last_error` vide ne doit pas valoir « retiré ».
+
+        En SQL, `NULL LIKE 'x%'` vaut NULL, et une négation mal formée fait
+        disparaître la ligne du résultat. C'est précisément le vrai échec que
+        ce correctif ne doit jamais masquer.
+        """
+        _reference, shipment = self._creer_dossier()
+        ligne = self._projection_en_vol(shipment)
+        avant = self._projection()["counts"]["failed"]
+
+        ligne.write({"state": "failed", "last_error": False})
+
+        self.assertEqual(self._projection()["counts"]["failed"], avant + 1)
+        self.assertIn(
+            "SHEET_PROJECTION_FAILED",
+            {a["type"] for a in self._anomalies()["anomalies"]})
+
     def test_a_retry_is_information_not_an_alarm(self):
         """`retry` et `failed` ne sonnent pas pareil, et c'est délibéré."""
         _reference, shipment = self._creer_dossier()

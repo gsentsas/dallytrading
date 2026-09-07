@@ -141,10 +141,17 @@ class DallyOpsAnomalyService(models.AbstractModel):
         information, pas une alarme — d'où deux types et deux gravités, plutôt
         qu'un seul qui ferait sonner l'un comme l'autre.
         """
-        lignes = self.env["dally.ops.sheet.outbox"].sudo().search([
-            ("company_id", "=", self.env.company.id),
-            ("state", "in", ("failed", "retry")),
-        ], order="id desc", limit=FENETRE)
+        # Une projection retirée volontairement n'est pas une panne : elle est
+        # écartée par le domaine du modèle, jamais par une règle réécrite ici.
+        # Deux formulations de la même exclusion divergeraient, et l'écran
+        # cesserait alors de dire la même chose que les compteurs.
+        Boite = self.env["dally.ops.sheet.outbox"]
+        lignes = Boite.sudo().search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("state", "in", ("failed", "retry")),
+            ] + Boite._domaine_hors_identite_retiree(),
+            order="id desc", limit=FENETRE)
         return [
             self._anomalie(
                 "SHEET_PROJECTION_FAILED" if ligne.state == "failed"

@@ -14,6 +14,7 @@ import './ui-detail.css';
 import './ui-polish.css';
 import './ui-search.css';
 import './ui-secondary.css';
+import './ui-flow.css';
 
 export const metadata: Metadata = {
   title: 'Dally Ops',

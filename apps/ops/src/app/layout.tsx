@@ -5,6 +5,7 @@ import { OpsShell } from '@/features/shell/OpsShell';
 import './globals.css';
 import './brand.css';
 import './ui-shell.css';
+import './ui-forms.css';
 
 export const metadata: Metadata = {
   title: 'Dally Ops',

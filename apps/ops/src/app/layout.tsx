@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 
-import { DallyTradingBrand } from '@/features/brand/DallyTradingBrand';
+import { OpsShell } from '@/features/shell/OpsShell';
 
 import './globals.css';
 import './brand.css';
@@ -9,11 +9,6 @@ export const metadata: Metadata = {
   title: 'Dally Ops',
   description: 'Application terrain des opérations DallyTrading.',
   applicationName: 'Dally Ops',
-  // Toutes ces icônes viennent de l'œuvre officielle, jamais d'un monogramme
-  // ni d'un pictogramme alternatif. Les tailles d'écran d'accueil portent le
-  // logo complet ; les deux favicons portent l'emblème seul, parce qu'à 16 et
-  // 32 px le wordmark n'est plus qu'une bavure grise — même œuvre, cadrage
-  // plus serré.
   icons: {
     icon: [
       { url: '/icones/dallytrading-ops-favicon-16.png', type: 'image/png', sizes: '16x16' },
@@ -30,24 +25,21 @@ export const metadata: Metadata = {
     title: 'Dally Ops',
     statusBarStyle: 'black-translucent',
   },
-  // Un outil interne n'a rien à faire dans un index public.
   robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#16365B',
+  viewportFit: 'cover',
+  themeColor: '#00162f',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
       <body>
-        <header className="ops-brand-header">
-          <DallyTradingBrand />
-        </header>
-        {children}
+        <OpsShell>{children}</OpsShell>
       </body>
     </html>
   );

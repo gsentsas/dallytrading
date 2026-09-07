@@ -5,6 +5,7 @@ import { currentIdentity, readOpsSession } from '@/lib/auth/auth';
 import { newCorrelationId } from '@/lib/logger';
 import { fetchActivity } from '@/lib/ops/activity';
 import { ActivityTimeline } from '@/features/activity/ActivityTimeline';
+import { IndicateurSync } from '@/features/offline/IndicateurSync';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,14 +29,42 @@ export default async function ActivityPage({
   }, session.odooSessionId, correlation).catch(() => null);
 
   return (
-    <main>
-      <Link className="retour" href="/">← Accueil</Link>
-      <h1>{team ? 'ACTIVITÉ AUJOURD’HUI' : 'MES SAISIES DU JOUR'}</h1>
+    <main className="ops-operation-page ops-supervision-page">
+      <Link className="retour ops-back-link" href="/">← Accueil</Link>
+      <h1 className="sr-only">{team ? 'ACTIVITÉ AUJOURD’HUI' : 'MES SAISIES DU JOUR'}</h1>
+
+      <header className="ops-supervision-heading">
+        <p className="ops-eyebrow">{team ? 'SUPERVISION' : 'ACTIVITÉ'}</p>
+        <h2>{team ? 'Suivi de l’équipe 👥' : 'Mes saisies du jour'}</h2>
+        <p>{team ? 'Vue d’ensemble des opérations confirmées en temps réel' : 'Vos opérations confirmées par le CRM aujourd’hui'}</p>
+      </header>
+
+      <div className="ops-supervision-status">
+        <span className="ops-date-pill">Aujourd’hui</span>
+        <IndicateurSync login={identity.user.login} />
+      </div>
+
       {page ? (
         <>
-          <ActivityTimeline events={page.events} timezone={page.timezone} />
+          <section className="ops-supervision-summary">
+            <div>
+              <span className="tone-purple" aria-hidden="true">▤</span>
+              <small>{team ? 'Activité équipe' : 'Mes événements'}</small>
+              <strong>{page.events.length}</strong>
+              <p>événement(s) confirmé(s) sur cette page</p>
+            </div>
+          </section>
+
+          <section className="ops-supervision-activity" aria-labelledby="activite-recente-titre">
+            <div className="ops-section-heading">
+              <h2 id="activite-recente-titre">ACTIVITÉ RÉCENTE</h2>
+              <p>{team ? 'ÉQUIPE' : 'MES SAISIES'}</p>
+            </div>
+            <ActivityTimeline events={page.events} timezone={page.timezone} />
+          </section>
+
           {page.next_cursor ? (
-            <Link className="bouton-lien" href={`/activite?cursor=${encodeURIComponent(page.next_cursor)}`}>
+            <Link className="bouton-lien ops-supervision-more" href={`/activite?cursor=${encodeURIComponent(page.next_cursor)}`}>
               CHARGER LA SUITE
             </Link>
           ) : null}

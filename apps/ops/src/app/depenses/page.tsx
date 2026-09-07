@@ -10,21 +10,10 @@ import { Reessayer } from '@/features/reception/Reessayer';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Le choix du départ, pour une dépense.
- *
- * Écran distinct de celui des réceptions, et non un filtre de plus sur le
- * même : les deux ne montrent pas les mêmes départs. On ne réceptionne un
- * colis que pendant la collecte, mais on paie un dédouanement après le départ
- * et un stockage à l'arrivée. Servir une liste unique aux deux écrans
- * forcerait l'un des deux à mentir.
- */
 export default async function PageDepenses() {
   const correlationId = newCorrelationId();
   const identite = await currentIdentity(correlationId).catch(() => null);
   if (!identite) redirect('/connexion');
-
-  // La capacité, pas le rôle : c'est Odoo qui décide qui déclare une dépense.
   if (identite.capabilities.expense_create !== true) redirect('/');
 
   const session = await readOpsSession();
@@ -44,9 +33,16 @@ export default async function PageDepenses() {
   }
 
   return (
-    <main>
-      <Link className="retour" href="/">← Accueil</Link>
-      <h1>Déclarer une dépense</h1>
+    <main className="ops-operation-page ops-expense-page">
+      <Link className="retour ops-back-link" href="/">← Accueil</Link>
+      <header className="ops-operation-heading">
+        <span className="ops-operation-heading-icon tone-red" aria-hidden="true">●●</span>
+        <div>
+          <p className="ops-eyebrow">CAISSE</p>
+          <h1>Déclarer une dépense</h1>
+          <p>Enregistrer une dépense engagée sur le terrain.</p>
+        </div>
+      </header>
 
       {!identite.cash_actor_configured ? (
         <p className="erreur" role="alert">
@@ -57,15 +53,17 @@ export default async function PageDepenses() {
 
       {departs === null ? (
         <>
-          {/* Aucun détail technique : ni modèle, ni code, ni trace. */}
           <p className="erreur" role="alert">Impossible de charger les départs.</p>
           <Reessayer />
         </>
       ) : departs.length === 0 ? (
-        <p className="attenue">Aucun départ aérien ou maritime n’est actif actuellement.</p>
+        <section className="ops-empty-state">
+          <span aria-hidden="true">✓</span>
+          <p className="attenue">Aucun départ aérien ou maritime n’est actif actuellement.</p>
+        </section>
       ) : (
         <>
-          <p className="attenue">Choisissez le départ concerné</p>
+          <div className="ops-section-heading"><h2>Choisissez le départ concerné</h2><p>{departs.length} disponible(s)</p></div>
           <ListeDepartsDepense departs={departs} />
         </>
       )}

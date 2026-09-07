@@ -3,9 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { DallyTradingBrand } from '@/features/brand/DallyTradingBrand';
-
-type IconName = 'home' | 'folder' | 'plus' | 'truck' | 'grid' | 'bell';
+type IconName = 'home' | 'folder' | 'plus' | 'truck' | 'grid';
 
 function Icon({ name }: { readonly name: IconName }) {
   const common = {
@@ -44,19 +42,12 @@ function Icon({ name }: { readonly name: IconName }) {
       </svg>
     );
   }
-  if (name === 'grid') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect {...common} x="4" y="4" width="5" height="5" rx="1" />
-        <rect {...common} x="15" y="4" width="5" height="5" rx="1" />
-        <rect {...common} x="4" y="15" width="5" height="5" rx="1" />
-        <rect {...common} x="15" y="15" width="5" height="5" rx="1" />
-      </svg>
-    );
-  }
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path {...common} d="M7 10a5 5 0 0 1 10 0c0 4 1.8 5.1 2.2 5.6H4.8C5.2 15.1 7 14 7 10ZM10 19h4" />
+      <rect {...common} x="4" y="4" width="5" height="5" rx="1" />
+      <rect {...common} x="15" y="4" width="5" height="5" rx="1" />
+      <rect {...common} x="4" y="15" width="5" height="5" rx="1" />
+      <rect {...common} x="15" y="15" width="5" height="5" rx="1" />
     </svg>
   );
 }
@@ -69,7 +60,13 @@ const nav = [
   { href: '/activite', label: 'Plus', icon: 'grid' as const },
 ];
 
-export function OpsShell({ children }: { readonly children: React.ReactNode }) {
+export function OpsShell({
+  children,
+  brandHeader,
+}: {
+  readonly children: React.ReactNode;
+  readonly brandHeader: React.ReactNode;
+}) {
   const pathname = usePathname();
   const connexion = pathname === '/connexion';
 
@@ -85,12 +82,7 @@ export function OpsShell({ children }: { readonly children: React.ReactNode }) {
         <span className="ops-globe" />
       </div>
 
-      <header className="ops-brand-header">
-        <DallyTradingBrand />
-        <Link className="ops-notification" href="/traitement" aria-label="Ouvrir les éléments à traiter">
-          <Icon name="bell" />
-        </Link>
-      </header>
+      {brandHeader}
 
       <div className="ops-shell-content">{children}</div>
 

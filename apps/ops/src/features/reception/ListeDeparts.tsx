@@ -18,7 +18,9 @@ export function ListeDeparts({ consolidations }: { consolidations: readonly Cons
               <span className="ops-state-pill is-open"><span aria-hidden="true" />Collecte ouverte</span>
             </div>
             <p className="reference">{consolidation.reference}</p>
-            <p className="route ops-depart-route">{enRoute(consolidation.origin, consolidation.destination)}</p>
+            <p className="ops-depart-route">
+              <span className="route">{enRoute(consolidation.origin, consolidation.destination)}</span>
+            </p>
 
             <div className="ops-reception-dates">
               {cloture ? <p className="attenue">Collecte jusqu’au : <strong>{cloture}</strong></p> : null}

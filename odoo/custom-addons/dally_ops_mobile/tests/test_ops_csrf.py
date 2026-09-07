@@ -32,6 +32,7 @@ class TestOpsCsrf(HttpCase):
     ROUTE = "/api/v1/ops/customers/search"
 
     def setUp(self):
+        """Crée une session Ops réelle afin de tester la barrière HTTP."""
         super().setUp()
         self.operateur = self.env["res.users"].create({
             "name": "Gilles CSRF",
@@ -71,6 +72,7 @@ class TestOpsCsrf(HttpCase):
             reponse.json()["error"]["code"], "cross_origin_refused")
 
     def test_le_formulaire_urlencode_est_refuse(self):
+        """Un formulaire urlencoded ne peut pas atteindre une mutation Ops."""
         reponse = self._poster(
             {"Content-Type": "application/x-www-form-urlencoded"})
         self.assertEqual(reponse.status_code, 403)
@@ -97,6 +99,7 @@ class TestOpsCsrf(HttpCase):
         self.assertNotEqual(reponse.status_code, 403)
 
     def test_la_casse_du_content_type_ne_gene_pas(self):
+        """Le type JSON reste admis indépendamment de sa casse."""
         reponse = self._poster({"Content-Type": "Application/JSON"})
         self.assertNotEqual(reponse.status_code, 403)
 
@@ -113,9 +116,16 @@ class TestOpsCsrf(HttpCase):
 
     def test_l_origine_du_domaine_servi_passe(self):
         """L'origine égale à l'hôte servi est légitime."""
-        hote = self.base_url().split("://", 1)[1]
-        reponse = self._poster({"Origin": "https://%s" % hote})
+        reponse = self._poster({"Origin": self.base_url()})
         self.assertNotEqual(reponse.status_code, 403)
+
+    def test_le_meme_hote_sur_un_autre_schema_est_refuse(self):
+        """Même hôte mais autre schéma = autre origine, donc refus."""
+        base = self.base_url()
+        autre_schema = "https://" if base.startswith("http://") else "http://"
+        origine = autre_schema + base.split("://", 1)[1]
+        reponse = self._poster({"Origin": origine})
+        self.assertEqual(reponse.status_code, 403)
 
     def test_l_absence_d_origine_passe(self):
         """La passerelle Next.js n'émet pas d'`Origin` : elle n'est pas un navigateur.
@@ -141,10 +151,12 @@ class TestOpsCsrf(HttpCase):
     # ------------------------------------------------------------------
 
     def test_un_contexte_croise_est_refuse(self):
+        """Un contexte navigateur cross-site est refusé avant le contrôleur."""
         reponse = self._poster({"Sec-Fetch-Site": "cross-site"})
         self.assertEqual(reponse.status_code, 403)
 
     def test_un_contexte_meme_origine_passe(self):
+        """Un contexte same-origin reste compatible avec une mutation légitime."""
         reponse = self._poster({"Sec-Fetch-Site": "same-origin"})
         self.assertNotEqual(reponse.status_code, 403)
 
@@ -201,6 +213,7 @@ class TestOpsCsrf(HttpCase):
         self.assertNotEqual(reponse.status_code, 403)
 
     def test_l_envoi_de_fichier_inter_origine_est_refuse(self):
+        """Un multipart venant d’une origine étrangère reste refusé."""
         reponse = self.url_open(
             "/api/v1/ops/intakes/INEXISTANT/photos",
             files={"file": ("p.jpg", b"\xff\xd8\xff", "image/jpeg")},

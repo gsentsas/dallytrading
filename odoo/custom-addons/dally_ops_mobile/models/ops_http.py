@@ -102,12 +102,14 @@ class RefusOrigineCroisee(werkzeug.exceptions.Forbidden):
     #: Le motif ne descend pas au client. Dire « il manquait le Content-Type »
     #: à un attaquant, c'est lui dire quoi corriger.
     def get_body(self, environ=None, scope=None):
+        """Rend le contrat JSON minimal de refus, sans détail exploitable."""
         return (
             '{"success": false, "error": {"code": "cross_origin_refused", '
             '"message": "Requete refusee."}}'
         )
 
     def get_headers(self, environ=None, scope=None):
+        """Force JSON, no-store et nosniff sur le refus pré-dispatch."""
         return [
             ("Content-Type", "application/json; charset=utf-8"),
             ("Cache-Control", "private, no-store, max-age=0"),
@@ -148,7 +150,7 @@ class DallyOpsHttp(models.AbstractModel):
         #    La passerelle, elle, n'en émet pas — d'où « présent ET étranger »
         #    plutôt que « obligatoire ».
         origine = requete.headers.get("Origin")
-        if origine and not cls._dally_ops_meme_origine(origine, requete.host):
+        if origine and not cls._dally_ops_meme_origine(origine, requete):
             cls._dally_ops_refuser(rule, "origine étrangère")
 
         # 2. `Sec-Fetch-Site`. Même nature d'en-tête, et il couvre le cas où
@@ -166,15 +168,20 @@ class DallyOpsHttp(models.AbstractModel):
             cls._dally_ops_refuser(rule, "type de contenu non JSON")
 
     @staticmethod
-    def _dally_ops_meme_origine(origine, hote):
-        """Compare l'origine annoncée à l'hôte servi.
+    def _dally_ops_meme_origine(origine, requete):
+        """Compare schéma, hôte et port de l'``Origin`` à la requête servie.
 
-        La comparaison porte sur l'autorité — hôte et port — et non sur le
-        schéma : derrière un proxy, le schéma vu par Odoo est celui du saut
-        interne, pas celui du navigateur, et exiger leur égalité refuserait du
-        trafic légitime pour une raison qui n'a rien à voir avec l'attaque.
+        Odoo applique ``ProxyFix`` quand ``proxy_mode`` est actif : le schéma
+        de ``requete`` est donc déjà celui du client, reconstruit depuis les
+        en-têtes du reverse proxy de confiance. Ignorer le schéma accepterait
+        ``http://ops.example`` face à ``https://ops.example`` alors que ce sont
+        deux origines différentes au sens du navigateur.
         """
-        return urlparse(origine).netloc.lower() == (hote or "").lower()
+        annoncee = urlparse(origine)
+        return (
+            annoncee.scheme.lower() == (requete.scheme or "").lower()
+            and annoncee.netloc.lower() == (requete.host or "").lower()
+        )
 
     @classmethod
     def _dally_ops_refuser(cls, rule, motif):

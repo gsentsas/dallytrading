@@ -4,36 +4,28 @@ import type { DepartDepense } from '@/lib/ops/expenses';
 import { LIBELLE_MODE, enRoute } from '@/features/reception/format';
 import { LIBELLE_ETAT_DEPART } from '@/features/depenses/format';
 
-/**
- * Les départs sur lesquels une dépense peut être imputée.
- *
- * La liste est plus longue que celle des réceptions, et c'est voulu : on paie
- * une manutention pendant la collecte, un dédouanement après le départ et un
- * stockage à l'arrivée. L'état est donc affiché sur chaque carte — sans lui,
- * deux départs de même route seraient impossibles à distinguer.
- */
 export function ListeDepartsDepense({ departs }: { departs: readonly DepartDepense[] }) {
   return (
-    <>
+    <section className="ops-depart-list ops-expense-depart-list" aria-label="Départs pour dépenses">
       {departs.map((depart) => (
-        <section className="carte" key={depart.reference}>
-          <span className="mode">
-            {LIBELLE_MODE[depart.transport_mode] ?? depart.transport_mode}
-          </span>
+        <section className="carte ops-depart-card ops-expense-depart-card" key={depart.reference}>
+          <div className="ops-depart-card-top">
+            <span className="ops-depart-mode">
+              {LIBELLE_MODE[depart.transport_mode] ?? depart.transport_mode}
+            </span>
+            <span className="ops-state-pill"><span aria-hidden="true" />{LIBELLE_ETAT_DEPART[depart.state] ?? depart.state}</span>
+          </div>
           <p className="reference">{depart.reference}</p>
-          <p className="route">{enRoute(depart.origin, depart.destination)}</p>
-          <p className="attenue" style={{ margin: 0 }}>
-            {LIBELLE_ETAT_DEPART[depart.state] ?? depart.state}
-          </p>
+          <p className="route ops-depart-route">{enRoute(depart.origin, depart.destination)}</p>
 
           <Link
-            className="bouton-lien"
+            className="bouton-lien ops-expense-action"
             href={`/depenses/${encodeURIComponent(depart.reference)}`}
           >
-            Sélectionner
+            Sélectionner <span aria-hidden="true">→</span>
           </Link>
         </section>
       ))}
-    </>
+    </section>
   );
 }

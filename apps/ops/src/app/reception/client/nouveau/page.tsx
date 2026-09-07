@@ -7,14 +7,6 @@ import { FormulaireClient } from '@/features/reception/FormulaireClient';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Créer un client.
- *
- * La consolidation n'entre pas dans la création : un contact CRM n'a rien à
- * voir avec un départ. Elle est seulement portée à travers l'écran pour que
- * l'opérateur retrouve son fil ensuite. Le futur enregistrement du dossier
- * revalidera l'ensemble côté serveur.
- */
 export default async function PageNouveauClient({
   searchParams,
 }: {
@@ -28,14 +20,21 @@ export default async function PageNouveauClient({
   if (!consolidation) redirect('/reception');
 
   return (
-    <main>
+    <main className="ops-operation-page ops-customer-create-page">
       <Link
-        className="retour"
+        className="retour ops-back-link"
         href={`/reception/client?consolidation=${encodeURIComponent(consolidation)}`}
       >
         ← Rechercher à nouveau
       </Link>
-      <h1>Nouveau client</h1>
+      <header className="ops-operation-heading">
+        <span className="ops-operation-heading-icon tone-blue" aria-hidden="true">＋</span>
+        <div>
+          <p className="ops-eyebrow">CLIENT</p>
+          <h1>Nouveau client</h1>
+          <p>Créer la fiche CRM avant de poursuivre la réception.</p>
+        </div>
+      </header>
       <FormulaireClient consolidation={consolidation} />
     </main>
   );

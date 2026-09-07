@@ -141,10 +141,15 @@ class DallyOpsAnomalyService(models.AbstractModel):
         information, pas une alarme — d'où deux types et deux gravités, plutôt
         qu'un seul qui ferait sonner l'un comme l'autre.
         """
-        lignes = self.env["dally.ops.sheet.outbox"].sudo().search([
+        Boite = self.env["dally.ops.sheet.outbox"]
+        exclues = Boite._projections_identite_retiree().ids
+        domaine = [
             ("company_id", "=", self.env.company.id),
             ("state", "in", ("failed", "retry")),
-        ], order="id desc", limit=FENETRE)
+        ]
+        if exclues:
+            domaine.append(("id", "not in", exclues))
+        lignes = Boite.sudo().search(domaine, order="id desc", limit=FENETRE)
         return [
             self._anomalie(
                 "SHEET_PROJECTION_FAILED" if ligne.state == "failed"

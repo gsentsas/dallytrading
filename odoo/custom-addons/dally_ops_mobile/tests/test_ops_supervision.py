@@ -151,6 +151,23 @@ class TestOpsSupervision(SocleReconciliation):
         self.assertNotIn("projection.invalid", signalee["operator_message"])
         self.assertNotIn("HTTP 500", signalee["operator_message"])
 
+    def test_a_retired_identity_is_not_reported_as_a_sheet_failure(self):
+        """Une projection neutralisée volontairement ne demande aucune action."""
+        reference, shipment = self._creer_dossier()
+        self.env["dally.ops.sheet.outbox"].enqueue_dossier(shipment)
+        ligne = self.env["dally.ops.sheet.outbox"].sudo().search(
+            [("company_id", "=", self.societe.id)], order="id desc", limit=1)
+        avant = self._projection()["counts"]["failed"]
+        ligne.write({
+            "state": "failed",
+            "last_error": "intake_identity_retired:%s" % reference,
+        })
+
+        resultat = self._anomalies()
+        self.assertNotIn(
+            reference, [a["reference"] for a in resultat["anomalies"]])
+        self.assertEqual(self._projection()["counts"]["failed"], avant)
+
     def test_a_retry_is_information_not_an_alarm(self):
         """`retry` et `failed` ne sonnent pas pareil, et c'est délibéré."""
         _reference, shipment = self._creer_dossier()

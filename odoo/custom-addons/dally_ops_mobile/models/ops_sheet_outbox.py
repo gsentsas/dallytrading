@@ -64,6 +64,11 @@ PALIERS_MINUTES = (0, 2, 10, 30, 120, 360)
 #: assez peu pour qu'un passage d'Apps Script tienne dans son quota.
 LOT_MAXIMAL = 50
 
+#: Une identité Ops retirée est une projection volontairement neutralisée,
+#: pas une panne du transport vers le tableur. Le mécanisme de récupération
+#: d'identité l'inscrit comme refus permanent pour qu'elle ne reparte jamais.
+MOTIF_IDENTITE_RETIREE = "intake_identity_retired:"
+
 
 class DallyOpsSheetOutbox(models.Model):
     _name = "dally.ops.sheet.outbox"
@@ -188,9 +193,12 @@ class DallyOpsSheetOutbox(models.Model):
             raise AccessError(_("Accès réservé au responsable."))
 
         compte = {"pending": 0, "retry": 0, "failed": 0, "synced": 0}
+        exclues = self._projections_identite_retiree().ids
+        domaine = [("company_id", "=", self.env.company.id)]
+        if exclues:
+            domaine.append(("id", "not in", exclues))
         groupes = self.sudo()._read_group(
-            [("company_id", "=", self.env.company.id)],
-            groupby=["state"], aggregates=["__count"])
+            domaine, groupby=["state"], aggregates=["__count"])
         for etat, nombre in groupes:
             # `processing` rejoint `pending` : qu'un envoi soit en vol ou en
             # file d'attente ne change rien pour le comptoir.
@@ -219,6 +227,20 @@ class DallyOpsSheetOutbox(models.Model):
             "last_synced_at": (derniere.delivered_at.isoformat()
                                if derniere.delivered_at else None),
         }
+
+    @api.model
+    def _projections_identite_retiree(self):
+        """Les refus permanents créés exprès lors d'un retrait d'identité.
+
+        Ils restent dans l'outbox pour l'audit, mais ne demandent aucune
+        intervention : l'ancien dossier a été renuméroté précisément pour que
+        cette projection ne soit jamais envoyée au tableur.
+        """
+        return self.sudo().search([
+            ("company_id", "=", self.env.company.id),
+            ("state", "=", "failed"),
+            ("last_error", "=like", MOTIF_IDENTITE_RETIREE + "%"),
+        ])
 
     def business_key_for(self, shipment):
         """La clé métier d'un dossier, décidée en un seul endroit.

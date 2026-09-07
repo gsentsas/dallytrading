@@ -212,6 +212,17 @@ class TestOpsCsrf(HttpCase):
             allow_redirects=False, timeout=30)
         self.assertNotEqual(reponse.status_code, 403)
 
+    def test_un_multipart_est_refuse_sur_une_mutation_json(self):
+        """Une route JSON ne profite pas de l exception réservée aux fichiers."""
+        reponse = self.url_open(
+            self.ROUTE,
+            files={"file": ("p.jpg", b"\xff\xd8\xff", "image/jpeg")},
+            data={"phone": "+221770000000"},
+            allow_redirects=False, timeout=30)
+        self.assertEqual(reponse.status_code, 403)
+        self.assertEqual(
+            reponse.json()["error"]["code"], "cross_origin_refused")
+
     def test_l_envoi_de_fichier_inter_origine_est_refuse(self):
         """Un multipart venant d’une origine étrangère reste refusé."""
         reponse = self.url_open(

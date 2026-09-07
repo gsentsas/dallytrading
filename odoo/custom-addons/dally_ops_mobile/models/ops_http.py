@@ -84,6 +84,13 @@ TYPE_JSON = "application/json"
 #: ``Sec-Fetch-Site`` qui protègent ces deux routes.
 TYPE_FICHIER = "multipart/form-data"
 
+#: Les seules mutations Ops dont le corps est réellement multipart. Une route
+#: JSON ne doit pas devenir multipart par simple effet de cette exception.
+ROUTES_FICHIER = frozenset({
+    "/api/v1/ops/intakes/<string:reference>/photos",
+    "/api/v1/ops/expenses/<string:reference>/receipt",
+})
+
 #: Les contextes de navigation admis. ``none`` est la saisie directe dans la
 #: barre d'adresse, ``same-origin`` et ``same-site`` viennent du domaine.
 #: ``cross-site`` est précisément le cas à refuser.
@@ -163,7 +170,9 @@ class DallyOpsHttp(models.AbstractModel):
         #    seul vecteur qui n'a besoin ni de CORS ni de JavaScript.
         type_recu = (requete.headers.get("Content-Type") or "").split(";")[0].strip().lower()
         if type_recu == TYPE_FICHIER:
-            return
+            if rule.rule in ROUTES_FICHIER:
+                return
+            cls._dally_ops_refuser(rule, "multipart hors route fichier")
         if type_recu != TYPE_JSON:
             cls._dally_ops_refuser(rule, "type de contenu non JSON")
 

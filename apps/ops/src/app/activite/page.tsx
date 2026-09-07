@@ -27,15 +27,15 @@ export default async function ActivityPage({
     scope: team ? 'team' : 'mine',
     ...(cursor ? { cursor } : {}),
   }, session.odooSessionId, correlation).catch(() => null);
+  const titreAccessible = team ? 'ACTIVITÉ AUJOURD’HUI' : 'MES SAISIES DU JOUR';
 
   return (
     <main className="ops-operation-page ops-supervision-page">
       <Link className="retour ops-back-link" href="/">← Accueil</Link>
-      <h1 className="sr-only">{team ? 'ACTIVITÉ AUJOURD’HUI' : 'MES SAISIES DU JOUR'}</h1>
 
       <header className="ops-supervision-heading">
         <p className="ops-eyebrow">{team ? 'SUPERVISION' : 'ACTIVITÉ'}</p>
-        <h2>{team ? 'Suivi de l’équipe 👥' : 'Mes saisies du jour'}</h2>
+        <h1 aria-label={titreAccessible}>{team ? 'Suivi de l’équipe 👥' : 'Mes saisies du jour'}</h1>
         <p>{team ? 'Vue d’ensemble des opérations confirmées en temps réel' : 'Vos opérations confirmées par le CRM aujourd’hui'}</p>
       </header>
 

@@ -14,8 +14,8 @@ export function FormulairePaiement({
 }: {
   canaux: CanalPaiement[];
   collecteur: string;
-  dossierLabel: string;
-  clientName: string;
+  dossierLabel?: string;
+  clientName?: string;
   onAnnuler: () => void;
   soumettre: (
     demande: Record<string, unknown>,
@@ -86,21 +86,19 @@ export function FormulairePaiement({
 
       {etat.nom === 'erreur' ? <p className="erreur" role="alert">{etat.message}</p> : null}
 
-      <section className="ops-payment-context">
-        <span className="ops-payment-context-icon tone-blue" aria-hidden="true">▰</span>
-        <div>
-          <small>Dossier</small>
-          <strong>{dossierLabel}</strong>
-        </div>
-      </section>
+      {dossierLabel ? (
+        <section className="ops-payment-context">
+          <span className="ops-payment-context-icon tone-blue" aria-hidden="true">▰</span>
+          <div><small>Dossier</small><strong>{dossierLabel}</strong></div>
+        </section>
+      ) : null}
 
-      <section className="ops-payment-context">
-        <span className="ops-payment-context-icon tone-green" aria-hidden="true">●</span>
-        <div>
-          <small>Client</small>
-          <strong>{clientName}</strong>
-        </div>
-      </section>
+      {clientName ? (
+        <section className="ops-payment-context">
+          <span className="ops-payment-context-icon tone-green" aria-hidden="true">●</span>
+          <div><small>Client</small><strong>{clientName}</strong></div>
+        </section>
+      ) : null}
 
       <label className="ops-payment-card" htmlFor="montant">
         <span className="ops-payment-card-icon tone-green" aria-hidden="true">●●</span>
@@ -133,10 +131,7 @@ export function FormulairePaiement({
             onChange={(evenement) => changer(() => setChoix(evenement.target.value))}
           >
             {canaux.map((canal) => (
-              <option
-                key={`${canal.code}|${canal.currency_code}`}
-                value={`${canal.code}|${canal.currency_code}`}
-              >
+              <option key={`${canal.code}|${canal.currency_code}`} value={`${canal.code}|${canal.currency_code}`}>
                 {canal.name} — {canal.currency_code}
               </option>
             ))}
@@ -163,9 +158,7 @@ export function FormulairePaiement({
         <span aria-hidden="true">✓</span>
         {etat.nom === 'envoi' ? 'Enregistrement…' : 'Enregistrer'}
       </button>
-      <button type="button" className="secondaire ops-payment-cancel" onClick={onAnnuler}>
-        Annuler
-      </button>
+      <button type="button" className="secondaire ops-payment-cancel" onClick={onAnnuler}>Annuler</button>
     </form>
   );
 }

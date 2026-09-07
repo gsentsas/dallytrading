@@ -94,6 +94,33 @@ class TestOpsSupervision(SocleReconciliation):
         self.assertEqual(signalee["reference"], shipment.external_reference)
         self.assertEqual(signalee["action"], "open_intake")
 
+    def test_a_dossier_from_another_channel_is_never_signalled(self):
+        """Une anomalie ne doit désigner qu'un dossier que la fiche sait ouvrir.
+
+        Un dossier venu d'un autre canal peut remplir tous les autres critères
+        — société, consolidation, facture comptabilisée, colis non couvert.
+        S'il était signalé, l'écran afficherait « OUVRIR LE DOSSIER » vers une
+        référence que la route Intake refuse de résoudre : un lien mort, et un
+        responsable envoyé chercher là où il n'y a rien.
+
+        Le service partage donc le domaine du service de ligne, plutôt que
+        d'en écrire un plus large.
+        """
+        reference, shipment, _facture = self._dossier_facture()
+        self._service_ligne().add_late_line(reference, self._ligne_tardive())
+        self.assertIn(
+            shipment.external_reference,
+            [a["reference"] for a in self._anomalies()["anomalies"]])
+
+        # Le même dossier, sorti du périmètre Ops par sa seule provenance :
+        # `google_sheets` est la voie historique du classeur, et ces
+        # dossiers-là n'ont pas de fiche Ops.
+        shipment.sudo().sync_source = "google_sheets"
+        self.assertNotIn(
+            shipment.external_reference,
+            [a["reference"] for a in self._anomalies()["anomalies"]],
+            "un dossier hors Ops ne doit produire aucune anomalie")
+
     def test_a_dossier_without_an_invoice_is_not_an_anomaly(self):
         """Un dossier en cours de saisie n'a pas de colis « non facturé ».
 

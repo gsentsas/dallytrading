@@ -144,9 +144,19 @@ def charge(request_uuid, line_uuid, famille, poids=1.0):
     }
 
 
+#: Toute attente de la sonde est bornée.
+#:
+#: `barriere.wait()` vient après l'ouverture du curseur et la construction de
+#: l'environnement. Si l'une des deux lève dans un seul fil — pool épuisé, base
+#: indisponible — l'autre attendrait la barrière sans fin, et `join()` avec lui.
+#: La sonde resterait suspendue : aucun verdict, et surtout aucun nettoyage,
+#: donc un banc laissé dans l'état que le nettoyage existe pour éviter.
+DELAI = 120
+
+
 def en_parallele(reference, operateur, charges):
-    """Deux vrais curseurs, relaches ensemble par une barriere."""
-    barriere = Barrier(len(charges))
+    """Deux vrais curseurs, relâchés ensemble par une barrière."""
+    barriere = Barrier(len(charges), timeout=DELAI)
     issues = []
 
     def executer(corps):
@@ -159,7 +169,11 @@ def en_parallele(reference, operateur, charges):
                 return (local["dally.ops.intake.line.service"]
                         .with_company(societe).add_late_line(reference, corps))
 
-            barriere.wait()
+            try:
+                barriere.wait()
+            except Exception as attente:                    # noqa: BLE001
+                issues.append(("refus", "barriere:%s" % type(attente).__name__))
+                return
             try:
                 issues.append(("ok", retrying(geste, local)))
                 cr.commit()
@@ -174,7 +188,12 @@ def en_parallele(reference, operateur, charges):
     for f in fils:
         f.start()
     for f in fils:
-        f.join()
+        f.join(timeout=DELAI)
+    encore_en_vie = [f for f in fils if f.is_alive()]
+    if encore_en_vie:
+        raise RuntimeError(
+            "%s fil(s) toujours actif(s) apres %ss : la sonde ne peut pas "
+            "conclure." % (len(encore_en_vie), DELAI))
     return issues
 
 
@@ -279,18 +298,26 @@ for etiquette, cible in (("cas 1", dossier1), ("cas 2", dossier2),
 # comptabilité », ce qui fait échouer un test d'identité sans rapport, joué
 # plus tard. Défaire les pièces n'est donc pas de la politesse : c'est éviter
 # de fabriquer un rouge que la campagne suivante mettrait sur le dos du code.
-pieces = env["account.move"].sudo().browse([])
-for cible in (dossier1, dossier2, dossier3):
-    pieces |= cible.sudo()._supplement_invoices()
-for facture in PIECES:
-    pieces |= facture
-pieces.filtered(lambda piece: piece.state == "posted").button_draft()
-pieces.filtered(lambda piece: piece.state != "cancel").button_cancel()
-pieces.unlink()
-env.cr.commit()
-if not euro_etait_active:
-    euro.active = False
+# La devise se restaure dans un `finally`. Défaire les pièces peut échouer —
+# une séquence comptable ou un verrou de facturation peut refuser la
+# suppression — et le script s'arrêterait alors avant de rendre l'euro à son
+# état d'origine. Il laisserait exactement le rouge sans rapport que ce
+# nettoyage existe pour éviter, et sur un test qui n'a rien à voir avec lui.
+try:
+    pieces = env["account.move"].sudo().browse([])
+    for cible in (dossier1, dossier2, dossier3):
+        pieces |= cible.sudo()._supplement_invoices()
+    for facture in PIECES:
+        pieces |= facture
+    pieces.filtered(lambda piece: piece.state == "posted").button_draft()
+    pieces.filtered(lambda piece: piece.state != "cancel").button_cancel()
+    pieces.unlink()
     env.cr.commit()
+finally:
+    if not euro_etait_active:
+        euro.active = False
+        env.cr.commit()
+
 restantes = env["account.move.line"].sudo().search_count(
     [("currency_id.name", "=", "EUR")])
 print("nettoyage : %s ligne(s) comptable(s) en EUR restantes" % restantes)

@@ -221,22 +221,27 @@ class DallyOpsAnomalyService(models.AbstractModel):
 
     @api.model
     def _paiements_a_verifier(self):
-        """Un encaissement que la comptabilité n'a pas su enregistrer."""
-        collections = self.env["dally.freight.collection"].sudo().search([
-            ("company_id", "=", self.env.company.id),
-            ("state", "=", "error"),
-        ], order="id desc", limit=FENETRE)
+        """Un encaissement que la comptabilité n'a pas su enregistrer.
+
+        Le filtre sur le dossier passe par le domaine Ops, comme partout
+        ailleurs : un encaissement en erreur sur un dossier venu d'un autre
+        canal produirait un lien que la fiche refuserait d'ouvrir.
+        """
+        collections = self.env["dally.freight.collection"].sudo().search(
+            [("company_id", "=", self.env.company.id),
+             ("state", "=", "error"),
+             ("shipment_id", "in", self._dossiers_ops().ids)],
+            order="id desc", limit=FENETRE)
         return [
             self._anomalie(
                 "PAYMENT_REVIEW_REQUIRED",
-                collection.shipment_id.external_reference or "",
+                collection.shipment_id.external_reference,
                 _("Paiement à vérifier"),
                 _("Un encaissement de ce dossier n'a pas pu être "
                   "comptabilisé."),
-                collection.shipment_id.external_reference or None,
+                collection.shipment_id.external_reference,
             )
             for collection in collections
-            if collection.shipment_id.external_reference
         ]
 
     @api.model
@@ -247,20 +252,20 @@ class DallyOpsAnomalyService(models.AbstractModel):
         bloque — paiement, complétude, dérogation. Ops le lit, il ne le
         recalcule pas.
         """
-        dossiers = self.env["dally.shipment"].sudo().search([
-            ("company_id", "=", self.env.company.id),
-            ("consolidation_id", "!=", False),
-            ("consolidation_state", "in", ("closed", "in_transit")),
-            ("ready_for_departure", "=", False),
-        ], order="id desc", limit=FENETRE)
+        dossiers = self.env["dally.shipment"].sudo().search(
+            self._domaine([
+                ("consolidation_id", "!=", False),
+                ("consolidation_state", "in", ("closed", "in_transit")),
+                ("ready_for_departure", "=", False),
+            ]), order="id desc", limit=FENETRE)
         return [
             self._anomalie(
                 "INCOMPLETE_BEFORE_DEPARTURE",
-                dossier.external_reference or dossier.name,
+                dossier.external_reference,
                 _("Dossier incomplet avant départ"),
                 _("Ce dossier est rattaché à un départ fermé mais n'est pas "
                   "prêt à partir."),
-                dossier.external_reference or None,
+                dossier.external_reference,
             )
             for dossier in dossiers
         ]
@@ -288,13 +293,28 @@ class DallyOpsAnomalyService(models.AbstractModel):
         }
 
     @api.model
+    def _domaine(self, extra=()):
+        """Le domaine des dossiers qu'une anomalie a le droit de désigner.
+
+        Il vient du service de ligne, qui porte déjà la définition d'un dossier
+        Ops : société, `sync_source = backoffice`, `sync_source_key` en
+        `ops:%`, consolidation d'entrée. La recopier ici en ferait une seconde
+        version, plus large, qui divergerait.
+
+        Ce n'est pas un détail de forme. Une anomalie annonce `open_intake`
+        avec une référence, et la fiche résout cette référence **avec ce
+        domaine-là**. Chercher plus large ferait donc afficher un lien que la
+        fiche refuserait d'ouvrir — l'écran promettrait un dossier
+        introuvable.
+        """
+        return (self.env["dally.ops.intake.line.service"]._domaine_dossier_ops()
+                + [("external_reference", "!=", False)] + list(extra))
+
+    @api.model
     def _dossiers_ops(self):
         """Les dossiers nés de Dally Ops, dans la société courante."""
-        return self.env["dally.shipment"].sudo().search([
-            ("company_id", "=", self.env.company.id),
-            ("intake_consolidation_id", "!=", False),
-            ("external_reference", "!=", False),
-        ], order="id desc", limit=FENETRE)
+        return self.env["dally.shipment"].sudo().search(
+            self._domaine(), order="id desc", limit=FENETRE)
 
     @api.model
     def _dossiers_factures(self):
@@ -304,9 +324,6 @@ class DallyOpsAnomalyService(models.AbstractModel):
         simplement pas encore été facturé. Confondre les deux ferait sonner
         chaque saisie en cours.
         """
-        return self.env["dally.shipment"].sudo().search([
-            ("company_id", "=", self.env.company.id),
-            ("intake_consolidation_id", "!=", False),
-            ("external_reference", "!=", False),
-            ("invoice_id.state", "=", "posted"),
-        ], order="id desc", limit=FENETRE)
+        return self.env["dally.shipment"].sudo().search(
+            self._domaine([("invoice_id.state", "=", "posted")]),
+            order="id desc", limit=FENETRE)

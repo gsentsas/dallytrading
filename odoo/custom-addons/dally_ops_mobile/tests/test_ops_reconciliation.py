@@ -20,6 +20,8 @@ seulement quand elle est réellement en peine.
 """
 import uuid
 
+import psycopg2.errors
+
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 from odoo.addons.dally_ops_mobile.models.ops_errors import DallyOpsConflict
 from odoo.exceptions import UserError
@@ -282,7 +284,10 @@ class TestOpsReconciliation(SocleReconciliation):
         _reference, shipment = self._creer_dossier()
         ligne = self._projection(shipment, "delivered")
 
-        with self.assertRaises(Exception):
+        # L'exception attendue est nommée : `Exception` laisserait n'importe
+        # quelle panne valider le test. La contrainte est déclarée en SQL sur
+        # le modèle, donc c'est PostgreSQL qui refuse, pas l'ORM.
+        with self.assertRaises(psycopg2.errors.UniqueViolation):
             with self.env.cr.savepoint():
                 ligne.sudo().copy({"state": "failed"})
 

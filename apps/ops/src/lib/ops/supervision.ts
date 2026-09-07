@@ -25,20 +25,42 @@ export const typeAnomalie = z.enum([
   'INCOMPLETE_BEFORE_DEPARTURE',
 ]);
 
-const anomalie = z
-  .object({
-    type: typeAnomalie,
-    /** La référence métier du dossier ou du départ. Jamais une clé primaire. */
-    reference: z.string(),
-    title: z.string().min(1),
-    /** Une phrase rédigée pour l'opérateur. Jamais un message de transport. */
-    operator_message: z.string().min(1),
-    severity: z.enum(['high', 'medium', 'low']),
+/** Ce que toute anomalie porte, quelle que soit son issue. */
+const socleAnomalie = {
+  type: typeAnomalie,
+  /** La référence métier du dossier ou du départ. Jamais une clé primaire. */
+  reference: z.string(),
+  title: z.string().min(1),
+  /** Une phrase rédigée pour l'opérateur. Jamais un message de transport. */
+  operator_message: z.string().min(1),
+  severity: z.enum(['high', 'medium', 'low']),
+};
+
+/**
+ * L'action et le dossier à ouvrir vont ensemble, ou pas du tout.
+ *
+ * Deux champs indépendants laissaient passer deux états incohérents :
+ * `open_intake` sans dossier, où l'écran annonce une action puis n'affiche
+ * aucun lien ; et un dossier sans action, où l'écran tait une fiche qu'il
+ * pourrait ouvrir. Les deux se lisent comme un bug d'affichage alors que
+ * c'est le contrat qui est trop large.
+ *
+ * L'union discriminée rend ces états inexprimables : le serveur qui en
+ * produirait un est refusé à la frontière, là où le défaut se voit.
+ */
+const anomalie = z.discriminatedUnion('action', [
+  z.object({
+    ...socleAnomalie,
+    action: z.literal('open_intake'),
+    intake_reference: z.string().min(1),
+  }).strict(),
+  z.object({
+    ...socleAnomalie,
     /** `null` quand il n'y a rien à ouvrir — un incident de transport, par exemple. */
-    action: z.enum(['open_intake']).nullable(),
-    intake_reference: z.string().nullable(),
-  })
-  .strict();
+    action: z.null(),
+    intake_reference: z.null(),
+  }).strict(),
+]);
 
 const listeAnomalies = z
   .object({

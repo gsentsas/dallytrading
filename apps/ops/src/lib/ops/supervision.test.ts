@@ -80,6 +80,22 @@ describe('les anomalies', () => {
     await expect(fetchAnomalies('session', 'cid')).rejects.toThrow();
   });
 
+  it('refuse `open_intake` sans dossier à ouvrir', async () => {
+    // L'écran annoncerait une action puis n'afficherait aucun lien.
+    vi.mocked(opsGet).mockResolvedValue({
+      ...LISTE, anomalies: [{ ...ANOMALIE, intake_reference: null }],
+    });
+    await expect(fetchAnomalies('session', 'cid')).rejects.toThrow();
+  });
+
+  it('refuse un dossier annoncé sans action pour l’ouvrir', async () => {
+    // L'écran tairait une fiche qu'il pourrait pourtant ouvrir.
+    vi.mocked(opsGet).mockResolvedValue({
+      ...LISTE, anomalies: [{ ...ANOMALIE, action: null }],
+    });
+    await expect(fetchAnomalies('session', 'cid')).rejects.toThrow();
+  });
+
   it('accepte une anomalie sans dossier à ouvrir', async () => {
     vi.mocked(opsGet).mockResolvedValue({
       ...LISTE,

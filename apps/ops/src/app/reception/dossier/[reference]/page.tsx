@@ -13,6 +13,7 @@ import { EtatDossier } from '@/features/reception/EtatDossier';
 import { SynchronisationDossier } from '@/features/reception/SynchronisationDossier';
 import { PhotosDossier } from '@/features/reception/PhotosDossier';
 import { EvenementsDossier } from '@/features/reception/EvenementsDossier';
+import { libelleEtat } from '@/features/recherche/vocabulaire';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,7 +72,7 @@ export default async function PageDossier({
           <strong>{dossier.customer.name}</strong>
           <small>{dossier.reference}</small>
         </div>
-        <span className="ops-dossier-state">En cours</span>
+        <span className="ops-dossier-state">{libelleEtat(dossier.state)}</span>
       </section>
 
       <section className="carte ops-dossier-information">

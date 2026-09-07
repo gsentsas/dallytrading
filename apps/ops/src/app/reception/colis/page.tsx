@@ -51,7 +51,7 @@ export default async function PageColis({
         </div>
       </header>
 
-      <h1 className="sr-only">DOSSIER EN COURS</h1>
+      <h1 className="ops-current-dossier-title">DOSSIER EN COURS</h1>
       <section className="carte ops-reception-context">
         <div>
           <small>Client</small>

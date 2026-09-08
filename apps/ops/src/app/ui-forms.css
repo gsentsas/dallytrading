@@ -1,0 +1,696 @@
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  /* `clip` est deprecie ; `clip-path` fait le meme masquage et est la
+     propriete que les navigateurs actuels honorent. */
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Le badge des maquettes n'est pas simulé : aucun compteur fictif. */
+.ops-notification::after { display: none; }
+
+.ops-login-page {
+  position: relative;
+  display: grid;
+  width: min(100%, 46rem);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: calc(4rem + env(safe-area-inset-top)) 2rem 3rem;
+  align-content: center;
+  overflow: hidden;
+}
+
+.ops-login-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ops-login-atmosphere::before {
+  content: '';
+  position: absolute;
+  inset: 24% -20% -12%;
+  background:
+    linear-gradient(180deg, transparent 0 22%, rgba(2, 13, 32, 0.1) 45%),
+    radial-gradient(ellipse at 50% 50%, rgba(21, 111, 218, 0.16), transparent 55%);
+}
+
+.ops-login-globe {
+  position: absolute;
+  right: -4.5rem;
+  top: 5.5rem;
+  width: 17rem;
+  height: 17rem;
+  border: 1px solid rgba(44, 139, 255, 0.19);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(23, 130, 255, 0.18), rgba(0, 24, 60, 0.04) 62%);
+  box-shadow: inset 0 0 4rem rgba(16, 96, 210, 0.1);
+}
+
+.ops-login-globe::before,
+.ops-login-globe::after {
+  content: '';
+  position: absolute;
+  inset: 14% 8%;
+  border: 1px solid rgba(48, 139, 255, 0.14);
+  border-radius: 50%;
+  transform: rotate(26deg);
+}
+
+.ops-login-globe::after {
+  inset: 8% 37%;
+  transform: rotate(-18deg);
+}
+
+.ops-login-orbit {
+  position: absolute;
+  right: -8rem;
+  top: 2.3rem;
+  width: 31rem;
+  height: 13rem;
+  border-top: 1px solid rgba(18, 113, 255, 0.4);
+  border-radius: 50%;
+  transform: rotate(-13deg);
+}
+
+.ops-login-orbit-two {
+  top: 5rem;
+  right: -11rem;
+  width: 36rem;
+  opacity: 0.48;
+}
+
+.ops-login-kicker {
+  position: absolute;
+  top: calc(5.2rem + env(safe-area-inset-top));
+  left: 2rem;
+  margin: 0;
+  color: #5e9be1;
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.8;
+  letter-spacing: 0.28em;
+}
+
+.ops-login-brand {
+  display: grid;
+  justify-items: center;
+  margin: 11rem 0 2rem;
+  text-align: center;
+}
+
+.ops-login-brand img {
+  width: 13.5rem;
+  height: auto;
+  padding: 0.75rem 0.9rem;
+  background: #fff;
+  border-radius: 1.5rem;
+  box-shadow: 0 1.2rem 3rem rgba(0, 7, 25, 0.25);
+}
+
+.ops-login-brand h1 {
+  margin: 1.7rem 0 0.25rem;
+  color: #fff;
+  font-size: clamp(2.6rem, 9vw, 4rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.ops-login-brand p {
+  margin: 0;
+  color: #a9c7f5;
+  font-size: 1.05rem;
+}
+
+.ops-login-form {
+  display: grid;
+  gap: 0.9rem;
+  width: 100%;
+}
+
+.ops-login-field {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 4.9rem;
+  margin: 0;
+  color: #b8d3ff;
+  border: 1px solid rgba(82, 167, 255, 0.48);
+  border-radius: 1.45rem;
+  background: linear-gradient(145deg, rgba(8, 48, 88, 0.85), rgba(4, 35, 67, 0.76));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.ops-login-field-icon {
+  display: grid;
+  place-items: center;
+  color: #8cb9f6;
+}
+
+.ops-login-field-icon svg,
+.ops-password-toggle svg {
+  width: 1.55rem;
+  height: 1.55rem;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ops-login-field input {
+  min-width: 0;
+  margin: 0;
+  padding: 0.9rem 0;
+  color: #f6fbff;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font-size: 1.05rem;
+}
+
+.ops-login-field input::placeholder { color: #9ab9e7; }
+
+.ops-login-field:focus-within {
+  border-color: rgba(38, 173, 255, 0.9);
+  box-shadow: 0 0 0 3px rgba(21, 136, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.ops-password-toggle {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  min-height: 3.5rem;
+  padding: 0;
+  color: #8cb9f6;
+  background: transparent;
+  border: 0;
+}
+
+.ops-login-submit,
+.ops-payment-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  min-height: 4.8rem;
+  margin-top: 0.35rem;
+  color: #fff;
+  background: linear-gradient(100deg, #20bfff, #126dff 58%, #2db9ff);
+  border: 1px solid rgba(104, 214, 255, 0.75);
+  border-radius: 1.45rem;
+  box-shadow: 0 1rem 2.6rem rgba(0, 103, 255, 0.21), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.ops-login-benefits {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  margin-top: 2.3rem;
+  padding: 1rem 0.65rem;
+  border: 1px solid rgba(79, 154, 237, 0.28);
+  border-radius: 1.4rem;
+  background: rgba(5, 37, 71, 0.64);
+}
+
+.ops-login-benefits > div {
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  text-align: center;
+}
+
+.ops-login-benefits > div + div { border-left: 1px solid rgba(91, 163, 240, 0.26); }
+
+.ops-login-benefits span {
+  display: grid;
+  place-items: center;
+  min-width: 3.1rem;
+  height: 3.1rem;
+  padding: 0 0.55rem;
+  color: #fff;
+  border-radius: 0.9rem;
+  font-size: 0.9rem;
+  letter-spacing: -0.15em;
+}
+
+.ops-login-benefits strong {
+  color: #bfd5f7;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.ops-login-signature {
+  margin: 2rem 0 0;
+  color: #4f8fd7;
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 650;
+  letter-spacing: 0.32em;
+}
+
+.ops-payment-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.ops-payment-heading {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.25rem 0 0.3rem;
+}
+
+.ops-payment-heading-icon {
+  display: grid;
+  place-items: center;
+  width: 4.1rem;
+  height: 4.1rem;
+  flex: 0 0 auto;
+  color: #fff;
+  background: linear-gradient(145deg, #c653ff, #7627e9);
+  border-radius: 1.15rem;
+  font-size: 1.7rem;
+}
+
+.ops-payment-heading h2 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(2rem, 7vw, 3rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.ops-payment-heading p {
+  margin: 0.45rem 0 0;
+  color: #a9c7f5;
+}
+
+.ops-payment-context,
+.ops-payment-card {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+  margin: 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(82, 167, 255, 0.38);
+  border-radius: 1.35rem;
+  background: linear-gradient(145deg, rgba(8, 48, 88, 0.86), rgba(4, 35, 67, 0.81));
+}
+
+.ops-payment-context-icon,
+.ops-payment-card-icon {
+  display: grid;
+  place-items: center;
+  width: 3.35rem;
+  height: 3.35rem;
+  color: #fff;
+  border-radius: 1rem;
+  font-weight: 800;
+}
+
+.ops-payment-context small,
+.ops-payment-context strong { display: block; }
+.ops-payment-context small { color: #84aee2; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.16em; }
+.ops-payment-context strong { margin-top: 0.2rem; color: #fff; font-size: 1.05rem; }
+
+.ops-payment-field-copy { min-width: 0; }
+.ops-payment-field-copy > strong { display: block; margin-bottom: 0.65rem; color: #fff; font-size: 1.08rem; }
+.ops-payment-field-copy em { color: #ff4969; font-style: normal; }
+.ops-payment-field-copy small { display: block; margin-top: 0.48rem; color: #91b4e2; font-size: 0.82rem; }
+.ops-payment-field-copy b { color: #d9e9ff; }
+
+.ops-payment-card input,
+.ops-payment-card select {
+  width: 100%;
+  margin: 0;
+  padding: 0.9rem 1rem;
+  color: #eaf3ff;
+  background: rgba(2, 27, 56, 0.6);
+  border: 1px solid rgba(67, 151, 245, 0.48);
+  border-radius: 0.95rem;
+}
+
+.ops-payment-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+}
+
+.ops-payment-currency {
+  display: grid;
+  place-items: center;
+  min-width: 5.2rem;
+  padding: 0 0.8rem;
+  color: #fff;
+  background: linear-gradient(145deg, #147cff, #0e5dde);
+  border: 1px solid rgba(91, 183, 255, 0.75);
+  border-radius: 0.95rem;
+  font-weight: 800;
+}
+
+.ops-payment-cancel {
+  margin-top: -0.25rem;
+  border-radius: 1.2rem;
+}
+
+@media (max-width: 620px) {
+  .ops-login-page { padding-inline: 1.3rem; }
+  .ops-login-kicker { left: 1.3rem; }
+  .ops-login-brand { margin-top: 10rem; }
+  .ops-login-brand img { width: 11rem; }
+  .ops-login-benefits { margin-top: 1.6rem; }
+  .ops-payment-context,
+  .ops-payment-card { grid-template-columns: 3.45rem minmax(0, 1fr); padding: 0.95rem; }
+  .ops-payment-context-icon,
+  .ops-payment-card-icon { width: 3rem; height: 3rem; }
+}
+
+@media (max-width: 390px) {
+  .ops-login-kicker { font-size: 0.7rem; }
+  .ops-login-brand { margin-top: 9.5rem; }
+  .ops-login-benefits strong { font-size: 0.7rem; }
+  .ops-payment-input-row { grid-template-columns: 1fr; }
+  .ops-payment-currency { min-height: 3rem; }
+}
+
+/*
+ * Les champs de fichier.
+ *
+ * Un `input[type=file]` garde son bouton natif : sur ce fond nuit il s'affiche
+ * en gris clair sur blanc, seul élément de l'application à ne pas suivre le
+ * système. Le contrôle reste exactement le même — c'est son habillage qui
+ * rejoint les autres champs, pour que la photo d'un dossier se prenne dans le
+ * même vocabulaire visuel que le reste du formulaire.
+ */
+input[type='file'] {
+  padding: 0.55rem 0.6rem;
+  color: var(--ops-attenue);
+  font-size: 0.9rem;
+}
+
+input[type='file']::file-selector-button {
+  margin-right: 0.75rem;
+  padding: 0.55rem 0.95rem;
+  color: var(--ops-texte);
+  font: inherit;
+  font-weight: 600;
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+input[type='file']::file-selector-button:hover {
+  background: rgba(56, 189, 248, 0.26);
+}
+
+input[type='file']:focus-visible {
+  outline: 2px solid var(--ops-accent);
+  outline-offset: 2px;
+}
+
+/*
+ * « Se souvenir de moi ».
+ *
+ * La case s'aligne a gauche sous les deux champs, dans le meme rythme
+ * vertical qu'eux. Sa surface tactile fait 44px de haut : c'est une case a
+ * cocher sur un telephone, souvent avec des gants.
+ */
+.ops-login-remember {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 44px;
+  margin-top: 0.15rem;
+  color: #cfe1fb;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+/*
+ * La case est redessinee.
+ *
+ * Le rendu natif pose un carre blanc plein : sur ce fond nuit c'est la seule
+ * tache claire de l'ecran, et elle attire l'oeil avant le bouton. `appearance:
+ * none` rend la main sur le dessin — un carre vide borde de bleu, et une coche
+ * qui apparait quand il est actif.
+ */
+.ops-login-remember input[type='checkbox'] {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1.5px solid rgba(112, 176, 244, 0.6);
+  border-radius: 0.42rem;
+  background: rgba(6, 34, 66, 0.55);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.ops-login-remember input[type='checkbox']::after {
+  content: '';
+  width: 0.72rem;
+  height: 0.38rem;
+  border: 2px solid #fff;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 1px;
+  transform: translateY(-1px) rotate(-45deg);
+  opacity: 0;
+}
+
+.ops-login-remember input[type='checkbox']:checked {
+  border-color: transparent;
+  background: linear-gradient(140deg, #2ea8ff, #0b6ff2);
+}
+
+.ops-login-remember input[type='checkbox']:checked::after { opacity: 1; }
+
+.ops-login-remember input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--ops-accent);
+  outline-offset: 2px;
+}
+
+/* Les pictogrammes des benefices remplacent les caracteres : le carre garde
+   sa taille, le trace s'y inscrit. */
+.ops-login-benefits span svg {
+  width: 1.55rem;
+  height: 1.55rem;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+/*
+ * La signature entre deux filets, comme sur la maquette : le texte au centre,
+ * un trait de chaque cote qui s'etire sur la largeur restante.
+ */
+.ops-login-signature {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.ops-login-signature::before,
+.ops-login-signature::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(120, 178, 240, 0.5), transparent);
+}
+
+/* Les carrés d'icône de l'encaissement portent maintenant des tracés. */
+.ops-payment-heading-icon svg,
+.ops-payment-context-icon svg,
+.ops-payment-card-icon svg {
+  width: 55%;
+  height: 55%;
+  color: #fff;
+}
+
+/*
+ * La devise, présentée comme le segment actif de la maquette.
+ *
+ * Elle ne se choisit pas : c'est le canal de paiement qui la porte, et le
+ * serveur la refuserait autrement. La maquette montre deux segments dont un
+ * actif ; ici il n'y a que l'actif, parce qu'il n'y a rien à choisir.
+ */
+.ops-payment-currency {
+  display: grid;
+  place-items: center;
+  min-height: 3.4rem;
+  padding: 0 1.1rem;
+  color: #fff;
+  border-radius: 0.85rem;
+  background: linear-gradient(140deg, #2ea8ff, #0b6ff2);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+/* ==========================================================================
+ * Le mode encaissement : le paiement devient la tâche principale.
+ * ======================================================================== */
+
+/*
+ * Entrer en encaissement depuis un dossier, c'est arrêter de consulter pour
+ * saisir. Le formulaire arrivait pourtant en septième position, sous les
+ * informations, l'état, le reçu — plusieurs centaines de pixels sous le
+ * pouce, quand la maquette le pose immédiatement sous le titre.
+ *
+ * Les blocs de consultation se replient donc tant que le formulaire est
+ * ouvert. Ils ne sont pas retirés : ils restent dans le document, et
+ * « Annuler » les rend intacts. Aucune fonction du dossier n'est supprimée —
+ * seule leur place dans l'attention change, le temps d'un encaissement.
+ *
+ * Le repli s'appuie sur `:has()`. Un navigateur qui ne le connaît pas
+ * retrouve simplement la mise en page d'avant : c'est une amélioration, pas
+ * une dépendance.
+ */
+.ops-dossier-page:has(.ops-payment-form) > .ops-dossier-customer,
+.ops-dossier-page:has(.ops-payment-form) > .ops-dossier-information,
+.ops-dossier-page:has(.ops-payment-form) > [aria-labelledby='etat-dossier-titre'],
+.ops-dossier-page:has(.ops-payment-form) > .ops-dossier-receipt,
+.ops-dossier-page:has(.ops-payment-form) > [data-testid='photos-dossier'],
+.ops-dossier-page:has(.ops-payment-form) > [data-testid='synchronisation-dossier'],
+.ops-dossier-page:has(.ops-payment-form) > .ops-dossier-activity,
+.ops-dossier-page:has(.ops-payment-form) > [data-testid='evenements-dossier'] {
+  display: none;
+}
+
+/*
+ * Le contexte du formulaire, compact.
+ *
+ * Dossier et client tiennent côte à côte sur une ligne : ce sont deux
+ * rappels, pas deux champs. La maquette leur donne la même discrétion —
+ * on vérifie d'un coup d'œil qu'on encaisse pour la bonne personne, puis on
+ * saisit.
+ */
+.ops-payment-form:has(.ops-payment-context) {
+  --ops-payment-context-gap: 0.6rem;
+}
+
+.ops-payment-context {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid rgba(86, 146, 214, 0.28);
+  border-radius: 0.9rem;
+  background: rgba(8, 43, 82, 0.5);
+}
+
+.ops-payment-context-icon {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.6rem;
+}
+
+.ops-payment-context small {
+  display: block;
+  color: #7fa8d9;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.ops-payment-context strong {
+  display: block;
+  color: #fff;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  /* Les deux rappels partagent une ligne : ensemble ils prennent la hauteur
+     d'un seul champ. */
+  .ops-payment-form {
+    gap: 0.8rem;
+  }
+
+  .ops-payment-context {
+    padding: 0.5rem 0.6rem;
+    gap: 0.5rem;
+  }
+
+  .ops-payment-context-icon { width: 1.9rem; height: 1.9rem; }
+  .ops-payment-context small { font-size: 0.63rem; }
+  .ops-payment-context strong { font-size: 0.88rem; }
+
+  .ops-payment-heading-icon { width: 2.8rem; height: 2.8rem; }
+  .ops-payment-heading h2 { font-size: 1.6rem; }
+  .ops-payment-heading p { font-size: 0.86rem; }
+
+  .ops-payment-card { padding: 0.75rem 0.8rem; gap: 0.7rem; }
+  .ops-payment-card-icon { width: 2.2rem; height: 2.2rem; }
+  .ops-payment-field-copy > strong { font-size: 0.9rem; }
+  .ops-payment-field-copy small { font-size: 0.74rem; }
+  .ops-payment-card input,
+  .ops-payment-card select { min-height: 3rem; }
+  .ops-payment-currency { min-height: 3rem; padding: 0 0.9rem; }
+}
+
+/*
+ * En mode encaissement, le titre du dossier devient un fil d'Ariane.
+ *
+ * Il reste — c'est le seul `h1` de la page, et le retirer laisserait un
+ * document sans titre — mais il cesse de prendre la taille d'un titre
+ * d'écran : la tâche du moment est le paiement, pas la consultation du
+ * dossier. L'opérateur garde sous les yeux sur quel dossier il encaisse.
+ */
+.ops-dossier-page:has(.ops-payment-form) > .ops-dossier-heading {
+  margin-bottom: 0.35rem;
+}
+
+.ops-dossier-page:has(.ops-payment-form) > .ops-dossier-heading .ops-eyebrow {
+  display: none;
+}
+
+.ops-dossier-page:has(.ops-payment-form) > .ops-dossier-heading h1 {
+  margin: 0;
+  color: #8fb6e6;
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+/* Les deux rappels partagent une ligne : ensemble, la hauteur d'un champ. */
+@media (max-width: 520px) {
+  .ops-payment-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ops-payment-form > * { grid-column: 1 / -1; }
+
+  .ops-payment-form > .ops-payment-context { grid-column: span 1; }
+}

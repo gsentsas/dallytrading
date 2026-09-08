@@ -1,4 +1,6 @@
 import Link from 'next/link';
+
+import { OpsCardIcon } from '@/features/shell/OpsCardIcon';
 import { redirect } from 'next/navigation';
 
 import { currentIdentity, readOpsSession } from '@/lib/auth/auth';
@@ -13,16 +15,22 @@ import { EtatDossier } from '@/features/reception/EtatDossier';
 import { SynchronisationDossier } from '@/features/reception/SynchronisationDossier';
 import { PhotosDossier } from '@/features/reception/PhotosDossier';
 import { EvenementsDossier } from '@/features/reception/EvenementsDossier';
+import { libelleEtat } from '@/features/recherche/vocabulaire';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Le dossier d'une réception, avec ses articles.
- *
- * Tout ce qui s'affiche vient du serveur — les totaux comme la permission de
- * modifier. L'écran ne réinvente aucune règle : il lit `editable` et
- * `edit_block_reason`.
- */
+function initiales(nom: string): string {
+  return nom.split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((partie) => partie.slice(0, 1).toUpperCase()).join('') || 'DT';
+}
+
+function dateLisible(value: string | null): string {
+  if (!value) return 'Non renseignée';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' }).format(date);
+}
+
 export default async function PageDossier({
   params,
 }: {
@@ -53,19 +61,83 @@ export default async function PageDossier({
   ).catch(() => null);
 
   return (
-    <main>
-      <Link className="retour" href="/reception">← Réceptions</Link>
-      <h1>DOSSIER {dossier.local_reference}</h1>
-      <section className="carte">
-        <p className="route" style={{ margin: 0 }}>{dossier.customer.name}</p>
-        <p className="reference">{dossier.reference}</p>
-        <p className="attenue" style={{ margin: 0 }}>
-          {dossier.consolidation_reference}
-        </p>
+    <main className="ops-operation-page ops-dossier-page">
+      <Link className="retour ops-back-link" href="/reception">← Réceptions</Link>
+      <header className="ops-dossier-heading">
+        <p className="ops-eyebrow">DOSSIER</p>
+        {/*
+          * Le titre s'écrit « Dossier A1339 » comme sur la maquette, mais son
+          * nom accessible reste « DOSSIER A1339 » — la forme que le parcours
+          * de bout en bout et les lecteurs d'écran connaissent depuis le
+          * début. Deux span : l'un pour l'oreille, l'autre pour l'œil.
+          */}
+        <h1>
+          <span className="sr-only">DOSSIER {dossier.local_reference}</span>
+          <span aria-hidden="true">Dossier {dossier.local_reference}</span>
+        </h1>
+      </header>
+
+      {/*
+        * La carte client : l'avatar, le nom, la référence, et l'état à droite
+        * sur la même ligne — la disposition de la maquette.
+        *
+        * Celle-ci montre aussi un téléphone. Le serveur ne renvoie que le nom
+        * du client sur un dossier ; afficher un numéro supposerait de
+        * l'inventer, et un mauvais numéro sur un écran de terrain se compose.
+        */}
+      <section className="carte ops-dossier-customer">
+        <span className="ops-dossier-avatar" aria-hidden="true">{initiales(dossier.customer.name)}</span>
+        <div>
+          <strong>{dossier.customer.name}</strong>
+          <small>{dossier.reference}</small>
+        </div>
+        <span className="ops-dossier-state">{libelleEtat(dossier.state)}</span>
       </section>
 
-      {/* L'état et l'étape suivante, tels que le serveur les autorise. La
-          liste vient de lui : l'écran n'en déduit aucune. */}
+      <section className="carte ops-dossier-information">
+        <div className="ops-dossier-section-title">
+          <span className="ops-card-icon tone-blue" aria-hidden="true">
+            <OpsCardIcon name="saisies" />
+          </span>
+          <h2>Informations du dossier</h2>
+        </div>
+        {/*
+          * Chaque ligne porte le pictogramme de ce qu'elle dit, et un filet la
+          * sépare de la suivante — la lecture de la maquette, où l'œil descend
+          * la colonne des libellés et trouve la valeur alignée à droite.
+          *
+          * La maquette ajoute une destination et un type de colis. Le serveur
+          * ne les renvoie pas pour un dossier : ils ne sont donc pas affichés,
+          * plutôt que remplis d'une valeur plausible.
+          */}
+        <dl>
+          <div>
+            <span aria-hidden="true"><OpsCardIcon name="saisies" /></span>
+            <dt>Référence</dt><dd>{dossier.local_reference}</dd>
+          </div>
+          <div>
+            <span aria-hidden="true"><OpsCardIcon name="agenda" /></span>
+            <dt>Date de réception</dt><dd>{dateLisible(dossier.received_on)}</dd>
+          </div>
+          <div>
+            <span aria-hidden="true"><OpsCardIcon name="reception" /></span>
+            <dt>Nombre d’articles</dt><dd>{dossier.totals.lines_count}</dd>
+          </div>
+          <div>
+            <span aria-hidden="true"><OpsCardIcon name="depenses" /></span>
+            <dt>Poids total</dt><dd>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(dossier.totals.weight_kg)} kg</dd>
+          </div>
+          <div>
+            <span aria-hidden="true"><OpsCardIcon name="reception" /></span>
+            <dt>Volume total</dt><dd>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 }).format(dossier.totals.volume_cbm)} m³</dd>
+          </div>
+          <div>
+            <span aria-hidden="true"><OpsCardIcon name="chargement" /></span>
+            <dt>Départ</dt><dd>{dossier.consolidation_reference}</dd>
+          </div>
+        </dl>
+      </section>
+
       <EtatDossier
         reference={dossier.reference}
         state={dossier.state}
@@ -73,16 +145,13 @@ export default async function PageDossier({
         peutAvancer={identite.capabilities.intake_state_advance === true}
       />
 
-      {/* Le reçu n'existe que pour un dossier que le serveur a numéroté :
-          l'accès passe donc par la référence qu'il a attribuée. */}
       <Link
-        className="bouton-lien"
+        className="bouton-lien ops-dossier-receipt"
         href={`/reception/dossier/${encodeURIComponent(dossier.reference)}/recu`}
       >
         VOIR LE REÇU
       </Link>
 
-      {/* Le collecteur vient de l'identité serveur, jamais d'une saisie. */}
       <DossierArticles
         dossier={dossier}
         familles={familles}
@@ -90,8 +159,6 @@ export default async function PageDossier({
         collecteur={identite.cash_actor ?? ''}
       />
 
-      {/* Les preuves de terrain : après les articles qu'elles documentent,
-          avant le journal qui les consigne. */}
       <PhotosDossier
         reference={dossier.reference}
         etat={dossier.state}
@@ -99,7 +166,7 @@ export default async function PageDossier({
       />
 
       <SynchronisationDossier etat={dossier.reconciliation} />
-      <section aria-labelledby="activite-dossier-titre">
+      <section className="ops-dossier-activity" aria-labelledby="activite-dossier-titre">
         <h2 id="activite-dossier-titre">ACTIVITÉ</h2>
         {activite ? (
           <>
@@ -111,8 +178,6 @@ export default async function PageDossier({
         ) : <p className="attenue">Activité momentanément indisponible.</p>}
       </section>
 
-      {/* Distinct de l'ACTIVITÉ ci-dessus : celle-ci dit ce que Dally Ops a
-          fait, celui-ci ce qui est arrivé au colis. */}
       <EvenementsDossier
         reference={dossier.reference}
         peutConsigner={identite.capabilities.event_create === true}

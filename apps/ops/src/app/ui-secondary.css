@@ -1,0 +1,182 @@
+.tone-teal { background: linear-gradient(145deg, #31dfe1, #0aa8b9); }
+
+.ops-expense-action {
+  background: linear-gradient(100deg, #ff6680, #ed2d58 65%, #ff6e72);
+  border-color: rgba(255, 120, 145, .62);
+}
+
+.ops-transfer-page > h2,
+.ops-agenda-page > h1 {
+  margin: .4rem 0 0;
+  color: #dcecff;
+  font-size: .82rem;
+  letter-spacing: .2em;
+}
+
+.ops-transfer-page > button,
+.ops-agenda-page > button {
+  border-radius: 1.1rem;
+}
+
+.ops-transfer-page > button:first-of-type {
+  min-height: 4rem;
+  color: #fff;
+  background: linear-gradient(100deg, #32dfdf, #0aa9c9 62%, #31c8f5);
+  border: 1px solid rgba(76, 225, 235, .55);
+}
+
+.ops-transfer-page > section.carte,
+.ops-transfer-page > div > section.carte,
+.ops-transfer-page section.carte,
+.ops-agenda-page section.carte,
+.ops-agenda-page button.carte-rdv {
+  border-color: rgba(82, 167, 255, .3);
+  border-radius: 1.2rem;
+  background: linear-gradient(145deg, rgba(8, 48, 88, .8), rgba(4, 35, 67, .8));
+}
+
+.ops-transfer-page form,
+.ops-transfer-page section.carte,
+.ops-agenda-page form {
+  display: grid;
+  gap: .75rem;
+}
+
+.ops-transfer-page label,
+.ops-agenda-page label {
+  margin: 0;
+  color: #dfeeff;
+  font-weight: 700;
+}
+
+.ops-transfer-page input,
+.ops-transfer-page select,
+.ops-agenda-page input,
+.ops-agenda-page select,
+.ops-agenda-page textarea {
+  margin-top: .45rem;
+  color: #eef7ff;
+  border: 1px solid rgba(70, 154, 246, .44);
+  border-radius: .9rem;
+  background: rgba(2, 27, 56, .62);
+}
+
+.ops-transfer-page h3,
+.ops-agenda-page h2,
+.ops-agenda-page h3 {
+  color: #dcecff;
+  letter-spacing: .06em;
+}
+
+.ops-transfer-page .succes,
+.ops-agenda-page .succes {
+  padding: .75rem .9rem;
+  color: #bfffe7;
+  border: 1px solid rgba(25, 215, 155, .36);
+  border-radius: .9rem;
+  background: rgba(7, 81, 65, .3);
+}
+
+.ops-agenda-page .actions-deux {
+  gap: .65rem;
+}
+
+.ops-agenda-page .actions-deux button,
+.ops-agenda-page .actions-deux .bouton-lien {
+  min-height: 3rem;
+  border-radius: .95rem;
+}
+
+.ops-agenda-page .carte-rdv {
+  min-height: 5.4rem;
+  padding: .9rem 1rem;
+}
+
+.ops-agenda-page .carte-rdv time {
+  display: grid;
+  place-items: center;
+  min-height: 3.3rem;
+  color: #fff;
+  border: 1px solid rgba(51, 172, 255, .45);
+  border-radius: .9rem;
+  background: linear-gradient(145deg, #2cbaff, #116be8);
+}
+
+.ops-agenda-page .carte-rdv strong { color: #fff; }
+.ops-agenda-page .carte-rdv small { color: #94b7e3; }
+
+.ops-treatment-page > [data-testid='compte-anomalies'],
+.ops-treatment-page > [data-testid='liste-tronquee'] {
+  margin: 0;
+}
+
+.ops-treatment-page > section.carte {
+  position: relative;
+  margin: 0;
+  padding: 1rem 1.1rem;
+  border-color: rgba(82, 167, 255, .3);
+  border-radius: 1.15rem;
+  background: linear-gradient(145deg, rgba(10, 53, 94, .82), rgba(4, 34, 65, .8));
+}
+
+.ops-treatment-page > section.carte > strong {
+  color: #fff;
+  font-size: 1.05rem;
+}
+
+.ops-treatment-page > section.carte > p:not(.attenue):not(.alerte) {
+  color: #c3d8f5;
+}
+
+.ops-treatment-page > section.carte .alerte {
+  width: fit-content;
+  padding: .3rem .6rem;
+  color: #ffe5cb;
+  border-color: rgba(255, 173, 50, .45);
+  border-radius: 999px;
+  background: rgba(126, 69, 7, .34);
+  font-size: .76rem;
+}
+
+.ops-treatment-page > section.carte a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.7rem;
+  padding: .55rem .85rem;
+  color: #42bdff;
+  border: 1px solid rgba(58, 166, 255, .44);
+  border-radius: .85rem;
+  text-decoration: none;
+  font-size: .8rem;
+  font-weight: 750;
+}
+
+.ops-sync-section {
+  display: grid;
+  gap: .75rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(82, 167, 255, .3);
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, rgba(8, 48, 88, .78), rgba(4, 35, 67, .78));
+}
+
+.ops-sync-section > .attenue { margin: 0; }
+
+.ops-sync-section .carte {
+  border-color: rgba(81, 160, 242, .27);
+  border-radius: 1rem;
+  background: rgba(3, 31, 61, .52);
+}
+
+.ops-sync-section button {
+  border-radius: 1rem;
+}
+
+.ops-sync-sheet {
+  border-color: rgba(161, 78, 255, .3);
+}
+
+@media (max-width: 560px) {
+  .ops-transfer-page .actions-deux,
+  .ops-agenda-page .actions-deux { grid-template-columns: 1fr; }
+}

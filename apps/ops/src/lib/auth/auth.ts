@@ -49,9 +49,12 @@ export async function readOpsSession(): Promise<OpsSession | null> {
   }
 }
 
-export async function writeOpsSession(session: OpsSession): Promise<void> {
+export async function writeOpsSession(
+  session: OpsSession,
+  persistant = true,
+): Promise<void> {
   const magasin = await cookies();
-  magasin.set(OPS_COOKIE, sealSession(session), cookieOptions());
+  magasin.set(OPS_COOKIE, sealSession(session), cookieOptions(undefined, persistant));
 }
 
 export async function clearOpsSession(): Promise<void> {
@@ -77,6 +80,7 @@ export async function loginOps(
   login: string,
   password: string,
   correlationId: string,
+  persistant = true,
 ): Promise<OpsIdentity> {
   let sessionId: string;
   try {
@@ -100,7 +104,7 @@ export async function loginOps(
     throw erreur;
   }
 
-  await writeOpsSession({ odooSessionId: sessionId, issuedAt: Date.now() });
+  await writeOpsSession({ odooSessionId: sessionId, issuedAt: Date.now() }, persistant);
   logger.info('ops.login.accepted', { correlationId, role: identite.role });
   return identite;
 }

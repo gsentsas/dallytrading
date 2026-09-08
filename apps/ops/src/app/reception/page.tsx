@@ -10,24 +10,10 @@ import { Reessayer } from '@/features/reception/Reessayer';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Le choix du départ.
- *
- * Premier écran métier de Dally Ops, et il ne répond qu'à une question : « sur
- * quel départ dois-je enregistrer ce colis ? » Tout ce qui n'aide pas à y
- * répondre — poids, dossiers, factures, MAWB — n'est pas demandé au serveur et
- * n'arrive donc jamais ici.
- *
- * L'écran n'offre aucun moyen d'ouvrir ou de fermer une collecte : cela reste
- * une décision de back-office. Un logisticien qui ne trouve pas son départ doit
- * appeler, pas en créer un.
- */
 export default async function PageReception() {
   const correlationId = newCorrelationId();
   const identite = await currentIdentity(correlationId).catch(() => null);
   if (!identite) redirect('/connexion');
-
-  // La capacité, pas le rôle : c'est Odoo qui décide qui réceptionne.
   if (identite.capabilities.intake_create !== true) redirect('/');
 
   const session = await readOpsSession();
@@ -47,23 +33,35 @@ export default async function PageReception() {
   }
 
   return (
-    <main>
-      <Link className="retour" href="/">← Accueil</Link>
-      <h1>Réceptionner un colis</h1>
+    <main className="ops-operation-page ops-reception-page">
+      <Link className="retour ops-back-link" href="/">← Accueil</Link>
+      <header className="ops-operation-heading">
+        <span className="ops-operation-heading-icon tone-green" aria-hidden="true">◇</span>
+        <div>
+          <p className="ops-eyebrow">RÉCEPTION</p>
+          <h1>Réceptionner un colis</h1>
+          <p>Enregistrer un colis sur un départ ouvert.</p>
+        </div>
+      </header>
 
       {consolidations === null ? (
         <>
-          {/* Aucun détail technique : ni modèle, ni code, ni trace. */}
           <p className="erreur" role="alert">Impossible de charger les départs.</p>
           <Reessayer />
         </>
       ) : consolidations.length === 0 ? (
-        <p className="attenue">
-          Aucune collecte aérienne ou maritime n’est ouverte actuellement.
-        </p>
+        <section className="ops-empty-state">
+          <span aria-hidden="true">◇</span>
+          <p className="attenue">
+            Aucune collecte aérienne ou maritime n’est ouverte actuellement.
+          </p>
+        </section>
       ) : (
         <>
-          <p className="attenue">Choisissez le prochain départ</p>
+          <div className="ops-section-heading ops-reception-section-heading">
+            <h2>Choisissez le prochain départ</h2>
+            <p>{consolidations.length} disponible(s)</p>
+          </div>
           <ListeDeparts consolidations={consolidations} />
         </>
       )}

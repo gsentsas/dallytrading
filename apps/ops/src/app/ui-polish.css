@@ -1,0 +1,22 @@
+.ops-current-dossier-title {
+  width: fit-content;
+  margin: -.15rem 0 -.25rem;
+  color: #6f9fd8;
+  font-size: .78rem;
+  font-weight: 750;
+  letter-spacing: .22em;
+}
+
+.ops-supervision-heading h1 {
+  margin: .25rem 0 0;
+  color: #fff;
+  font-size: clamp(2.35rem, 8vw, 3.8rem);
+  line-height: 1;
+  letter-spacing: -.05em;
+}
+
+.ops-supervision-heading h2 { font-size: inherit; }
+
+@media (max-width: 520px) {
+  .ops-current-dossier-title { font-size: .7rem; }
+}

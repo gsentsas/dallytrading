@@ -1,111 +1,69 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import {
-  currentIdentity,
-  readOpsSession,
-} from '@/lib/auth/auth';
+import { currentIdentity, readOpsSession } from '@/lib/auth/auth';
 import { fetchConsolidations } from '@/lib/ops/consolidations';
-import {
-  fetchTariffFamilies,
-} from '@/lib/ops/intakes';
+import { fetchTariffFamilies } from '@/lib/ops/intakes';
 import { newCorrelationId } from '@/lib/logger';
 import { enRoute } from '@/features/reception/format';
-import {
-  FormulaireColis,
-} from '@/features/reception/FormulaireColis';
+import { FormulaireColis } from '@/features/reception/FormulaireColis';
 
 export const dynamic = 'force-dynamic';
 
 export default async function PageColis({
   searchParams,
 }: {
-  searchParams: Promise<{
-    consolidation?: string;
-    customer?: string;
-  }>;
+  searchParams: Promise<{ consolidation?: string; customer?: string }>;
 }) {
   const correlationId = newCorrelationId();
-  const identite = await currentIdentity(
-    correlationId,
-  ).catch(() => null);
+  const identite = await currentIdentity(correlationId).catch(() => null);
   if (!identite) redirect('/connexion');
-  if (
-    identite.capabilities.intake_create !== true
-  ) redirect('/');
+  if (identite.capabilities.intake_create !== true) redirect('/');
 
   const { consolidation, customer } = await searchParams;
-  if (!consolidation || !customer) {
-    redirect('/reception');
-  }
+  if (!consolidation || !customer) redirect('/reception');
 
   const session = await readOpsSession();
   if (!session) redirect('/connexion');
   const [ouverts, familles] = await Promise.all([
-    fetchConsolidations(
-      session.odooSessionId, correlationId,
-    ),
-    fetchTariffFamilies(
-      session.odooSessionId, correlationId,
-    ),
+    fetchConsolidations(session.odooSessionId, correlationId),
+    fetchTariffFamilies(session.odooSessionId, correlationId),
   ]).catch(() => [null, null] as const);
-  const depart = ouverts?.find(
-    (candidat) => candidat.reference === consolidation,
-  );
+  const depart = ouverts?.find((candidat) => candidat.reference === consolidation);
   if (ouverts && !depart) redirect('/reception');
-  if (!familles) {
-    throw new Error(
-      'Service de réception momentanément indisponible.',
-    );
-  }
+  if (!familles) throw new Error('Service de réception momentanément indisponible.');
 
   return (
-    <main>
+    <main className="ops-operation-page ops-reception-form-page">
       <Link
-        className="retour"
+        className="retour ops-back-link"
         href={`/reception/client?consolidation=${encodeURIComponent(consolidation)}`}
       >
         ← Changer de client
       </Link>
-      <h1>DOSSIER EN COURS</h1>
-      <section className="carte">
-        <p
-          className="attenue"
-          style={{ margin: '0 0 0.25rem' }}
-        >
-          Client
-        </p>
-        {/*
-          La référence client est un jeton opaque : utile au serveur,
-          illisible pour un opérateur. L'afficher n'aiderait personne au
-          comptoir.
 
-          Afficher le nom demanderait soit de le faire voyager dans l'URL —
-          donc une donnée personnelle dans les journaux du proxy —, soit
-          d'ouvrir une lecture de `res.partner` que cette étape n'accorde
-          pas. On annonce donc simplement qu'un client est sélectionné.
-        */}
-        <p data-testid="client-selectionne">
-          Client sélectionné
-        </p>
-        <p
-          className="attenue"
-          style={{ margin: '0.75rem 0 0.25rem' }}
-        >
-          Départ
-        </p>
-        <p
-          className="reference"
-          data-testid="consolidation-selectionnee"
-        >
-          {consolidation}
-        </p>
-        {depart ? (
-          <p className="route">
-            {enRoute(depart.origin, depart.destination)}
-          </p>
-        ) : null}
+      <header className="ops-operation-heading compact">
+        <span className="ops-operation-heading-icon tone-green" aria-hidden="true">◇</span>
+        <div>
+          <p className="ops-eyebrow">RÉCEPTION</p>
+          <h1 className="ops-visual-title">Réceptionner un colis</h1>
+          <p>Enregistrer un colis sur le départ sélectionné.</p>
+        </div>
+      </header>
+
+      <h2 className="ops-current-dossier-title">DOSSIER EN COURS</h2>
+      <section className="carte ops-reception-context">
+        <div>
+          <small>Client</small>
+          <strong data-testid="client-selectionne">Client sélectionné</strong>
+        </div>
+        <div>
+          <small>Départ</small>
+          <strong className="reference" data-testid="consolidation-selectionnee">{consolidation}</strong>
+          {depart ? <span>{enRoute(depart.origin, depart.destination)}</span> : null}
+        </div>
       </section>
+
       <FormulaireColis
         consolidation={consolidation}
         customer={customer}

@@ -147,6 +147,17 @@ export function DossierArticles({
       <FormulairePaiement
         canaux={canaux}
         collecteur={collecteur}
+        /*
+         * Le dossier et le client, tels que le serveur les a rendus.
+         *
+         * Le formulaire savait déjà les afficher, mais personne ne les lui
+         * passait : on encaissait donc sans voir sur quel dossier ni pour qui.
+         * `local_reference` est la référence que l'opérateur lit sur le
+         * bordereau, et `customer.name` le nom que l'API renvoie — rien n'est
+         * reconstitué ici.
+         */
+        dossierLabel={dossier.local_reference}
+        clientName={dossier.customer.name}
         onAnnuler={() => setVue({ nom: 'liste' })}
         soumettre={(demande) => envoyer(
           `/api/intakes/${encodeURIComponent(dossier.reference)}/payments`,

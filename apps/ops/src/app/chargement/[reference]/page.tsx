@@ -8,16 +8,6 @@ import { ChargementDepart } from '@/features/chargement/ChargementDepart';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * La pile d'un départ.
- *
- * La page ne lit rien elle-même : le contenu bouge à chaque geste, et une
- * page serveur rendue une fois afficherait un état périmé dès le premier
- * colis chargé. Elle vérifie la capacité, valide la référence, et confie la
- * lecture au composant qui la rechargera après chaque mutation.
- *
- * Pas de `decodeURIComponent` : App Router livre le segment déjà décodé.
- */
 export default async function PageChargementDepart(
   { params }: { params: Promise<{ reference: string }> },
 ) {
@@ -31,9 +21,17 @@ export default async function PageChargementDepart(
   if (propre === null) notFound();
 
   return (
-    <main>
-      <Link className="retour" href="/chargement">← Départs</Link>
-      <h1>DÉPART {propre}</h1>
+    <main className="ops-operation-page ops-loading-page">
+      <Link className="retour ops-back-link" href="/chargement">← Départs</Link>
+      <header className="ops-operation-heading compact">
+        <span className="ops-operation-heading-icon tone-orange" aria-hidden="true">▣</span>
+        <div>
+          <p className="ops-eyebrow">CHARGEMENT</p>
+          <h1>Charger un départ</h1>
+          <p>Vérifiez ce qui part et confirmez chaque colis physique.</p>
+        </div>
+      </header>
+      <p className="ops-loading-reference">Référence départ <strong>{propre}</strong></p>
       <ChargementDepart reference={propre} />
     </main>
   );

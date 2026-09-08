@@ -1,0 +1,120 @@
+.ops-selected-depart {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  border-color: var(--ops-line);
+  border-radius: 1.2rem;
+  background: linear-gradient(145deg, rgba(8, 48, 88, .8), rgba(4, 35, 67, .8));
+}
+
+.ops-selected-depart small {
+  color: #7fa7d8;
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+}
+
+.ops-selected-depart .reference { margin: .35rem 0 0; }
+.ops-selected-depart .route { margin: .25rem 0 0; color: #fff; font-size: 1.25rem; }
+
+.ops-customer-select-page form,
+.ops-customer-create-page form,
+.ops-expense-detail-page form,
+.ops-prepared-reception-page form {
+  display: grid;
+  gap: .8rem;
+}
+
+.ops-customer-select-page form,
+.ops-customer-create-page form,
+.ops-expense-detail-page form,
+.ops-prepared-reception-page form,
+.ops-customer-select-page > section.carte,
+.ops-customer-create-page > section.carte,
+.ops-expense-detail-page > section.carte,
+.ops-prepared-reception-page > section.carte {
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(82, 167, 255, .31);
+  border-radius: 1.2rem;
+  background: linear-gradient(145deg, rgba(8, 48, 88, .79), rgba(4, 35, 67, .79));
+}
+
+.ops-customer-select-page label,
+.ops-customer-create-page label,
+.ops-expense-detail-page label,
+.ops-prepared-reception-page label {
+  margin: 0;
+  color: #e8f3ff;
+  font-weight: 700;
+}
+
+.ops-customer-select-page input,
+.ops-customer-create-page input,
+.ops-customer-create-page select,
+.ops-expense-detail-page input,
+.ops-expense-detail-page select,
+.ops-expense-detail-page textarea,
+.ops-prepared-reception-page input,
+.ops-prepared-reception-page select,
+.ops-prepared-reception-page textarea {
+  min-height: 3.4rem;
+  margin-top: .5rem;
+  color: #eef7ff;
+  border: 1px solid rgba(69, 154, 247, .45);
+  border-radius: .9rem;
+  background: rgba(2, 27, 56, .62);
+}
+
+.ops-customer-select-page form > button[type='submit'],
+.ops-customer-create-page form > button[type='submit'],
+.ops-expense-detail-page form > button[type='submit'],
+.ops-prepared-reception-page form > button[type='submit'] {
+  min-height: 4rem;
+  color: #fff;
+  border-radius: 1.1rem;
+  background: linear-gradient(100deg, #20bfff, #126dff 60%, #2db9ff);
+  border: 1px solid rgba(104, 214, 255, .65);
+}
+
+.ops-customer-select-page button.secondaire,
+.ops-customer-create-page button.secondaire,
+.ops-expense-detail-page button.secondaire,
+.ops-prepared-reception-page button.secondaire {
+  border-radius: 1rem;
+}
+
+.ops-customer-select-page [data-testid='client-trouve'],
+.ops-customer-select-page [data-testid='introuvable'] {
+  margin-top: .9rem;
+  border-color: rgba(25, 215, 155, .34);
+}
+
+.ops-customer-select-page [data-testid='client-trouve'] .mode {
+  color: #d2ffef;
+  background: rgba(12, 121, 86, .52);
+}
+
+.ops-expense-detail-page > .reference,
+.ops-expense-detail-page .reference { color: #7fb5f3; }
+
+.ops-expense-detail-page > section.carte,
+.ops-expense-detail-page [data-testid='depense'] {
+  margin: 0;
+  border-color: rgba(255, 82, 112, .26);
+}
+
+.ops-expense-detail-page button:not(.secondaire) {
+  color: #fff;
+  background: linear-gradient(100deg, #ff6680, #ed2d58 65%, #ff6e72);
+}
+
+.ops-prepared-reception-page > section,
+.ops-prepared-reception-page > div {
+  border-radius: 1.15rem;
+}
+
+@media (max-width: 560px) {
+  .ops-customer-select-page form,
+  .ops-customer-create-page form,
+  .ops-expense-detail-page form,
+  .ops-prepared-reception-page form { padding: .9rem; }
+}

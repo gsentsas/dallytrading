@@ -9,18 +9,6 @@ import { RechercheClient } from '@/features/reception/RechercheClient';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Identifier le client, une fois le départ choisi.
- *
- * La référence de consolidation arrive par l'URL. Elle est **revérifiée ici**
- * contre la liste des départs encore ouverts : une URL se recopie, une
- * collecte se ferme, et rien ne garantit qu'un lien collé hier désigne encore
- * un départ où l'on peut déposer un colis. Si elle n'y est plus, on renvoie au
- * choix du départ plutôt que d'afficher un en-tête mensonger.
- *
- * Cette revérification est un confort d'écran, pas une autorisation : la
- * création du dossier refera l'ensemble des contrôles côté serveur.
- */
 export default async function PageReceptionClient({
   searchParams,
 }: {
@@ -42,20 +30,24 @@ export default async function PageReceptionClient({
   if (ouverts && !depart) redirect('/reception');
 
   return (
-    <main>
-      <Link className="retour" href="/reception">← Changer de départ</Link>
-      <h1>Réceptionner un colis</h1>
+    <main className="ops-operation-page ops-customer-select-page">
+      <Link className="retour ops-back-link" href="/reception">← Changer de départ</Link>
+      <header className="ops-operation-heading compact">
+        <span className="ops-operation-heading-icon tone-green" aria-hidden="true">◇</span>
+        <div>
+          <p className="ops-eyebrow">RÉCEPTION</p>
+          <h1>Réceptionner un colis</h1>
+          <p>Identifiez le client concerné avant de saisir le colis.</p>
+        </div>
+      </header>
 
-      <section className="carte">
+      <section className="carte ops-selected-depart">
+        <small>Départ sélectionné</small>
         <p className="reference">{consolidation}</p>
-        {depart ? (
-          <p className="route" style={{ margin: '0.15rem 0 0' }}>
-            {enRoute(depart.origin, depart.destination)}
-          </p>
-        ) : null}
+        {depart ? <p className="route">{enRoute(depart.origin, depart.destination)}</p> : null}
       </section>
 
-      <h2 style={{ fontSize: '1.15rem', margin: '1.5rem 0 0.75rem' }}>Identifier le client</h2>
+      <div className="ops-section-heading"><h2>Identifier le client</h2><p>ÉTAPE 2</p></div>
       <RechercheClient consolidation={consolidation} />
     </main>
   );

@@ -130,12 +130,24 @@ export function isExpired(session: OpsSession, maintenant = Date.now()): boolean
  * autre site. Pas de `domain` : le cookie reste sur `ops.dallytrading.com` et
  * n'est jamais transmis à `dallytrading.com` ni à `crm.dallytrading.com`.
  */
-export function cookieOptions(estHttps = opsUsesHttps()) {
+export function cookieOptions(
+  estHttps = opsUsesHttps(),
+  persistant = true,
+) {
   return {
     httpOnly: true,
     secure: estHttps,
     sameSite: 'lax' as const,
     path: '/',
-    maxAge: OPS_SESSION_MAX_AGE_SECONDS,
+    // `persistant` est le « se souvenir de moi ». Sans lui, le cookie n'a pas
+    // d'age maximum : il vit le temps du navigateur et disparait a sa
+    // fermeture. Avec lui, il tient les huit heures.
+    //
+    // Cocher la case n'allonge rien au-dela : `isExpired` relit `issuedAt` a
+    // chaque requete et refuse une session de plus de huit heures, quel que
+    // soit ce que le cookie pretend. La case choisit donc entre « oublie-moi
+    // en fermant » et « garde-moi jusqu'a la fin de ma journee » — jamais
+    // au-dela.
+    ...(persistant ? { maxAge: OPS_SESSION_MAX_AGE_SECONDS } : {}),
   };
 }

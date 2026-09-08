@@ -40,6 +40,16 @@ export function ActivityTimeline({
       {events.map((event) => (
         <li
           className="carte activite"
+          /*
+           * Le type d'événement descend en attribut pour que la feuille de
+           * style colore sa pastille — vert pour un colis, rouge pour un
+           * encaissement, orange pour un départ. C'est la lecture de couleur
+           * de la maquette : on repère le geste avant de lire le texte.
+           *
+           * L'attribut n'ajoute aucune information à ce que la page disait
+           * déjà : il nomme, en machine, ce que le libellé dit en français.
+           */
+          data-evenement={event.event}
           key={`${event.occurred_at}:${event.event}:${event.actor}:${event.summary}`}
         >
           <time dateTime={event.occurred_at}>

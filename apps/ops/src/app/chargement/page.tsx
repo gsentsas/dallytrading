@@ -35,14 +35,28 @@ export default async function PageChargement() {
   return (
     <main className="ops-operation-page">
       <Link className="retour ops-back-link" href="/">← Accueil</Link>
-      <header className="ops-operation-heading">
-        <span className="ops-operation-heading-icon tone-orange" aria-hidden="true">▣</span>
+      {/* La maquette donne ici le titre pleine largeur, sans carré d'icône :
+          l'écran de sélection s'ouvre sur le texte, l'icône revient sur les
+          cartes de départ. */}
+      <header className="ops-operation-heading is-plain">
         <div>
           <p className="ops-eyebrow">DÉPARTS</p>
           <h1>Charger un départ</h1>
           <p>Sélectionnez un départ et vérifiez les colis à expédier sur le terrain.</p>
         </div>
       </header>
+
+      {/*
+        * Les trois temps du chargement, tels que l'écran les enchaîne déjà :
+        * on choisit un départ, on vérifie les colis, on confirme. C'est un
+        * repère de lecture, pas une commande — aucune étape ne se clique, et
+        * le serveur reste seul à décider de ce qui est permis.
+        */}
+      <ol className="ops-stepper" aria-label="Étapes du chargement">
+        <li aria-current="step"><span aria-hidden="true">1</span>Sélection</li>
+        <li><span aria-hidden="true">2</span>Vérification</li>
+        <li><span aria-hidden="true">3</span>Confirmation</li>
+      </ol>
 
       {departs === null ? (
         <>

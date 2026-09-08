@@ -3,6 +3,24 @@
 from odoo import models
 
 
+#: Les trois vues dont la source anglaise est réellement abîmée, constatées en
+#: production. La liste est fermée : la réparation ne touche rien d'autre.
+#:
+#: Une première mesure en annonçait cinq. Elle cherchait « Maritime » dans la
+#: valeur anglaise — mot qui est aussi de l'anglais chez le fournisseur, dans
+#: « International Maritime Dangerous Goods code ». Deux vues n'avaient jamais
+#: été abîmées.
+TK_REPAIRABLE_VIEWS = (
+    "tk_freight.freight_shipment_form_view",
+    "tk_freight.package_form_view",
+    "tk_freight.package_tree_view",
+)
+
+#: Les marqueurs qui prouvent la corruption. Tous sont du français sans
+#: équivalent anglais : leur présence dans la langue source ne s'explique que
+#: par une écriture fautive. « Maritime » en est volontairement absent.
+TK_CORRUPTION_MARKERS = ("Cotationss", "Cotations", "Colis", "Expéditeur")
+
 #: Les vues du fournisseur que le pont francise. La réparation vise les mêmes :
 #: ce sont exactement celles que l'ancien overlay pouvait abîmer.
 TK_OVERLAID_VIEWS = (
@@ -283,52 +301,67 @@ class IrUiView(models.Model):
 
         return True
 
-    def dally_repair_tk_freight_source_arch(self):
+    def _dally_repair_tk_freight_source_arch(self):
         """Rend au fournisseur son architecture anglaise, une fois.
+
+        Méthode **privée** : le souligné la rend inappelable par RPC. Ce n'est
+        pas un geste d'interface, c'est une opération d'exploitation, à jouer
+        depuis `odoo shell`, une fois, après décision — sur une base fraîchement
+        sauvegardée.
 
         ## Ce qu'on répare
 
         L'overlay écrivait `arch_db` dans le contexte français, ce qui écrivait
         les deux langues. La correction empêche que cela recommence ; elle ne
-        défait pas ce qui a déjà été écrit. Mesuré en production : cinq vues du
-        fournisseur portent du français dans leur valeur `en_US` — « Cotationss »
-        sur le formulaire d'expédition, « Colis » et « Maritime » ailleurs.
+        défait pas ce qui a déjà été écrit. Mesuré en production : **trois** vues
+        du fournisseur portent du français dans leur langue source —
+        « Cotationss » sur le formulaire d'expédition, « Colis » sur les deux
+        vues de colisage.
 
-        ## Pourquoi depuis le fichier et non depuis une liste de mots
+        ## Pourquoi c'est fermé des deux côtés
 
-        On pourrait remplacer les mots français fautifs par leur anglais
-        d'origine. Ce serait deviner : rien ne garantit que la table de
-        remplacement inverse soit exacte, et une erreur y écrirait un anglais
-        approximatif dans la langue source du fournisseur.
+        La liste des vues est close, et chacune doit en plus porter un marqueur
+        de corruption pour être touchée. Les deux conditions comptent :
 
-        `reset_arch(mode="hard")` relit l'architecture **depuis le fichier XML du
-        module licencié**, par `arch_fs`. C'est la seule source qui fasse foi, et
-        elle est celle du fournisseur, pas la nôtre.
+        - `reset_arch(mode="hard")` réécrit l'architecture depuis le fichier du
+          module. Toute divergence entre la base et le fichier serait donc
+          effacée — y compris une divergence légitime, qu'on n'a pas à trancher
+          ici. Sans précondition, cette méthode deviendrait un « remets tout
+          comme à l'installation », ce qu'elle ne doit pas être.
+        - Une vue saine n'est pas touchée, donc la relancer ne fait rien.
 
-        ## Pourquoi c'est sûr de le rejouer
+        ## Pourquoi depuis le fichier et non depuis une table inverse
 
-        Une vue déjà saine a une valeur `en_US` identique au fichier : elle est
-        laissée telle quelle, et la méthode ne rend que ce qu'elle a touché. Le
-        français est réappliqué juste après, terme par terme — donc une
-        exécution sur une base saine ne change rien du tout.
+        On pourrait remplacer les mots français par leur anglais d'origine. Ce
+        serait deviner, et une erreur écrirait notre approximation dans la
+        langue source du fournisseur. `reset_arch(mode="hard")` relit le fichier
+        XML du module licencié : la seule source qui fasse foi, et c'est la
+        sienne.
 
         :return: les xmlid des vues effectivement réparées.
         """
         reparees = []
-        for xmlid in TK_OVERLAID_VIEWS:
+        for xmlid in TK_REPAIRABLE_VIEWS:
             view = self.env.ref(xmlid, raise_if_not_found=False)
             if not view or not view.arch_fs:
                 continue
-            source = view.with_context(read_arch_from_file=True, lang=None).arch
-            actuelle = view.with_context(lang="en_US").arch_db
-            if not source or source == actuelle:
+
+            # La précondition : sans marqueur, on ne touche pas. Une vue qui
+            # diverge du fichier pour une autre raison n'est pas notre affaire.
+            anglais = view.with_context(lang="en_US").arch_db or ""
+            if not any(marqueur in anglais for marqueur in TK_CORRUPTION_MARKERS):
                 continue
+
+            source = view.with_context(read_arch_from_file=True, lang=None).arch
+            if not source or source == anglais:
+                continue
+
             view.reset_arch(mode="hard")
             reparees.append(xmlid)
 
         if reparees:
             # La remise à zéro efface les traductions des termes qui ont bougé :
-            # on repose le français dans la foulée, sinon la réparation
-            # rendrait un écran anglais.
+            # on repose le français dans la foulée, sinon la réparation rendrait
+            # un écran anglais.
             self.dally_apply_tk_freight_fr_overlay()
         return reparees

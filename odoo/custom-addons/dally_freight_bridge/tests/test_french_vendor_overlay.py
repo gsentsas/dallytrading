@@ -204,7 +204,7 @@ class TestRepairVendorSourceArch(TransactionCase):
         )
 
         # --- le remède ---
-        reparees = self.env["ir.ui.view"].dally_repair_tk_freight_source_arch()
+        reparees = self.env["ir.ui.view"]._dally_repair_tk_freight_source_arch()
         self.assertIn(self._VUE, reparees)
 
         anglais_apres = self.vue.with_context(lang="en_US").arch_db
@@ -214,7 +214,7 @@ class TestRepairVendorSourceArch(TransactionCase):
     def test_le_francais_survit_a_la_reparation(self):
         self.env["ir.ui.view"].dally_apply_tk_freight_fr_overlay()
         self._abimer_la_source()
-        self.env["ir.ui.view"].dally_repair_tk_freight_source_arch()
+        self.env["ir.ui.view"]._dally_repair_tk_freight_source_arch()
         # La remise à zéro efface les traductions ; l'overlay est rejoué dans la
         # foulée, donc l'écran reste français.
         arch_fr = self.vue.with_context(lang="fr_FR").arch_db
@@ -227,7 +227,48 @@ class TestRepairVendorSourceArch(TransactionCase):
         francais = self.vue.with_context(lang="fr_FR").arch_db
 
         self.assertEqual(
-            self.env["ir.ui.view"].dally_repair_tk_freight_source_arch(), [],
+            self.env["ir.ui.view"]._dally_repair_tk_freight_source_arch(), [],
             "rien à réparer ne doit rien réparer")
         self.assertEqual(self.vue.with_context(lang="en_US").arch_db, anglais)
         self.assertEqual(self.vue.with_context(lang="fr_FR").arch_db, francais)
+
+    def test_la_reparation_n_est_pas_appelable_par_rpc(self):
+        # Le souligné n'est pas décoratif : Odoo refuse d'exposer une méthode
+        # privée aux appels distants. Réparer une base est un geste
+        # d'exploitation, pas un bouton.
+        self.assertFalse(
+            hasattr(self.env["ir.ui.view"], "dally_repair_tk_freight_source_arch"),
+            "aucun nom public ne doit subsister",
+        )
+        self.assertTrue(
+            hasattr(self.env["ir.ui.view"], "_dally_repair_tk_freight_source_arch"))
+
+    def test_une_divergence_sans_marqueur_n_est_jamais_reinitialisee(self):
+        """Le fail-closed de la réparation.
+
+        `reset_arch(mode="hard")` réécrit tout depuis le fichier du module :
+        sans précondition, cette méthode effacerait n'importe quelle divergence,
+        y compris légitime, et deviendrait un « remets tout comme à
+        l'installation ». Une vue qui diffère du fichier sans porter de marqueur
+        de corruption doit donc rester intacte.
+        """
+        anglais = self.vue.with_context(lang="en_US")
+        anglais.write({"arch_db": anglais.arch_db.replace(
+            'string="Barcode"', 'string="Barcode "')})
+        divergente = self.vue.with_context(lang="en_US").arch_db
+
+        self.assertEqual(
+            self.env["ir.ui.view"]._dally_repair_tk_freight_source_arch(), [],
+            "sans marqueur de corruption, aucune vue ne doit être touchée")
+        self.assertEqual(self.vue.with_context(lang="en_US").arch_db, divergente,
+                         "la divergence légitime survit à la réparation")
+
+    def test_la_liste_des_vues_reparables_est_fermee_aux_trois_constatees(self):
+        from odoo.addons.dally_freight_bridge.models.view_translation_overlay import (
+            TK_CORRUPTION_MARKERS, TK_REPAIRABLE_VIEWS,
+        )
+        self.assertEqual(len(TK_REPAIRABLE_VIEWS), 3)
+        self.assertIn("tk_freight.freight_shipment_form_view", TK_REPAIRABLE_VIEWS)
+        # « Maritime » est de l'anglais légitime chez le fournisseur : le
+        # retenir comme marqueur avait fait compter cinq vues au lieu de trois.
+        self.assertNotIn("Maritime", TK_CORRUPTION_MARKERS)

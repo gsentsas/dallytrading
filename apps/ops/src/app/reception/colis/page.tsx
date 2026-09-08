@@ -46,12 +46,12 @@ export default async function PageColis({
         <span className="ops-operation-heading-icon tone-green" aria-hidden="true">◇</span>
         <div>
           <p className="ops-eyebrow">RÉCEPTION</p>
-          <h2 className="ops-visual-title">Réceptionner un colis</h2>
+          <h1 className="ops-visual-title">Réceptionner un colis</h1>
           <p>Enregistrer un colis sur le départ sélectionné.</p>
         </div>
       </header>
 
-      <h1 className="ops-current-dossier-title">DOSSIER EN COURS</h1>
+      <h2 className="ops-current-dossier-title">DOSSIER EN COURS</h2>
       <section className="carte ops-reception-context">
         <div>
           <small>Client</small>

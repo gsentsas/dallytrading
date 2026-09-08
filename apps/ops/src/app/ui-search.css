@@ -132,3 +132,6 @@ a.ops-search-result-card:focus-visible {
   .ops-search-clear { grid-column: 1 / -1; width: 100%; }
   .ops-search-result-topline { align-items: flex-start; }
 }
+
+/* La marge que portait le style inline revient ici, avec le reste. */
+.ops-search-input-row { margin-top: .35rem; }

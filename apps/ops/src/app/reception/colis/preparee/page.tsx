@@ -28,7 +28,7 @@ export default async function PageReceptionPreparee() {
         <span className="ops-operation-heading-icon tone-green" aria-hidden="true">◇</span>
         <div>
           <p className="ops-eyebrow">AGENDA → RÉCEPTION</p>
-          <h2 className="ops-visual-title">Réception préparée</h2>
+          <h1 className="ops-visual-title">Réception préparée</h1>
           <p>Les informations du rendez-vous sont prêtes pour la saisie terrain.</p>
         </div>
       </header>

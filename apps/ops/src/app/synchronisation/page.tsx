@@ -25,7 +25,13 @@ export default function PageSynchronisation() {
       </section>
 
       <section className="ops-sync-section ops-sync-sheet">
-        <div className="ops-section-heading"><h2>CRM → TABLEUR</h2><p>PROJECTION</p></div>
+        {/*
+          * Pas de titre ici : `EtatProjectionTableur` porte le sien, avec sa
+          * description. Le répéter au-dessus donnait deux fois « CRM →
+          * TABLEUR » l'un sous l'autre dès que la projection était lisible —
+          * et deux titres pour une seule section brouillent la navigation par
+          * titres autant que la lecture.
+          */}
         <EtatProjectionTableur />
       </section>
     </main>

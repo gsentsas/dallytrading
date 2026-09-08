@@ -71,18 +71,43 @@ test('la barre de recherche reste utilisable sur un écran de téléphone', asyn
   expect(cadreChamp).not.toBeNull();
   expect(cadreBouton).not.toBeNull();
 
-  // Le champ doit dominer la rangée, pas la partager : c'est exactement ce
-  // que le défaut de production inversait.
-  expect(cadreChamp!.width).toBeGreaterThan(cadreBouton!.width * 2);
+  // Sur un téléphone, « Effacer » passe SOUS le champ et prend toute la
+  // largeur. C'est la mise en page prévue par la feuille au palier 430px, et
+  // elle ne pouvait pas s'appliquer tant qu'un `display: flex` en ligne tenait
+  // la rangée : le bouton restait collé au champ et le comprimait.
+  const largeur = page.viewportSize()!.width;
+  expect(largeur).toBeLessThanOrEqual(430);
+  expect(cadreBouton!.y).toBeGreaterThan(cadreChamp!.y);
+  expect(cadreBouton!.width).toBeGreaterThan(largeur * 0.7);
 
-  // Les deux commandes tiennent sur la même ligne, à la même hauteur.
-  expect(Math.abs(cadreChamp!.y - cadreBouton!.y)).toBeLessThanOrEqual(1);
+  // Ce que le défaut de production écrasait : le champ garde sa largeur. Il
+  // n'est plus réduit à la croix de `type="search"`.
+  expect(cadreChamp!.width).toBeGreaterThan(largeur * 0.6);
 
   // Et rien ne déborde horizontalement.
   const debordement = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(debordement).toBeLessThanOrEqual(0);
+});
+
+test('au-delà du palier mobile, le champ domine la rangée', async ({ page }) => {
+  // L'autre moitié du contrat, celle que le défaut de production inversait :
+  // dès qu'il y a la place, les deux commandes partagent la ligne et le champ
+  // prend tout l'espace restant. `globals.css` impose `width: 100%` à tout
+  // input ET à tout button ; sans la grille, les deux se disputaient la
+  // largeur et Chrome Android donnait la ligne au bouton.
+  await page.setViewportSize({ width: 600, height: 900 });
+  await seConnecter(page);
+  await page.goto('/recherche');
+
+  const champ = page.getByLabel('Nom, téléphone ou référence');
+  const bouton = page.getByRole('button', { name: 'Effacer' });
+  const cadreChamp = await champ.boundingBox();
+  const cadreBouton = await bouton.boundingBox();
+
+  expect(cadreChamp!.width).toBeGreaterThan(cadreBouton!.width * 2);
+  expect(Math.abs(cadreChamp!.y - cadreBouton!.y)).toBeLessThanOrEqual(1);
 });
 
 test('le bouton effacer rend la main au champ', async ({ page }) => {

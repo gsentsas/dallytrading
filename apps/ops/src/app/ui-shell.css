@@ -867,3 +867,170 @@ body {
   .ops-quick-copy p { font-size: 0.7rem; line-height: 1.28; }
   .ops-quick-card .ops-card-chevron { right: 0.35rem; font-size: 1.2rem; }
 }
+
+/* ==========================================================================
+ * Densité mesurée : chaque bloc ramené à la hauteur de la maquette.
+ * ======================================================================== */
+
+/*
+ * Les écarts n'ont pas été estimés à l'œil mais mesurés, bloc par bloc, en
+ * ramenant les hauteurs de la maquette (863 px de large) à des pixels CSS de
+ * 390. L'en-tête dépassait de 24 px, les pastilles de 14, la carte des
+ * saisies de 21, une carte d'accès de 33, la navigation de 29 — et six accès
+ * seulement tenaient à l'écran là où la maquette en montre huit.
+ */
+@media (max-width: 520px) {
+  /* L'en-tête de marque : 71px → ~50px. */
+  .ops-brand-header { padding-block: 0.5rem; }
+  .ops-brand-logo { height: 2.85rem; border-radius: 0.62rem; }
+  .ops-brand-app { font-size: 1.08rem; }
+  .ops-brand-app::after { top: 1.35rem; font-size: 0.58rem; }
+  .ops-notification { width: 2.5rem; height: 2.5rem; }
+
+  .ops-shell-content > main.ops-home { padding-top: 0.85rem; }
+  .ops-home-intro { padding-top: 0.2rem; }
+  .ops-eyebrow { font-size: 0.66rem; letter-spacing: 0.18em; }
+  .ops-home h1 { margin: 0.1rem 0 0.6rem; font-size: 1.72rem; }
+
+  /* Les pastilles d'état : 34px → ~23px. */
+  .ops-status-row > [data-testid='indicateur-sync'],
+  .ops-status-row .ops-pill {
+    min-height: 1.45rem;
+    padding: 0.22rem 0.62rem;
+    font-size: 0.76rem;
+  }
+
+  /* La carte des saisies : 87px → ~68px. */
+  .ops-home-activity { padding: 0.7rem; gap: 0.65rem; }
+  .ops-home-activity .ops-card-icon { width: 2.2rem; height: 2.2rem; }
+  .ops-home-activity h2 { font-size: 0.94rem; }
+  .ops-home-activity .ops-home-activity-copy > p { font-size: 0.8rem; }
+  .ops-home-activity .ops-outline-button {
+    min-height: 2.1rem;
+    padding: 0 0.6rem;
+    font-size: 0.76rem;
+  }
+
+  .ops-quick-section { margin-top: 0.15rem; }
+  .ops-section-heading { margin-bottom: 0.55rem; }
+
+  /*
+   * La carte d'accès : 122px → ~92px.
+   *
+   * Sur la maquette la description court sous l'icône, sur toute la largeur
+   * de la carte ; ici elle restait coincée dans la colonne du titre et
+   * débordait sur une quatrième ligne. `display: contents` rend le titre et
+   * la description au parent : le titre prend la colonne de droite, la
+   * description les deux.
+   */
+  .ops-quick-grid { gap: 0.65rem; }
+
+  .ops-quick-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.15rem 0.6rem;
+    min-height: 5.9rem;
+    padding: 0.7rem 1rem 0.7rem 0.7rem;
+  }
+
+  .ops-quick-copy { display: contents; }
+
+  .ops-quick-copy strong {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    font-size: 0.88rem;
+    line-height: 1.2;
+  }
+
+  .ops-quick-copy p {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin-top: 0.35rem;
+    font-size: 0.72rem;
+    line-height: 1.28;
+  }
+
+  .ops-quick-card .ops-card-icon { width: 2.25rem; height: 2.25rem; }
+
+  .ops-insight-card { padding: 0.75rem 0.85rem; gap: 0.7rem; }
+  .ops-insight-icon { width: 2.5rem; height: 2.5rem; }
+  .ops-insight-card strong { font-size: 0.92rem; }
+  .ops-insight-card small { font-size: 0.76rem; }
+
+  /* La navigation basse : 116px → ~88px. Le bouton central reste surélevé et
+     largement au-dessus des 44px de cible tactile. */
+  .ops-bottom-nav { padding: 0.35rem 0.4rem 0.5rem; }
+  .ops-bottom-nav a { font-size: 0.68rem; gap: 0.12rem; }
+  .ops-nav-icon { width: 1.5rem; height: 1.5rem; }
+  .ops-nav-primary .ops-nav-icon { width: 3.3rem; height: 3.3rem; }
+  .ops-nav-primary .ops-nav-icon svg { width: 1.7rem; height: 1.7rem; }
+}
+
+/*
+ * Dernier ajustement, calculé et non deviné.
+ *
+ * Il fallait 16 px de moins par carte pour que la huitième passe au-dessus de
+ * la navigation : haut de grille 306 + 4 × (hauteur + 10) ≤ 844 − 99. Le
+ * texte reste à 13,6 px pour un titre et 11,2 px pour une description — au
+ * niveau de la maquette, pas en dessous.
+ */
+@media (max-width: 520px) {
+  .ops-brand-header { padding-block: 0.38rem; }
+  .ops-brand-logo { height: 2.6rem; }
+
+  .ops-home-activity { padding: 0.62rem; }
+  .ops-home-activity .ops-card-icon { width: 2.05rem; height: 2.05rem; }
+
+  .ops-quick-grid { gap: 0.6rem; }
+
+  .ops-quick-card {
+    min-height: 5.4rem;
+    padding: 0.58rem 0.95rem 0.6rem 0.6rem;
+    gap: 0.1rem 0.55rem;
+  }
+
+  .ops-quick-card .ops-card-icon { width: 2.05rem; height: 2.05rem; }
+  .ops-quick-copy strong { font-size: 0.85rem; line-height: 1.18; }
+  .ops-quick-copy p { margin-top: 0.28rem; font-size: 0.7rem; line-height: 1.24; }
+}
+
+/*
+ * La densité ne se paie pas sur le pouce.
+ *
+ * En resserrant, la navigation basse, la cloche et « Voir tout » étaient
+ * passés à 40-42 px de haut. Ce sont les commandes les plus touchées de
+ * l'application, souvent d'une seule main : elles remontent à 44 px, le seuil
+ * en dessous duquel un pouce commence à rater. Le gain de densité obtenu
+ * ailleurs reste acquis — c'est la hauteur de frappe qui revient, pas la
+ * taille du texte.
+ */
+@media (max-width: 520px) {
+  .ops-bottom-nav a {
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .ops-notification { width: 44px; height: 44px; }
+
+  .ops-brand-header > a,
+  .ops-brand-header .ops-brand {
+    min-height: 44px;
+  }
+
+  .ops-home-activity .ops-outline-button { min-height: 44px; }
+
+  .ops-home .ops-logout button,
+  .ops-home button.secondaire { min-height: 44px; }
+}
+
+/*
+ * Les références de dossier citées dans le journal restent des liens en pleine
+ * ligne de texte : les porter à 44 px casserait le paragraphe qui les
+ * contient. Leur zone de frappe gagne ce qu'elle peut sans déplacer la ligne.
+ */
+.timeline-activite .dossier-activite,
+.ops-supervision-activity .dossier-activite {
+  display: inline-block;
+  padding-block: 0.3rem;
+  margin-block: -0.3rem;
+}

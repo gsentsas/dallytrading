@@ -17,6 +17,7 @@
         "reports/consolidation_reports.xml",
         "reports/consolidation_manifest.xml",
         "views/consolidation_views.xml",
+        "views/master_shipment_views.xml",
         "views/shipment_package_views.xml",
         "wizard/payment_override_views.xml",
         "wizard/add_to_consolidation_views.xml",

@@ -81,11 +81,24 @@
   padding: 1rem;
 }
 
+/*
+ * La legende ne chevauche plus la bordure.
+ *
+ * Un `legend` se pose par defaut SUR le trait du `fieldset` et l'interrompt :
+ * sur une carte a coins arrondis, le titre semblait deborder du cadre. Le
+ * `float` la sort de cette position particuliere et la rend a la mise en
+ * page normale — un intitule de section, au-dessus de ses champs.
+ */
 .ops-reception-form-page .dimensions legend {
-  padding: 0 .35rem;
+  float: left;
+  width: 100%;
+  margin-bottom: .7rem;
+  padding: 0;
   color: #fff;
   font-weight: 800;
 }
+
+.ops-reception-form-page .dimensions legend + * { clear: both; }
 
 .ops-reception-form-page .grille-trois {
   gap: .75rem;
@@ -141,6 +154,112 @@
   .ops-reception-form-page > form > button { grid-column: auto; }
 }
 
+/*
+ * Les trois dimensions restent sur une ligne, jusqu'au plus petit ecran.
+ *
+ * La maquette les aligne — longueur, largeur, hauteur — parce qu'on les
+ * mesure d'un geste et qu'on les saisit dans la foulee. Les empiler faisait
+ * trois champs a chercher la ou il n'y en a qu'un a remplir.
+ */
 @media (max-width: 420px) {
-  .ops-reception-form-page .grille-trois { grid-template-columns: 1fr; }
+  .ops-reception-form-page .grille-trois { gap: .5rem; }
+
+  .ops-reception-form-page .grille-trois input {
+    padding-inline: .55rem;
+    font-size: .95rem;
+  }
+}
+
+/*
+ * Le formulaire de réception, tel que la maquette le compose.
+ *
+ * Une seule carte porte tous les champs. Chaque champ y est un libellé en
+ * gras au-dessus de sa boîte de saisie — et non une carte à lui seul. La
+ * différence n'est pas décorative : quinze cartes empilées font quinze
+ * objets à franchir, quand la maquette en montre un, qu'on remplit de haut
+ * en bas.
+ *
+ * Aucun champ n'est retiré. Ce sont les mêmes `label` et les mêmes `input`,
+ * aux mêmes identifiants : seule leur enveloppe change.
+ */
+@media (max-width: 520px) {
+  .ops-reception-form-page > form {
+    gap: 0.95rem;
+    padding: 1rem;
+    border: 1px solid rgba(82, 167, 255, 0.3);
+    border-radius: 1.4rem;
+    background: linear-gradient(145deg, rgba(8, 48, 88, 0.7), rgba(4, 35, 67, 0.7));
+  }
+
+  .ops-reception-form-page > form > label,
+  .ops-reception-form-page .dimensions {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    font-size: 0.92rem;
+    font-weight: 700;
+  }
+
+  .ops-reception-form-page > form > label {
+    display: block;
+    color: #fff;
+  }
+
+  .ops-reception-form-page > form > label input,
+  .ops-reception-form-page > form > label select,
+  .ops-reception-form-page > form > label textarea,
+  .ops-reception-form-page .dimensions input {
+    min-height: 3.15rem;
+    margin-top: 0.45rem;
+    padding: 0.7rem 0.85rem;
+    font-size: 0.98rem;
+    font-weight: 500;
+  }
+
+  /* La carte du dossier en cours reste distincte : c'est un rappel de
+     contexte, pas un champ à remplir. */
+  .ops-reception-form-page .ops-reception-context {
+    padding: 0.85rem 0.95rem;
+  }
+
+  .ops-reception-form-page > form > button[type='submit'] {
+    min-height: 3.4rem;
+    margin-top: 0.35rem;
+  }
+}
+
+/*
+ * Le rappel du dossier en cours, resserré.
+ *
+ * La maquette n'a pas ce bloc : elle montre un champ « Dossier » qui contient
+ * le départ. Ici le client ET le départ ont déjà été choisis en amont, et les
+ * rappeler évite de remonter le parcours pour vérifier. Ils occupent donc la
+ * place d'un rappel, pas celle d'une section.
+ */
+@media (max-width: 520px) {
+  .ops-reception-context {
+    gap: 0.5rem;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .ops-reception-context > * {
+    padding: 0.6rem 0.7rem;
+  }
+
+  .ops-reception-context small,
+  .ops-reception-context .ops-eyebrow {
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+  }
+
+  .ops-reception-context strong,
+  .ops-reception-context p {
+    font-size: 0.92rem;
+  }
+
+  .ops-reception-form-page > .ops-eyebrow {
+    margin: 0.9rem 0 0.5rem;
+    font-size: 0.68rem;
+  }
 }

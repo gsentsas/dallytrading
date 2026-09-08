@@ -253,3 +253,320 @@
   .ops-dossier-information dl > div { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .ops-supervision-summary { grid-template-columns: 1fr; }
 }
+
+/*
+ * L'état vide de la supervision.
+ *
+ * Même vocabulaire que les cartes de la maquette : le carré d'icône coloré,
+ * un titre, une explication. Ce n'est pas un message d'erreur — c'est un
+ * écran qui attend, et qui le dit sans laisser un blanc.
+ */
+.ops-empty-premium {
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  padding: 2.2rem 1.4rem 2.4rem;
+  text-align: center;
+  border: 1px solid rgba(86, 146, 214, 0.26);
+  border-radius: 1.35rem;
+  background: linear-gradient(145deg, rgba(10, 53, 94, 0.72), rgba(4, 34, 65, 0.72));
+}
+
+.ops-empty-premium .ops-card-icon {
+  width: 3.6rem;
+  height: 3.6rem;
+  margin-bottom: 0.35rem;
+}
+
+.ops-empty-premium h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.18rem;
+  letter-spacing: -0.02em;
+}
+
+.ops-empty-premium p {
+  max-width: 26rem;
+  margin: 0;
+  color: #a8c8ec;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.ops-empty-premium .attenue {
+  color: #7fa8d9;
+  font-size: 0.81rem;
+}
+
+/* Le compteur de supervision reprend le carré d'icône du système. */
+.ops-supervision-summary .ops-card-icon {
+  width: 3.1rem;
+  height: 3.1rem;
+}
+
+/*
+ * Les lignes d'information du dossier.
+ *
+ * Un pictogramme en tête, le libellé, la valeur alignée à droite, et un filet
+ * entre deux lignes : c'est la grille de la maquette. Le filet ne se met pas
+ * sous la dernière — un trait qui ne sépare rien n'est qu'une bordure de plus.
+ */
+.ops-dossier-information dl > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.72rem 0;
+}
+
+.ops-dossier-information dl > div + div {
+  border-top: 1px solid rgba(86, 146, 214, 0.2);
+}
+
+.ops-dossier-information dl > div > span[aria-hidden] {
+  display: grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  color: #6fa6e4;
+}
+
+.ops-dossier-information dl > div > span[aria-hidden] svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ops-dossier-information dt {
+  margin: 0;
+  color: #a8c8ec;
+  font-size: 0.92rem;
+}
+
+.ops-dossier-information dd {
+  margin: 0;
+  color: #fff;
+  font-size: 0.98rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.ops-dossier-section-title .ops-card-icon {
+  width: 2.7rem;
+  height: 2.7rem;
+}
+
+/*
+ * La densité du dossier, calée sur la maquette.
+ *
+ * Sur la maquette, l'en-tête, la carte client et les six lignes
+ * d'information tiennent dans un écran. Le rendu précédent tenait la même
+ * information dans une fois et demie la hauteur : on lisait moins de dossier
+ * par coup d'œil.
+ */
+@media (max-width: 520px) {
+  .ops-dossier-heading h1 {
+    margin: 0.05rem 0 0.85rem;
+    font-size: 1.95rem;
+    line-height: 1.05;
+  }
+
+  .ops-dossier-customer {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.8rem;
+    align-items: center;
+    padding: 0.85rem 0.95rem;
+  }
+
+  .ops-dossier-avatar {
+    width: 3.1rem;
+    height: 3.1rem;
+    font-size: 1.02rem;
+  }
+
+  .ops-dossier-customer strong { font-size: 1.05rem; }
+  .ops-dossier-customer small { font-size: 0.78rem; }
+
+  .ops-dossier-state {
+    margin: 0;
+    padding: 0.35rem 0.8rem;
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+
+  .ops-dossier-information { padding: 0.9rem 1rem; }
+
+  .ops-dossier-section-title .ops-card-icon {
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+
+  .ops-dossier-section-title h2 { font-size: 1.08rem; }
+
+  .ops-dossier-information dl > div { padding: 0.58rem 0; gap: 0.65rem; }
+  .ops-dossier-information dl > div > span[aria-hidden] { width: 1.3rem; height: 1.3rem; }
+  .ops-dossier-information dt { font-size: 0.86rem; }
+  .ops-dossier-information dd { font-size: 0.92rem; }
+}
+
+/* ==========================================================================
+ * La supervision, calée sur la maquette.
+ * ======================================================================== */
+
+@media (max-width: 520px) {
+  .ops-supervision-heading h1 {
+    margin: 0.05rem 0 0.35rem;
+    font-size: 1.95rem;
+    line-height: 1.06;
+  }
+
+  .ops-supervision-heading > p:last-child {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.35;
+  }
+
+  .ops-supervision-status {
+    gap: 0.5rem;
+    margin: 0.9rem 0 1.1rem;
+  }
+
+  .ops-supervision-status > * {
+    min-height: 2.4rem;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.84rem;
+    white-space: nowrap;
+  }
+
+  /* Le compteur reste une carte, mais à la taille des tuiles de la maquette. */
+  .ops-supervision-summary > div { padding: 0.9rem 1rem; }
+  .ops-supervision-summary .ops-card-icon { width: 2.6rem; height: 2.6rem; }
+  .ops-supervision-summary strong { font-size: 1.75rem; }
+  .ops-supervision-summary small { font-size: 0.84rem; }
+  .ops-supervision-summary p { font-size: 0.78rem; }
+}
+
+/*
+ * Le journal d'activité, en cartes.
+ *
+ * La maquette présente chaque événement comme une carte : une pastille de
+ * couleur, le geste en gras, son détail dessous, et l'heure à droite. Le
+ * rendu précédent gardait la disposition en frise — l'heure en tête, le
+ * reste en dessous — qui lit bien sur un tableau mais étire la liste sur un
+ * téléphone.
+ *
+ * Rien n'est modifié dans le balisage : ce sont les mêmes éléments, replacés.
+ * Les contrats (`.activite`, `.acteur`, `.dossier-activite`, `time`) restent
+ * exactement où les tests les cherchent.
+ */
+.ops-supervision-activity .activite {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.85rem;
+  align-items: start;
+  padding: 0.9rem;
+}
+
+.ops-supervision-activity .activite::before {
+  content: '';
+  grid-row: 1;
+  grid-column: 1;
+  width: 2.7rem;
+  height: 2.7rem;
+  border-radius: 0.85rem;
+  background: linear-gradient(145deg, #2ea8ff, #0b6ff2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.ops-supervision-activity .activite > time {
+  grid-row: 1;
+  grid-column: 3;
+  align-self: start;
+  color: #8fb6e6;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.ops-supervision-activity .activite > time::after {
+  content: '';
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: 0.45rem;
+  border-radius: 50%;
+  background: var(--ops-green, #19d79b);
+  vertical-align: middle;
+}
+
+.ops-supervision-activity .activite > div {
+  display: flex;
+  flex-direction: column;
+  grid-row: 1;
+  grid-column: 2;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+/* Le geste d'abord, son détail ensuite, l'opérateur en dernier. */
+.ops-supervision-activity .activite .libelle-activite {
+  order: 1;
+  margin: 0;
+  color: #fff;
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.ops-supervision-activity .activite .dossier-activite { order: 2; font-size: 0.86rem; }
+.ops-supervision-activity .activite .resume-activite {
+  order: 3;
+  margin: 0;
+  color: #a8c8ec;
+  font-size: 0.86rem;
+}
+.ops-supervision-activity .activite .correction-activite { order: 4; font-size: 0.8rem; }
+.ops-supervision-activity .activite .acteur {
+  order: 5;
+  margin-top: 0.16rem;
+  color: #7fa8d9;
+  font-size: 0.78rem;
+}
+
+/*
+ * La couleur de la pastille dit le geste.
+ *
+ * Vert pour ce qui entre (un colis reçu), rouge pour l'argent, orange pour ce
+ * qui part, violet pour le suivi, bleu pour le reste. Les mêmes teintes que
+ * les cartes de l'accueil : un opérateur qui apprend la couleur d'un geste la
+ * retrouve partout.
+ */
+.ops-supervision-activity .activite[data-evenement^='intake']::before,
+.ops-supervision-activity .activite[data-evenement^='photo']::before {
+  background: linear-gradient(145deg, #24d29a, #0e9c6d);
+}
+
+.ops-supervision-activity .activite[data-evenement*='payment']::before,
+.ops-supervision-activity .activite[data-evenement^='expense']::before {
+  background: linear-gradient(145deg, #ff6b81, #e0374f);
+}
+
+.ops-supervision-activity .activite[data-evenement^='package']::before {
+  background: linear-gradient(145deg, #ffa53a, #f07a12);
+}
+
+.ops-supervision-activity .activite[data-evenement^='event']::before,
+.ops-supervision-activity .activite[data-evenement^='customer']::before {
+  background: linear-gradient(145deg, #a86bff, #7a2fe0);
+}
+
+/* Une passe de densité de plus : la maquette tient le titre, le sous-titre et
+   les deux pastilles dans la hauteur que nous prenions pour le seul titre. */
+@media (max-width: 520px) {
+  .ops-supervision-heading h1 { font-size: 1.58rem; }
+  .ops-supervision-heading > p:last-child { font-size: 0.85rem; }
+  .ops-supervision-heading .ops-eyebrow { font-size: 0.7rem; letter-spacing: 0.16em; }
+  .ops-supervision-status > * { min-height: 2.25rem; font-size: 0.8rem; }
+  .ops-supervision-summary strong { font-size: 1.5rem; }
+  .ops-supervision-summary > div { padding: 0.8rem 0.9rem; }
+  .ops-supervision-activity .activite { padding: 0.75rem 0.8rem; gap: 0.7rem; }
+  .ops-supervision-activity .activite::before { width: 2.4rem; height: 2.4rem; }
+  .ops-supervision-activity .activite .libelle-activite { font-size: 0.96rem; }
+}

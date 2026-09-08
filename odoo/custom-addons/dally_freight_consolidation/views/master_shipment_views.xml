@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+      Le maître, vu de la consolidation.
+
+      Deux gestes seulement : le créer quand il n'existe pas, l'ouvrir quand il
+      existe. Le bouton de création disparaît dès qu'un maître est rattaché —
+      il n'y en a qu'un, et la contrainte d'unicité le garantit en base.
+
+      Les deux éléments portent `groups` : le champ est confiné aux rôles Dally,
+      et une vue qui le référencerait sans la même restriction casserait pour un
+      utilisateur qui ne peut pas le lire.
+    -->
+    <record id="consolidation_view_form_master_shipment" model="ir.ui.view">
+        <field name="name">dally.freight.consolidation.form.master.shipment</field>
+        <field name="model">dally.freight.consolidation</field>
+        <field name="inherit_id" ref="dally_freight_consolidation.consolidation_view_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//header" position="inside">
+                <field name="tk_master_shipment_id" invisible="1"
+                       groups="dally_core.group_dally_readonly"/>
+                <button name="action_create_master_shipment" type="object"
+                        string="Créer l'expédition maître" class="btn-primary"
+                        groups="dally_core.group_dally_logistics"
+                        invisible="tk_master_shipment_id or state not in ('draft', 'collecting', 'collection_closed', 'ready')"/>
+            </xpath>
+
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_open_master_shipment" type="object"
+                        class="oe_stat_button" icon="fa-plane"
+                        groups="dally_core.group_dally_readonly"
+                        invisible="not tk_master_shipment_id">
+                    <field name="tk_master_shipment_count" widget="statinfo"
+                           string="Expédition maître"/>
+                </button>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!--
+      La consolidation, vue de l'expédition.
+
+      Le chemin de retour, pour qu'un exploitant qui ouvre une expédition maître
+      sache de quelle consolidation elle vient. La vue du fournisseur n'est pas
+      modifiée : elle est héritée, comme toutes nos adaptations tk.
+    -->
+    <record id="freight_shipment_view_form_consolidation" model="ir.ui.view">
+        <field name="name">freight.shipment.form.dally.consolidation</field>
+        <field name="model">freight.shipment</field>
+        <field name="inherit_id" ref="tk_freight.freight_shipment_form_view"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <field name="dally_consolidation_id" invisible="1"
+                       groups="dally_core.group_dally_readonly"/>
+                <button name="action_open_dally_consolidation" type="object"
+                        class="oe_stat_button" icon="fa-cubes"
+                        groups="dally_core.group_dally_readonly"
+                        invisible="not dally_consolidation_id">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Consolidation</span>
+                        <span class="o_stat_value"><field name="dally_consolidation_id"/></span>
+                    </div>
+                </button>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

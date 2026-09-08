@@ -13,3 +13,5 @@ from . import test_intake_sequence
 
 from . import test_open_consolidations_endpoint
 from . import test_sheet_bindings_endpoint
+
+from . import test_master_shipment

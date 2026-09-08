@@ -312,7 +312,11 @@ class DallyFreightConsolidation(models.Model):
                 raise UserError(_("La référence est immuable après attribution d'un dossier de collecte."))
         immutable = {"transport_mode", "direction", "origin_country_id", "origin_city",
                      "origin_location", "destination_country_id", "destination_city",
-                     "destination_location", "mawb_number", "line_ids"}
+                     "destination_location", "mawb_number", "line_ids",
+                     # Le rattachement au maître suit le même gel : après le
+                     # départ, on ne redirige plus une consolidation vers une
+                     # autre expédition.
+                     "tk_master_shipment_id"}
         if immutable.intersection(vals):
             blocked = self.filtered(lambda rec: rec.state in ("departed", "arrived", "closed"))
             if blocked:

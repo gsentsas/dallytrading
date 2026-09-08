@@ -1,4 +1,6 @@
 import Link from 'next/link';
+
+import { OpsCardIcon } from '@/features/shell/OpsCardIcon';
 import { redirect } from 'next/navigation';
 
 import { currentIdentity, readOpsSession } from '@/lib/auth/auth';
@@ -63,9 +65,26 @@ export default async function PageDossier({
       <Link className="retour ops-back-link" href="/reception">← Réceptions</Link>
       <header className="ops-dossier-heading">
         <p className="ops-eyebrow">DOSSIER</p>
-        <h1>DOSSIER {dossier.local_reference}</h1>
+        {/*
+          * Le titre s'écrit « Dossier A1339 » comme sur la maquette, mais son
+          * nom accessible reste « DOSSIER A1339 » — la forme que le parcours
+          * de bout en bout et les lecteurs d'écran connaissent depuis le
+          * début. Deux span : l'un pour l'oreille, l'autre pour l'œil.
+          */}
+        <h1>
+          <span className="sr-only">DOSSIER {dossier.local_reference}</span>
+          <span aria-hidden="true">Dossier {dossier.local_reference}</span>
+        </h1>
       </header>
 
+      {/*
+        * La carte client : l'avatar, le nom, la référence, et l'état à droite
+        * sur la même ligne — la disposition de la maquette.
+        *
+        * Celle-ci montre aussi un téléphone. Le serveur ne renvoie que le nom
+        * du client sur un dossier ; afficher un numéro supposerait de
+        * l'inventer, et un mauvais numéro sur un écran de terrain se compose.
+        */}
       <section className="carte ops-dossier-customer">
         <span className="ops-dossier-avatar" aria-hidden="true">{initiales(dossier.customer.name)}</span>
         <div>
@@ -77,16 +96,45 @@ export default async function PageDossier({
 
       <section className="carte ops-dossier-information">
         <div className="ops-dossier-section-title">
-          <span className="tone-blue" aria-hidden="true">▤</span>
+          <span className="ops-card-icon tone-blue" aria-hidden="true">
+            <OpsCardIcon name="saisies" />
+          </span>
           <h2>Informations du dossier</h2>
         </div>
+        {/*
+          * Chaque ligne porte le pictogramme de ce qu'elle dit, et un filet la
+          * sépare de la suivante — la lecture de la maquette, où l'œil descend
+          * la colonne des libellés et trouve la valeur alignée à droite.
+          *
+          * La maquette ajoute une destination et un type de colis. Le serveur
+          * ne les renvoie pas pour un dossier : ils ne sont donc pas affichés,
+          * plutôt que remplis d'une valeur plausible.
+          */}
         <dl>
-          <div><dt>Référence</dt><dd>{dossier.local_reference}</dd></div>
-          <div><dt>Date de réception</dt><dd>{dateLisible(dossier.received_on)}</dd></div>
-          <div><dt>Nombre d’articles</dt><dd>{dossier.totals.lines_count}</dd></div>
-          <div><dt>Poids total</dt><dd>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(dossier.totals.weight_kg)} kg</dd></div>
-          <div><dt>Volume total</dt><dd>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 }).format(dossier.totals.volume_cbm)} m³</dd></div>
-          <div><dt>Départ</dt><dd>{dossier.consolidation_reference}</dd></div>
+          <div>
+            <span aria-hidden="true"><OpsCardIcon name="saisies" /></span>
+            <dt>Référence</dt><dd>{dossier.local_reference}</dd>
+          </div>
+          <div>
+            <span aria-hidden="true"><OpsCardIcon name="agenda" /></span>
+            <dt>Date de réception</dt><dd>{dateLisible(dossier.received_on)}</dd>
+          </div>
+          <div>
+            <span aria-hidden="true"><OpsCardIcon name="reception" /></span>
+            <dt>Nombre d’articles</dt><dd>{dossier.totals.lines_count}</dd>
+          </div>
+          <div>
+            <span aria-hidden="true"><OpsCardIcon name="depenses" /></span>
+            <dt>Poids total</dt><dd>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(dossier.totals.weight_kg)} kg</dd>
+          </div>
+          <div>
+            <span aria-hidden="true"><OpsCardIcon name="reception" /></span>
+            <dt>Volume total</dt><dd>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 }).format(dossier.totals.volume_cbm)} m³</dd>
+          </div>
+          <div>
+            <span aria-hidden="true"><OpsCardIcon name="chargement" /></span>
+            <dt>Départ</dt><dd>{dossier.consolidation_reference}</dd>
+          </div>
         </dl>
       </section>
 

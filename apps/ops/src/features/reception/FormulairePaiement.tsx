@@ -2,6 +2,8 @@
 
 import { useRef, useState, type FormEvent } from 'react';
 
+import { OpsCardIcon } from '@/features/shell/OpsCardIcon';
+
 import type { CanalPaiement } from '@/lib/ops/payments';
 
 export function FormulairePaiement({
@@ -77,7 +79,7 @@ export function FormulairePaiement({
   return (
     <form className="ops-payment-form" onSubmit={enregistrer} noValidate data-testid="formulaire-paiement">
       <div className="ops-payment-heading">
-        <span className="ops-payment-heading-icon" aria-hidden="true">▣</span>
+        <span className="ops-payment-heading-icon" aria-hidden="true"><OpsCardIcon name="encaissement" /></span>
         <div>
           <h2>Encaissement</h2>
           <p>Enregistrer un paiement reçu d’un client.</p>
@@ -88,20 +90,20 @@ export function FormulairePaiement({
 
       {dossierLabel ? (
         <section className="ops-payment-context">
-          <span className="ops-payment-context-icon tone-blue" aria-hidden="true">▰</span>
+          <span className="ops-payment-context-icon tone-blue" aria-hidden="true"><OpsCardIcon name="recherche" /></span>
           <div><small>Dossier</small><strong>{dossierLabel}</strong></div>
         </section>
       ) : null}
 
       {clientName ? (
         <section className="ops-payment-context">
-          <span className="ops-payment-context-icon tone-green" aria-hidden="true">●</span>
+          <span className="ops-payment-context-icon tone-green" aria-hidden="true"><OpsCardIcon name="supervision" /></span>
           <div><small>Client</small><strong>{clientName}</strong></div>
         </section>
       ) : null}
 
       <label className="ops-payment-card" htmlFor="montant">
-        <span className="ops-payment-card-icon tone-green" aria-hidden="true">●●</span>
+        <span className="ops-payment-card-icon tone-green" aria-hidden="true"><OpsCardIcon name="depenses" /></span>
         <span className="ops-payment-field-copy">
           <strong>Montant <em>*</em></strong>
           <span className="ops-payment-input-row">
@@ -122,7 +124,7 @@ export function FormulairePaiement({
       </label>
 
       <label className="ops-payment-card" htmlFor="mode-paiement">
-        <span className="ops-payment-card-icon tone-orange" aria-hidden="true">▰</span>
+        <span className="ops-payment-card-icon tone-orange" aria-hidden="true"><OpsCardIcon name="encaissement" /></span>
         <span className="ops-payment-field-copy">
           <strong>Mode de paiement <em>*</em></strong>
           <select
@@ -141,7 +143,7 @@ export function FormulairePaiement({
       </label>
 
       <label className="ops-payment-card" htmlFor="date-paiement">
-        <span className="ops-payment-card-icon tone-purple" aria-hidden="true">□</span>
+        <span className="ops-payment-card-icon tone-purple" aria-hidden="true"><OpsCardIcon name="agenda" /></span>
         <span className="ops-payment-field-copy">
           <strong>Date de paiement <em>*</em></strong>
           <input

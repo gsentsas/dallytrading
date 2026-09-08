@@ -8,19 +8,25 @@ import { entreesAutorisees } from '@/features/auth/capacites';
 import { ActivityTimeline } from '@/features/activity/ActivityTimeline';
 import { LogoutButton } from '@/features/auth/LogoutButton';
 import { IndicateurSync } from '@/features/offline/IndicateurSync';
+import { OpsCardIcon, type OpsCardIconName } from '@/features/shell/OpsCardIcon';
 
 export const dynamic = 'force-dynamic';
 
-const iconByEntry: Record<string, string> = {
-  recherche: '⌕',
-  reception: '◇',
-  chargement: '⇥',
-  encaissement: '▣',
-  depenses: '◫',
-  transferts: '⇄',
-  agenda: '▦',
-  supervision: '👥',
-  traitement: '!',
+/**
+ * Chaque accès porte le pictogramme de son métier. Les identifiants viennent
+ * du serveur ; l'icône est un choix d'affichage, et le repli sur le dossier
+ * évite qu'un accès nouvellement ouvert par Odoo arrive sans image.
+ */
+const iconByEntry: Record<string, OpsCardIconName> = {
+  recherche: 'recherche',
+  reception: 'reception',
+  chargement: 'chargement',
+  encaissement: 'encaissement',
+  depenses: 'depenses',
+  transferts: 'transferts',
+  agenda: 'agenda',
+  supervision: 'supervision',
+  traitement: 'traitement',
 };
 
 const toneByEntry: Record<string, string> = {
@@ -69,7 +75,7 @@ export default async function PageAccueil() {
       </section>
 
       <section className="ops-home-activity" aria-labelledby="mes-saisies-titre">
-        <div className="ops-card-icon tone-blue" aria-hidden="true">▤</div>
+        <div className="ops-card-icon tone-blue" aria-hidden="true"><OpsCardIcon name="saisies" /></div>
         <div className="ops-home-activity-copy">
           <h2 id="mes-saisies-titre">Mes saisies du jour</h2>
           {activite ? (
@@ -96,7 +102,7 @@ export default async function PageAccueil() {
             const content = (
               <>
                 <div className={`ops-card-icon tone-${toneByEntry[entree.id] ?? 'blue'}`} aria-hidden="true">
-                  {iconByEntry[entree.id] ?? '•'}
+                  <OpsCardIcon name={iconByEntry[entree.id] ?? 'recherche'} />
                 </div>
                 <div className="ops-quick-copy">
                   <strong>{entree.titre}</strong>
@@ -116,7 +122,7 @@ export default async function PageAccueil() {
       </section>
 
       <Link className="ops-insight-card" href="/activite">
-        <span className="ops-insight-icon" aria-hidden="true">▥</span>
+        <span className="ops-insight-icon" aria-hidden="true"><OpsCardIcon name="insight" /></span>
         <span>
           <strong>Une logistique plus fluide sur le terrain</strong>
           <small>DallyTrading vous accompagne au quotidien</small>

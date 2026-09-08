@@ -39,6 +39,8 @@ visible qu'on corrige en configurant un port ; un maître routé au mauvais
 endroit est un incident invisible qu'on découvre à l'arrivée.
 """
 
+import re
+
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
@@ -96,6 +98,25 @@ class DallyFreightConsolidation(models.Model):
     # La résolution des ports
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _dally_code_iata(texte):
+        """Le code à trois lettres contenu dans un libellé, s'il n'y en a qu'un.
+
+        Les libellés de terrain mêlent le nom et le code : « AIBD-DSS »,
+        « Roissy CDG ». L'extraction découpe sur tout ce qui n'est pas
+        alphanumérique et ne retient que les jetons de **exactement trois
+        lettres**. C'est déterministe et sans jokers : « AIBD » fait quatre
+        lettres, « Roissy » six.
+
+        Deux codes dans le même libellé — « LEH BKO » — ne donnent rien : on ne
+        choisit pas lequel est l'origine. C'est le fail-closed, appliqué à
+        l'extraction elle-même.
+        """
+        jetons = re.findall(r"[A-Za-z0-9]+", texte or "")
+        codes = {jeton.upper() for jeton in jetons
+                 if len(jeton) == 3 and jeton.isalpha()}
+        return codes.pop() if len(codes) == 1 else None
+
     def _dally_resolve_port(self, libelle, ville, pays):
         """Le `freight.port` de cette route, ou une erreur qui dit laquelle.
 
@@ -110,13 +131,20 @@ class DallyFreightConsolidation(models.Model):
         if pays:
             socle.append(("country_id", "=", pays.id))
 
-        # Du plus précis au moins précis : un code IATA/OACI vaut mieux qu'un
-        # nom, et un nom mieux qu'une ville.
+        # Du plus précis au moins précis : un code vaut mieux qu'un nom, et un
+        # nom mieux qu'une ville. Le code extrait passe juste après le libellé
+        # brut — « DSS » se résout tel quel, « AIBD-DSS » par extraction.
         tentatives = []
         if libelle:
             tentatives.append(("code", libelle.strip()))
+            extrait = self._dally_code_iata(libelle)
+            if extrait and extrait != libelle.strip().upper():
+                tentatives.append(("code", extrait))
             tentatives.append(("name", libelle.strip()))
         if ville:
+            extrait_ville = self._dally_code_iata(ville)
+            if extrait_ville:
+                tentatives.append(("code", extrait_ville))
             tentatives.append(("city", ville.strip()))
 
         for champ, valeur in tentatives:
@@ -259,11 +287,21 @@ class DallyFreightConsolidation(models.Model):
         self.ensure_one()
         if self.master_piece_count <= 0 and self.master_gross_weight_kg <= 0:
             return None
+        # Un poids sans nombre de pièces ne se complète pas d'un « 1 » de
+        # confort : le maître déclarerait une pièce que personne n'a comptée, et
+        # le poids s'y trouverait attaché. On refuse et on dit quoi saisir.
+        if self.master_piece_count <= 0:
+            raise UserError(_(
+                "Un poids brut maître est déclaré (%(poids)s kg) sans nombre de "
+                "pièces. Renseignez les pièces MAWB avant de créer l'expédition "
+                "maître : le document ne peut pas déclarer un poids sans colis.",
+                poids=self.master_gross_weight_kg,
+            ))
         return {
             "name": self.name,
             "package_type": "item",
             "transport": MODE_TO_TRANSPORT[self.transport_mode],
-            "qty": self.master_piece_count or 1,
+            "qty": self.master_piece_count,
             "gross_weight": self.master_gross_weight_kg or 0.0,
             "volume": self.client_volume_cbm or 0.0,
         }
@@ -291,13 +329,41 @@ class DallyFreightConsolidation(models.Model):
                 dict(self._fields["state"].selection).get(self.state, self.state),
             ))
 
+        # Toutes les vérifications passent avant le verrou et avant la moindre
+        # écriture. Elles ne lisent que des champs, échouer verrou en main
+        # ferait attendre l'autre transaction pour rien — et surtout, un refus
+        # qui tomberait après la création laisserait une expédition derrière
+        # lui, sans lien et sans personne pour la regarder.
         vals = self._dally_master_shipment_values()
+        ligne_colis = self._dally_master_package_values()
+
+        # Le verrou, puis la relecture, puis la création — dans cet ordre.
+        #
+        # `UNIQUE (tk_master_shipment_id)` empêche deux consolidations de
+        # partager un maître. Elle n'empêche pas deux créations concurrentes sur
+        # la MÊME consolidation : chacune crée son expédition, les deux clés
+        # sont distinctes, aucune contrainte ne s'oppose — et il reste un maître
+        # orphelin que personne ne regarde.
+        #
+        # Le verrou de ligne sérialise les deux appels. Le second attend le
+        # commit du premier, relit la colonne, la trouve remplie, et rend
+        # l'expédition déjà créée sans en fabriquer une seconde.
+        self.env.cr.execute(
+            "SELECT tk_master_shipment_id FROM dally_freight_consolidation "
+            "WHERE id = %s FOR UPDATE",
+            [self.id],
+        )
+        verrouillee = self.env.cr.fetchone()
+        deja_liee = verrouillee[0] if verrouillee else None
+        if deja_liee:
+            self.invalidate_recordset(["tk_master_shipment_id"])
+            return self.action_open_master_shipment()
+
         expedition = self.env["freight.shipment"].create(vals)
 
-        ligne = self._dally_master_package_values()
-        if ligne:
+        if ligne_colis:
             self.env["shipment.package.line"].create(
-                dict(ligne, shipment_id=expedition.id))
+                dict(ligne_colis, shipment_id=expedition.id))
 
         self.tk_master_shipment_id = expedition
         self.message_post(body=_(

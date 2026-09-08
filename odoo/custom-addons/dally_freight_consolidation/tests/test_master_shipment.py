@@ -7,9 +7,12 @@ refus comptent donc autant que le cas heureux, et davantage : un maître absent
 se remarque, un maître mal routé se découvre à l'arrivée.
 """
 
+import os
+
+import psycopg2
 from psycopg2 import errors
 from odoo.exceptions import UserError
-from odoo.tests import tagged
+from odoo.tests import TransactionCase, tagged
 from odoo.tools import mute_logger
 
 from odoo.addons.dally_freight_consolidation.models.consolidation import (
@@ -134,6 +137,79 @@ class TestMasterShipment(ConsolidationCommon):
         self.assertEqual(maitre.truck_ref, "CMR-771")
         self.assertFalse(maitre.mawb_no)
         self.assertFalse(maitre.bl_number)
+
+    # ------------------------------------------------------------------
+    # L'extraction déterministe d'un code
+    # ------------------------------------------------------------------
+
+    def test_un_code_noye_dans_le_libelle_est_extrait(self):
+        # Les libellés de terrain mêlent le nom et le code. L'extraction ne
+        # retient que les jetons de exactement trois lettres : « AIBD » en fait
+        # quatre, « Roissy » six.
+        for champ, libelle, port in (
+            ("origin_location", "AIBD-DSS", self.port_dss),
+            ("origin_location", "DSS", self.port_dss),
+            ("origin_location", "Aéroport AIBD / DSS", self.port_dss),
+            ("destination_location", "Roissy CDG", self.port_cdg),
+            ("destination_location", "CDG", self.port_cdg),
+        ):
+            with self.subTest(libelle=libelle):
+                consolidation = self._consolidation(
+                    name="AIR-EXTRACT-%s" % abs(hash(champ + libelle)))
+                consolidation.write({champ: libelle})
+                consolidation.action_create_master_shipment()
+                cible = ("source_location_id" if champ == "origin_location"
+                         else "destination_location_id")
+                self.assertEqual(consolidation.tk_master_shipment_id[cible], port)
+
+    def test_deux_codes_dans_le_meme_libelle_ne_donnent_rien(self):
+        # « DSS CDG » : on ne choisit pas lequel est l'origine. Le fail-closed
+        # s'applique à l'extraction elle-même.
+        consolidation = self._consolidation()
+        consolidation.write({"origin_location": "DSS CDG", "origin_city": False})
+        with self.assertRaises(UserError) as refus:
+            consolidation.action_create_master_shipment()
+        self.assertIn("Aucun port", str(refus.exception))
+
+    def test_l_extraction_reste_exacte_et_sans_joker(self):
+        # « DAKAR » fait cinq lettres : rien n'est extrait, et aucun port n'est
+        # trouvé par sous-chaîne. Un `ilike` avec jokers aurait matché « DSS »
+        # dans un nom quelconque.
+        self.assertIsNone(
+            self.env["dally.freight.consolidation"]._dally_code_iata("DAKAR"))
+        self.assertEqual(
+            self.env["dally.freight.consolidation"]._dally_code_iata("AIBD-DSS"), "DSS")
+        self.assertEqual(
+            self.env["dally.freight.consolidation"]._dally_code_iata("Roissy CDG"), "CDG")
+        self.assertIsNone(
+            self.env["dally.freight.consolidation"]._dally_code_iata("LEH BKO"))
+        self.assertIsNone(
+            self.env["dally.freight.consolidation"]._dally_code_iata(""))
+
+    # ------------------------------------------------------------------
+    # Le poids sans les pièces
+    # ------------------------------------------------------------------
+
+    def test_un_poids_sans_pieces_est_refuse(self):
+        # Compléter par « 1 pièce » déclarerait un colis que personne n'a
+        # compté, et lui attacherait tout le poids.
+        consolidation = self._consolidation()
+        consolidation.write({"master_piece_count": 0, "master_gross_weight_kg": 480.5})
+        with self.assertRaises(UserError) as refus:
+            consolidation.action_create_master_shipment()
+        self.assertIn("sans nombre de pièces", str(refus.exception))
+        self.assertFalse(consolidation.tk_master_shipment_id,
+                         "aucun maître ne doit rester derrière un refus")
+
+    def test_aucun_maitre_orphelin_apres_un_refus_de_ligne_colis(self):
+        # Le refus tombe après le verrou : il ne doit laisser ni expédition ni
+        # lien. La transaction de test le vérifie à l'état visible.
+        consolidation = self._consolidation()
+        consolidation.write({"master_piece_count": 0, "master_gross_weight_kg": 12.0})
+        avant = self.env["freight.shipment"].search_count([])
+        with self.assertRaises(UserError):
+            consolidation.action_create_master_shipment()
+        self.assertEqual(self.env["freight.shipment"].search_count([]), avant)
 
     # ------------------------------------------------------------------
     # L'idempotence
@@ -319,3 +395,195 @@ class TestMasterShipment(ConsolidationCommon):
         self.assertEqual(consolidation.state, "collection_closed")
         self.assertEqual(consolidation.tk_master_shipment_id.stage_id, etape_initiale,
                          "l'état de la consolidation ne pilote pas l'étape tk")
+
+
+@tagged("post_install", "-at_install")
+class TestMasterShipmentConcurrence(TransactionCase):
+    """Deux créations concurrentes sur la MÊME consolidation.
+
+    Le test d'unicité prouvait qu'une expédition ne peut pas servir deux
+    consolidations. Il ne prouvait pas le cas qui compte : deux appels
+    concurrents sur la même consolidation. Chacun crée son expédition, les deux
+    clés étrangères sont distinctes, aucune contrainte ne s'oppose — et il reste
+    un maître orphelin que personne ne regarde.
+
+    ## Pourquoi un entrelacement décidé, et non une course
+
+    Une première version lançait deux fils qui appelaient l'action ensemble.
+    Dans le lanceur de tests Odoo, les deux se figeaient : le registre et le
+    curseur de test ne se prêtent pas à des connexions concurrentes créées à la
+    main, et le test échouait sur un délai plutôt que sur ce qu'il voulait dire.
+
+    Un test qui dépend de l'ordonnanceur ne prouve d'ailleurs qu'un
+    entrelacement parmi d'autres — celui du jour où il a tourné. On décide donc
+    l'entrelacement, et on vérifie les deux moitiés séparément :
+
+    1. le verrou est réellement pris : un curseur qui détient déjà la ligne fait
+       expirer le second ;
+    2. la relecture après verrou fonctionne : un curseur qui trouve la
+       consolidation déjà liée rend l'existant sans rien créer.
+
+    Ensemble, elles interdisent l'orphelin.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.senegal = self.env.ref("base.sn")
+        self.france = self.env.ref("base.fr")
+        Port = self.env["freight.port"]
+        self.origine = Port.create({
+            "name": "Concurrence Origine", "code": "CO1",
+            "country_id": self.senegal.id, "air": True,
+        })
+        self.destination = Port.create({
+            "name": "Concurrence Destination", "code": "CD1",
+            "country_id": self.france.id, "air": True,
+        })
+        self.consolidation = self.env["dally.freight.consolidation"].create({
+            "name": "CONCURRENCE-TEST", "transport_mode": "air",
+            "direction": "export", "origin_location": "CO1",
+            "destination_location": "CD1", "state": "collecting",
+        })
+
+    def test_deux_curseurs_reels_ne_laissent_aucun_maitre_orphelin(self):
+        """Deux connexions distinctes, sur des données validées.
+
+        Une première version créait la consolidation dans la transaction de
+        test : l'autre connexion ne voyait aucune ligne, son `FOR UPDATE` ne
+        trouvait rien à verrouiller et passait sans attendre. Le test réussissait
+        pour la mauvaise raison. Une seconde lançait deux fils, qui se figeaient
+        dans le lanceur Odoo.
+
+        On travaille donc sur des enregistrements validés, avec deux connexions
+        réelles et un entrelacement décidé — plus sûr qu'une course, dont on ne
+        prouve jamais que l'ordre du jour.
+        """
+        from odoo import SUPERUSER_ID, api
+        from odoo.sql_db import db_connect
+
+        base = self.env.cr.dbname
+        cree = {}
+
+        preparation = db_connect(base).cursor()
+        try:
+            env = api.Environment(preparation, SUPERUSER_ID, {})
+            origine = env["freight.port"].create({
+                "name": "Verrou Origine", "code": "VO1",
+                "country_id": env.ref("base.sn").id, "air": True})
+            destination = env["freight.port"].create({
+                "name": "Verrou Destination", "code": "VD1",
+                "country_id": env.ref("base.fr").id, "air": True})
+            consolidation = env["dally.freight.consolidation"].create({
+                "name": "VERROU-CONCURRENCE", "transport_mode": "air",
+                "direction": "export", "origin_location": "VO1",
+                "destination_location": "VD1", "state": "collecting"})
+            cree = {"consolidation": consolidation.id,
+                    "ports": [origine.id, destination.id]}
+            preparation.commit()
+        finally:
+            preparation.close()
+
+        premier = db_connect(base).cursor()
+        second = db_connect(base).cursor()
+        try:
+            # --- le premier prend le verrou et le garde ---
+            env_premier = api.Environment(premier, SUPERUSER_ID, {})
+            consolidation_1 = env_premier["dally.freight.consolidation"].browse(
+                cree["consolidation"])
+            consolidation_1.action_create_master_shipment()
+
+            # --- le second se heurte au verrou, il ne double pas la création ---
+            second.execute("SET LOCAL lock_timeout = '2s'")
+            with self.assertRaises(psycopg2.errors.LockNotAvailable):
+                second.execute(
+                    "SELECT tk_master_shipment_id FROM dally_freight_consolidation "
+                    "WHERE id = %s FOR UPDATE", [cree["consolidation"]])
+            second.rollback()
+
+            # --- le premier valide ; le second relit et trouve le maître ---
+            premier.commit()
+            env_second = api.Environment(second, SUPERUSER_ID, {})
+            consolidation_2 = env_second["dally.freight.consolidation"].browse(
+                cree["consolidation"])
+            avant = env_second["freight.shipment"].search_count([])
+            action = consolidation_2.action_create_master_shipment()
+            second.commit()
+
+            self.assertEqual(
+                env_second["freight.shipment"].search_count([]), avant,
+                "le second appel ne doit créer aucune expédition")
+
+            maitres = env_second["freight.shipment"].search([
+                ("operation", "=", "master"),
+                ("source_location_id", "=", cree["ports"][0])])
+            self.assertEqual(len(maitres), 1, "un seul maître, aucun orphelin")
+            self.assertEqual(maitres, consolidation_2.tk_master_shipment_id)
+            self.assertEqual(action["res_id"], maitres.id)
+            self.assertTrue(maitres.dally_consolidation_id,
+                            "le maître restant est bien rattaché")
+        finally:
+            for curseur in (premier, second):
+                try:
+                    curseur.close()
+                except Exception:                      # noqa: BLE001
+                    pass
+            menage = db_connect(base).cursor()
+            try:
+                env = api.Environment(menage, SUPERUSER_ID, {})
+                consolidation = env["dally.freight.consolidation"].browse(
+                    cree["consolidation"])
+                if consolidation.exists():
+                    maitre = consolidation.tk_master_shipment_id
+                    consolidation.write({"tk_master_shipment_id": False})
+                    if maitre.exists():
+                        maitre.freight_packages.unlink()
+                        maitre.unlink()
+                    consolidation.with_context(
+                        _dally_consolidation_state_write=_CONSOLIDATION_STATE_WRITE_TOKEN,
+                        _dally_consolidation_bypass=_CONSOLIDATION_BYPASS_TOKEN,
+                    ).write({"state": "cancelled"})
+                    consolidation.unlink()
+                env["freight.port"].browse(cree.get("ports", [])).exists().unlink()
+                menage.commit()
+            except Exception:                          # noqa: BLE001
+                menage.rollback()
+            finally:
+                menage.close()
+
+    def test_le_perdant_rend_le_maitre_du_gagnant_sans_en_creer_un_second(self):
+        """L'autre moitié : celui qui obtient le verrou après coup relit, trouve
+        la consolidation déjà liée, et ne crée rien.
+
+        C'est exactement l'état dans lequel se réveille le second appel d'une
+        course réelle, une fois le premier validé.
+        """
+        # Le gagnant.
+        self.consolidation.action_create_master_shipment()
+        gagnant = self.consolidation.tk_master_shipment_id
+        self.assertTrue(gagnant)
+
+        # Le perdant : il repart d'un cache vide, comme une autre transaction.
+        avant = self.env["freight.shipment"].search_count([])
+        self.consolidation.invalidate_recordset()
+        action = self.consolidation.action_create_master_shipment()
+
+        self.assertEqual(self.consolidation.tk_master_shipment_id, gagnant)
+        self.assertEqual(action["res_id"], gagnant.id)
+        self.assertEqual(
+            self.env["freight.shipment"].search_count([]), avant,
+            "le perdant ne crée aucune expédition")
+
+    def test_aucun_maitre_orphelin_sur_ces_ports(self):
+        """L'invariante, dite telle qu'on la vérifierait en exploitation : sur
+        cette route, il n'existe pas d'expédition maître sans consolidation."""
+        self.consolidation.action_create_master_shipment()
+        self.consolidation.invalidate_recordset()
+        self.consolidation.action_create_master_shipment()
+
+        maitres = self.env["freight.shipment"].search([
+            ("operation", "=", "master"),
+            ("source_location_id", "=", self.origine.id),
+        ])
+        self.assertEqual(len(maitres), 1)
+        orphelins = maitres.filtered(lambda m: not m.dally_consolidation_id)
+        self.assertFalse(orphelins, "aucune expédition maître sans consolidation")

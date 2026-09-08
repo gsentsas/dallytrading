@@ -27,6 +27,9 @@ export const dynamic = 'force-dynamic';
 const schema = z.object({
   login: z.string().trim().min(1).max(128),
   password: z.string().min(1).max(256),
+  // « Se souvenir de moi ». Absent d'une requete ancienne : on retombe alors
+  // sur le comportement d'avant, une session persistante.
+  remember: z.boolean().optional(),
 });
 
 /** Toujours la même réponse, quel que soit le motif du refus. */
@@ -70,7 +73,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const analyse = schema.safeParse(corps);
   if (!analyse.success) return refus(400);
-  const { login, password } = analyse.data;
+  const { login, password, remember } = analyse.data;
 
   // Le budget du compte compte les ÉCHECS : on le consulte ici, on ne le
   // consomme qu'en cas de refus. Un poste d'entrepôt sert plusieurs
@@ -84,7 +87,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   try {
-    const identite = await loginOps(login, password, correlationId);
+    const identite = await loginOps(login, password, correlationId, remember ?? true);
     clearRateLimitKey(cleCompte);
     const reponse = NextResponse.json({ success: true, data: identite });
     reponse.headers.set('Cache-Control', 'no-store');

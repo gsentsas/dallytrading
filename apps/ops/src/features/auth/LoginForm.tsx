@@ -37,6 +37,9 @@ export function LoginForm() {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
+  // Décochée par défaut, comme sur la maquette : on ne garde une trace sur
+  // l'appareil que si l'opérateur le demande.
+  const [seSouvenir, setSeSouvenir] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
 
@@ -48,7 +51,7 @@ export function LoginForm() {
       const reponse = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ login, password }),
+        body: JSON.stringify({ login, password, remember: seSouvenir }),
       });
       const charge = (await reponse.json().catch(() => null)) as
         | { success?: boolean; error?: string }
@@ -111,6 +114,23 @@ export function LoginForm() {
         >
           <EyeIcon hidden={!passwordVisible} />
         </button>
+      </label>
+
+      {/*
+        * « Se souvenir de moi » choisit la durée de vie du cookie, rien de
+        * plus : décochée, la session s'efface à la fermeture du navigateur ;
+        * cochée, elle tient la journée de travail. Le serveur plafonne de
+        * toute façon à huit heures, donc cocher n'ouvre aucune fenêtre plus
+        * large — la case décide seulement de ce que l'appareil garde entre
+        * deux ouvertures.
+        */}
+      <label className="ops-login-remember">
+        <input
+          type="checkbox"
+          checked={seSouvenir}
+          onChange={(evenement) => setSeSouvenir(evenement.target.checked)}
+        />
+        <span>Se souvenir de moi</span>
       </label>
 
       <button className="ops-login-submit" type="submit" disabled={envoiEnCours}>

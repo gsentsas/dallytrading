@@ -11,7 +11,7 @@ import os
 
 import psycopg2
 from psycopg2 import errors
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 from odoo.tools import mute_logger
 
@@ -351,6 +351,81 @@ class TestMasterShipment(ConsolidationCommon):
         consolidation.action_create_master_shipment()
         self.assertTrue(consolidation.tk_master_shipment_id)
         self.assertFalse(consolidation.tk_master_shipment_id.airline_id)
+
+    # ------------------------------------------------------------------
+    # Ce qui est relu APRÈS le verrou
+    # ------------------------------------------------------------------
+    #
+    # Le verrou ne protège que ce qui est lu après lui. Ces deux tests écrivent
+    # en SQL direct — donc sans passer par le cache de l'ORM, exactement comme
+    # le ferait une autre transaction validée entre-temps — et vérifient que
+    # l'action s'en aperçoit.
+
+    def test_un_depart_survenu_entre_temps_est_vu(self):
+        consolidation = self._consolidation()
+        self.assertEqual(consolidation.state, "collecting")
+        self.env.cr.execute(
+            "UPDATE dally_freight_consolidation SET state = 'departed' WHERE id = %s",
+            [consolidation.id])
+        # Le cache de la transaction porte encore « collecting ».
+        self.assertEqual(consolidation.state, "collecting")
+        with self.assertRaises(UserError) as refus:
+            consolidation.action_create_master_shipment()
+        self.assertIn("avant le départ", str(refus.exception))
+        self.assertFalse(consolidation.tk_master_shipment_id)
+
+    def test_une_route_changee_entre_temps_est_revalidee(self):
+        consolidation = self._consolidation()
+        self.env.cr.execute(
+            "UPDATE dally_freight_consolidation SET origin_location = 'ZZZ', "
+            "origin_city = NULL WHERE id = %s", [consolidation.id])
+        self.assertEqual(consolidation.origin_location, "DSS")
+        with self.assertRaises(UserError) as refus:
+            consolidation.action_create_master_shipment()
+        self.assertIn("Aucun port", str(refus.exception))
+
+    def test_un_maitre_cree_entre_temps_est_repris_sans_doublon(self):
+        consolidation = self._consolidation()
+        autre = self.env["freight.shipment"].create(
+            {"transport": "air", "operation": "master"})
+        self.env.cr.execute(
+            "UPDATE dally_freight_consolidation SET tk_master_shipment_id = %s "
+            "WHERE id = %s", [autre.id, consolidation.id])
+        avant = self.env["freight.shipment"].search_count([])
+        action = consolidation.action_create_master_shipment()
+        self.assertEqual(action["res_id"], autre.id)
+        self.assertEqual(self.env["freight.shipment"].search_count([]), avant)
+
+    # ------------------------------------------------------------------
+    # Ce qu'un rattachement a le droit d'être
+    # ------------------------------------------------------------------
+
+    def test_un_rattachement_vers_une_expedition_maison_est_refuse(self):
+        maison = self.env["freight.shipment"].create(
+            {"transport": "air", "operation": "house"})
+        consolidation = self._consolidation()
+        with self.assertRaises(ValidationError) as refus:
+            consolidation.write({"tk_master_shipment_id": maison.id})
+            consolidation.flush_recordset()
+        self.assertIn("maître", str(refus.exception))
+
+    def test_un_rattachement_vers_une_autre_societe_est_refuse(self):
+        autre_societe = self.env["res.company"].create({"name": "Autre Société"})
+        etranger = self.env["freight.shipment"].create({
+            "transport": "air", "operation": "master",
+            "company_id": autre_societe.id})
+        consolidation = self._consolidation()
+        with self.assertRaises(ValidationError) as refus:
+            consolidation.write({"tk_master_shipment_id": etranger.id})
+            consolidation.flush_recordset()
+        self.assertIn("appartient", str(refus.exception))
+
+    def test_le_maitre_cree_par_l_action_satisfait_la_contrainte(self):
+        consolidation = self._consolidation()
+        consolidation.action_create_master_shipment()
+        maitre = consolidation.tk_master_shipment_id
+        self.assertEqual(maitre.operation, "master")
+        self.assertEqual(maitre.company_id, consolidation.company_id)
 
     # ------------------------------------------------------------------
     # Le chemin de retour, les droits, la non-régression

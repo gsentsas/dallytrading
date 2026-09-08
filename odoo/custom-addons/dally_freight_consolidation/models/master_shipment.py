@@ -42,7 +42,7 @@ endroit est un incident invisible qu'on découvre à l'arrivée.
 import re
 
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 
 #: Mode Dally → `transport` tk. Les deux vocabulaires ne coïncident pas :
@@ -88,6 +88,36 @@ class DallyFreightConsolidation(models.Model):
         "UNIQUE (tk_master_shipment_id)",
         "Cette expédition maître est déjà rattachée à une consolidation.",
     )
+
+    @api.constrains("tk_master_shipment_id", "company_id")
+    def _check_tk_master_shipment(self):
+        """Le maître rattaché est bien un maître, et de la même société.
+
+        La contrainte d'unicité vit en base ; celle-ci ne le peut pas, elle
+        traverse deux tables. Elle vaut pourtant autant : un rattachement vers
+        une expédition « house » ferait porter la consolidation par un dossier
+        client, et un rattachement inter-sociétés ferait voyager une
+        consolidation sous l'entité d'une autre — deux erreurs qu'un écran ou un
+        import peuvent commettre sans bruit.
+        """
+        for record in self:
+            maitre = record.sudo().tk_master_shipment_id
+            if not maitre:
+                continue
+            if maitre.operation != "master":
+                raise ValidationError(_(
+                    "L'expédition %(reference)s n'est pas une expédition maître "
+                    "(type « %(type)s ») : une consolidation ne peut pas s'y "
+                    "rattacher.",
+                    reference=maitre.display_name, type=maitre.operation or "—",
+                ))
+            if maitre.company_id and record.company_id and maitre.company_id != record.company_id:
+                raise ValidationError(_(
+                    "L'expédition maître appartient à %(maitre)s et la "
+                    "consolidation à %(consolidation)s.",
+                    maitre=maitre.company_id.display_name,
+                    consolidation=record.company_id.display_name,
+                ))
 
     @api.depends("tk_master_shipment_id")
     def _compute_tk_master_shipment_count(self):
@@ -313,12 +343,46 @@ class DallyFreightConsolidation(models.Model):
     def action_create_master_shipment(self):
         """Crée l'expédition maître, une seule fois.
 
-        Idempotente à deux niveaux. Si le lien existe déjà, on ouvre
-        l'existante sans rien créer — c'est le cas du double clic et du rejeu
-        d'un appel. Et si deux transactions passent malgré tout la lecture en
-        même temps, la contrainte d'unicité en base refuse la seconde.
+        ## L'ordre compte, et il est celui-ci
+
+        Verrou, relecture, revalidation, création. Pas un autre.
+
+        Une version précédente validait avant de verrouiller, au motif qu'une
+        validation ne lit que des champs et qu'échouer verrou en main ferait
+        attendre l'autre transaction pour rien. C'était un raisonnement de
+        confort qui ouvrait une fenêtre : entre la lecture des champs et
+        l'obtention du verrou, une autre transaction peut clôturer la collecte,
+        changer le mode, la route, le poids déclaré — et le maître se créait
+        alors avec des valeurs déjà périmées, sur un dossier qui n'était plus
+        dans l'état vérifié.
+
+        Le verrou ne protège que ce qui est lu **après** lui. Tout ce qui décide
+        est donc relu après, sur des données fraîches : l'invalidation force la
+        relecture en base plutôt que dans le cache de la transaction, qui porte
+        encore les valeurs d'avant.
         """
         self.ensure_one()
+        # Sortie de courtoisie, sans garantie : elle évite un verrou inutile sur
+        # le cas courant du double clic. La vraie décision se prend après.
+        if self.tk_master_shipment_id:
+            return self.action_open_master_shipment()
+
+        # Le verrou. `UNIQUE (tk_master_shipment_id)` empêche deux
+        # consolidations de partager un maître ; elle ne fait rien contre deux
+        # créations sur la MÊME consolidation, qui produiraient deux expéditions
+        # distinctes dont l'une resterait orpheline.
+        self.env.cr.execute(
+            "SELECT id FROM dally_freight_consolidation WHERE id = %s FOR UPDATE",
+            [self.id],
+        )
+        if not self.env.cr.fetchone():
+            raise UserError(_("Cette consolidation n'existe plus."))
+
+        # Tout ce qui a été lu avant le verrou est suspect : on repart de la
+        # base. `invalidate_recordset()` sans argument vide le cache de tous les
+        # champs — état, mode, direction, route, poids, pièces et rattachement.
+        self.invalidate_recordset()
+
         if self.tk_master_shipment_id:
             return self.action_open_master_shipment()
 
@@ -329,35 +393,10 @@ class DallyFreightConsolidation(models.Model):
                 dict(self._fields["state"].selection).get(self.state, self.state),
             ))
 
-        # Toutes les vérifications passent avant le verrou et avant la moindre
-        # écriture. Elles ne lisent que des champs, échouer verrou en main
-        # ferait attendre l'autre transaction pour rien — et surtout, un refus
-        # qui tomberait après la création laisserait une expédition derrière
-        # lui, sans lien et sans personne pour la regarder.
+        # Revalidation sur les valeurs fraîches, et toujours avant la moindre
+        # écriture : un refus ne doit laisser aucune expédition derrière lui.
         vals = self._dally_master_shipment_values()
         ligne_colis = self._dally_master_package_values()
-
-        # Le verrou, puis la relecture, puis la création — dans cet ordre.
-        #
-        # `UNIQUE (tk_master_shipment_id)` empêche deux consolidations de
-        # partager un maître. Elle n'empêche pas deux créations concurrentes sur
-        # la MÊME consolidation : chacune crée son expédition, les deux clés
-        # sont distinctes, aucune contrainte ne s'oppose — et il reste un maître
-        # orphelin que personne ne regarde.
-        #
-        # Le verrou de ligne sérialise les deux appels. Le second attend le
-        # commit du premier, relit la colonne, la trouve remplie, et rend
-        # l'expédition déjà créée sans en fabriquer une seconde.
-        self.env.cr.execute(
-            "SELECT tk_master_shipment_id FROM dally_freight_consolidation "
-            "WHERE id = %s FOR UPDATE",
-            [self.id],
-        )
-        verrouillee = self.env.cr.fetchone()
-        deja_liee = verrouillee[0] if verrouillee else None
-        if deja_liee:
-            self.invalidate_recordset(["tk_master_shipment_id"])
-            return self.action_open_master_shipment()
 
         expedition = self.env["freight.shipment"].create(vals)
 

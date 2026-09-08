@@ -80,10 +80,18 @@ class DallyFreightConsolidation(models.Model):
         string="Maître",
     )
 
-    #: Un maître, une consolidation. La contrainte est posée en base et non en
-    #: Python : deux clics simultanés sur « Créer l'expédition » passent tous
-    #: les deux la lecture avant que l'un ait écrit, et seule une contrainte
-    #: d'unicité les sépare.
+    #: Un maître ne sert qu'une consolidation.
+    #:
+    #: C'est la seule chose que cette contrainte garantit, et il faut la lire
+    #: pour ce qu'elle est : elle empêche **deux consolidations** de pointer sur
+    #: la même expédition — un rattachement croisé par écran, par import ou par
+    #: copie.
+    #:
+    #: Elle ne protège pas de deux créations concurrentes sur la **même**
+    #: consolidation : chacune produirait sa propre expédition, les deux clés
+    #: seraient distinctes, et rien ne s'y opposerait. Ce cas-là est tenu par le
+    #: verrou de ligne pris dans `action_create_master_shipment`, qui sérialise
+    #: les deux appels et fait relire le rattachement au second.
     _tk_master_shipment_unique = models.Constraint(
         "UNIQUE (tk_master_shipment_id)",
         "Cette expédition maître est déjà rattachée à une consolidation.",

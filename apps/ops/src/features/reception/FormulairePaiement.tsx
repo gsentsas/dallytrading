@@ -156,7 +156,7 @@ export function FormulairePaiement({
 
       <button className="ops-payment-submit" type="submit" disabled={etat.nom === 'envoi' || canaux.length === 0}>
         <span aria-hidden="true">✓</span>
-        {etat.nom === 'envoi' ? 'Enregistrement…' : 'Enregistrer'}
+        {etat.nom === 'envoi' ? 'Enregistrement…' : 'CONFIRMER L’ENCAISSEMENT'}
       </button>
       <button type="button" className="secondaire ops-payment-cancel" onClick={onAnnuler}>Annuler</button>
     </form>

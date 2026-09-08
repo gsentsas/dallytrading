@@ -19,7 +19,10 @@ export default async function PageAgenda() {
         <span className="ops-operation-heading-icon tone-blue" aria-hidden="true">▦</span>
         <div>
           <p className="ops-eyebrow">PLANNING</p>
-          <h2 className="ops-visual-title">Agenda</h2>
+          {/* Le titre visuel n'est pas un titre de document : l'agenda porte
+              deja son <h1> « AGENDA », restyle en etiquette. Deux elements de
+              titre pour une page dupliqueraient le nom accessible. */}
+          <p className="ops-visual-title">Agenda</p>
           <p>Organiser les passages et rendez-vous de l’équipe.</p>
         </div>
       </header>

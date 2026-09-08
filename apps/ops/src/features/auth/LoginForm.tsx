@@ -106,7 +106,7 @@ export function LoginForm() {
         <button
           className="ops-password-toggle"
           type="button"
-          aria-label={passwordVisible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+          aria-label={passwordVisible ? 'Masquer la saisie' : 'Afficher la saisie'}
           onClick={() => setPasswordVisible((visible) => !visible)}
         >
           <EyeIcon hidden={!passwordVisible} />

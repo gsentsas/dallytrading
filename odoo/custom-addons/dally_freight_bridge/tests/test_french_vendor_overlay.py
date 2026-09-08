@@ -151,3 +151,83 @@ class TestFrenchShipmentScreen(TransactionCase):
         self.env["ir.ui.view"].dally_apply_tk_freight_fr_overlay()
         self.assertEqual(self.vue.with_context(lang="fr_FR").arch_db, premier,
                          "une seconde passe ne doit plus rien changer")
+
+
+@tagged("post_install", "-at_install", "dally_freight")
+class TestRepairVendorSourceArch(TransactionCase):
+    """La réparation de la source anglaise abîmée.
+
+    Le correctif empêche que l'overlay réécrive `en_US` ; il ne défait pas ce
+    qui a déjà été écrit. Cinq vues du fournisseur, en production, portent du
+    français dans leur langue source.
+
+    Ce test reproduit la panne, puis la répare, puis vérifie les deux langues.
+    Reproduire compte autant que réparer : sans cela, on ne saurait pas que le
+    remède agit sur le bon mal.
+    """
+
+    _VUE = "tk_freight.freight_shipment_form_view"
+
+    def setUp(self):
+        super().setUp()
+        self.vue = self.env.ref(self._VUE, raise_if_not_found=False)
+        if not self.vue:
+            self.skipTest("tk_freight absent de cette base")
+
+    def _abimer_la_source(self):
+        """Reproduit l'ÉTAT que porte la production, pas la manœuvre qui l'a créé.
+
+        Écrire un seul terme dans le contexte français ne suffit pas à salir
+        `en_US` — mesuré : la valeur anglaise reste intacte. La corruption est
+        née d'une réécriture en bloc de l'architecture, sur une base où
+        l'alignement des termes ne tenait plus, et je ne sais pas la rejouer
+        fidèlement.
+
+        Ce qui compte pour valider le remède est l'état d'arrivée, et il est
+        connu précisément : cinq vues portent du français dans leur langue
+        source, « Cotationss » sur ce formulaire. On l'écrit donc directement,
+        et on répare.
+        """
+        anglais = self.vue.with_context(lang="en_US")
+        anglais.write({"arch_db": anglais.arch_db.replace(
+            'string="Quotations"', 'string="Cotationss"')})
+
+    def test_une_source_abimee_est_rendue_au_fournisseur(self):
+        self.assertIn('string="Address Type"',
+                      self.vue.with_context(lang="en_US").arch_db)
+
+        self._abimer_la_source()
+        self.assertIn(
+            'string="Cotationss"',
+            self.vue.with_context(lang="en_US").arch_db,
+            "l'état à réparer doit bien être en place, sinon le test ne prouve rien",
+        )
+
+        # --- le remède ---
+        reparees = self.env["ir.ui.view"].dally_repair_tk_freight_source_arch()
+        self.assertIn(self._VUE, reparees)
+
+        anglais_apres = self.vue.with_context(lang="en_US").arch_db
+        self.assertNotIn('string="Cotationss"', anglais_apres)
+        self.assertIn('string="Address Type"', anglais_apres)
+
+    def test_le_francais_survit_a_la_reparation(self):
+        self.env["ir.ui.view"].dally_apply_tk_freight_fr_overlay()
+        self._abimer_la_source()
+        self.env["ir.ui.view"].dally_repair_tk_freight_source_arch()
+        # La remise à zéro efface les traductions ; l'overlay est rejoué dans la
+        # foulée, donc l'écran reste français.
+        arch_fr = self.vue.with_context(lang="fr_FR").arch_db
+        self.assertIn('string="Type d’adresse"', arch_fr)
+        self.assertIn('string="Date de création"', arch_fr)
+
+    def test_sur_une_base_saine_la_reparation_ne_touche_rien(self):
+        self.env["ir.ui.view"].dally_apply_tk_freight_fr_overlay()
+        anglais = self.vue.with_context(lang="en_US").arch_db
+        francais = self.vue.with_context(lang="fr_FR").arch_db
+
+        self.assertEqual(
+            self.env["ir.ui.view"].dally_repair_tk_freight_source_arch(), [],
+            "rien à réparer ne doit rien réparer")
+        self.assertEqual(self.vue.with_context(lang="en_US").arch_db, anglais)
+        self.assertEqual(self.vue.with_context(lang="fr_FR").arch_db, francais)

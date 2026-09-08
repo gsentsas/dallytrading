@@ -3,6 +3,26 @@
 from odoo import models
 
 
+#: Les vues du fournisseur que le pont francise. La réparation vise les mêmes :
+#: ce sont exactement celles que l'ancien overlay pouvait abîmer.
+TK_OVERLAID_VIEWS = (
+    "tk_freight.freight_shipment_form_view",
+    "tk_freight.freight_booking_form_view",
+    "tk_freight.shipment_quot_form_view",
+    "tk_freight.shipment_package_line_view_form",
+    "tk_freight.package_form_view", "tk_freight.package_tree_view",
+    "tk_freight.freight_success", "tk_freight.portal_booking_create",
+    "tk_freight.freight_quotation_inherit",
+    "tk_freight.res_partner_form_inherit_view",
+    "tk_freight.policy_risk_tree_view",
+    "tk_freight.shipment_tracking_view_form",
+    "tk_freight.shipment_tracking_template_view_form",
+    "tk_freight.shipment_tracking_template_view_tree",
+    "tk_freight.freight_shipment_kanban_view",
+    "tk_freight.freight_shipment_search_view",
+)
+
+
 class IrUiView(models.Model):
     _inherit = "ir.ui.view"
 
@@ -82,22 +102,7 @@ class IrUiView(models.Model):
             ("Risques politiques", "Risques assurés"),
             ("Expéditrices", "Expéditeurs"), ("Vendeuses", "Fournisseurs"),
         )
-        xmlids = (
-            "tk_freight.freight_shipment_form_view",
-            "tk_freight.freight_booking_form_view",
-            "tk_freight.shipment_quot_form_view",
-            "tk_freight.shipment_package_line_view_form",
-            "tk_freight.package_form_view", "tk_freight.package_tree_view",
-            "tk_freight.freight_success", "tk_freight.portal_booking_create",
-            "tk_freight.freight_quotation_inherit",
-            "tk_freight.res_partner_form_inherit_view",
-            "tk_freight.policy_risk_tree_view",
-            "tk_freight.shipment_tracking_view_form",
-            "tk_freight.shipment_tracking_template_view_form",
-            "tk_freight.shipment_tracking_template_view_tree",
-            "tk_freight.freight_shipment_kanban_view",
-            "tk_freight.freight_shipment_search_view",
-        )
+        xmlids = TK_OVERLAID_VIEWS
         # ------------------------------------------------------------------
         # L'écran Expéditions
         # ------------------------------------------------------------------
@@ -277,3 +282,53 @@ class IrUiView(models.Model):
                 champ.with_context(lang="fr_FR").write({"field_description": label})
 
         return True
+
+    def dally_repair_tk_freight_source_arch(self):
+        """Rend au fournisseur son architecture anglaise, une fois.
+
+        ## Ce qu'on répare
+
+        L'overlay écrivait `arch_db` dans le contexte français, ce qui écrivait
+        les deux langues. La correction empêche que cela recommence ; elle ne
+        défait pas ce qui a déjà été écrit. Mesuré en production : cinq vues du
+        fournisseur portent du français dans leur valeur `en_US` — « Cotationss »
+        sur le formulaire d'expédition, « Colis » et « Maritime » ailleurs.
+
+        ## Pourquoi depuis le fichier et non depuis une liste de mots
+
+        On pourrait remplacer les mots français fautifs par leur anglais
+        d'origine. Ce serait deviner : rien ne garantit que la table de
+        remplacement inverse soit exacte, et une erreur y écrirait un anglais
+        approximatif dans la langue source du fournisseur.
+
+        `reset_arch(mode="hard")` relit l'architecture **depuis le fichier XML du
+        module licencié**, par `arch_fs`. C'est la seule source qui fasse foi, et
+        elle est celle du fournisseur, pas la nôtre.
+
+        ## Pourquoi c'est sûr de le rejouer
+
+        Une vue déjà saine a une valeur `en_US` identique au fichier : elle est
+        laissée telle quelle, et la méthode ne rend que ce qu'elle a touché. Le
+        français est réappliqué juste après, terme par terme — donc une
+        exécution sur une base saine ne change rien du tout.
+
+        :return: les xmlid des vues effectivement réparées.
+        """
+        reparees = []
+        for xmlid in TK_OVERLAID_VIEWS:
+            view = self.env.ref(xmlid, raise_if_not_found=False)
+            if not view or not view.arch_fs:
+                continue
+            source = view.with_context(read_arch_from_file=True, lang=None).arch
+            actuelle = view.with_context(lang="en_US").arch_db
+            if not source or source == actuelle:
+                continue
+            view.reset_arch(mode="hard")
+            reparees.append(xmlid)
+
+        if reparees:
+            # La remise à zéro efface les traductions des termes qui ont bougé :
+            # on repose le français dans la foulée, sinon la réparation
+            # rendrait un écran anglais.
+            self.dally_apply_tk_freight_fr_overlay()
+        return reparees

@@ -134,3 +134,61 @@ describe('attributs du cookie', () => {
     expect(Object.keys(cookieOptions(true))).not.toContain('domain');
   });
 });
+
+/**
+ * « Se souvenir de moi ».
+ *
+ * La case ne touche qu'une chose : la durée de vie du cookie sur l'appareil.
+ * Elle ne peut ni allonger la session au-delà du plafond serveur, ni changer
+ * ce que la session contient. Ces cinq cas fixent exactement cela, parce
+ * qu'une case de connexion qui dériverait vers autre chose se remarquerait
+ * tard et mal.
+ */
+describe('se souvenir de moi', () => {
+  it('sans persistance, le cookie n’a pas d’âge maximum', () => {
+    // Pas de `maxAge` : le navigateur l'efface à sa fermeture.
+    const options = cookieOptions(true, false);
+    expect(options).not.toHaveProperty('maxAge');
+  });
+
+  it('avec persistance, le cookie tient exactement le plafond de session', () => {
+    expect(cookieOptions(true, true).maxAge).toBe(OPS_SESSION_MAX_AGE_SECONDS);
+    // Et ce plafond est bien la journée de travail, pas davantage.
+    expect(OPS_SESSION_MAX_AGE_SECONDS).toBe(8 * 60 * 60);
+  });
+
+  it('sans argument, garde le comportement d’avant : persistant', () => {
+    // Une requête ancienne, qui n'envoie pas le drapeau, ne doit pas se voir
+    // déconnectée à la fermeture du navigateur du jour au lendemain.
+    expect(cookieOptions(true).maxAge).toBe(OPS_SESSION_MAX_AGE_SECONDS);
+  });
+
+  it('la persistance ne change rien aux autres attributs du cookie', () => {
+    const persistant = cookieOptions(true, true);
+    const ephemere = cookieOptions(true, false);
+    for (const cle of ['httpOnly', 'secure', 'sameSite', 'path'] as const) {
+      expect(ephemere[cle]).toEqual(persistant[cle]);
+    }
+    // Ni l'un ni l'autre n'ouvre le cookie à un sous-domaine.
+    expect(Object.keys(ephemere)).not.toContain('domain');
+  });
+
+  it('un cookie persistant n’empêche pas l’expiration au-delà de huit heures', () => {
+    // Le point qui compte : cocher la case ne prolonge pas la session. Le
+    // serveur relit `issuedAt` et refuse, quoi que le cookie prétende.
+    const emise = 1_700_000_000_000;
+    const session = { odooSessionId: 'abc123', issuedAt: emise };
+    const huitHeures = OPS_SESSION_MAX_AGE_SECONDS * 1000;
+    expect(isExpired(session, emise + huitHeures - 1)).toBe(false);
+    expect(isExpired(session, emise + huitHeures)).toBe(true);
+    expect(isExpired(session, emise + huitHeures + 60_000)).toBe(true);
+  });
+
+  it('la persistance ne touche ni au contenu scellé ni à l’identité', () => {
+    // Le cookie porte la session Odoo et rien d'autre : la case ne peut pas
+    // y glisser un droit, un rôle, ou une durée qui lui serait propre.
+    const session = { odooSessionId: 'abc123', issuedAt: 1_700_000_000_000 };
+    expect(unsealSession(sealSession(session, SECRET), SECRET)).toEqual(session);
+    expect(Object.keys(session)).toEqual(['odooSessionId', 'issuedAt']);
+  });
+});

@@ -388,3 +388,39 @@
   .ops-payment-input-row { grid-template-columns: 1fr; }
   .ops-payment-currency { min-height: 3rem; }
 }
+
+/*
+ * Les champs de fichier.
+ *
+ * Un `input[type=file]` garde son bouton natif : sur ce fond nuit il s'affiche
+ * en gris clair sur blanc, seul élément de l'application à ne pas suivre le
+ * système. Le contrôle reste exactement le même — c'est son habillage qui
+ * rejoint les autres champs, pour que la photo d'un dossier se prenne dans le
+ * même vocabulaire visuel que le reste du formulaire.
+ */
+input[type='file'] {
+  padding: 0.55rem 0.6rem;
+  color: var(--ops-attenue);
+  font-size: 0.9rem;
+}
+
+input[type='file']::file-selector-button {
+  margin-right: 0.75rem;
+  padding: 0.55rem 0.95rem;
+  color: var(--ops-texte);
+  font: inherit;
+  font-weight: 600;
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+input[type='file']::file-selector-button:hover {
+  background: rgba(56, 189, 248, 0.26);
+}
+
+input[type='file']:focus-visible {
+  outline: 2px solid var(--ops-accent);
+  outline-offset: 2px;
+}

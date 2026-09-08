@@ -7,6 +7,7 @@ refus comptent donc autant que le cas heureux, et davantage : un maître absent
 se remarque, un maître mal routé se découvre à l'arrivée.
 """
 
+import logging
 import os
 
 import psycopg2
@@ -21,6 +22,8 @@ from odoo.addons.dally_freight_consolidation.models.consolidation import (
 )
 
 from .common import ConsolidationCommon
+
+_logger = logging.getLogger(__name__)
 
 
 @tagged("post_install", "-at_install")
@@ -185,6 +188,26 @@ class TestMasterShipment(ConsolidationCommon):
             self.env["dally.freight.consolidation"]._dally_code_iata("LEH BKO"))
         self.assertIsNone(
             self.env["dally.freight.consolidation"]._dally_code_iata(""))
+
+    def test_un_joker_dans_le_libelle_ne_elargit_pas_la_recherche(self):
+        """`=ilike` ne pose pas de joker, mais il en honore.
+
+        Sans échappement, un libellé « D_S » trouverait « DSS » — et « % »
+        trouverait n'importe quel port. La promesse d'exactitude tomberait sur
+        une valeur que l'exploitation saisit librement.
+        """
+        Consolidation = self.env["dally.freight.consolidation"]
+        self.assertEqual(Consolidation._dally_echapper_like("D_S"), "D\\_S")
+        self.assertEqual(Consolidation._dally_echapper_like("100%"), "100\\%")
+
+        for joker in ("D_S", "%", "DS%", "_SS"):
+            with self.subTest(joker=joker):
+                consolidation = self._consolidation(
+                    name="AIR-JOKER-%s" % abs(hash(joker)))
+                consolidation.write({"origin_location": joker, "origin_city": False})
+                with self.assertRaises(UserError) as refus:
+                    consolidation.action_create_master_shipment()
+                self.assertIn("Aucun port", str(refus.exception))
 
     # ------------------------------------------------------------------
     # Le poids sans les pièces
@@ -533,25 +556,33 @@ class TestMasterShipmentConcurrence(TransactionCase):
         réelles et un entrelacement décidé — plus sûr qu'une course, dont on ne
         prouve jamais que l'ordre du jour.
         """
+        import uuid
+
         from odoo import SUPERUSER_ID, api
         from odoo.sql_db import db_connect
 
         base = self.env.cr.dbname
         cree = {}
+        # Ces enregistrements sont validés : ils survivent au rollback de la
+        # transaction de test. Un suffixe unique évite qu'un nettoyage manqué
+        # bloque l'exécution suivante sur `_name_company_unique`.
+        jeton = uuid.uuid4().hex[:8].upper()
+        code_origine = "V%s" % jeton[:3]
+        code_destination = "W%s" % jeton[:3]
 
         preparation = db_connect(base).cursor()
         try:
             env = api.Environment(preparation, SUPERUSER_ID, {})
             origine = env["freight.port"].create({
-                "name": "Verrou Origine", "code": "VO1",
+                "name": "Verrou Origine %s" % jeton, "code": code_origine,
                 "country_id": env.ref("base.sn").id, "air": True})
             destination = env["freight.port"].create({
-                "name": "Verrou Destination", "code": "VD1",
+                "name": "Verrou Destination %s" % jeton, "code": code_destination,
                 "country_id": env.ref("base.fr").id, "air": True})
             consolidation = env["dally.freight.consolidation"].create({
-                "name": "VERROU-CONCURRENCE", "transport_mode": "air",
-                "direction": "export", "origin_location": "VO1",
-                "destination_location": "VD1", "state": "collecting"})
+                "name": "VERROU-CONCURRENCE-%s" % jeton, "transport_mode": "air",
+                "direction": "export", "origin_location": code_origine,
+                "destination_location": code_destination, "state": "collecting"})
             cree = {"consolidation": consolidation.id,
                     "ports": [origine.id, destination.id]}
             preparation.commit()
@@ -621,7 +652,15 @@ class TestMasterShipmentConcurrence(TransactionCase):
                 env["freight.port"].browse(cree.get("ports", [])).exists().unlink()
                 menage.commit()
             except Exception:                          # noqa: BLE001
+                # Un nettoyage muet laisserait des enregistrements validés
+                # derrière lui. On le dit, et le test échoue : mieux vaut une
+                # suite rouge qu'une base qui dérive sans que personne ne sache.
                 menage.rollback()
+                _logger.exception(
+                    "Nettoyage des enregistrements validés du test de "
+                    "concurrence impossible : %s / ports %s",
+                    cree.get("consolidation"), cree.get("ports"))
+                raise
             finally:
                 menage.close()
 

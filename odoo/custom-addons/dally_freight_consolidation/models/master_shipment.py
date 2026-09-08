@@ -78,6 +78,9 @@ class DallyFreightConsolidation(models.Model):
     tk_master_shipment_count = fields.Integer(
         compute="_compute_tk_master_shipment_count",
         string="Maître",
+        # Le compteur suit la visibilité du lien : sans cela, un compte à 1
+        # dirait l'existence d'un rattachement que le champ refuse de montrer.
+        groups="dally_core.group_dally_readonly",
     )
 
     #: Un maître ne sert qu'une consolidation.
@@ -137,6 +140,21 @@ class DallyFreightConsolidation(models.Model):
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _dally_echapper_like(valeur):
+        """Neutralise les métacaractères de `LIKE` dans une valeur de recherche.
+
+        `=ilike` compare sans joker implicite, mais la valeur, elle, part
+        telle quelle dans un `LIKE` SQL : un `%` ou un `_` qu'elle contient y
+        redeviennent des jokers. Un libellé « D_S » trouverait alors « DSS »
+        comme « DAS », et « % » trouverait tout — l'exact contraire de ce que
+        cette résolution promet.
+
+        L'antislash est échappé en premier, sinon il échapperait les échappements
+        posés juste après.
+        """
+        return (valeur or "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    @staticmethod
     def _dally_code_iata(texte):
         """Le code à trois lettres contenu dans un libellé, s'il n'y en a qu'un.
 
@@ -161,6 +179,10 @@ class DallyFreightConsolidation(models.Model):
         Aucune recherche approximative : les comparaisons sont exactes, à la
         casse près. Un `ilike` avec jokers trouverait « Dakar » dans
         « Port-Dakar-Sud » et router ailleurs sans le dire.
+
+        Les métacaractères que la valeur pourrait contenir sont échappés : sans
+        cela, `=ilike` les honorerait et rouvrirait par la fenêtre le flou que
+        la porte refuse.
         """
         self.ensure_one()
         drapeau = MODE_TO_PORT_FLAG[self.transport_mode]
@@ -188,7 +210,8 @@ class DallyFreightConsolidation(models.Model):
         for champ, valeur in tentatives:
             if not valeur:
                 continue
-            trouves = Port.search(socle + [(champ, "=ilike", valeur)])
+            trouves = Port.search(
+                socle + [(champ, "=ilike", self._dally_echapper_like(valeur))])
             if len(trouves) == 1:
                 return trouves
             if len(trouves) > 1:
@@ -225,7 +248,8 @@ class DallyFreightConsolidation(models.Model):
             modele, champ, proprietaire = "freight.vessel", "vessel_id", "ship_owner_id"
         else:
             return
-        trouves = self.env[modele].sudo().search([("name", "=ilike", nom)])
+        trouves = self.env[modele].sudo().search(
+            [("name", "=ilike", self._dally_echapper_like(nom))])
         if len(trouves) != 1:
             return
         vals[champ] = trouves.id

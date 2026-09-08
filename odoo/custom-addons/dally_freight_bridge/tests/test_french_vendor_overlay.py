@@ -253,9 +253,15 @@ class TestRepairVendorSourceArch(TransactionCase):
         de corruption doit donc rester intacte.
         """
         anglais = self.vue.with_context(lang="en_US")
-        anglais.write({"arch_db": anglais.arch_db.replace(
+        avant = anglais.arch_db
+        self.assertIn('string="Barcode"', avant,
+                      "sans cet attribut, la divergence ne serait pas introduite "
+                      "et le test passerait sans rien prouver")
+        anglais.write({"arch_db": avant.replace(
             'string="Barcode"', 'string="Barcode "')})
         divergente = self.vue.with_context(lang="en_US").arch_db
+        self.assertNotEqual(divergente, avant,
+                            "la divergence doit être en place avant de réparer")
 
         self.assertEqual(
             self.env["ir.ui.view"]._dally_repair_tk_freight_source_arch(), [],

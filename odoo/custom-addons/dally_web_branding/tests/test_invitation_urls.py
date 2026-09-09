@@ -66,6 +66,14 @@ class TestInternalInvitationUrls(TransactionCase):
         self.assertIn(CRM_BASE_URL, hrefs)
         self.assertNotIn(f"{PUBLIC_BASE_URL}/web/login", hrefs)
 
+    def test_internal_password_reset_url_uses_crm_base(self):
+        self.internal_user.partner_id.signup_prepare("reset")
+        reset_url = self.internal_user.partner_id._get_signup_url()
+
+        self.assertTrue(reset_url.startswith(f"{CRM_BASE_URL}/web/reset_password?"))
+        self.assertIn("token=", reset_url)
+        self.assertNotIn(PUBLIC_BASE_URL, reset_url)
+
     def test_public_and_portal_bases_are_not_forced_to_crm(self):
         self.assertEqual(self.public_partner.get_base_url(), PUBLIC_BASE_URL)
         self.assertEqual(self.portal_user.get_base_url(), PUBLIC_BASE_URL)

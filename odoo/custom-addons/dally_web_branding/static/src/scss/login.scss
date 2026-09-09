@@ -1,0 +1,434 @@
+body.dally-auth-page {
+    --dally-navy: #16365b;
+    --dally-navy-dark: #0f2743;
+    --dally-green: #4c9a2a;
+    --dally-green-light: #6dbe45;
+    --dally-green-text: #3a7a20;
+    --dally-ink: #14202b;
+    --dally-muted: #5d6872;
+    --dally-line: #d9e1e5;
+    --dally-surface: #f3f6f7;
+
+    margin: 0;
+    overflow-x: hidden;
+    background: var(--dally-surface);
+    color: var(--dally-ink);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+    letter-spacing: 0;
+}
+
+.dally-auth-page #wrapwrap,
+.dally-auth-page #wrapwrap > main {
+    min-height: 100%;
+}
+
+.dally-auth-page #wrapwrap > main {
+    display: block;
+    min-height: 100vh;
+    min-height: 100dvh;
+}
+
+.dally-auth-page .dally-auth-shell,
+.dally-auth-page .dally-auth-shell *,
+.dally-auth-page .dally-auth-shell *::before,
+.dally-auth-page .dally-auth-shell *::after {
+    box-sizing: border-box;
+}
+
+.dally-auth-page .dally-auth-shell {
+    display: grid;
+    grid-template-columns: 56% 44%;
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: hidden;
+}
+
+.dally-auth-page .dally-auth-brand {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--dally-navy);
+    color: #fff;
+}
+
+.dally-auth-page .dally-auth-brand::before,
+.dally-auth-page .dally-auth-brand::after {
+    position: absolute;
+    border: 1px solid rgba(109, 190, 69, 0.22);
+    border-radius: 50%;
+    content: "";
+    pointer-events: none;
+}
+
+.dally-auth-page .dally-auth-brand::before {
+    right: -12rem;
+    bottom: -15rem;
+    width: 38rem;
+    height: 38rem;
+}
+
+.dally-auth-page .dally-auth-brand::after {
+    right: -3rem;
+    bottom: -6rem;
+    width: 22rem;
+    height: 22rem;
+}
+
+.dally-auth-page .dally-auth-brand-inner {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: 100%;
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: 4.5rem 6.5rem;
+}
+
+.dally-auth-page .dally-auth-logo-frame {
+    width: 80%;
+    max-width: 22rem;
+    margin-bottom: 3rem;
+    padding: 0.75rem;
+    border-radius: 4px;
+    background: #fff;
+    box-shadow: 0 1.5rem 4rem rgba(3, 19, 34, 0.24);
+}
+
+.dally-auth-page .dally-auth-logo {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 640 / 460;
+    object-fit: contain;
+}
+
+.dally-auth-page .dally-auth-eyebrow,
+.dally-auth-page .dally-auth-product {
+    margin: 0 0 0.75rem;
+    color: var(--dally-green-light);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+.dally-auth-page .dally-auth-brand h1 {
+    max-width: 35rem;
+    margin: 0;
+    color: #fff;
+    font-size: 2rem;
+    font-weight: 650;
+    line-height: 1.22;
+    letter-spacing: 0;
+}
+
+.dally-auth-page .dally-auth-modes {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    max-width: 36rem;
+    margin: 3rem 0 0;
+    padding: 1.5rem 0 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.18);
+    list-style: none;
+}
+
+.dally-auth-page .dally-auth-modes li {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.55rem;
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.dally-auth-page .dally-auth-modes .fa {
+    color: var(--dally-green-light);
+    font-size: 1.25rem;
+}
+
+.dally-auth-page .dally-auth-surface {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 5rem;
+    background: var(--dally-surface);
+}
+
+.dally-auth-page .dally-auth-card {
+    width: 100%;
+    max-width: 27.5rem;
+    padding: 2.75rem;
+    border: 1px solid var(--dally-line);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1.25rem 4rem rgba(22, 54, 91, 0.1);
+}
+
+.dally-auth-page .dally-auth-intro {
+    margin-bottom: 2rem;
+}
+
+.dally-auth-page .dally-auth-product {
+    color: var(--dally-green-text);
+}
+
+.dally-auth-page .dally-auth-intro h2 {
+    margin: 0 0 0.625rem;
+    color: var(--dally-navy-dark);
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0;
+}
+
+.dally-auth-page .dally-auth-intro > p:last-child {
+    margin: 0;
+    color: var(--dally-muted);
+    font-size: 0.9375rem;
+    line-height: 1.55;
+}
+
+.dally-auth-page .dally-auth-native > .oe_structure {
+    display: none;
+}
+
+.dally-auth-page .oe_login_form,
+.dally-auth-page .oe_signup_form,
+.dally-auth-page .oe_reset_password_form {
+    position: relative;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+}
+
+.dally-auth-page .form-label,
+.dally-auth-page .col-form-label {
+    margin-bottom: 0.45rem;
+    color: var(--dally-navy-dark);
+    font-size: 0.875rem;
+    font-weight: 650;
+}
+
+.dally-auth-page .form-control {
+    min-width: 0;
+    min-height: 3rem;
+    border-color: #aebbc3;
+    border-radius: 4px;
+    background: #fff;
+    color: var(--dally-ink);
+    font-size: 1rem;
+}
+
+.dally-auth-page .form-control::placeholder {
+    color: #78848d;
+    opacity: 1;
+}
+
+.dally-auth-page .form-control:hover {
+    border-color: #768791;
+}
+
+.dally-auth-page .form-control:focus {
+    border-color: var(--dally-green-text);
+    box-shadow: 0 0 0 0.2rem rgba(76, 154, 42, 0.22);
+}
+
+.dally-auth-page .input-group .form-control {
+    border-radius: 4px 0 0 4px;
+}
+
+.dally-auth-page .o_show_password {
+    min-width: 3rem;
+    border-color: #aebbc3 !important;
+    border-radius: 0 4px 4px 0;
+    color: var(--dally-navy);
+}
+
+.dally-auth-page .o_show_password:hover {
+    background: #eef4f1;
+    color: var(--dally-green-text);
+}
+
+.dally-auth-page .btn-primary {
+    min-height: 3rem;
+    border-color: var(--dally-green-text);
+    background: var(--dally-green-text);
+    color: #fff;
+    font-weight: 700;
+}
+
+.dally-auth-page .btn-primary:hover,
+.dally-auth-page .btn-primary:active {
+    border-color: #2e6318;
+    background: #2e6318;
+    color: #fff;
+}
+
+.dally-auth-page a,
+.dally-auth-page .btn-link {
+    color: var(--dally-green-text);
+}
+
+.dally-auth-page a:hover,
+.dally-auth-page .btn-link:hover {
+    color: #2e6318;
+}
+
+.dally-auth-page :is(a, button, input):focus-visible {
+    outline: 3px solid var(--dally-green-light);
+    outline-offset: 2px;
+}
+
+.dally-auth-page .list-group-item {
+    border-color: var(--dally-line);
+    color: var(--dally-navy-dark);
+}
+
+.dally-auth-page .list-group-item:hover {
+    border-color: #aebbc3;
+    background: #eef4f1;
+    color: var(--dally-navy-dark);
+}
+
+.dally-auth-page .alert-danger,
+.dally-auth-page .alert-success {
+    display: block;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    line-height: 1.45;
+}
+
+.dally-auth-page .alert-danger {
+    border-color: #f1aeb5;
+    background: #f8d7da;
+    color: #842029;
+}
+
+.dally-auth-page .alert-success {
+    border-color: #a3cfbb;
+    background: #d1e7dd;
+    color: #0a3622;
+}
+
+.dally-auth-page .dally-auth-website {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 2rem;
+    color: var(--dally-muted);
+    font-size: 0.8125rem;
+    text-decoration: none;
+}
+
+.dally-auth-page .dally-auth-website:hover {
+    color: var(--dally-green-text);
+    text-decoration: underline;
+}
+
+@media (min-width: 900px) and (max-width: 1199px) {
+    .dally-auth-page .dally-auth-brand-inner {
+        padding-right: 3rem;
+        padding-left: 3rem;
+    }
+
+    .dally-auth-page .dally-auth-surface {
+        padding-right: 2.5rem;
+        padding-left: 2.5rem;
+    }
+}
+
+@media (max-width: 899px) {
+    .dally-auth-page .dally-auth-shell {
+        grid-template-columns: minmax(0, 1fr);
+        overflow: visible;
+    }
+
+    .dally-auth-page .dally-auth-brand-inner {
+        display: grid;
+        grid-template-columns: 9rem minmax(0, 1fr);
+        gap: 1.75rem;
+        align-items: center;
+        width: 100%;
+        max-width: 40rem;
+        padding: 1.5rem 2rem;
+    }
+
+    .dally-auth-page .dally-auth-logo-frame {
+        width: 9rem;
+        margin: 0;
+        padding: 0.4rem;
+    }
+
+    .dally-auth-page .dally-auth-eyebrow,
+    .dally-auth-page .dally-auth-modes {
+        display: none;
+    }
+
+    .dally-auth-page .dally-auth-brand h1 {
+        font-size: 1.25rem;
+        line-height: 1.3;
+    }
+
+    .dally-auth-page .dally-auth-surface {
+        align-items: flex-start;
+        padding: 2rem;
+    }
+
+    .dally-auth-page .dally-auth-card {
+        width: 100%;
+        max-width: 32rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .dally-auth-page .dally-auth-brand-inner {
+        grid-template-columns: 6.75rem minmax(0, 1fr);
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .dally-auth-page .dally-auth-logo-frame {
+        width: 6.75rem;
+        padding: 0.3rem;
+    }
+
+    .dally-auth-page .dally-auth-brand h1 {
+        font-size: 1rem;
+    }
+
+    .dally-auth-page .dally-auth-surface {
+        padding: 1.25rem 1rem 2rem;
+    }
+
+    .dally-auth-page .dally-auth-card {
+        padding: 1.5rem 1.25rem;
+        box-shadow: 0 0.75rem 2.5rem rgba(22, 54, 91, 0.08);
+    }
+
+    .dally-auth-page .dally-auth-intro {
+        margin-bottom: 1.5rem;
+    }
+
+    .dally-auth-page .dally-auth-intro h2 {
+        font-size: 1.5rem;
+    }
+
+    .dally-auth-page .o_caps_lock_warning > .d-flex {
+        gap: 0.75rem;
+    }
+
+    .dally-auth-page .o_caps_lock_warning .btn-link {
+        max-width: 12rem;
+        padding-right: 0;
+        text-align: right;
+        white-space: normal;
+    }
+}

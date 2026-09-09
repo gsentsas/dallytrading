@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="login_layout" inherit_id="website.login_layout"
+              name="DallyTrading authentication layout" priority="90">
+        <xpath expr="//t[@t-call='website.layout']" position="replace">
+            <t t-call="web.frontend_layout">
+                <t t-set="title" t-value="'DallyTrading CRM'"/>
+                <t t-set="x_icon"
+                   t-value="'/dally_web_branding/static/src/img/favicon-32.png'"/>
+                <t t-set="html_data"
+                   t-value="{'class': 'dally-auth-html',
+                             'style': 'height: 100%;',
+                             'lang': (request.env.context.get('lang') or 'fr_FR').replace('_', '-')}"/>
+                <t t-set="body_classname" t-value="'dally-auth-page'"/>
+                <t t-set="no_header" t-value="True"/>
+                <t t-set="no_footer" t-value="True"/>
+                <t t-set="no_copyright" t-value="True"/>
+                <t t-set="head">
+                    <meta name="theme-color" content="#16365B"/>
+                    <link rel="icon" type="image/png" sizes="16x16"
+                          href="/dally_web_branding/static/src/img/favicon-16.png"/>
+                    <link rel="icon" type="image/png" sizes="32x32"
+                          href="/dally_web_branding/static/src/img/favicon-32.png"/>
+                </t>
+
+                <div class="dally-auth-shell">
+                    <section class="dally-auth-brand" aria-labelledby="dally-auth-brand-title">
+                        <div class="dally-auth-brand-inner">
+                            <div class="dally-auth-logo-frame">
+                                <img class="dally-auth-logo"
+                                     src="/dally_web_branding/static/src/img/dallytrading-logo.png"
+                                     width="640" height="460"
+                                     alt="DallyTrading - Import, Export, Logistics, Solutions"/>
+                            </div>
+
+                            <div class="dally-auth-brand-copy">
+                                <p class="dally-auth-eyebrow">Commerce et logistique internationale</p>
+                                <h1 id="dally-auth-brand-title">
+                                    Votre plateforme de gestion logistique et commerciale
+                                </h1>
+                            </div>
+
+                            <ul class="dally-auth-modes" aria-label="Activités DallyTrading">
+                                <li><i class="fa fa-plane" aria-hidden="true"/><span>Aérien</span></li>
+                                <li><i class="fa fa-ship" aria-hidden="true"/><span>Maritime</span></li>
+                                <li><i class="fa fa-truck" aria-hidden="true"/><span>Transport</span></li>
+                                <li><i class="fa fa-exchange" aria-hidden="true"/><span>Trading</span></li>
+                            </ul>
+                        </div>
+                    </section>
+
+                    <section class="dally-auth-surface" aria-labelledby="dally-auth-access-title">
+                        <div class="dally-auth-card">
+                            <div class="dally-auth-intro">
+                                <p class="dally-auth-product">DallyTrading CRM</p>
+                                <h2 id="dally-auth-access-title">Accès sécurisé</h2>
+                                <p>Retrouvez vos opérations commerciales et logistiques.</p>
+                            </div>
+
+                            <div class="dally-auth-native">
+                                <t t-out="0"/>
+                            </div>
+
+                            <a class="dally-auth-website" href="https://dallytrading.com/"
+                               target="_blank" rel="noopener noreferrer">
+                                dallytrading.com
+                                <i class="fa fa-external-link" aria-hidden="true"/>
+                            </a>
+                        </div>
+                    </section>
+                </div>
+            </t>
+        </xpath>
+    </template>
+</odoo>

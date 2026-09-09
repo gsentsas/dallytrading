@@ -275,6 +275,13 @@ class TestOpsPayments(AccountTestInvoicingCommon):
                 reference, self._demande(payment_date="2099-01-01"))
         self.assertEqual(erreur.exception.code, "invalid_payment_date")
 
+    def test_confirmation_de_paiement_doit_etre_un_booleen(self):
+        reference = self._creer_dossier()
+        with self.assertRaises(DallyOpsError) as erreur:
+            self._paiements().record_payment(
+                reference, self._demande(confirm_existing_payment='oui'))
+        self.assertEqual(erreur.exception.code, "invalid_payment_confirmation")
+
     def test_un_couple_methode_devise_non_configure_est_refuse(self):
         """Wave existe en francs, pas en euros : on refuse plutôt que d'inventer."""
         reference = self._creer_dossier()
@@ -425,10 +432,21 @@ class TestOpsPayments(AccountTestInvoicingCommon):
                 reference, dict(demande, amount=999.0))
         self.assertEqual(erreur.exception.code, "idempotency_conflict")
 
-    def test_plusieurs_encaissements_coexistent(self):
+    def test_un_second_encaissement_demande_confirmation(self):
         reference = self._creer_dossier()
         self._paiements().record_payment(reference, self._demande(amount=30000.0))
-        self._paiements().record_payment(reference, self._demande(amount=14280.0))
+        with self.assertRaises(DallyOpsConflict) as erreur:
+            self._paiements().record_payment(
+                reference, self._demande(amount=14280.0))
+        self.assertEqual(erreur.exception.code, "payment_already_recorded")
+        self.assertEqual(len(self._collections(reference)), 1)
+
+    def test_plusieurs_encaissements_confirmes_coexistent(self):
+        reference = self._creer_dossier()
+        self._paiements().record_payment(reference, self._demande(amount=30000.0))
+        self._paiements().record_payment(
+            reference, self._demande(
+                amount=14280.0, confirm_existing_payment=True))
         self.assertEqual(len(self._collections(reference)), 2)
 
     # ─── Le dossier ──────────────────────────────────────────────────
@@ -460,7 +478,8 @@ class TestOpsPayments(AccountTestInvoicingCommon):
         reference = self._creer_dossier()
         self._paiements().record_payment(reference, self._demande(amount=44280.0))
         self._paiements().record_payment(reference, self._demande(
-            amount=50.0, payment_method="cash", currency_code="EUR"))
+            amount=50.0, payment_method="cash", currency_code="EUR",
+            confirm_existing_payment=True))
 
         detail = (self.env["dally.ops.intake.line.service"]
                   .with_user(self.logisticien).with_company(self.societe)

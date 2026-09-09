@@ -44,9 +44,10 @@ from odoo.exceptions import AccessError
 from .ops_errors import DallyOpsConflict, DallyOpsError, DallyOpsInternal, DallyOpsNotFound
 
 #: Les seules clés acceptées dans une demande d'encaissement Wave.
-CHAMPS = frozenset({
+CHAMPS_REQUIS = frozenset({
     "request_uuid", "amount", "currency", "wave_reference", "paid_at", "note",
 })
+CHAMPS = CHAMPS_REQUIS | {"confirm_existing_payment"}
 
 #: Ce que le serveur décide seul — nommé pour que le refus soit lisible.
 #:
@@ -168,6 +169,9 @@ class DallyOpsWavePaymentService(models.AbstractModel):
                 return rejeu
 
             canal = self._resoudre_canal(donnees["currency"])
+            self._verrouiller(
+                "ops-payment-shipment:%s:%s" % (self.env.company.id, shipment.id))
+            self._verifier_paiement_existant(shipment, donnees)
             beneficiaire, _compte = self._beneficiaire()
             self._verifier_reference_libre(donnees["wave_reference"])
 
@@ -304,6 +308,24 @@ class DallyOpsWavePaymentService(models.AbstractModel):
         return shipment
 
     @api.model
+    def _verifier_paiement_existant(self, shipment, donnees):
+        """Demande une confirmation avant tout Wave supplémentaire.
+
+        Le même verrou dossier que le paiement classique protège aussi le cas
+        où deux écrans différents (Wave et paiement général) valident en même
+        temps. Les collectes annulées ne déclenchent naturellement rien.
+        """
+        existe = self.env["dally.freight.collection"].sudo().search_count([
+            ("company_id", "=", self.env.company.id),
+            ("shipment_id", "=", shipment.id),
+            ("state", "!=", "cancelled"),
+        ])
+        if existe and not donnees["confirm_existing_payment"]:
+            raise DallyOpsConflict(
+                _("Ce dossier contient déjà un encaissement. Vérifiez le paiement existant avant d'en ajouter un autre."),
+                code="payment_already_recorded")
+
+    @api.model
     def _resoudre_canal(self, devise):
         """Le canal Wave de la société dans cette devise, ou un refus."""
         canal = self.env["dally.freight.payment.channel"].sudo().search([
@@ -379,8 +401,14 @@ class DallyOpsWavePaymentService(models.AbstractModel):
             if inconnus & CHAMPS_INTERDITS:
                 raise DallyOpsError(_("Champ réservé au serveur."))
             raise DallyOpsError(_("Champ non pris en charge dans la demande."))
-        if set(payload) != CHAMPS:
+        if not CHAMPS_REQUIS.issubset(payload):
             raise DallyOpsError(_("Un champ obligatoire est manquant."))
+
+        confirmation = payload.get("confirm_existing_payment", False)
+        if not isinstance(confirmation, bool):
+            raise DallyOpsError(
+                _("Confirmation de paiement invalide."),
+                code="invalid_payment_confirmation", status=422)
 
         Intake = self.env["dally.ops.intake.service"]
         montant = payload.get("amount")
@@ -402,6 +430,7 @@ class DallyOpsWavePaymentService(models.AbstractModel):
             "wave_reference": self._reference_wave(payload.get("wave_reference")),
             "paid_at": self._date_encaissement(payload.get("paid_at")),
             "note": (note or "").strip()[:LONGUEUR_NOTE],
+            "confirm_existing_payment": confirmation,
         }
 
     @staticmethod

@@ -60,13 +60,25 @@ export function FormulairePaiement({
     requestUuid.current ??= crypto.randomUUID();
     setEtat({ nom: 'envoi' });
     try {
-      const issue = await soumettre({
+      const demande = {
         request_uuid: requestUuid.current,
         amount: valeur,
         payment_date: date,
         payment_method: code,
         currency_code: currency,
-      });
+      };
+      let issue = await soumettre(demande);
+      if (!issue.ok && issue.code === 'payment_already_recorded') {
+        const confirme = window.confirm(
+          (issue.message ?? 'Ce dossier contient déjà un encaissement.') +
+          '\n\nVoulez-vous vraiment enregistrer un paiement supplémentaire ?',
+        );
+        if (!confirme) {
+          setEtat({ nom: 'erreur', message: 'Aucun nouveau paiement n’a été enregistré.' });
+          return;
+        }
+        issue = await soumettre({ ...demande, confirm_existing_payment: true });
+      }
       if (!issue.ok) {
         if (issue.code === 'idempotency_conflict') requestUuid.current = null;
         setEtat({ nom: 'erreur', message: issue.message ?? 'Enregistrement impossible.' });

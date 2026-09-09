@@ -37,9 +37,10 @@ from odoo.exceptions import AccessError, UserError
 from .ops_errors import DallyOpsConflict, DallyOpsError, DallyOpsInternal, DallyOpsNotFound
 
 #: Les seules clés acceptées dans une demande d'encaissement.
-CHAMPS_PAIEMENT = frozenset({
+CHAMPS_REQUIS_PAIEMENT = frozenset({
     "request_uuid", "amount", "payment_date", "payment_method", "currency_code",
 })
+CHAMPS_PAIEMENT = CHAMPS_REQUIS_PAIEMENT | {"confirm_existing_payment"}
 
 #: Ce que le navigateur ne décide jamais.
 CHAMPS_INTERDITS = frozenset({
@@ -121,6 +122,9 @@ class DallyOpsPaymentService(models.AbstractModel):
 
             canal = self._resoudre_canal(
                 donnees["payment_method"], donnees["currency_code"])
+            self._verrouiller(
+                "ops-payment-shipment:%s:%s" % (self.env.company.id, shipment.id))
+            self._verifier_paiement_existant(shipment, donnees)
             acteur = self._acteur_de_caisse()
 
             collection = self._appeler_le_moteur(shipment, canal, acteur, donnees)
@@ -203,6 +207,24 @@ class DallyOpsPaymentService(models.AbstractModel):
         return shipment
 
     @api.model
+    def _verifier_paiement_existant(self, shipment, donnees):
+        """Exige une confirmation explicite avant un encaissement supplémentaire.
+
+        Le verrou du dossier est pris avant cette lecture : deux téléphones qui
+        valident presque simultanément ne peuvent donc pas chacun croire être le
+        premier paiement. Un complément reste possible, mais jamais silencieux.
+        """
+        existe = self.env["dally.freight.collection"].sudo().search_count([
+            ("company_id", "=", self.env.company.id),
+            ("shipment_id", "=", shipment.id),
+            ("state", "!=", "cancelled"),
+        ])
+        if existe and not donnees["confirm_existing_payment"]:
+            raise DallyOpsConflict(
+                _("Ce dossier contient déjà un encaissement. Vérifiez le paiement existant avant d'en ajouter un autre."),
+                code="payment_already_recorded")
+
+    @api.model
     def _resoudre_canal(self, methode, devise):
         """Le canal désigné par le couple méthode/devise, ou un refus.
 
@@ -252,8 +274,14 @@ class DallyOpsPaymentService(models.AbstractModel):
             if inconnus & CHAMPS_INTERDITS:
                 raise DallyOpsError(_("Champ réservé au serveur."))
             raise DallyOpsError(_("Champ non pris en charge dans la demande."))
-        if set(payload) != CHAMPS_PAIEMENT:
+        if not CHAMPS_REQUIS_PAIEMENT.issubset(payload):
             raise DallyOpsError(_("Un champ obligatoire est manquant."))
+
+        confirmation = payload.get("confirm_existing_payment", False)
+        if not isinstance(confirmation, bool):
+            raise DallyOpsError(
+                _("Confirmation de paiement invalide."),
+                code="invalid_payment_confirmation", status=422)
 
         request_uuid = self.env["dally.ops.intake.service"]._uuid(
             payload.get("request_uuid"), "request_uuid")
@@ -278,6 +306,7 @@ class DallyOpsPaymentService(models.AbstractModel):
             "payment_date": self._date_de_paiement(payload.get("payment_date")),
             "payment_method": methode.strip(),
             "currency_code": devise.strip().upper(),
+            "confirm_existing_payment": confirmation,
         }
 
     @api.model

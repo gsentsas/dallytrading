@@ -342,6 +342,13 @@ class TestOpsWavePayments(AccountTestInvoicingCommon):
             with self.assertRaises(DallyOpsError):
                 self._service().record_wave_payment(reference, demande)
 
+    def test_confirmation_existante_doit_etre_un_booleen(self):
+        reference = self._creer_dossier()
+        with self.assertRaises(DallyOpsError) as erreur:
+            self._service().record_wave_payment(
+                reference, self._demande(confirm_existing_payment="oui"))
+        self.assertEqual(erreur.exception.code, "invalid_payment_confirmation")
+
     def test_un_montant_nul_ou_negatif_est_refuse(self):
         reference = self._creer_dossier()
         for montant in (0, -1, 0.0, -100000.0, True, "100000", None):
@@ -409,9 +416,11 @@ class TestOpsWavePayments(AccountTestInvoicingCommon):
 
     def test_la_reference_wave_est_facultative(self):
         reference = self._creer_dossier()
-        for valeur in (None, "", "   "):
+        for index, valeur in enumerate((None, "", "   ")):
             resultat = self._service().record_wave_payment(
-                reference, self._demande(wave_reference=valeur))
+                reference, self._demande(
+                    wave_reference=valeur,
+                    confirm_existing_payment=index > 0))
             self.assertEqual(resultat["payment"]["wave_reference"], "")
         # Trois encaissements sans référence coexistent : l'unicité ne gêne
         # jamais les lignes sans numéro.
@@ -495,12 +504,25 @@ class TestOpsWavePayments(AccountTestInvoicingCommon):
             self.assertEqual(erreur.exception.code, "idempotency_conflict")
         self.assertEqual(len(self._collections(reference)), 1)
 
-    def test_deux_encaissements_partiels_coexistent_sur_le_meme_dossier(self):
+    def test_un_second_encaissement_wave_demande_confirmation(self):
+        reference = self._creer_dossier()
+        self._service().record_wave_payment(
+            reference, self._demande(amount=100000.0, wave_reference="TWPART001"))
+        with self.assertRaises(DallyOpsConflict) as erreur:
+            self._service().record_wave_payment(
+                reference, self._demande(
+                    amount=50000.0, wave_reference="TWPART002"))
+        self.assertEqual(erreur.exception.code, "payment_already_recorded")
+        self.assertEqual(len(self._collections(reference)), 1)
+
+    def test_deux_encaissements_partiels_confirmes_coexistent(self):
         reference = self._creer_dossier()
         self._service().record_wave_payment(
             reference, self._demande(amount=100000.0, wave_reference="TWPART001"))
         self._service().record_wave_payment(
-            reference, self._demande(amount=50000.0, wave_reference="TWPART002"))
+            reference, self._demande(
+                amount=50000.0, wave_reference="TWPART002",
+                confirm_existing_payment=True))
 
         collections = self._collections(reference)
         self.assertEqual(len(collections), 2)
@@ -521,6 +543,7 @@ class TestOpsWavePayments(AccountTestInvoicingCommon):
         from odoo.addons.dally_ops_mobile.models import ops_wave_payment_service
         code = code_seul(ops_wave_payment_service)
         self.assertIn("ops-payment-request:%s", code)
+        self.assertIn("ops-payment-shipment:%s:%s", code)
         self.assertIn("pg_advisory_xact_lock", code)
 
     def test_deux_demandes_successives_ne_produisent_qu_un_audit(self):

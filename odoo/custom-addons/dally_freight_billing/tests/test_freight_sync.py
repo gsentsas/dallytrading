@@ -114,6 +114,7 @@ class TestFreightSyncService(TransactionCase):
         self.assertEqual(shipment.transport_mode, "air")
         self.assertEqual(shipment.direction, "export")
         self.assertEqual(shipment.partner_id.email, "awa.sync@example.com")
+        self.assertEqual(shipment.partner_id.lang, self.env.company.partner_id.lang or "fr_FR")
         self.assertEqual(shipment.origin_city, "Dakar")
         self.assertEqual(shipment.destination_city, "Paris")
         self.assertEqual(shipment.state, "request_received")

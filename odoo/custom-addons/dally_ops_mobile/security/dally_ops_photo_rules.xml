@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Les photos Ops deviennent consultables dans le CRM, jamais au portail. -->
+    <record id="rule_dally_ops_photo_crm_company" model="ir.rule">
+        <field name="name">Photos Ops CRM — sociétés autorisées</field>
+        <field name="model_id" ref="model_dally_ops_photo"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('dally_core.group_dally_readonly'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+</odoo>

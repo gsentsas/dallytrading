@@ -10,6 +10,13 @@ tout le reste de Dally Ops referme depuis l'origine. Le modèle porte donc une
 identité opaque, et la pièce jointe reste un détail de stockage qui ne sort
 jamais.
 
+## Visibilité CRM
+
+Les preuves restent privées et ne sont jamais publiées au portail. Le CRM peut
+en revanche les consulter depuis le dossier fret : il lit le même enregistrement
+`dally.ops.photo` et la même pièce jointe, sans recopier l'image. Les champs de
+prévisualisation ci-dessous ne sont que des champs liés en lecture seule.
+
 ## Ce qui n'existe pas ici, et ne doit pas exister
 
 Aucun champ de publication client. Une photo d'exploitation — un colis éventré,
@@ -76,6 +83,15 @@ class DallyOpsPhoto(models.Model):
     operator_user_id = fields.Many2one(
         "res.users", required=True, index=True, readonly=True)
 
+    # Lecture CRM : aucune copie des octets. Ces champs suivent la pièce jointe
+    # privée déjà créée par Ops et servent uniquement aux widgets de lecture.
+    image_data = fields.Binary(
+        string="Photo", related="attachment_id.datas", readonly=True)
+    filename = fields.Char(
+        string="Fichier", related="attachment_id.name", readonly=True)
+    mime_type = fields.Char(
+        string="Type MIME", related="attachment_id.mimetype", readonly=True)
+
     active = fields.Boolean(default=True, index=True)
     deleted_at = fields.Datetime(readonly=True, copy=False)
     deleted_by_user_id = fields.Many2one(
@@ -86,6 +102,20 @@ class DallyOpsPhoto(models.Model):
         "Cette photo existe déjà.")
 
 
+class DallyShipment(models.Model):
+    """Expose les preuves Ops sur le dossier métier, en lecture seule."""
+
+    _inherit = "dally.shipment"
+
+    ops_photo_ids = fields.One2many(
+        "dally.ops.photo",
+        "shipment_id",
+        string="Photos Ops",
+        domain=[("active", "=", True)],
+        readonly=True,
+    )
+
+
 class DallyOpsPhotoRequest(models.Model):
     """Le registre d'idempotence des deux gestes photo.
 
@@ -94,10 +124,10 @@ class DallyOpsPhotoRequest(models.Model):
     laisseraient le même identifiant servir une fois à ajouter et une fois à
     supprimer, et le second geste passerait pour neuf.
 
-    `intent_hash` porte l'intention entière — dossier, nature, contenu. Comparer
-    l'action seule laisserait un identifiant recyclé sur une autre photo rendre
-    en silence le résultat du premier envoi, et l'opérateur croirait avoir
-    enregistré ce qu'il vient de faire.
+    `intent_hash` porte l'intention entière — action, dossier, nature, contenu.
+    Comparer l'action seule laisserait un identifiant recyclé sur une autre
+    photo rendre en silence le résultat du premier envoi, et l'opérateur
+    croirait avoir enregistré ce qu'il vient de faire.
     """
 
     _name = "dally.ops.photo.request"

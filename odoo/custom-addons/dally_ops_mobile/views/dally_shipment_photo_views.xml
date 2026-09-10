@@ -15,7 +15,8 @@
                     <field name="ops_photo_ids" readonly="1" nolabel="1"
                            context="{'active_test': True}">
                         <list create="false" edit="false" delete="false">
-                            <field name="image_data" widget="image" string="Aperçu"/>
+                            <field name="image_data" widget="image" string="Aperçu"
+                                   options="{'size': [0, 96], 'zoom': True}"/>
                             <field name="kind" string="Nature"/>
                             <field name="operator_user_id" string="Pris par"
                                    widget="many2one_avatar_user"/>

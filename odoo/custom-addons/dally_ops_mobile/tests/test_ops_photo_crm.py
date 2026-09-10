@@ -9,9 +9,11 @@ from odoo.tests import TransactionCase, tagged
 
 @tagged("post_install", "-at_install", "dally", "dally_ops_mobile")
 class TestOpsPhotoCRM(TransactionCase):
+    """Protège l'exposition CRM sans élargir la surface portail ni l'audit."""
 
     @classmethod
     def setUpClass(cls):
+        """Crée deux sociétés, une preuve active et les identités sentinelles."""
         super().setUpClass()
         cls.company = cls.env.company
         cls.other_company = cls.env["res.company"].create({"name": "CRM Photo Autre"})
@@ -94,10 +96,12 @@ class TestOpsPhotoCRM(TransactionCase):
             })
 
     def test_crm_reader_sees_photo_from_shipment(self):
+        """Le lecteur CRM retrouve la preuve active depuis le dossier fret."""
         shipment = self.shipment.with_user(self.crm_user)
         self.assertEqual(shipment.ops_photo_ids.ids, [self.photo.id])
 
     def test_crm_reader_can_render_private_attachment_without_duplication(self):
+        """L'aperçu relit la pièce privée existante sans créer de copie."""
         values = self.photo.with_user(self.crm_user).read([
             "image_data", "filename", "mime_type", "kind", "operator_user_id",
         ])[0]
@@ -110,26 +114,39 @@ class TestOpsPhotoCRM(TransactionCase):
             ("res_id", "=", self.photo.id),
         ]), 1)
 
-    def test_removed_photo_is_not_shown_on_shipment(self):
+    def test_removed_photo_is_not_shown_or_searchable_in_crm(self):
+        """Une preuve retirée reste archivée mais sort de la surface CRM ordinaire."""
         self.photo.sudo().write({"active": False})
         shipment = self.shipment.with_user(self.crm_user)
         self.assertFalse(shipment.ops_photo_ids)
+        found = (self.env["dally.ops.photo"]
+                 .with_user(self.crm_user)
+                 .with_context(active_test=False)
+                 .search([("id", "=", self.photo.id)]))
+        self.assertFalse(found)
+        self.assertTrue(
+            self.env["dally.ops.photo"].sudo().with_context(active_test=False)
+            .browse(self.photo.id).exists())
 
     def test_other_company_photo_is_hidden(self):
+        """La règle multi-société masque les preuves hors sociétés autorisées."""
         found = self.env["dally.ops.photo"].with_user(self.crm_user).search([
             ("id", "=", self.other_photo.id),
         ])
         self.assertFalse(found)
 
     def test_crm_reader_cannot_modify_ops_photo(self):
+        """L'exposition CRM est strictement en lecture seule."""
         with self.assertRaises(AccessError):
             self.photo.with_user(self.crm_user).write({"kind": "package"})
 
     def test_portal_cannot_read_ops_photo(self):
+        """Un compte portail n'obtient aucun droit de lecture sur la preuve Ops."""
         with self.assertRaises(AccessError):
             self.photo.with_user(self.portal_user).read(["kind"])
 
     def test_shipment_form_contains_internal_photo_tab(self):
+        """La vue du dossier charge l'onglet interne et son champ d'aperçu."""
         view = self.env.ref(
             "dally_ops_mobile.dally_shipment_view_form_ops_photos")
         self.assertIn("Photos Ops", view.arch_db)

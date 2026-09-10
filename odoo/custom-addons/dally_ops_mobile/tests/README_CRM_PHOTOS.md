@@ -11,4 +11,6 @@ Garanties :
 - seuls les rôles internes DallyTrading disposant de `group_dally_readonly`
   peuvent lire `dally.ops.photo` ;
 - une règle multi-société limite la lecture aux sociétés autorisées ;
-- les photos retirées (`active = False`) ne sont pas affichées dans l'onglet.
+- les photos retirées (`active = False`) restent conservées pour l'audit
+  système, mais elles ne sont ni affichées ni recherchables par un lecteur CRM
+  ordinaire, même avec `active_test=False`.

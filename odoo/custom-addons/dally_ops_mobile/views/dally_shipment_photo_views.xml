@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="dally_shipment_view_form_ops_photos" model="ir.ui.view">
+        <field name="name">dally.shipment.form.ops.photos</field>
+        <field name="model">dally.shipment</field>
+        <field name="inherit_id" ref="dally_freight.dally_shipment_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Photos Ops" name="ops_photos"
+                      groups="dally_core.group_dally_readonly">
+                    <div class="alert alert-info" role="alert">
+                        Photos prises par l'équipe terrain dans Ops. Elles restent
+                        internes et ne sont jamais publiées au portail client.
+                    </div>
+                    <field name="ops_photo_ids" readonly="1" nolabel="1"
+                           context="{'active_test': True}">
+                        <list create="false" edit="false" delete="false">
+                            <field name="image_data" widget="image" string="Aperçu"/>
+                            <field name="kind" string="Nature"/>
+                            <field name="operator_user_id" string="Pris par"
+                                   widget="many2one_avatar_user"/>
+                            <field name="create_date" string="Pris le"/>
+                            <field name="filename" string="Fichier" optional="hide"/>
+                            <field name="mime_type" string="Format" optional="hide"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

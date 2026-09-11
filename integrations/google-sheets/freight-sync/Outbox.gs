@@ -486,7 +486,9 @@ function writeDossierRow_(grid, row, projection, article, payment) {
   }
 
   grid.set(row, c.depositDate, dossier.deposit_date || '');
-  grid.set(row, c.plannedConsolidation, sheetLiteralText_(dossier.planned_consolidation));
+  const plannedConsolidation = sheetLiteralText_(dossier.planned_consolidation);
+  grid.extendStrictListValidation(row, c.plannedConsolidation, plannedConsolidation);
+  grid.set(row, c.plannedConsolidation, plannedConsolidation);
   grid.set(row, c.dossier, sheetLiteralText_(dossier.reference));
   grid.set(row, c.client, sheetLiteralText_(client.name));
   grid.set(row, c.phone, sheetLiteralText_(client.phone));
@@ -570,6 +572,39 @@ function writeDossierRow_(grid, row, projection, article, payment) {
     payment && paymentIsCancelled_(payment)
       ? 'Projeté depuis le CRM. Encaissement annulé.'
       : 'Projeté depuis le CRM.'));
+}
+
+/**
+ * Étend seulement une liste stricte déjà posée sur la cellule.
+ *
+ * La copie conserve le texte d'aide et les options de la règle. Les autres
+ * types de validation restent intacts afin que leur rejet normal reste
+ * visible au transport.
+ */
+function extendStrictListValidation_(range, value) {
+  const validation = range.getDataValidation();
+  if (!validation || validation.getAllowInvalid() !== false) return;
+
+  const projected = String(value);
+  if (!projected) return;
+
+  const criteria = validation.getCriteriaType();
+  const criteriaName = String(criteria);
+  if (criteriaName !== 'VALUE_IN_LIST' && criteriaName !== 'ONE_OF_LIST') return;
+
+  const criteriaValues = validation.getCriteriaValues();
+  if (!Array.isArray(criteriaValues[0])) return;
+  const allowed = criteriaValues[0].slice();
+
+  if (allowed.some(existing => String(existing) === projected)) return;
+
+  const updatedCriteriaValues = criteriaValues.slice();
+  updatedCriteriaValues[0] = allowed.concat([projected]);
+  const extended = validation.copy()
+    .withCriteria(criteria, updatedCriteriaValues)
+    .setAllowInvalid(false)
+    .build();
+  range.setDataValidation(extended);
 }
 
 /**
@@ -759,6 +794,10 @@ function sheetGrid_(spreadsheet, name, firstRow) {
       if (row > logicalLast) {
         logicalLast = row;
       }
+    },
+
+    extendStrictListValidation: function (row, column, value) {
+      extendStrictListValidation_(sheet.getRange(row, column), value);
     },
 
     findRow: function (predicate) {

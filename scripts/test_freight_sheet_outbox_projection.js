@@ -17,12 +17,64 @@ const lire = nom => fs.readFileSync(path.join(racine, nom), 'utf8');
 
 /* --- Un onglet simulé, à la sémantique de Google ------------------- */
 
+function fauxValidation(type, criteriaValues, options) {
+  const opts = options || {};
+  const values = criteriaValues.slice();
+  const allowInvalid = opts.allowInvalid !== false;
+  const helpText = opts.helpText == null ? null : String(opts.helpText);
+  const accepts = opts.accepts || (value => {
+    if (String(type) !== 'VALUE_IN_LIST' && String(type) !== 'ONE_OF_LIST') {
+      return true;
+    }
+    const allowed = Array.isArray(values[0]) ? values[0] : [];
+    return allowed.some(candidate => String(candidate) === String(value));
+  });
+
+  return {
+    getCriteriaType: () => type,
+    getCriteriaValues: () => values.slice(),
+    getAllowInvalid: () => allowInvalid,
+    getHelpText: () => helpText,
+    accepte: accepts,
+    copy() {
+      let nextType = type;
+      let nextValues = values.slice();
+      let nextAllowInvalid = allowInvalid;
+      let nextHelpText = helpText;
+
+      return {
+        withCriteria(criteria, args) {
+          nextType = criteria;
+          nextValues = args.slice();
+          return this;
+        },
+        setAllowInvalid(value) {
+          nextAllowInvalid = Boolean(value);
+          return this;
+        },
+        setHelpText(value) {
+          nextHelpText = value == null ? null : String(value);
+          return this;
+        },
+        build() {
+          return fauxValidation(nextType, nextValues, {
+            allowInvalid: nextAllowInvalid,
+            helpText: nextHelpText,
+          });
+        },
+      };
+    },
+  };
+}
+
 function fauxOnglet(nom, colonnes, onWrite) {
   const cellules = new Map();
+  const validations = new Map();
   const cle = (row, col) => row + ':' + col;
   let dernier = 0;
   let lecturesUnitaires = 0;
   let lecturesBloc = 0;
+  let ecrituresValidation = 0;
 
   return {
     nom,
@@ -47,7 +99,25 @@ function fauxOnglet(nom, colonnes, onWrite) {
             })
           );
         },
+        getDataValidation() {
+          return validations.get(cle(row, col)) || null;
+        },
+        setDataValidation(validation) {
+          validations.set(cle(row, col), validation);
+          ecrituresValidation++;
+          return this;
+        },
         setValue(value) {
+          const validation = validations.get(cle(row, col));
+          if (
+            validation &&
+            validation.getAllowInvalid() === false &&
+            !validation.accepte(value)
+          ) {
+            throw new Error(
+              'Les données saisies ne respectent pas les règles de validation.'
+            );
+          }
           cellules.set(cle(row, col), value);
           if (row > dernier) dernier = row;
           if (onWrite) onWrite({sheet: nom, row, col, value});
@@ -63,6 +133,13 @@ function fauxOnglet(nom, colonnes, onWrite) {
       const v = cellules.get(cle(row, col));
       return v == null ? '' : v;
     },
+    definirValidation(row, col, validation) {
+      validations.set(cle(row, col), validation);
+    },
+    validation(row, col) {
+      return validations.get(cle(row, col)) || null;
+    },
+    ecrituresValidation: () => ecrituresValidation,
 
     statistiques() {
       return {
@@ -173,6 +250,29 @@ function projectionDossier(surcharge) {
   return Object.assign(base, surcharge || {});
 }
 
+const CONSOLIDATIONS_OUVERTES = [
+  'AIR-DSS-CDG-2026-002',
+  'AIR-DSS-CDG-2026-001',
+  'AIR-DSS-ROI-2026-001',
+];
+
+function projectionAib() {
+  const projection = projectionDossier();
+  projection.business_key = 'ops:aib-ris-1';
+  projection.identity = Object.assign({}, projection.identity, {
+    sync_source_key: 'ops:aib-ris-1',
+    global_external_reference: 'AIR-AIB-RIS-2026-001-A001',
+    intake_consolidation_ref: 'AIR-AIB-RIS-2026-001',
+  });
+  projection.dossier = Object.assign({}, projection.dossier, {
+    planned_consolidation: 'AIR-AIB-RIS-2026-001',
+  });
+  projection.articles = projection.articles.map(article => Object.assign({}, article, {
+    article_key: 'AIR-AIB-RIS-2026-001-A001|A|1',
+  }));
+  return projection;
+}
+
 function nouveauClasseur(onWrite) {
   return {
     'Saisie aérien': fauxOnglet('Saisie aérien', 63, onWrite),
@@ -225,6 +325,98 @@ function nouveauClasseur(onWrite) {
                      'Savon corrigé');
   assert.strictEqual(onglets['Saisie aérien'].valeur(ligne, C.exactWeight), 14.5);
   assert.strictEqual(onglets['Saisie aérien'].lignes().length, 1);
+}
+
+/* --- 3.a. Une consolidation projetée étend la liste stricte ------- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const row = ctx.DALLY.firstDataRow;
+  aerien.definirValidation(row, C.plannedConsolidation, fauxValidation(
+    'ONE_OF_LIST',
+    [CONSOLIDATIONS_OUVERTES.slice(), true],
+    {allowInvalid: false, helpText: 'Choisir une consolidation ouverte.'}
+  ));
+
+  ctx.applyDossierProjection_(classeur, projectionAib());
+
+  const validation = aerien.validation(row, C.plannedConsolidation);
+  assert.deepStrictEqual(
+    validation.getCriteriaValues()[0],
+    CONSOLIDATIONS_OUVERTES.concat(['AIR-AIB-RIS-2026-001']),
+    'la nouvelle consolidation doit être ajoutée après les anciennes valeurs'
+  );
+  assert.strictEqual(validation.getAllowInvalid(), false,
+                     'la validation étendue doit rester stricte');
+  assert.strictEqual(validation.getHelpText(), 'Choisir une consolidation ouverte.',
+                     'le texte d’aide doit être conservé');
+  assert.strictEqual(aerien.valeur(row, C.plannedConsolidation),
+                     'AIR-AIB-RIS-2026-001', 'l’écriture doit aboutir');
+  assert.strictEqual(aerien.ecrituresValidation(), 1,
+                     'une seule règle locale doit être remplacée');
+}
+
+/* --- 3.b. Une valeur déjà autorisée ne duplique pas la liste ------ */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const row = ctx.DALLY.firstDataRow;
+  const originale = fauxValidation(
+    'VALUE_IN_LIST',
+    [CONSOLIDATIONS_OUVERTES.slice(), false],
+    {allowInvalid: false, helpText: 'Liste existante'}
+  );
+  aerien.definirValidation(row, C.plannedConsolidation, originale);
+
+  ctx.applyDossierProjection_(classeur, projectionDossier());
+
+  assert.strictEqual(aerien.validation(row, C.plannedConsolidation), originale,
+                     'une liste déjà compatible ne doit pas être reconstruite');
+  assert.deepStrictEqual(originale.getCriteriaValues()[0], CONSOLIDATIONS_OUVERTES);
+  assert.strictEqual(aerien.ecrituresValidation(), 0,
+                     'aucune écriture de validation ne doit avoir lieu');
+}
+
+/* --- 3.c. Sans validation, le comportement existant est conservé -- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const row = ctx.DALLY.firstDataRow;
+
+  ctx.applyDossierProjection_(classeur, projectionAib());
+
+  assert.strictEqual(aerien.validation(row, C.plannedConsolidation), null);
+  assert.strictEqual(aerien.ecrituresValidation(), 0,
+                     'la projection ne doit pas créer une règle artificielle');
+  assert.strictEqual(aerien.valeur(row, C.plannedConsolidation),
+                     'AIR-AIB-RIS-2026-001');
+}
+
+/* --- 3.d. Une autre validation n’est jamais contournée ------------ */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const row = ctx.DALLY.firstDataRow;
+  const originale = fauxValidation(
+    'TEXT_IS_EMAIL',
+    [],
+    {allowInvalid: false, helpText: 'Adresse requise', accepts: () => false}
+  );
+  aerien.definirValidation(row, C.plannedConsolidation, originale);
+
+  assert.throws(
+    () => ctx.applyDossierProjection_(classeur, projectionAib()),
+    /règles de validation/,
+    'l’écriture normale doit rester bloquée par la règle incompatible'
+  );
+  assert.strictEqual(aerien.validation(row, C.plannedConsolidation), originale,
+                     'la règle incompatible doit rester exactement en place');
+  assert.strictEqual(aerien.ecrituresValidation(), 0,
+                     'aucun remplacement silencieux ne doit avoir lieu');
 }
 
 /* --- 4. Trois articles : trois lignes, et toujours trois ---------- */
@@ -739,6 +931,50 @@ function nouveauClasseur(onWrite) {
   assert.match(resultat.results[0].error, /Écriture Google Sheets non confirmée/);
   assert.strictEqual(accuse.results[0].ok, false,
                      'Odoo reçoit un retry, jamais un faux succès');
+}
+
+/* --- 16.c. Validation refusée avant flush : retry, pas delivered --- */
+{
+  const evenements = [];
+  const onglets = nouveauClasseur(() => evenements.push('write'));
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  aerien.definirValidation(
+    ctx.DALLY.firstDataRow,
+    C.plannedConsolidation,
+    fauxValidation('TEXT_IS_EMAIL', [], {
+      allowInvalid: false,
+      accepts: () => false,
+    })
+  );
+  let accuse = null;
+  const transport = contexte({
+    getActive: () => classeur,
+    flush: () => evenements.push('flush'),
+    apiGet: () => ({projections: [projectionAib()]}),
+    apiPost: (_path, _property, body) => {
+      accuse = body;
+      evenements.push('ack');
+    },
+  });
+
+  const resultat = transport.dallySheetProjectionPull();
+
+  assert.strictEqual(resultat.results[0].ok, false,
+                     'une validation refusée ne peut jamais devenir delivered');
+  assert.strictEqual(resultat.results[0].permanent, false,
+                     'le refus Google doit produire un retry');
+  assert.match(resultat.results[0].error, /règles de validation/);
+  assert.strictEqual(evenements.includes('flush'), false,
+                     'aucun flush ne doit suivre une écriture déjà refusée');
+  assert.strictEqual(evenements[0], 'write',
+                     'l’échec doit être celui d’une écriture réelle');
+  assert.strictEqual(evenements[evenements.length - 1], 'ack',
+                     'l’ACK d’échec doit partir après la tentative d’écriture');
+  assert.strictEqual(accuse.results[0].ok, false,
+                     'Odoo doit recevoir un échec, jamais un faux succès');
+  assert.strictEqual(accuse.results[0].permanent, false,
+                     'l’ACK doit rendre la projection réessayable');
 }
 
 /* --- 17. Sheet écrit, ACK perdu : rejeu sans doublon ---------------- */

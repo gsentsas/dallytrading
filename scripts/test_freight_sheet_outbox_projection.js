@@ -1452,8 +1452,8 @@ function nouveauClasseur(onWrite) {
 
   assert.strictEqual(resultat.results[0].ok, false,
                      'une validation refusée ne peut jamais devenir delivered');
-  assert.strictEqual(resultat.results[0].permanent, false,
-                     'le refus Google doit produire un retry');
+  assert.strictEqual(resultat.results[0].permanent, true,
+                     'une validation structurelle exige une correction humaine');
   assert.match(resultat.results[0].error, /Validation de consolidation incompatible/);
   assert.strictEqual(evenements.includes('flush'), false,
                      'aucun flush ne doit suivre une écriture déjà refusée');
@@ -1463,8 +1463,8 @@ function nouveauClasseur(onWrite) {
                          'seul l’ACK d’échec doit partir après le pré-vol');
   assert.strictEqual(accuse.results[0].ok, false,
                      'Odoo doit recevoir un échec, jamais un faux succès');
-  assert.strictEqual(accuse.results[0].permanent, false,
-                     'l’ACK doit rendre la projection réessayable');
+  assert.strictEqual(accuse.results[0].permanent, true,
+                     'l’ACK doit arrêter les retries impossibles');
 }
 
 /* --- 17. Sheet écrit, ACK perdu : rejeu sans doublon ---------------- */

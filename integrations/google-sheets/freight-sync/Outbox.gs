@@ -173,7 +173,8 @@ function isPermanentProjectionError_(err) {
     .test(text) ||
     /identité (?:article|paiement) contradictoire|catégorie article non mappée/i
       .test(text) ||
-    /validation de catégorie incompatible|reprise partielle ambiguë/i.test(text);
+    /validation de (?:catégorie|consolidation) incompatible|reprise partielle ambiguë/i
+      .test(text);
 }
 
 function applyProjection_(spreadsheet, projection) {

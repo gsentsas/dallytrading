@@ -120,9 +120,9 @@ function fauxOnglet(nom, colonnes, onWrite) {
               'Les données saisies ne respectent pas les règles de validation.'
             );
           }
+          if (onWrite) onWrite({type: 'value', sheet: nom, row, col, value});
           cellules.set(cle(row, col), value);
           if (row > dernier) dernier = row;
-          if (onWrite) onWrite({type: 'value', sheet: nom, row, col, value});
         },
       };
     },
@@ -277,6 +277,26 @@ const CONSOLIDATIONS_OUVERTES = [
   'AIR-DSS-ROI-2026-001',
 ];
 
+const CATEGORIES_CONTROLEES = [
+  'Vêtements',
+  'Effets personnels',
+  'Alimentaires',
+  'Non Alimentaires',
+];
+
+function definirValidationCategorie(onglet, rows) {
+  rows.forEach(row => {
+    onglet.definirValidation(
+      row,
+      C.goodsCategory,
+      fauxValidation('ONE_OF_LIST', [CATEGORIES_CONTROLEES.slice(), true], {
+        allowInvalid: false,
+        helpText: 'Liste contrôlée - Choisissez une valeur dans la liste.',
+      })
+    );
+  });
+}
+
 function projectionAib(nombreArticles) {
   const projection = projectionDossier();
   const count = nombreArticles == null ? 1 : Number(nombreArticles);
@@ -296,6 +316,40 @@ function projectionAib(nombreArticles) {
     })
   );
   return projection;
+}
+
+function projectionAibDossier(reference, nombreArticles) {
+  const projection = projectionAib(nombreArticles);
+  const globale = 'AIR-AIB-RIS-2026-001-' + reference;
+  projection.business_key = 'ops:aib-ris-' + reference.toLowerCase();
+  projection.identity = Object.assign({}, projection.identity, {
+    sync_source_key: projection.business_key,
+    global_external_reference: globale,
+    collection_local_ref: reference,
+    shipment_id: 5000 + Number(reference.slice(1)),
+  });
+  projection.dossier = Object.assign({}, projection.dossier, {
+    reference: reference,
+  });
+  projection.articles = projection.articles.map((article, index) =>
+    Object.assign({}, article, {
+      article_key: globale + '|A|' + (index + 1),
+      description: 'Article ' + reference + ' ' + (index + 1),
+    })
+  );
+  return projection;
+}
+
+function ecrireLignePartielle(onglet, row, projection) {
+  const dossier = projection.dossier;
+  const client = dossier.customer;
+  onglet.getRange(row, C.depositDate).setValue(dossier.deposit_date);
+  onglet.getRange(row, C.plannedConsolidation)
+    .setValue(dossier.planned_consolidation);
+  onglet.getRange(row, C.dossier).setValue(dossier.reference);
+  onglet.getRange(row, C.client).setValue(client.name);
+  onglet.getRange(row, C.phone).setValue(client.phone);
+  onglet.getRange(row, C.parcelState).setValue('Depose');
 }
 
 function nouveauClasseur(onWrite) {
@@ -444,8 +498,8 @@ function nouveauClasseur(onWrite) {
 
   assert.throws(
     () => ctx.applyDossierProjection_(classeur, projectionAib()),
-    /règles de validation/,
-    'l’écriture normale doit rester bloquée par la règle incompatible'
+    /Validation de consolidation incompatible/,
+    'le pré-vol doit refuser la règle incompatible avant les écritures'
   );
   assert.strictEqual(aerien.validation(row, C.plannedConsolidation), originale,
                      'la règle incompatible doit rester exactement en place');
@@ -510,6 +564,279 @@ function nouveauClasseur(onWrite) {
   assert.strictEqual(aerien.ecrituresValidation(), 0);
   assert.strictEqual(aerien.valeur(row, C.plannedConsolidation),
                      'AIR-AIB-RIS-2026-001');
+}
+
+/* --- 3.g. La catégorie singulière devient la valeur canonique ---- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const row = ctx.DALLY.firstDataRow;
+  definirValidationCategorie(aerien, [row]);
+  const originale = aerien.validation(row, C.goodsCategory);
+  const p = projectionDossier();
+  p.articles[0].goods_category = 'Non Alimentaire';
+
+  ctx.applyDossierProjection_(classeur, p);
+
+  assert.strictEqual(aerien.valeur(row, C.goodsCategory), 'Non Alimentaires');
+  assert.strictEqual(aerien.validation(row, C.goodsCategory), originale,
+                     'la validation G ne doit jamais être reconstruite');
+  assert.strictEqual(originale.getAllowInvalid(), false,
+                     'la validation G doit rester stricte');
+  assert.deepStrictEqual(originale.getCriteriaValues()[0], CATEGORIES_CONTROLEES,
+                         'les anciennes catégories doivent rester intactes');
+  assert.strictEqual(
+    originale.getHelpText(),
+    'Liste contrôlée - Choisissez une valeur dans la liste.'
+  );
+}
+
+/* --- 3.h. Encens non_food reste dans la taxonomie contrôlée ------- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const row = ctx.DALLY.firstDataRow;
+  definirValidationCategorie(aerien, [row]);
+  const originale = aerien.validation(row, C.goodsCategory);
+  const p = projectionDossier();
+  p.articles[0].goods_category = 'Encens';
+  p.articles[0].tariff_family_code = 'non_food';
+
+  ctx.applyDossierProjection_(classeur, p);
+
+  assert.strictEqual(aerien.valeur(row, C.goodsCategory), 'Non Alimentaires');
+  assert.strictEqual(aerien.validation(row, C.goodsCategory), originale);
+  assert.strictEqual(originale.getCriteriaValues()[0].includes('Encens'), false,
+                     'Encens ne doit jamais être ajouté à la liste G');
+}
+
+/* --- 3.i. Une valeur exacte autorisée garde son libellé ----------- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const row = ctx.DALLY.firstDataRow;
+  definirValidationCategorie(aerien, [row]);
+  const p = projectionDossier();
+  p.articles[0].goods_category = 'Effets personnels';
+  p.articles[0].tariff_family_code = 'food';
+
+  ctx.applyDossierProjection_(classeur, p);
+
+  assert.strictEqual(aerien.valeur(row, C.goodsCategory), 'Effets personnels');
+}
+
+/* --- 3.j. Une catégorie inconnue échoue avant toute écriture ------ */
+{
+  const writes = [];
+  const onglets = nouveauClasseur(event => writes.push(event));
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const row = ctx.DALLY.firstDataRow;
+  definirValidationCategorie(aerien, [row]);
+  const p = projectionDossier();
+  p.articles[0].goods_category = 'Catégorie imprévue';
+  p.articles[0].tariff_family_code = 'famille_imprévue';
+
+  assert.throws(
+    () => ctx.applyDossierProjection_(classeur, p),
+    /Catégorie article non mappée/
+  );
+  assert.strictEqual(writes.length, 0,
+                     'le pré-vol doit échouer avant la première écriture');
+  assert.strictEqual(aerien.valeur(row, C.depositDate), '');
+  assert.strictEqual(aerien.valeur(row, C.plannedConsolidation), '');
+  assert.strictEqual(aerien.valeur(row, C.dossier), '');
+}
+
+/* --- 3.k. A002 récupère ses quatre lignes partielles -------------- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const firstRow = ctx.DALLY.firstDataRow;
+  const full = projectionAibDossier('A002', 5);
+  const firstOnly = projectionAibDossier('A002', 1);
+  definirValidationCategorie(aerien, [3, 4, 5, 6, 7]);
+
+  ctx.applyDossierProjection_(classeur, firstOnly);
+  for (let row = firstRow + 1; row <= firstRow + 4; row++) {
+    ecrireLignePartielle(aerien, row, full);
+  }
+
+  const rowsBefore = aerien.lignes();
+  const written = ctx.applyDossierProjection_(classeur, full);
+
+  assert.deepStrictEqual(Array.from(written), [3, 4, 5, 6, 7]);
+  assert.deepStrictEqual(aerien.lignes(), rowsBefore,
+                         'aucune nouvelle ligne ne doit être allouée');
+  written.forEach((row, index) => {
+    assert.strictEqual(aerien.valeur(row, C.articleKey),
+                       full.articles[index].article_key);
+    assert.strictEqual(aerien.valeur(row, C.syncSourceKey),
+                       full.identity.sync_source_key);
+  });
+}
+
+/* --- 3.l. A003 récupère ses cinq lignes partielles ---------------- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const firstRow = ctx.DALLY.firstDataRow;
+  const p = projectionAibDossier('A003', 5);
+  definirValidationCategorie(aerien, [3, 4, 5, 6, 7]);
+
+  for (let row = firstRow; row <= firstRow + 4; row++) {
+    ecrireLignePartielle(aerien, row, p);
+  }
+
+  const rowsBefore = aerien.lignes();
+  const written = ctx.applyDossierProjection_(classeur, p);
+
+  assert.deepStrictEqual(Array.from(written), [3, 4, 5, 6, 7]);
+  assert.deepStrictEqual(aerien.lignes(), rowsBefore,
+                         'les cinq lignes existantes doivent être réutilisées');
+  assert.strictEqual(
+    written.filter(row => aerien.valeur(row, C.articleKey)).length,
+    5,
+    'aucune ligne partielle ne doit subsister'
+  );
+}
+
+/* --- 3.m. Une erreur tardive est reprise sur la même ligne -------- */
+{
+  let failDescription = true;
+  const onglets = nouveauClasseur(event => {
+    if (
+      failDescription &&
+      event.type === 'value' &&
+      event.col === C.description
+    ) {
+      throw new Error('échec tardif simulé');
+    }
+  });
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const row = ctx.DALLY.firstDataRow;
+  definirValidationCategorie(aerien, [row]);
+  const p = projectionDossier();
+
+  assert.throws(
+    () => ctx.applyDossierProjection_(classeur, p),
+    /échec tardif simulé/
+  );
+  assert.strictEqual(aerien.valeur(row, C.articleKey), p.articles[0].article_key,
+                     'la clé article doit précéder les champs fragiles');
+  assert.strictEqual(aerien.valeur(row, C.shipmentId), p.identity.shipment_id);
+  assert.strictEqual(aerien.valeur(row, C.lastSync), '',
+                     'lastSync reste absent tant que la ligne est incomplète');
+
+  failDescription = false;
+  const written = ctx.applyDossierProjection_(classeur, p);
+  assert.deepStrictEqual(Array.from(written), [row]);
+  assert.deepStrictEqual(aerien.lignes(), [row],
+                         'le retry doit retrouver la ligne par sa clé');
+  assert.ok(aerien.valeur(row, C.lastSync) instanceof Date);
+}
+
+/* --- 3.n. Une clé précoce suffit à reprendre l’identité ----------- */
+{
+  let failShipment = true;
+  const onglets = nouveauClasseur(event => {
+    if (
+      failShipment &&
+      event.type === 'value' &&
+      event.col === C.shipmentId
+    ) {
+      throw new Error('identité dossier différée');
+    }
+  });
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const row = ctx.DALLY.firstDataRow;
+  definirValidationCategorie(aerien, [row]);
+  const p = projectionDossier();
+
+  assert.throws(
+    () => ctx.applyDossierProjection_(classeur, p),
+    /identité dossier différée/
+  );
+  assert.strictEqual(aerien.valeur(row, C.articleKey), p.articles[0].article_key);
+  assert.strictEqual(aerien.valeur(row, C.shipmentId), '');
+
+  failShipment = false;
+  assert.deepStrictEqual(
+    Array.from(ctx.applyDossierProjection_(classeur, p)),
+    [row]
+  );
+  assert.deepStrictEqual(aerien.lignes(), [row],
+                         'la clé précoce doit empêcher une nouvelle ligne');
+}
+
+/* --- 3.o. Des lignes partielles en excès restent ambiguës -------- */
+{
+  let projectionWrites = 0;
+  let seeding = true;
+  const onglets = nouveauClasseur(() => {
+    if (!seeding) projectionWrites += 1;
+  });
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const p = projectionAibDossier('A099', 1);
+  ecrireLignePartielle(aerien, 3, p);
+  ecrireLignePartielle(aerien, 4, p);
+  seeding = false;
+
+  assert.throws(
+    () => ctx.applyDossierProjection_(classeur, p),
+    /Reprise partielle ambiguë/
+  );
+  assert.strictEqual(projectionWrites, 0,
+                     'une ambiguïté ne doit attribuer aucune ligne');
+  assert.strictEqual(ctx.isPermanentProjectionError_(
+    new Error('Reprise partielle ambiguë : test')), true);
+}
+
+/* --- 3.p. Une payment_key précoce reprend sa ligne administrative - */
+{
+  let failPaymentShipment = true;
+  const onglets = nouveauClasseur(event => {
+    if (
+      failPaymentShipment &&
+      event.type === 'value' &&
+      event.row === 4 &&
+      event.col === C.shipmentId
+    ) {
+      throw new Error('identité paiement différée');
+    }
+  });
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const p = projectionDossier();
+  p.payments = [1, 2].map(index => ({
+    payment_key: 'payment-early-' + index,
+    state: 'pending',
+    amount_eur: index * 10,
+    amount_xof: 0,
+    payment_method: 'wave',
+    collected_by: 'Alain',
+  }));
+
+  assert.throws(
+    () => ctx.applyDossierProjection_(classeur, p),
+    /identité paiement différée/
+  );
+  assert.strictEqual(aerien.valeur(4, C.paymentKey), 'payment-early-2');
+  assert.strictEqual(aerien.valeur(4, C.shipmentId), '');
+
+  failPaymentShipment = false;
+  ctx.applyDossierProjection_(classeur, p);
+  assert.deepStrictEqual(aerien.lignes(), [3, 4]);
+  assert.strictEqual(aerien.valeur(4, C.paymentKey), 'payment-early-2');
+  assert.strictEqual(aerien.valeur(4, C.paymentEur), 20);
 }
 
 /* --- 4. Trois articles : trois lignes, et toujours trois ---------- */
@@ -1127,13 +1454,13 @@ function nouveauClasseur(onWrite) {
                      'une validation refusée ne peut jamais devenir delivered');
   assert.strictEqual(resultat.results[0].permanent, false,
                      'le refus Google doit produire un retry');
-  assert.match(resultat.results[0].error, /règles de validation/);
+  assert.match(resultat.results[0].error, /Validation de consolidation incompatible/);
   assert.strictEqual(evenements.includes('flush'), false,
                      'aucun flush ne doit suivre une écriture déjà refusée');
-  assert.strictEqual(evenements[0], 'write',
-                     'l’échec doit être celui d’une écriture réelle');
-  assert.strictEqual(evenements[evenements.length - 1], 'ack',
-                     'l’ACK d’échec doit partir après la tentative d’écriture');
+  assert.strictEqual(evenements.includes('write'), false,
+                     'le pré-vol doit refuser la validation avant toute valeur');
+  assert.deepStrictEqual(evenements, ['ack'],
+                         'seul l’ACK d’échec doit partir après le pré-vol');
   assert.strictEqual(accuse.results[0].ok, false,
                      'Odoo doit recevoir un échec, jamais un faux succès');
   assert.strictEqual(accuse.results[0].permanent, false,

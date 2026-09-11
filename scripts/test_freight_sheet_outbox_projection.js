@@ -70,6 +70,7 @@ function fauxValidation(type, criteriaValues, options) {
 function fauxOnglet(nom, colonnes, onWrite) {
   const cellules = new Map();
   const validations = new Map();
+  const validationsEnAttente = new Map();
   const cle = (row, col) => row + ':' + col;
   let dernier = 0;
   let lecturesUnitaires = 0;
@@ -103,8 +104,9 @@ function fauxOnglet(nom, colonnes, onWrite) {
           return validations.get(cle(row, col)) || null;
         },
         setDataValidation(validation) {
-          validations.set(cle(row, col), validation);
+          validationsEnAttente.set(cle(row, col), validation);
           ecrituresValidation++;
+          if (onWrite) onWrite({type: 'validation', sheet: nom, row, col, validation});
           return this;
         },
         setValue(value) {
@@ -120,7 +122,7 @@ function fauxOnglet(nom, colonnes, onWrite) {
           }
           cellules.set(cle(row, col), value);
           if (row > dernier) dernier = row;
-          if (onWrite) onWrite({sheet: nom, row, col, value});
+          if (onWrite) onWrite({type: 'value', sheet: nom, row, col, value});
         },
       };
     },
@@ -139,6 +141,12 @@ function fauxOnglet(nom, colonnes, onWrite) {
     validation(row, col) {
       return validations.get(cle(row, col)) || null;
     },
+    flushValidations() {
+      for (const [key, validation] of validationsEnAttente.entries()) {
+        validations.set(key, validation);
+      }
+      validationsEnAttente.clear();
+    },
     ecrituresValidation: () => ecrituresValidation,
 
     statistiques() {
@@ -151,7 +159,12 @@ function fauxOnglet(nom, colonnes, onWrite) {
 }
 
 function fauxClasseur(onglets) {
-  return {getSheetByName: nom => onglets[nom] || null};
+  return {
+    getSheetByName: nom => onglets[nom] || null,
+    flushValidations() {
+      Object.values(onglets).forEach(onglet => onglet.flushValidations());
+    },
+  };
 }
 
 /* --- Le contexte : le vrai code, sans Google ---------------------- */
@@ -163,6 +176,8 @@ function global_(source) {
 
 function contexte(options) {
   const opts = options || {};
+  const getActive = opts.getActive || (() => null);
+  const flush = opts.flush || (() => {});
   const sandbox = {
     console,
     Date,
@@ -174,8 +189,14 @@ function contexte(options) {
     Map,
     Utilities: {formatDate: () => '2026-08-30'},
     SpreadsheetApp: {
-      getActive: opts.getActive || (() => null),
-      flush: opts.flush || (() => {}),
+      getActive,
+      flush() {
+        flush();
+        const spreadsheet = getActive();
+        if (spreadsheet && spreadsheet.flushValidations) {
+          spreadsheet.flushValidations();
+        }
+      },
     },
     LockService: {getScriptLock: () => ({tryLock: () => true, releaseLock() {}})},
     withScriptLock_: fn => fn(),
@@ -256,8 +277,9 @@ const CONSOLIDATIONS_OUVERTES = [
   'AIR-DSS-ROI-2026-001',
 ];
 
-function projectionAib() {
+function projectionAib(nombreArticles) {
   const projection = projectionDossier();
+  const count = nombreArticles == null ? 1 : Number(nombreArticles);
   projection.business_key = 'ops:aib-ris-1';
   projection.identity = Object.assign({}, projection.identity, {
     sync_source_key: 'ops:aib-ris-1',
@@ -267,9 +289,12 @@ function projectionAib() {
   projection.dossier = Object.assign({}, projection.dossier, {
     planned_consolidation: 'AIR-AIB-RIS-2026-001',
   });
-  projection.articles = projection.articles.map(article => Object.assign({}, article, {
-    article_key: 'AIR-AIB-RIS-2026-001-A001|A|1',
-  }));
+  projection.articles = Array.from({length: count}, (_, index) =>
+    Object.assign({}, projection.articles[0], {
+      article_key: 'AIR-AIB-RIS-2026-001-A001|A|' + (index + 1),
+      description: 'Article A001 ' + (index + 1),
+    })
+  );
   return projection;
 }
 
@@ -331,15 +356,16 @@ function nouveauClasseur(onWrite) {
 {
   const onglets = nouveauClasseur();
   const classeur = fauxClasseur(onglets);
+  const validationCtx = contexte({getActive: () => classeur});
   const aerien = onglets['Saisie aérien'];
-  const row = ctx.DALLY.firstDataRow;
+  const row = validationCtx.DALLY.firstDataRow;
   aerien.definirValidation(row, C.plannedConsolidation, fauxValidation(
     'ONE_OF_LIST',
     [CONSOLIDATIONS_OUVERTES.slice(), true],
     {allowInvalid: false, helpText: 'Choisir une consolidation ouverte.'}
   ));
 
-  ctx.applyDossierProjection_(classeur, projectionAib());
+  validationCtx.applyDossierProjection_(classeur, projectionAib());
 
   const validation = aerien.validation(row, C.plannedConsolidation);
   assert.deepStrictEqual(
@@ -363,6 +389,7 @@ function nouveauClasseur(onWrite) {
   const classeur = fauxClasseur(onglets);
   const aerien = onglets['Saisie aérien'];
   const row = ctx.DALLY.firstDataRow;
+  let flushes = 0;
   const originale = fauxValidation(
     'VALUE_IN_LIST',
     [CONSOLIDATIONS_OUVERTES.slice(), false],
@@ -370,13 +397,20 @@ function nouveauClasseur(onWrite) {
   );
   aerien.definirValidation(row, C.plannedConsolidation, originale);
 
-  ctx.applyDossierProjection_(classeur, projectionDossier());
+  const transport = contexte({
+    getActive: () => classeur,
+    apiGet: () => ({projections: [projectionDossier()]}),
+    flush: () => { flushes += 1; },
+  });
+  transport.dallySheetProjectionPull();
 
   assert.strictEqual(aerien.validation(row, C.plannedConsolidation), originale,
                      'une liste déjà compatible ne doit pas être reconstruite');
   assert.deepStrictEqual(originale.getCriteriaValues()[0], CONSOLIDATIONS_OUVERTES);
   assert.strictEqual(aerien.ecrituresValidation(), 0,
                      'aucune écriture de validation ne doit avoir lieu');
+  assert.strictEqual(flushes, 1,
+                     'seul le flush final doit avoir lieu si la valeur est déjà permise');
 }
 
 /* --- 3.c. Sans validation, le comportement existant est conservé -- */
@@ -417,6 +451,65 @@ function nouveauClasseur(onWrite) {
                      'la règle incompatible doit rester exactement en place');
   assert.strictEqual(aerien.ecrituresValidation(), 0,
                      'aucun remplacement silencieux ne doit avoir lieu');
+}
+
+/* --- 3.e. Sept anciennes règles sont activées avant écriture ------ */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const firstRow = ctx.DALLY.firstDataRow;
+  let flushes = 0;
+
+  for (let offset = 0; offset < 7; offset++) {
+    aerien.definirValidation(
+      firstRow + offset,
+      C.plannedConsolidation,
+      fauxValidation('ONE_OF_LIST', [CONSOLIDATIONS_OUVERTES.slice(), true], {
+        allowInvalid: false,
+        helpText: 'Choisir une consolidation ouverte.',
+      })
+    );
+  }
+
+  const validationCtx = contexte({
+    getActive: () => classeur,
+    flush: () => { flushes += 1; },
+  });
+  const lignes = validationCtx.applyDossierProjection_(classeur, projectionAib(7));
+
+  assert.strictEqual(lignes.length, 7, 'les sept articles doivent être traités');
+  assert.strictEqual(flushes, 7,
+                     'chaque règle modifiée doit être activée avant son écriture');
+  lignes.forEach(row => {
+    assert.strictEqual(aerien.valeur(row, C.plannedConsolidation),
+                       'AIR-AIB-RIS-2026-001');
+    assert.deepStrictEqual(
+      aerien.validation(row, C.plannedConsolidation).getCriteriaValues()[0],
+      CONSOLIDATIONS_OUVERTES.concat(['AIR-AIB-RIS-2026-001'])
+    );
+  });
+}
+
+/* --- 3.f. Une liste non stricte n'est jamais reconstruite -------- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  const row = ctx.DALLY.firstDataRow;
+  const originale = fauxValidation(
+    'ONE_OF_LIST',
+    [CONSOLIDATIONS_OUVERTES.slice(), true],
+    {allowInvalid: true, helpText: 'Suggestion uniquement'}
+  );
+  aerien.definirValidation(row, C.plannedConsolidation, originale);
+
+  ctx.applyDossierProjection_(classeur, projectionAib());
+
+  assert.strictEqual(aerien.validation(row, C.plannedConsolidation), originale);
+  assert.strictEqual(aerien.ecrituresValidation(), 0);
+  assert.strictEqual(aerien.valeur(row, C.plannedConsolidation),
+                     'AIR-AIB-RIS-2026-001');
 }
 
 /* --- 4. Trois articles : trois lignes, et toujours trois ---------- */
@@ -887,15 +980,35 @@ function nouveauClasseur(onWrite) {
     ctx.isPermanentProjectionError_(new Error('Service indisponible')), false);
 }
 
-/* --- 16. L'ACK part seulement après l'écriture --------------------- */
+/* --- 16. Validation, deux barrières, écriture puis ACK ------------ */
 {
   const evenements = [];
-  const onglets = nouveauClasseur(() => evenements.push('write'));
+  const onglets = nouveauClasseur(event => {
+    if (event.type === 'validation' && event.col === C.plannedConsolidation) {
+      evenements.push('validation');
+    }
+    if (event.type === 'value' && event.col === C.plannedConsolidation) {
+      evenements.push('value');
+    }
+  });
   const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  aerien.definirValidation(
+    ctx.DALLY.firstDataRow,
+    C.plannedConsolidation,
+    fauxValidation('ONE_OF_LIST', [CONSOLIDATIONS_OUVERTES.slice(), true], {
+      allowInvalid: false,
+      helpText: 'Choisir une consolidation ouverte.',
+    })
+  );
+  let flushes = 0;
   const transport = contexte({
     getActive: () => classeur,
-    apiGet: () => ({projections: [projectionDossier()]}),
-    flush: () => evenements.push('flush'),
+    apiGet: () => ({projections: [projectionAib()]}),
+    flush: () => {
+      flushes += 1;
+      evenements.push(flushes === 1 ? 'preflush' : 'final-flush');
+    },
     apiPost: (_path, _property, body) => {
       assert.strictEqual(_path, '/api/v1/freight/sheet-outbox/ack',
                          'la projection ne doit jamais appeler le sync Sheet → Odoo');
@@ -906,12 +1019,57 @@ function nouveauClasseur(onWrite) {
     },
   });
   transport.dallySheetProjectionPull();
-  assert.strictEqual(evenements[0], 'write');
-  assert.deepStrictEqual(evenements.slice(-2), ['flush', 'ack'],
-                         'Google doit confirmer les écritures avant l’ACK Odoo');
+  assert.deepStrictEqual(
+    evenements,
+    ['validation', 'preflush', 'value', 'final-flush', 'ack'],
+    'la règle doit être activée avant la valeur, puis les données avant l’ACK'
+  );
 }
 
-/* --- 16.b. Flush Google perdu : jamais de faux delivered ----------- */
+/* --- 16.a. Pré-flush perdu : retry sans écriture ni faux succès ---- */
+{
+  const evenements = [];
+  const onglets = nouveauClasseur(event => {
+    if (event.type === 'validation') evenements.push('validation');
+    if (event.type === 'value' && event.col === C.plannedConsolidation) {
+      evenements.push('value');
+    }
+  });
+  const classeur = fauxClasseur(onglets);
+  const aerien = onglets['Saisie aérien'];
+  aerien.definirValidation(
+    ctx.DALLY.firstDataRow,
+    C.plannedConsolidation,
+    fauxValidation('ONE_OF_LIST', [CONSOLIDATIONS_OUVERTES.slice(), true], {
+      allowInvalid: false,
+    })
+  );
+  let accuse = null;
+  const transport = contexte({
+    getActive: () => classeur,
+    apiGet: () => ({projections: [projectionAib()]}),
+    flush: () => {
+      evenements.push('preflush');
+      throw new Error('pré-flush Google perdu');
+    },
+    apiPost: (_path, _property, body) => {
+      accuse = body;
+      evenements.push('ack');
+    },
+  });
+
+  const resultat = transport.dallySheetProjectionPull();
+
+  assert.strictEqual(resultat.results[0].ok, false);
+  assert.strictEqual(resultat.results[0].permanent, false);
+  assert.match(resultat.results[0].error, /pré-flush Google perdu/);
+  assert.strictEqual(accuse.results[0].ok, false,
+                     'l’ACK doit demander un retry, jamais annoncer un succès');
+  assert.deepStrictEqual(evenements, ['validation', 'preflush', 'ack'],
+                         'aucune valeur ne doit être écrite après l’échec du pré-flush');
+}
+
+/* --- 16.b. Flush final perdu : jamais de faux delivered ------------ */
 {
   const onglets = nouveauClasseur();
   const classeur = fauxClasseur(onglets);

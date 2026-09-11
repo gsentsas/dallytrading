@@ -983,9 +983,13 @@ function nouveauClasseur(onWrite) {
 /* --- 16. Validation, deux barrières, écriture puis ACK ------------ */
 {
   const evenements = [];
+  let flushes = 0;
   const onglets = nouveauClasseur(event => {
     if (event.type === 'validation' && event.col === C.plannedConsolidation) {
       evenements.push('validation');
+    }
+    if (event.type === 'value' && flushes === 0) {
+      evenements.push('value-before-preflush');
     }
     if (event.type === 'value' && event.col === C.plannedConsolidation) {
       evenements.push('value');
@@ -1001,7 +1005,6 @@ function nouveauClasseur(onWrite) {
       helpText: 'Choisir une consolidation ouverte.',
     })
   );
-  let flushes = 0;
   const transport = contexte({
     getActive: () => classeur,
     apiGet: () => ({projections: [projectionAib()]}),
@@ -1029,10 +1032,11 @@ function nouveauClasseur(onWrite) {
 /* --- 16.a. Pré-flush perdu : retry sans écriture ni faux succès ---- */
 {
   const evenements = [];
+  let preflushAttempted = false;
   const onglets = nouveauClasseur(event => {
     if (event.type === 'validation') evenements.push('validation');
-    if (event.type === 'value' && event.col === C.plannedConsolidation) {
-      evenements.push('value');
+    if (event.type === 'value') {
+      evenements.push(preflushAttempted ? 'value' : 'value-before-preflush');
     }
   });
   const classeur = fauxClasseur(onglets);
@@ -1049,6 +1053,7 @@ function nouveauClasseur(onWrite) {
     getActive: () => classeur,
     apiGet: () => ({projections: [projectionAib()]}),
     flush: () => {
+      preflushAttempted = true;
       evenements.push('preflush');
       throw new Error('pré-flush Google perdu');
     },

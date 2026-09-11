@@ -485,7 +485,6 @@ function writeDossierRow_(grid, row, projection, article, payment) {
     }
   }
 
-  grid.set(row, c.depositDate, dossier.deposit_date || '');
   const plannedConsolidation = sheetLiteralText_(dossier.planned_consolidation);
   const validationChanged = grid.extendStrictListValidation(
     row,
@@ -495,6 +494,7 @@ function writeDossierRow_(grid, row, projection, article, payment) {
   if (validationChanged) {
     SpreadsheetApp.flush();
   }
+  grid.set(row, c.depositDate, dossier.deposit_date || '');
   grid.set(row, c.plannedConsolidation, plannedConsolidation);
   grid.set(row, c.dossier, sheetLiteralText_(dossier.reference));
   grid.set(row, c.client, sheetLiteralText_(client.name));

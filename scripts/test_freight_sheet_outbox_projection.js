@@ -350,6 +350,7 @@ function ecrireLignePartielle(onglet, row, projection) {
   onglet.getRange(row, C.client).setValue(client.name);
   onglet.getRange(row, C.phone).setValue(client.phone);
   onglet.getRange(row, C.parcelState).setValue('Depose');
+  onglet.getRange(row, C.paymentFlag).setValue(0);
 }
 
 function nouveauClasseur(onWrite) {

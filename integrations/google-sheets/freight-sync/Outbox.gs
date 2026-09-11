@@ -627,9 +627,11 @@ function dossierPartialRowMatches_(grid, row, projection) {
     c.unitVolume, c.totalVolume, c.announcedWeight, c.exactWeight,
     c.billableWeight, c.appliedPrice, c.totalEur, c.customsValue,
     c.tariffFamily, c.paymentEur, c.paymentXof, c.paymentMethod,
-    c.collectedBy, c.paymentFlag,
+    c.collectedBy,
   ];
   if (articleOrPayment.some(column => grid.text(row, column))) return false;
+  const paymentFlag = grid.text(row, c.paymentFlag);
+  if (paymentFlag && paymentFlag !== '0') return false;
 
   const expectedClient = String(client.name || '').trim();
   const expectedPhone = String(client.phone || '').trim();

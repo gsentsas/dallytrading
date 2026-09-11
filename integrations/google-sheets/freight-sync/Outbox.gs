@@ -485,9 +485,16 @@ function writeDossierRow_(grid, row, projection, article, payment) {
     }
   }
 
-  grid.set(row, c.depositDate, dossier.deposit_date || '');
   const plannedConsolidation = sheetLiteralText_(dossier.planned_consolidation);
-  grid.extendStrictListValidation(row, c.plannedConsolidation, plannedConsolidation);
+  const validationChanged = grid.extendStrictListValidation(
+    row,
+    c.plannedConsolidation,
+    plannedConsolidation
+  );
+  if (validationChanged) {
+    SpreadsheetApp.flush();
+  }
+  grid.set(row, c.depositDate, dossier.deposit_date || '');
   grid.set(row, c.plannedConsolidation, plannedConsolidation);
   grid.set(row, c.dossier, sheetLiteralText_(dossier.reference));
   grid.set(row, c.client, sheetLiteralText_(client.name));
@@ -583,20 +590,20 @@ function writeDossierRow_(grid, row, projection, article, payment) {
  */
 function extendStrictListValidation_(range, value) {
   const validation = range.getDataValidation();
-  if (!validation || validation.getAllowInvalid() !== false) return;
+  if (!validation || validation.getAllowInvalid() !== false) return false;
 
   const projected = String(value);
-  if (!projected) return;
+  if (!projected) return false;
 
   const criteria = validation.getCriteriaType();
   const criteriaName = String(criteria);
-  if (criteriaName !== 'VALUE_IN_LIST' && criteriaName !== 'ONE_OF_LIST') return;
+  if (criteriaName !== 'VALUE_IN_LIST' && criteriaName !== 'ONE_OF_LIST') return false;
 
   const criteriaValues = validation.getCriteriaValues();
-  if (!Array.isArray(criteriaValues[0])) return;
+  if (!Array.isArray(criteriaValues[0])) return false;
   const allowed = criteriaValues[0].slice();
 
-  if (allowed.some(existing => String(existing) === projected)) return;
+  if (allowed.some(existing => String(existing) === projected)) return false;
 
   const updatedCriteriaValues = criteriaValues.slice();
   updatedCriteriaValues[0] = allowed.concat([projected]);
@@ -605,6 +612,7 @@ function extendStrictListValidation_(range, value) {
     .setAllowInvalid(false)
     .build();
   range.setDataValidation(extended);
+  return true;
 }
 
 /**
@@ -797,7 +805,7 @@ function sheetGrid_(spreadsheet, name, firstRow) {
     },
 
     extendStrictListValidation: function (row, column, value) {
-      extendStrictListValidation_(sheet.getRange(row, column), value);
+      return extendStrictListValidation_(sheet.getRange(row, column), value);
     },
 
     findRow: function (predicate) {

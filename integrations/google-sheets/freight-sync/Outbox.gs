@@ -599,6 +599,7 @@ function findOrCreateDossierRow_(grid, identity, articleKey, reservedRows) {
   return template || noFreeProjectionRow_();
 }
 
+/** Une ancienne ligne interrompue, encore sans propriétaire ni contenu. */
 function dossierPartialRowMatches_(grid, row, projection) {
   const c = DALLY.columns;
   const dossier = projection.dossier || {};
@@ -655,6 +656,7 @@ function dossierRowMatches_(grid, row, identity) {
   return !!identity.shipment_id && shipment === String(identity.shipment_id);
 }
 
+/** Autorise une clé précoce à recevoir l'identité du dossier attendu. */
 function dossierRowCanAdoptIdentity_(grid, row, projection) {
   const c = DALLY.columns;
   const dossier = projection.dossier || {};
@@ -680,6 +682,7 @@ function dossierRowCanAdoptIdentity_(grid, row, projection) {
   });
 }
 
+/** Valide et calcule toutes les valeurs fragiles avant la première écriture. */
 function prepareDossierRowWrite_(grid, row, projection, article, payment) {
   const c = DALLY.columns;
   const identity = projection.identity || {};
@@ -861,6 +864,7 @@ function writeDossierRow_(grid, row, projection, article, payment, prepared) {
   grid.set(row, c.lastSync, new Date());
 }
 
+/** Décrit une validation stricte sans la modifier. */
 function strictValidationInfo_(validation) {
   if (!validation || validation.getAllowInvalid() !== false) {
     return {strict: false, list: false, allowed: []};
@@ -880,12 +884,14 @@ function strictValidationInfo_(validation) {
   return {strict: true, list: true, allowed: criteriaValues[0].slice()};
 }
 
+/** Refuse une validation stricte que la projection ne sait pas étendre. */
 function assertExtendableStrictList_(validation, errorPrefix) {
   const info = strictValidationInfo_(validation);
   if (!info.strict || info.list) return;
   throw new Error(errorPrefix + ' : la cellule n’utilise pas une liste.');
 }
 
+/** Produit une clé stable pour les variantes typographiques de catégorie. */
 function normalizeGoodsCategory_(value) {
   return String(value || '')
     .replace(/[\u00A0\u202F]/g, ' ')
@@ -896,6 +902,7 @@ function normalizeGoodsCategory_(value) {
     .toLowerCase();
 }
 
+/** Choisit un libellé G autorisé, d'abord par valeur puis par famille tarifaire. */
 function canonicalGoodsCategory_(article, allowedValues) {
   const raw = String(article && article.goods_category || '').trim();
   const allowed = (allowedValues || []).map(value => String(value));

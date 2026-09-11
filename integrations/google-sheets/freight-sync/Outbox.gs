@@ -113,8 +113,26 @@ function dallySheetProjectionPull() {
         });
       }
     }
-    // L'accusé part **après** l'écriture. L'inverse ferait perdre une
-    // projection dès la première coupure entre les deux.
+    // `setValue()` peut être différé par Apps Script. Ne jamais annoncer à
+    // Odoo qu'une projection est livrée avant que Google n'ait confirmé les
+    // écritures. Si le flush échoue, un rejeu est sûr : les UPSERT sont fondés
+    // sur les clés métier et ne créent donc pas de doublon.
+    if (results.some(result => result.ok)) {
+      try {
+        SpreadsheetApp.flush();
+      } catch (err) {
+        const message = ('Écriture Google Sheets non confirmée : ' + errorText_(err)).slice(0, 200);
+        results.forEach(result => {
+          if (!result.ok) return;
+          result.ok = false;
+          result.permanent = false;
+          result.error = message;
+        });
+      }
+    }
+
+    // L'accusé part seulement après la confirmation des écritures. L'inverse
+    // ferait perdre une projection dès la première erreur différée de Sheets.
     apiPost_(DALLY_OUTBOX.ackPath, DALLY_OUTBOX.property, {results: results}, cfg);
     return {count: projections.length, results: results};
   });

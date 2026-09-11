@@ -96,7 +96,10 @@ function contexte(options) {
     Set,
     Map,
     Utilities: {formatDate: () => '2026-08-30'},
-    SpreadsheetApp: {getActive: opts.getActive || (() => null)},
+    SpreadsheetApp: {
+      getActive: opts.getActive || (() => null),
+      flush: opts.flush || (() => {}),
+    },
     LockService: {getScriptLock: () => ({tryLock: () => true, releaseLock() {}})},
     withScriptLock_: fn => fn(),
     readConfig_: () => ({apiBaseUrl: 'https://odoo.invalid'}),
@@ -700,6 +703,7 @@ function nouveauClasseur(onWrite) {
   const transport = contexte({
     getActive: () => classeur,
     apiGet: () => ({projections: [projectionDossier()]}),
+    flush: () => evenements.push('flush'),
     apiPost: (_path, _property, body) => {
       assert.strictEqual(_path, '/api/v1/freight/sheet-outbox/ack',
                          'la projection ne doit jamais appeler le sync Sheet → Odoo');
@@ -711,10 +715,33 @@ function nouveauClasseur(onWrite) {
   });
   transport.dallySheetProjectionPull();
   assert.strictEqual(evenements[0], 'write');
-  assert.strictEqual(evenements[evenements.length - 1], 'ack');
+  assert.deepStrictEqual(evenements.slice(-2), ['flush', 'ack'],
+                         'Google doit confirmer les écritures avant l’ACK Odoo');
 }
 
-/* --- 17. Sheet écrit, ACK perdu : rejeu sans doublon --------------- */
+/* --- 16.b. Flush Google perdu : jamais de faux delivered ----------- */
+{
+  const onglets = nouveauClasseur();
+  const classeur = fauxClasseur(onglets);
+  let accuse = null;
+  const transport = contexte({
+    getActive: () => classeur,
+    flush: () => { throw new Error('flush Google perdu'); },
+    apiGet: () => ({projections: [projectionDossier()]}),
+    apiPost: (_path, _property, body) => { accuse = body; },
+  });
+
+  const resultat = transport.dallySheetProjectionPull();
+  assert.strictEqual(resultat.results[0].ok, false,
+                     'un flush en erreur ne peut jamais devenir delivered');
+  assert.strictEqual(resultat.results[0].permanent, false,
+                     'une panne de validation Google doit rester réessayable');
+  assert.match(resultat.results[0].error, /Écriture Google Sheets non confirmée/);
+  assert.strictEqual(accuse.results[0].ok, false,
+                     'Odoo reçoit un retry, jamais un faux succès');
+}
+
+/* --- 17. Sheet écrit, ACK perdu : rejeu sans doublon ---------------- */
 {
   const onglets = nouveauClasseur();
   const classeur = fauxClasseur(onglets);

@@ -1671,6 +1671,29 @@ function lancerPostFlush(projections, options) {
                /dernière synchronisation absente/);
 }
 
+/* --- 16.i bis. champs métier article incomplets échouent -------- */
+{
+  const champs = [
+    [C.goodsCategory, 'catégorie article'],
+    [C.quantity, 'quantité'],
+    [C.billableWeight, 'poids facturable'],
+    [C.totalEur, 'montant transport'],
+  ];
+
+  champs.forEach(([column, message]) => {
+    const p = projectionAibDossier('A002', 1);
+    const passage = lancerPostFlush([p], {
+      dropCommittedWrite: event =>
+        event.sheet === 'Saisie aérien' && event.col === column,
+    });
+
+    assert.strictEqual(passage.resultat.results[0].ok, false);
+    assert.strictEqual(passage.resultat.results[0].permanent, false);
+    assert.match(passage.resultat.results[0].error,
+                 new RegExp(message + ' : valeur différente'));
+  });
+}
+
 /* --- 16.j. TEST G — un paiement actif manquant échoue ------------ */
 {
   const p = projectionAibDossier('A002', 1);

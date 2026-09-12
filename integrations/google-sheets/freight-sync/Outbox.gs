@@ -243,6 +243,58 @@ function verifyCommittedDossierRow_(grid, row, projection) {
   }
 }
 
+/** Vérifie un nombre métier relu, avec la tolérance de son unité. */
+function verifyCommittedNumber_(grid, row, label, column, value, tolerance) {
+  const expected = Number(value || 0);
+  const actual = committedSheetNumber_(grid.text(row, column));
+  if (
+    !Number.isFinite(expected) ||
+    !Number.isFinite(actual) ||
+    Math.abs(actual - expected) > tolerance
+  ) {
+    throw new Error('ligne ' + row + ' : ' + label + ' : valeur différente');
+  }
+}
+
+/** Vérifie les données métier réellement commises pour un article. */
+function verifyCommittedArticle_(grid, row, article, projection) {
+  const c = DALLY.columns;
+  const prepared = prepareDossierRowWrite_(
+    grid, row, projection, article, null);
+  verifyCommittedDossierRow_(grid, row, projection);
+
+  const textFields = [
+    ['catégorie article', c.goodsCategory, prepared.goodsCategory],
+    ['description article', c.description, article.description],
+    ['mode de facturation', c.billingMethod,
+      DALLY_OUTBOX.billingLabels[article.billing_method] || ''],
+    ['famille tarifaire', c.tariffFamily, prepared.tariffFamily],
+  ];
+  textFields.forEach(([label, column, value]) => {
+    if (grid.text(row, column) !== String(value == null ? '' : value).trim()) {
+      throw new Error('ligne ' + row + ' : ' + label + ' : valeur différente');
+    }
+  });
+
+  [
+    ['quantité', c.quantity, article.quantity, 0.0005],
+    ['longueur', c.length, article.length_cm, 0.0005],
+    ['largeur', c.width, article.width_cm, 0.0005],
+    ['hauteur', c.height, article.height_cm, 0.0005],
+    ['volume unitaire', c.unitVolume, article.unit_volume_cbm, 0.0000005],
+    ['volume total', c.totalVolume, article.total_volume_cbm, 0.0000005],
+    ['poids annoncé', c.announcedWeight, article.announced_weight_kg, 0.0005],
+    ['poids exact', c.exactWeight, article.exact_weight_kg, 0.0005],
+    ['poids facturable', c.billableWeight, article.billable_weight_kg, 0.0005],
+    ['prix unitaire appliqué', c.appliedPrice,
+      article.applied_unit_price_eur, 0.0005],
+    ['montant transport', c.totalEur, article.transport_amount_eur, 0.005],
+    ['valeur douanière', c.customsValue, article.customs_value_xof, 0.5],
+  ].forEach(([label, column, value, tolerance]) => {
+    verifyCommittedNumber_(grid, row, label, column, value, tolerance);
+  });
+}
+
 /** Convertit un nombre affiché par un classeur fr_FR en valeur comparable. */
 function committedSheetNumber_(value) {
   let text = String(value == null ? '' : value)
@@ -332,12 +384,12 @@ function verifyDossierProjectionCommitted_(spreadsheet, projection) {
     paymentByKey.set(key, payment);
   });
 
-  articleByKey.forEach((_article, key) => {
+  articleByKey.forEach((article, key) => {
     const rows = grid.findRows(row => grid.text(row, c.articleKey) === key);
     if (rows.length !== 1) {
       throw new Error('clé article ' + key + ' présente ' + rows.length + ' fois');
     }
-    verifyCommittedDossierRow_(grid, rows[0], projection);
+    verifyCommittedArticle_(grid, rows[0], article, projection);
   });
 
   paymentByKey.forEach((payment, key) => {

@@ -119,6 +119,11 @@ function dallySheetProjectionRun() {
  * Entrée : un passage complet du transport.
  * ------------------------------------------------------------------ */
 
+/**
+ * Applique un lot Outbox, confirme les écritures et accuse chaque projection.
+ *
+ * @return {{count: number, results: !Array<!Object>}} Résultat du passage.
+ */
 function dallySheetProjectionPull() {
   return withScriptLock_(function () {
     const cfg = readConfig_();
@@ -204,7 +209,13 @@ function applyProjection_(spreadsheet, projection) {
   throw new Error('Projection inconnue : ' + String(type));
 }
 
-/** Vérifie l'état relu après le flush, sans réutiliser le cache d'écriture. */
+/**
+ * Vérifie l'état relu après le flush, sans réutiliser le cache d'écriture.
+ *
+ * @param {!Object} spreadsheet Classeur relu après le flush global.
+ * @param {!Object} projection Projection Odoo attendue.
+ * @return {boolean} Vrai lorsque le type projeté est confirmé ou inchangé.
+ */
 function verifyCommittedProjection_(spreadsheet, projection) {
   const type = projection && projection.projection_type;
   if (type === 'freight_dossier') {
@@ -215,7 +226,14 @@ function verifyCommittedProjection_(spreadsheet, projection) {
   return true;
 }
 
-/** Vérifie qu'une ligne relue porte l'identité canonique du dossier. */
+/**
+ * Vérifie qu'une ligne relue porte l'identité canonique du dossier.
+ *
+ * @param {!Object} grid Grille fraîche construite après le flush.
+ * @param {number} row Numéro de la ligne à contrôler.
+ * @param {!Object} projection Projection Odoo attendue.
+ * @return {void}
+ */
 function verifyCommittedDossierRow_(grid, row, projection) {
   const c = DALLY.columns;
   const identity = projection.identity || {};
@@ -243,7 +261,17 @@ function verifyCommittedDossierRow_(grid, row, projection) {
   }
 }
 
-/** Vérifie un nombre métier relu, avec la tolérance de son unité. */
+/**
+ * Vérifie un nombre métier relu, avec la tolérance de son unité.
+ *
+ * @param {!Object} grid Grille fraîche construite après le flush.
+ * @param {number} row Numéro de la ligne à contrôler.
+ * @param {string} label Libellé utilisé dans le diagnostic.
+ * @param {number} column Colonne contenant la valeur.
+ * @param {*} value Valeur attendue de la projection.
+ * @param {number} tolerance Écart maximal accepté.
+ * @return {void}
+ */
 function verifyCommittedNumber_(grid, row, label, column, value, tolerance) {
   const expected = Number(value || 0);
   const actual = committedSheetNumber_(grid.text(row, column));
@@ -256,7 +284,15 @@ function verifyCommittedNumber_(grid, row, label, column, value, tolerance) {
   }
 }
 
-/** Vérifie les données métier réellement commises pour un article. */
+/**
+ * Vérifie les données métier réellement commises pour un article.
+ *
+ * @param {!Object} grid Grille fraîche construite après le flush.
+ * @param {number} row Numéro de la ligne article.
+ * @param {!Object} article Article Odoo attendu.
+ * @param {!Object} projection Projection Odoo attendue.
+ * @return {void}
+ */
 function verifyCommittedArticle_(grid, row, article, projection) {
   const c = DALLY.columns;
   const prepared = prepareDossierRowWrite_(
@@ -295,7 +331,12 @@ function verifyCommittedArticle_(grid, row, article, projection) {
   });
 }
 
-/** Convertit un nombre affiché par un classeur fr_FR en valeur comparable. */
+/**
+ * Convertit un nombre affiché par un classeur fr_FR en valeur comparable.
+ *
+ * @param {*} value Valeur affichée par Google Sheets.
+ * @return {number} Nombre normalisé, zéro pour une cellule vide ou NaN.
+ */
 function committedSheetNumber_(value) {
   let text = String(value == null ? '' : value)
     .replace(/[\s\u00A0\u202F]/g, '')
@@ -313,7 +354,15 @@ function committedSheetNumber_(value) {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
-/** Vérifie l'état persistant d'un paiement actif ou annulé. */
+/**
+ * Vérifie l'état persistant d'un paiement actif ou annulé.
+ *
+ * @param {!Object} grid Grille fraîche construite après le flush.
+ * @param {number} row Numéro de la ligne paiement.
+ * @param {!Object} payment Paiement Odoo attendu.
+ * @param {!Object} projection Projection Odoo attendue.
+ * @return {void}
+ */
 function verifyCommittedPayment_(grid, row, payment, projection) {
   const c = DALLY.columns;
   const cancelled = paymentIsCancelled_(payment);
@@ -361,6 +410,10 @@ function verifyCommittedPayment_(grid, row, payment, projection) {
  *
  * Chaque clé attendue doit être unique, chaque ligne B/C doit être expliquée,
  * et aucune identité en mémoire pendant l'écriture ne vaut preuve de commit.
+ *
+ * @param {!Object} spreadsheet Classeur relu après le flush global.
+ * @param {!Object} projection Projection Freight Odoo attendue.
+ * @return {boolean} Vrai lorsque toutes les lignes commises sont cohérentes.
  */
 function verifyDossierProjectionCommitted_(spreadsheet, projection) {
   const grid = sheetGrid_(spreadsheet, projection.sheet);

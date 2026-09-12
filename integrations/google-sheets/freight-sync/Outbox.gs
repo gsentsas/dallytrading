@@ -456,10 +456,24 @@ function verifyDossierProjectionCommitted_(spreadsheet, projection) {
 
   const planned = String(dossier.planned_consolidation || '').trim();
   const reference = String(dossier.reference || '').trim();
-  const dossierRows = grid.findRows(row =>
-    grid.text(row, c.plannedConsolidation) === planned &&
-    grid.text(row, c.dossier) === reference
-  );
+  const identity = projection.identity || {};
+  const syncSourceKey = String(identity.sync_source_key || '').trim();
+  const globalExternalReference = String(
+    identity.global_external_reference || ''
+  ).trim();
+  const shipmentId = String(identity.shipment_id || '').trim();
+  const dossierRows = grid.findRows(row => {
+    const sameCoordinates =
+      grid.text(row, c.plannedConsolidation) === planned &&
+      grid.text(row, c.dossier) === reference;
+    const sameSource = syncSourceKey &&
+      grid.text(row, c.syncSourceKey) === syncSourceKey;
+    const sameGlobal = globalExternalReference &&
+      grid.text(row, c.globalExternalReference) === globalExternalReference;
+    const sameShipment = shipmentId &&
+      grid.text(row, c.shipmentId) === shipmentId;
+    return Boolean(sameCoordinates || sameSource || sameGlobal || sameShipment);
+  });
 
   dossierRows.forEach(row => {
     const articleKey = grid.text(row, c.articleKey);

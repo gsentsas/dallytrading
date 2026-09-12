@@ -1863,6 +1863,27 @@ function lancerPostFlush(projections, options) {
                /ligne partielle résiduelle/);
 }
 
+/* --- 16.r. une identité canonique hors B/C reste vérifiée ---------- */
+{
+  const p = projectionAibDossier('A002', 1);
+  const passage = lancerPostFlush([p], {
+    onFlush: ({onglets, flushCount}) => {
+      if (flushCount !== 1) return;
+      const aerien = onglets['Saisie aérien'];
+      ecrireIdentiteCanonique(aerien, 4, p, {
+        articleKey: 'AIR-AIB-RIS-2026-001-A002|A|parasite',
+      });
+      aerien.getRange(4, C.plannedConsolidation)
+        .setValue('AIR-AUTRE-CONSOLIDATION');
+      aerien.getRange(4, C.dossier).setValue('A999');
+    },
+  });
+
+  assert.strictEqual(passage.resultat.results[0].ok, false);
+  assert.strictEqual(passage.resultat.results[0].permanent, false);
+  assert.match(passage.accuse().results[0].error, /clé article parasite/);
+}
+
 /* --- 17. Sheet écrit, ACK perdu : rejeu sans doublon ---------------- */
 {
   const onglets = nouveauClasseur();

@@ -29,6 +29,34 @@ const DALLY_OUTBOX = Object.freeze({
     food: 'Alimentaire standard', seafood: 'Halieutiques', honey: 'Miel',
     clothing: 'Habits / Vêtements', non_food: 'Non alimentaire',
   }),
+  goodsCategories: Object.freeze([
+    'Cartons', 'Sacs', 'Effets personnels', 'Vetements', 'Vêtements',
+    'Meubles', 'Electromenager', 'Fragile', 'Autres', 'Alimentaires',
+    'Non Alimentaires', 'Produits halieutiques', 'Miel',
+  ]),
+  goodsCategoryAliases: Object.freeze({
+    'alimentaire': 'Alimentaires',
+    'alimentaires': 'Alimentaires',
+    'non alimentaire': 'Non Alimentaires',
+    'non alimentaires': 'Non Alimentaires',
+    'effet personnel': 'Effets personnels',
+    'effets personnels': 'Effets personnels',
+    'vetement': 'Vêtements',
+    'vetements': 'Vêtements',
+    'electromenager': 'Electromenager',
+    'produit halieutique': 'Produits halieutiques',
+    'produits halieutiques': 'Produits halieutiques',
+    'halieutique': 'Produits halieutiques',
+    'halieutiques': 'Produits halieutiques',
+    'miel': 'Miel',
+  }),
+  goodsCategoryByFamily: Object.freeze({
+    food: 'Alimentaires',
+    seafood: 'Produits halieutiques',
+    honey: 'Miel',
+    clothing: 'Vêtements',
+    non_food: 'Non Alimentaires',
+  }),
   stateLabels: Object.freeze({
     request_received: 'Annonce', goods_received: 'Depose', preparing: 'Pese',
     ready: 'Charge', in_transit: 'Expedie', arrived: 'Arrive',
@@ -141,7 +169,12 @@ function dallySheetProjectionPull() {
 /** Une erreur de forme ne se réessaie pas : elle se corrige. */
 function isPermanentProjectionError_(err) {
   const text = errorText_(err);
-  return /onglet introuvable|projection inconnue|identité absente|identité paiement contradictoire|aucune ligne libre/i.test(text);
+  return /onglet introuvable|projection inconnue|identité absente|aucune ligne libre/i
+    .test(text) ||
+    /identité (?:article|paiement) contradictoire|catégorie article non mappée/i
+      .test(text) ||
+    /validation de (?:catégorie|consolidation) incompatible|reprise partielle ambiguë/i
+      .test(text);
 }
 
 function applyProjection_(spreadsheet, projection) {
@@ -175,9 +208,25 @@ function applyDossierProjection_(spreadsheet, projection) {
   const articles = projection.articles || [];
   const payments = projection.payments || [];
   const written = [];
+  const articleByKey = new Map();
 
-  // Les paiements possèdent leur propre identité métier. L'ordre du tableau
-  // n'a aucune signification et ne doit jamais décider de la ligne Sheet.
+  // Toutes les identités sont validées avant la première écriture. Une erreur
+  // de payload ne doit jamais laisser un nouveau squelette de ligne derrière
+  // elle.
+  for (const article of articles) {
+    const key = String(article && article.article_key || '').trim();
+    if (!key) {
+      throw new Error('Identité absente : clé article manquante.');
+    }
+    if (articleByKey.has(key)) {
+      throw new Error(
+        'Identité article contradictoire : clé dupliquée dans la projection : ' +
+        key
+      );
+    }
+    articleByKey.set(key, article);
+  }
+
   const paymentByKey = new Map();
 
   for (const payment of payments) {
@@ -209,35 +258,23 @@ function applyDossierProjection_(spreadsheet, projection) {
     }
   }
 
-  // Les articles restent retrouvés uniquement par article_key.
-  const articleRows = [];
+  const articlePlans = planDossierArticleRows_(grid, projection, articles);
+  const articleRows = articlePlans.map(plan => plan.row);
   const articleByRow = new Map();
-
-  for (const article of articles) {
-    const row = findOrCreateDossierRow_(
-      grid,
-      identity,
-      article.article_key
-    );
-
-    writeDossierRow_(grid, row, projection, article, null);
-
-    articleRows.push(row);
-    articleByRow.set(row, article);
-
-    if (!written.includes(row)) written.push(row);
-  }
+  articlePlans.forEach(plan => articleByRow.set(plan.row, plan.article));
 
   // Les paiements sont maintenant projetés indépendamment des articles.
   // 1. Une payment_key existante retrouve toujours sa ligne.
   // 2. Une nouvelle payment_key utilise d'abord une ligne article libre.
   // 3. Les paiements supplémentaires utilisent une ligne administrative.
   const usedPaymentRows = new Set();
+  const reservedRows = new Set(articleRows);
+  const paymentPlans = [];
 
   for (const payment of payments) {
     const key = paymentProjectionKey_(payment);
 
-    let row = findDossierPaymentRow_(grid, identity, key);
+    let row = findDossierPaymentRow_(grid, projection, key);
 
     // Une annulation neutralise une ligne existante ; elle n'en ouvre jamais.
     // Sans ligne, cet encaissement n'a jamais atteint le classeur : lui en
@@ -255,24 +292,40 @@ function applyDossierProjection_(spreadsheet, projection) {
       row = findOrCreateDossierPaymentRow_(
         grid,
         identity,
-        usedPaymentRows
+        usedPaymentRows,
+        reservedRows
       );
     }
 
     const article = articleByRow.get(row) || null;
-
-    writeDossierRow_(
-      grid,
-      row,
-      projection,
-      article,
-      payment
-    );
-
+    paymentPlans.push({row: row, article: article, payment: payment});
     usedPaymentRows.add(row);
-
-    if (!written.includes(row)) written.push(row);
+    reservedRows.add(row);
+    grid.reserve(row);
   }
+
+  // Catégories, validations et valeurs dérivées de toutes les lignes sont
+  // prêtes avant la première écriture métier.
+  articlePlans.forEach(plan => {
+    plan.prepared = prepareDossierRowWrite_(
+      grid, plan.row, projection, plan.article, null);
+  });
+  paymentPlans.forEach(plan => {
+    plan.prepared = prepareDossierRowWrite_(
+      grid, plan.row, projection, plan.article, plan.payment);
+  });
+
+  articlePlans.forEach(plan => {
+    writeDossierRow_(
+      grid, plan.row, projection, plan.article, null, plan.prepared);
+    if (!written.includes(plan.row)) written.push(plan.row);
+  });
+
+  paymentPlans.forEach(plan => {
+    writeDossierRow_(
+      grid, plan.row, projection, plan.article, plan.payment, plan.prepared);
+    if (!written.includes(plan.row)) written.push(plan.row);
+  });
 
   return written;
 }
@@ -284,12 +337,13 @@ function applyDossierProjection_(spreadsheet, projection) {
  * de production sont préformatées avec des formules jusqu'en bas. On cherche
  * donc d'abord une ligne dont les colonnes métier sont vides.
  */
-function findFreeProjectionRow_(grid, columns) {
+function findFreeProjectionRow_(grid, columns, reservedRows) {
   const uniques = [...new Set((columns || []).filter(Boolean))];
+  const reserved = reservedRows || new Set();
   const last = grid.lastRow();
 
   for (let row = grid.firstRow; row <= last; row++) {
-    if (uniques.every(column => !grid.text(row, column))) {
+    if (!reserved.has(row) && uniques.every(column => !grid.text(row, column))) {
       return row;
     }
   }
@@ -299,6 +353,7 @@ function findFreeProjectionRow_(grid, columns) {
   const next = grid.nextRow();
   if (
     next &&
+    !reserved.has(next) &&
     uniques.every(column => !grid.text(next, column))
   ) {
     return next;
@@ -351,8 +406,9 @@ function paymentIsCancelled_(payment) {
  * La clé est globale : la trouver sur un autre dossier est une corruption,
  * pas une raison de réutiliser cette ligne.
  */
-function findDossierPaymentRow_(grid, identity, paymentKey) {
+function findDossierPaymentRow_(grid, projection, paymentKey) {
   const c = DALLY.columns;
+  const identity = projection.identity || {};
   let found = 0;
 
   for (let row = grid.firstRow; row <= grid.lastRow(); row++) {
@@ -368,7 +424,11 @@ function findDossierPaymentRow_(grid, identity, paymentKey) {
     found = row;
   }
 
-  if (found && !dossierRowMatches_(grid, found, identity)) {
+  if (
+    found &&
+    !dossierRowMatches_(grid, found, identity) &&
+    !dossierRowCanAdoptIdentity_(grid, found, projection)
+  ) {
     throw new Error(
       'Identité paiement contradictoire : la clé ' +
       paymentKey +
@@ -382,13 +442,19 @@ function findDossierPaymentRow_(grid, identity, paymentKey) {
 /**
  * Ligne administrative disponible pour un paiement sans article associé.
  */
-function findOrCreateDossierPaymentRow_(grid, identity, reservedRows) {
+function findOrCreateDossierPaymentRow_(
+  grid,
+  identity,
+  usedPaymentRows,
+  reservedRows
+) {
   const c = DALLY.columns;
 
   const free = grid.findRow(row =>
     dossierRowMatches_(grid, row, identity) &&
     !grid.text(row, c.articleKey) &&
     !grid.text(row, c.paymentKey) &&
+    !usedPaymentRows.has(row) &&
     !reservedRows.has(row)
   );
 
@@ -407,28 +473,112 @@ function findOrCreateDossierPaymentRow_(grid, identity, reservedRows) {
     c.syncSourceKey,
     c.globalExternalReference,
     c.shipmentId,
-  ]);
+  ], reservedRows);
 
   return template || noFreeProjectionRow_();
 }
 
 /**
- * La ligne d'un article, retrouvée par identité — jamais par numéro de ligne.
+ * Prépare les lignes article sans écrire dans le classeur.
  *
- * Priorité identique à celle du connecteur historique : clé de source, puis
- * référence globale, puis identifiant de dossier. Le numéro de ligne, lui,
- * change dès qu'on trie le classeur.
+ * Une ligne partielle créée par une ancienne erreur n'est récupérable que si
+ * elle appartient sans ambiguïté au même dossier et ne porte encore aucune
+ * identité ni donnée d'article ou de paiement. Des lignes partielles en excès
+ * sont une anomalie explicite : les attribuer silencieusement détruirait leur
+ * provenance.
  */
-function findOrCreateDossierRow_(grid, identity, articleKey) {
+function planDossierArticleRows_(grid, projection, articles) {
   const c = DALLY.columns;
+  const identity = projection.identity || {};
+  const reservedRows = new Set();
+  const plans = [];
+  const unresolved = [];
+
+  articles.forEach((article, index) => {
+    const key = String(article.article_key || '').trim();
+    const matches = grid.findRows(row => grid.text(row, c.articleKey) === key);
+
+    if (matches.length > 1) {
+      throw new Error(
+        'Identité article contradictoire : clé dupliquée dans le classeur : ' +
+        key
+      );
+    }
+
+    if (matches.length === 1) {
+      const row = matches[0];
+      if (
+        !dossierRowMatches_(grid, row, identity) &&
+        !dossierRowCanAdoptIdentity_(grid, row, projection)
+      ) {
+        throw new Error(
+          'Identité article contradictoire : la clé ' + key +
+          ' appartient à un autre dossier.'
+        );
+      }
+      reservedRows.add(row);
+      plans[index] = {row: row, article: article};
+    } else {
+      unresolved.push({article: article, index: index});
+    }
+  });
+
+  const linkedRows = grid.findRows(row =>
+    dossierRowMatches_(grid, row, identity) &&
+    !grid.text(row, c.articleKey) &&
+    !grid.text(row, c.paymentKey) &&
+    !reservedRows.has(row)
+  );
+
+  const partialRows = grid.findRows(row =>
+    dossierPartialRowMatches_(grid, row, projection) &&
+    !reservedRows.has(row)
+  );
+
+  if (linkedRows.length + partialRows.length > unresolved.length) {
+    throw new Error(
+      'Reprise partielle ambiguë : ' +
+      (linkedRows.length + partialRows.length) +
+      ' ligne(s) candidate(s) pour ' + unresolved.length +
+      ' article(s) sans ligne.'
+    );
+  }
+
+  const reusableRows = linkedRows.concat(partialRows);
+
+  unresolved.forEach((entry, reusableIndex) => {
+    let row = reusableRows[reusableIndex] || 0;
+
+    if (!row) {
+      row = findOrCreateDossierRow_(
+        grid, identity, entry.article.article_key, reservedRows);
+    }
+
+    reservedRows.add(row);
+    grid.reserve(row);
+    plans[entry.index] = {row: row, article: entry.article};
+  });
+
+  return plans;
+}
+
+/**
+ * La ligne d'un article, retrouvée par identité — jamais par numéro de ligne.
+ */
+function findOrCreateDossierRow_(grid, identity, articleKey, reservedRows) {
+  const c = DALLY.columns;
+  const reserved = reservedRows || new Set();
   if (articleKey) {
-    const parKey = grid.findRow(row => grid.text(row, c.articleKey) === articleKey);
+    const parKey = grid.findRow(row =>
+      !reserved.has(row) && grid.text(row, c.articleKey) === articleKey);
     if (parKey) return parKey;
   }
-  // Un dossier déjà lié mais dont l'article n'a pas encore sa clé : on prend
-  // la première ligne du dossier restée sans clé, plutôt que d'en ajouter une.
+
   const libre = grid.findRow(row =>
-    dossierRowMatches_(grid, row, identity) && !grid.text(row, c.articleKey));
+    !reserved.has(row) &&
+    dossierRowMatches_(grid, row, identity) &&
+    !grid.text(row, c.articleKey) &&
+    !grid.text(row, c.paymentKey));
   if (libre) return libre;
 
   const template = findFreeProjectionRow_(grid, [
@@ -444,9 +594,54 @@ function findOrCreateDossierRow_(grid, identity, articleKey) {
     c.syncSourceKey,
     c.globalExternalReference,
     c.shipmentId,
-  ]);
+  ], reserved);
 
   return template || noFreeProjectionRow_();
+}
+
+/** Une ancienne ligne interrompue, encore sans propriétaire ni contenu. */
+function dossierPartialRowMatches_(grid, row, projection) {
+  const c = DALLY.columns;
+  const dossier = projection.dossier || {};
+  const client = dossier.customer || {};
+  const planned = String(dossier.planned_consolidation || '').trim();
+  const reference = String(dossier.reference || '').trim();
+
+  if (
+    grid.text(row, c.plannedConsolidation) !== planned ||
+    grid.text(row, c.dossier) !== reference
+  ) {
+    return false;
+  }
+
+  const ownership = [
+    c.articleKey, c.paymentKey, c.syncSourceKey,
+    c.globalExternalReference, c.shipmentId, c.partnerId,
+    c.saleOrderId, c.invoiceId, c.invoiceNumber,
+    c.intakeConsolidationRef, c.collectionLocalRef,
+    c.syncStatus, c.lastSync,
+  ];
+  if (ownership.some(column => grid.text(row, column))) return false;
+
+  const articleOrPayment = [
+    c.goodsCategory, c.description, c.quantity, c.length, c.width, c.height,
+    c.unitVolume, c.totalVolume, c.announcedWeight, c.exactWeight,
+    c.billableWeight, c.appliedPrice, c.totalEur, c.customsValue,
+    c.tariffFamily, c.paymentEur, c.paymentXof, c.paymentMethod,
+    c.collectedBy,
+  ];
+  if (articleOrPayment.some(column => grid.text(row, column))) return false;
+  const paymentFlag = grid.text(row, c.paymentFlag);
+  if (paymentFlag && paymentFlag !== '0') return false;
+
+  const expectedClient = String(client.name || '').trim();
+  const expectedPhone = String(client.phone || '').trim();
+  const rowClient = grid.text(row, c.client);
+  const rowPhone = grid.text(row, c.phone);
+
+  if (rowClient && rowClient !== expectedClient) return false;
+  if (rowPhone && rowPhone !== expectedPhone) return false;
+  return true;
 }
 
 function dossierRowMatches_(grid, row, identity) {
@@ -461,15 +656,47 @@ function dossierRowMatches_(grid, row, identity) {
   return !!identity.shipment_id && shipment === String(identity.shipment_id);
 }
 
-function writeDossierRow_(grid, row, projection, article, payment) {
+/** Autorise une clé précoce à recevoir l'identité du dossier attendu. */
+function dossierRowCanAdoptIdentity_(grid, row, projection) {
+  const c = DALLY.columns;
+  const dossier = projection.dossier || {};
+  const client = dossier.customer || {};
+  const ownership = [
+    c.syncSourceKey, c.globalExternalReference, c.shipmentId, c.partnerId,
+    c.saleOrderId, c.invoiceId, c.invoiceNumber,
+    c.intakeConsolidationRef, c.collectionLocalRef,
+  ];
+
+  if (ownership.some(column => grid.text(row, column))) return false;
+
+  const expected = [
+    [c.plannedConsolidation, dossier.planned_consolidation],
+    [c.dossier, dossier.reference],
+    [c.client, client.name],
+    [c.phone, client.phone],
+  ];
+
+  return expected.every(([column, value]) => {
+    const existing = grid.text(row, column);
+    return !existing || existing === String(value || '').trim();
+  });
+}
+
+/** Valide et calcule toutes les valeurs fragiles avant la première écriture. */
+function prepareDossierRowWrite_(grid, row, projection, article, payment) {
   const c = DALLY.columns;
   const identity = projection.identity || {};
   const dossier = projection.dossier || {};
-  const client = dossier.customer || {};
+  const plannedRaw = String(dossier.planned_consolidation || '').trim();
+  const dossierReference = String(dossier.reference || '').trim();
 
-  // La clé de paiement est une identité métier, pas une valeur calculée.
-  // Une projection n'a jamais le droit d'écraser silencieusement une clé
-  // existante par une autre.
+  if (!plannedRaw) {
+    throw new Error('Identité absente : consolidation planifiée manquante.');
+  }
+  if (!dossierReference) {
+    throw new Error('Identité absente : référence dossier manquante.');
+  }
+
   const paymentKey = payment
     ? paymentProjectionKey_(payment)
     : '';
@@ -485,18 +712,87 @@ function writeDossierRow_(grid, row, projection, article, payment) {
     }
   }
 
-  const plannedConsolidation = sheetLiteralText_(dossier.planned_consolidation);
+  const plannedConsolidation = sheetLiteralText_(plannedRaw);
+  assertExtendableStrictList_(
+    grid.validation(row, c.plannedConsolidation),
+    'Validation de consolidation incompatible'
+  );
+
+  let goodsCategory = '';
+  let tariffFamily = '';
+
+  if (article) {
+    const validation = grid.validation(row, c.goodsCategory);
+    const validationInfo = strictValidationInfo_(validation);
+
+    if (validationInfo.strict && !validationInfo.list) {
+      throw new Error(
+        'Validation de catégorie incompatible : la colonne G n’est pas une liste.'
+      );
+    }
+
+    const allowed = validationInfo.list
+      ? validationInfo.allowed
+      : DALLY_OUTBOX.goodsCategories.slice();
+    goodsCategory = canonicalGoodsCategory_(article, allowed);
+
+    if (
+      validationInfo.list &&
+      !validationInfo.allowed.some(value => String(value) === goodsCategory)
+    ) {
+      throw new Error(
+        'Validation de catégorie incompatible : valeur non autorisée : ' +
+        goodsCategory
+      );
+    }
+
+    tariffFamily = tariffFamilyLabel_(article.tariff_family_code);
+  }
+
+  return {
+    plannedConsolidation: plannedConsolidation,
+    dossierReference: sheetLiteralText_(dossierReference),
+    goodsCategory: goodsCategory,
+    tariffFamily: tariffFamily,
+    paymentKey: paymentKey,
+  };
+}
+
+function writeDossierRow_(grid, row, projection, article, payment, prepared) {
+  const c = DALLY.columns;
+  const identity = projection.identity || {};
+  const dossier = projection.dossier || {};
+  const client = dossier.customer || {};
+  const values = prepared || prepareDossierRowWrite_(
+    grid, row, projection, article, payment);
+
   const validationChanged = grid.extendStrictListValidation(
     row,
     c.plannedConsolidation,
-    plannedConsolidation
+    values.plannedConsolidation
   );
   if (validationChanged) {
     SpreadsheetApp.flush();
   }
+
+  // En cas d'erreur sur un champ métier ultérieur, le rejeu doit retrouver
+  // cette même ligne au lieu d'en allouer une nouvelle.
+  if (article) {
+    grid.set(row, c.articleKey, sheetLiteralText_(article.article_key));
+  }
+  if (payment) {
+    grid.set(row, c.paymentKey, sheetLiteralText_(values.paymentKey));
+  }
+  grid.set(row, c.shipmentId, identity.shipment_id || '');
+  grid.set(row, c.syncSourceKey, sheetLiteralText_(identity.sync_source_key));
+  grid.set(row, c.globalExternalReference,
+           sheetLiteralText_(identity.global_external_reference));
+  grid.set(row, c.intakeConsolidationRef,
+           sheetLiteralText_(identity.intake_consolidation_ref));
+
   grid.set(row, c.depositDate, dossier.deposit_date || '');
-  grid.set(row, c.plannedConsolidation, plannedConsolidation);
-  grid.set(row, c.dossier, sheetLiteralText_(dossier.reference));
+  grid.set(row, c.plannedConsolidation, values.plannedConsolidation);
+  grid.set(row, c.dossier, values.dossierReference);
   grid.set(row, c.client, sheetLiteralText_(client.name));
   grid.set(row, c.phone, sheetLiteralText_(client.phone));
   grid.set(row, c.address, sheetLiteralText_(client.address));
@@ -505,7 +801,7 @@ function writeDossierRow_(grid, row, projection, article, payment) {
   grid.set(row, c.parcelState, DALLY_OUTBOX.stateLabels[dossier.state] || '');
 
   if (article) {
-    grid.set(row, c.goodsCategory, sheetLiteralText_(article.goods_category));
+    grid.set(row, c.goodsCategory, values.goodsCategory);
     grid.set(row, c.description, sheetLiteralText_(article.description));
     grid.set(row, c.quantity, article.quantity || 0);
     grid.set(row, c.length, article.length_cm || '');
@@ -529,13 +825,7 @@ function writeDossierRow_(grid, row, projection, article, payment) {
     grid.set(
       row,
       c.tariffFamily,
-      tariffFamilyLabel_(article.tariff_family_code)
-    );
-
-    grid.set(
-      row,
-      c.articleKey,
-      sheetLiteralText_(article.article_key)
+      values.tariffFamily
     );
   }
 
@@ -552,23 +842,15 @@ function writeDossierRow_(grid, row, projection, article, payment) {
     grid.set(row, c.collectedBy, cancelled ? '' :
              sheetLiteralText_(payment.collected_by));
     grid.set(row, c.paymentFlag, cancelled ? 0 : 1);
-    grid.set(row, c.paymentKey, sheetLiteralText_(paymentKey));
   }
 
   grid.set(row, c.partnerId, identity.partner_id || '');
-  grid.set(row, c.shipmentId, identity.shipment_id || '');
   grid.set(row, c.saleOrderId, identity.sale_order_id || '');
   grid.set(row, c.invoiceId, identity.invoice_id || '');
   grid.set(row, c.invoiceNumber, sheetLiteralText_(identity.invoice_number));
-  grid.set(row, c.syncSourceKey, sheetLiteralText_(identity.sync_source_key));
-  grid.set(row, c.globalExternalReference,
-           sheetLiteralText_(identity.global_external_reference));
-  grid.set(row, c.intakeConsolidationRef,
-           sheetLiteralText_(identity.intake_consolidation_ref));
   grid.set(row, c.collectionLocalRef, sheetLiteralText_(identity.collection_local_ref));
 
   grid.set(row, c.syncStatus, 'Synchronisé');
-  grid.set(row, c.lastSync, new Date());
   // Une replanification demandée à la main reste lisible : la projection dit
   // ce qu'Odoo affirme, elle n'efface pas une décision en attente.
   const message = grid.text(row, c.syncMessage);
@@ -579,6 +861,68 @@ function writeDossierRow_(grid, row, projection, article, payment) {
     payment && paymentIsCancelled_(payment)
       ? 'Projeté depuis le CRM. Encaissement annulé.'
       : 'Projeté depuis le CRM.'));
+  grid.set(row, c.lastSync, new Date());
+}
+
+/** Décrit une validation stricte sans la modifier. */
+function strictValidationInfo_(validation) {
+  if (!validation || validation.getAllowInvalid() !== false) {
+    return {strict: false, list: false, allowed: []};
+  }
+
+  const criteria = validation.getCriteriaType();
+  const criteriaName = String(criteria);
+  if (criteriaName !== 'VALUE_IN_LIST' && criteriaName !== 'ONE_OF_LIST') {
+    return {strict: true, list: false, allowed: []};
+  }
+
+  const criteriaValues = validation.getCriteriaValues();
+  if (!Array.isArray(criteriaValues[0])) {
+    return {strict: true, list: false, allowed: []};
+  }
+
+  return {strict: true, list: true, allowed: criteriaValues[0].slice()};
+}
+
+/** Refuse une validation stricte que la projection ne sait pas étendre. */
+function assertExtendableStrictList_(validation, errorPrefix) {
+  const info = strictValidationInfo_(validation);
+  if (!info.strict || info.list) return;
+  throw new Error(errorPrefix + ' : la cellule n’utilise pas une liste.');
+}
+
+/** Produit une clé stable pour les variantes typographiques de catégorie. */
+function normalizeGoodsCategory_(value) {
+  return String(value || '')
+    .replace(/[\u00A0\u202F]/g, ' ')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/** Choisit un libellé G autorisé, d'abord par valeur puis par famille tarifaire. */
+function canonicalGoodsCategory_(article, allowedValues) {
+  const raw = String(article && article.goods_category || '').trim();
+  const allowed = (allowedValues || []).map(value => String(value));
+
+  if (allowed.includes(raw)) return raw;
+
+  const alias = DALLY_OUTBOX.goodsCategoryAliases[
+    normalizeGoodsCategory_(raw)
+  ];
+  if (alias && allowed.includes(alias)) return alias;
+
+  const family = DALLY_OUTBOX.goodsCategoryByFamily[
+    String(article && article.tariff_family_code || '').trim().toLowerCase()
+  ];
+  if (family && allowed.includes(family)) return family;
+
+  throw new Error(
+    'Catégorie article non mappée : ' + raw +
+    ' / famille ' + String(article && article.tariff_family_code || '')
+  );
 }
 
 /**
@@ -808,11 +1152,28 @@ function sheetGrid_(spreadsheet, name, firstRow) {
       return extendStrictListValidation_(sheet.getRange(row, column), value);
     },
 
+    validation: function (row, column) {
+      return sheet.getRange(row, column).getDataValidation();
+    },
+
     findRow: function (predicate) {
       for (let row = start; row <= logicalLast; row++) {
         if (predicate(row)) return row;
       }
       return 0;
+    },
+
+    findRows: function (predicate) {
+      const rows = [];
+      for (let row = start; row <= logicalLast; row++) {
+        if (predicate(row)) rows.push(row);
+      }
+      return rows;
+    },
+
+    reserve: function (row) {
+      ensureRow_(row);
+      if (row > logicalLast) logicalLast = row;
     },
 
     nextRow: function () {

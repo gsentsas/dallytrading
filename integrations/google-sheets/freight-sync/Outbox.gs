@@ -145,10 +145,12 @@ function dallySheetProjectionPull() {
     // Odoo qu'une projection est livrée avant que Google n'ait confirmé les
     // écritures. Si le flush échoue, un rejeu est sûr : les UPSERT sont fondés
     // sur les clés métier et ne créent donc pas de doublon.
+    let flushConfirmed = true;
     if (results.some(result => result.ok)) {
       try {
         SpreadsheetApp.flush();
       } catch (err) {
+        flushConfirmed = false;
         const message = ('Écriture Google Sheets non confirmée : ' + errorText_(err)).slice(0, 200);
         results.forEach(result => {
           if (!result.ok) return;
@@ -157,6 +159,23 @@ function dallySheetProjectionPull() {
           result.error = message;
         });
       }
+    }
+
+    if (flushConfirmed) {
+      projections.forEach((projection, index) => {
+        const result = results[index];
+        if (!result || !result.ok) return;
+
+        try {
+          verifyCommittedProjection_(SpreadsheetApp.getActive(), projection);
+        } catch (err) {
+          result.ok = false;
+          result.permanent = false;
+          result.error = (
+            'Projection Sheet incomplète après flush: ' + errorText_(err)
+          ).slice(0, 200);
+        }
+      });
     }
 
     // L'accusé part seulement après la confirmation des écritures. L'inverse
@@ -183,6 +202,176 @@ function applyProjection_(spreadsheet, projection) {
   if (type === 'cash_expense') return applyExpenseProjection_(spreadsheet, projection);
   if (type === 'cash_transfer') return applyTransferProjection_(spreadsheet, projection);
   throw new Error('Projection inconnue : ' + String(type));
+}
+
+/** Vérifie l'état relu après le flush, sans réutiliser le cache d'écriture. */
+function verifyCommittedProjection_(spreadsheet, projection) {
+  const type = projection && projection.projection_type;
+  if (type === 'freight_dossier') {
+    return verifyDossierProjectionCommitted_(spreadsheet, projection);
+  }
+  // Les projections Cash conservent leur contrat actuel. Leur vérification
+  // pourra être ajoutée séparément sans élargir ce correctif Freight.
+  return true;
+}
+
+/** Vérifie qu'une ligne relue porte l'identité canonique du dossier. */
+function verifyCommittedDossierRow_(grid, row, projection) {
+  const c = DALLY.columns;
+  const identity = projection.identity || {};
+  const dossier = projection.dossier || {};
+  const expected = [
+    ['plannedConsolidation', c.plannedConsolidation, dossier.planned_consolidation],
+    ['dossier', c.dossier, dossier.reference],
+    ['shipmentId', c.shipmentId, identity.shipment_id],
+    ['syncSourceKey', c.syncSourceKey, identity.sync_source_key],
+    ['globalExternalReference', c.globalExternalReference,
+      identity.global_external_reference],
+  ];
+
+  expected.forEach(([label, column, value]) => {
+    if (grid.text(row, column) !== String(value == null ? '' : value).trim()) {
+      throw new Error('ligne ' + row + ' : identité ' + label + ' absente ou différente');
+    }
+  });
+
+  if (grid.text(row, c.syncStatus) !== 'Synchronisé') {
+    throw new Error('ligne ' + row + ' : statut de synchronisation absent');
+  }
+  if (!grid.text(row, c.lastSync)) {
+    throw new Error('ligne ' + row + ' : dernière synchronisation absente');
+  }
+}
+
+/** Convertit un nombre affiché par un classeur fr_FR en valeur comparable. */
+function committedSheetNumber_(value) {
+  let text = String(value == null ? '' : value)
+    .replace(/[\s\u00A0\u202F]/g, '')
+    .replace(/[^0-9,.-]/g, '');
+  if (!text) return 0;
+
+  const comma = text.lastIndexOf(',');
+  const dot = text.lastIndexOf('.');
+  if (comma > dot) {
+    text = text.replace(/\./g, '').replace(',', '.');
+  } else if (dot > comma) {
+    text = text.replace(/,/g, '');
+  }
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+/** Vérifie l'état persistant d'un paiement actif ou annulé. */
+function verifyCommittedPayment_(grid, row, payment, projection) {
+  const c = DALLY.columns;
+  const cancelled = paymentIsCancelled_(payment);
+  verifyCommittedDossierRow_(grid, row, projection);
+
+  if (cancelled) {
+    if (
+      grid.text(row, c.paymentEur) ||
+      grid.text(row, c.paymentXof) ||
+      grid.text(row, c.paymentMethod) ||
+      grid.text(row, c.collectedBy) ||
+      grid.text(row, c.paymentFlag) !== '0'
+    ) {
+      throw new Error('ligne ' + row + ' : paiement annulé non neutralisé');
+    }
+    return;
+  }
+
+  if (grid.text(row, c.paymentFlag) !== '1') {
+    throw new Error('ligne ' + row + ' : paiement actif non comptabilisé');
+  }
+
+  const expectedEur = Number(payment.amount_eur || 0);
+  const expectedXof = Number(payment.amount_xof || 0);
+  const actualEur = committedSheetNumber_(grid.text(row, c.paymentEur));
+  const actualXof = committedSheetNumber_(grid.text(row, c.paymentXof));
+  if (
+    !Number.isFinite(actualEur) || Math.abs(actualEur - expectedEur) > 0.005 ||
+    !Number.isFinite(actualXof) || Math.abs(actualXof - expectedXof) > 0.5
+  ) {
+    throw new Error('ligne ' + row + ' : montant du paiement différent');
+  }
+
+  const method = DALLY_OUTBOX.paymentLabels[payment.payment_method] || '';
+  if (grid.text(row, c.paymentMethod) !== method) {
+    throw new Error('ligne ' + row + ' : mode de paiement différent');
+  }
+  if (grid.text(row, c.collectedBy) !== String(payment.collected_by || '').trim()) {
+    throw new Error('ligne ' + row + ' : encaisseur différent');
+  }
+}
+
+/**
+ * Relit le dossier depuis Google et refuse toute projection partielle.
+ *
+ * Chaque clé attendue doit être unique, chaque ligne B/C doit être expliquée,
+ * et aucune identité en mémoire pendant l'écriture ne vaut preuve de commit.
+ */
+function verifyDossierProjectionCommitted_(spreadsheet, projection) {
+  const grid = sheetGrid_(spreadsheet, projection.sheet);
+  const c = DALLY.columns;
+  const dossier = projection.dossier || {};
+  const articles = projection.articles || [];
+  const payments = projection.payments || [];
+  const articleByKey = new Map();
+  const paymentByKey = new Map();
+
+  articles.forEach(article => {
+    const key = String(article && article.article_key || '').trim();
+    if (!key) throw new Error('clé article attendue absente');
+    if (articleByKey.has(key)) throw new Error('clé article attendue dupliquée : ' + key);
+    articleByKey.set(key, article);
+  });
+
+  payments.forEach(payment => {
+    const key = paymentProjectionKey_(payment);
+    if (paymentByKey.has(key)) throw new Error('clé paiement attendue dupliquée : ' + key);
+    paymentByKey.set(key, payment);
+  });
+
+  articleByKey.forEach((_article, key) => {
+    const rows = grid.findRows(row => grid.text(row, c.articleKey) === key);
+    if (rows.length !== 1) {
+      throw new Error('clé article ' + key + ' présente ' + rows.length + ' fois');
+    }
+    verifyCommittedDossierRow_(grid, rows[0], projection);
+  });
+
+  paymentByKey.forEach((payment, key) => {
+    const rows = grid.findRows(row => grid.text(row, c.paymentKey) === key);
+    if (paymentIsCancelled_(payment) && rows.length === 0) return;
+    if (rows.length !== 1) {
+      throw new Error('clé paiement ' + key + ' présente ' + rows.length + ' fois');
+    }
+    verifyCommittedPayment_(grid, rows[0], payment, projection);
+  });
+
+  const planned = String(dossier.planned_consolidation || '').trim();
+  const reference = String(dossier.reference || '').trim();
+  const dossierRows = grid.findRows(row =>
+    grid.text(row, c.plannedConsolidation) === planned &&
+    grid.text(row, c.dossier) === reference
+  );
+
+  dossierRows.forEach(row => {
+    const articleKey = grid.text(row, c.articleKey);
+    const paymentKey = grid.text(row, c.paymentKey);
+    if (articleKey && !articleByKey.has(articleKey)) {
+      throw new Error('ligne ' + row + ' : clé article parasite');
+    }
+    if (paymentKey && !paymentByKey.has(paymentKey)) {
+      throw new Error('ligne ' + row + ' : clé paiement parasite');
+    }
+    if (!articleKey && !paymentKey) {
+      throw new Error('ligne ' + row + ' : ligne partielle résiduelle');
+    }
+    verifyCommittedDossierRow_(grid, row, projection);
+  });
+
+  return true;
 }
 
 /* ------------------------------------------------------------------ *

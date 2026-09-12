@@ -67,15 +67,26 @@ function fauxValidation(type, criteriaValues, options) {
   };
 }
 
-function fauxOnglet(nom, colonnes, onWrite) {
+function fauxOnglet(nom, colonnes, onWrite, options) {
+  const opts = options || {};
   const cellules = new Map();
+  const valeursEnAttente = new Map();
   const validations = new Map();
   const validationsEnAttente = new Map();
   const cle = (row, col) => row + ':' + col;
+  let ecrituresDifferees = Boolean(opts.bufferValues);
+  let perdreAuCommit = opts.dropCommittedWrite || (() => false);
   let dernier = 0;
   let lecturesUnitaires = 0;
   let lecturesBloc = 0;
   let ecrituresValidation = 0;
+
+  function valeurVisible_(row, col) {
+    const key = cle(row, col);
+    const pending = valeursEnAttente.get(key);
+    if (pending) return pending.value;
+    return cellules.get(key);
+  }
 
   return {
     nom,
@@ -88,14 +99,18 @@ function fauxOnglet(nom, colonnes, onWrite) {
       return {
         getDisplayValue() {
           lecturesUnitaires++;
-          const v = cellules.get(cle(row, col));
+          const v = valeurVisible_(row, col);
           return v == null ? '' : String(v);
         },
         getDisplayValues() {
           lecturesBloc++;
+          if (opts.onBulkRead) {
+            opts.onBulkRead({type: 'bulk-read', sheet: nom, row, col,
+                             numRows: height, numCols: width});
+          }
           return Array.from({length: height}, (_, r) =>
             Array.from({length: width}, (_, c) => {
-              const v = cellules.get(cle(row + r, col + c));
+              const v = valeurVisible_(row + r, col + c);
               return v == null ? '' : String(v);
             })
           );
@@ -120,8 +135,13 @@ function fauxOnglet(nom, colonnes, onWrite) {
               'Les données saisies ne respectent pas les règles de validation.'
             );
           }
-          if (onWrite) onWrite({type: 'value', sheet: nom, row, col, value});
-          cellules.set(cle(row, col), value);
+          const event = {type: 'value', sheet: nom, row, col, value};
+          if (onWrite) onWrite(event);
+          if (ecrituresDifferees) {
+            valeursEnAttente.set(cle(row, col), {value: value, event: event});
+          } else {
+            cellules.set(cle(row, col), value);
+          }
           if (row > dernier) dernier = row;
         },
       };
@@ -129,9 +149,14 @@ function fauxOnglet(nom, colonnes, onWrite) {
     lignes() {
       const vues = new Set();
       for (const k of cellules.keys()) vues.add(Number(k.split(':')[0]));
+      for (const k of valeursEnAttente.keys()) vues.add(Number(k.split(':')[0]));
       return [...vues].sort((a, b) => a - b);
     },
     valeur(row, col) {
+      const v = valeurVisible_(row, col);
+      return v == null ? '' : v;
+    },
+    valeurCommise(row, col) {
       const v = cellules.get(cle(row, col));
       return v == null ? '' : v;
     },
@@ -147,6 +172,20 @@ function fauxOnglet(nom, colonnes, onWrite) {
       }
       validationsEnAttente.clear();
     },
+    flushValues() {
+      for (const [key, pending] of valeursEnAttente.entries()) {
+        if (!perdreAuCommit(pending.event)) {
+          cellules.set(key, pending.value);
+        }
+      }
+      valeursEnAttente.clear();
+    },
+    setBufferedWrites(value) {
+      ecrituresDifferees = Boolean(value);
+    },
+    setDropCommittedWrite(callback) {
+      perdreAuCommit = callback || (() => false);
+    },
     ecrituresValidation: () => ecrituresValidation,
 
     statistiques() {
@@ -161,8 +200,11 @@ function fauxOnglet(nom, colonnes, onWrite) {
 function fauxClasseur(onglets) {
   return {
     getSheetByName: nom => onglets[nom] || null,
-    flushValidations() {
-      Object.values(onglets).forEach(onglet => onglet.flushValidations());
+    flush() {
+      Object.values(onglets).forEach(onglet => {
+        onglet.flushValidations();
+        onglet.flushValues();
+      });
     },
   };
 }
@@ -193,8 +235,8 @@ function contexte(options) {
       flush() {
         flush();
         const spreadsheet = getActive();
-        if (spreadsheet && spreadsheet.flushValidations) {
-          spreadsheet.flushValidations();
+        if (spreadsheet && spreadsheet.flush) {
+          spreadsheet.flush();
         }
       },
     },
@@ -353,13 +395,65 @@ function ecrireLignePartielle(onglet, row, projection) {
   onglet.getRange(row, C.paymentFlag).setValue(0);
 }
 
-function nouveauClasseur(onWrite) {
+function nouveauClasseur(onWrite, options) {
   return {
-    'Saisie aérien': fauxOnglet('Saisie aérien', 63, onWrite),
-    'Saisie maritime': fauxOnglet('Saisie maritime', 63, onWrite),
-    'Dépenses': fauxOnglet('Dépenses', 20, onWrite),
-    'Transferts caisse': fauxOnglet('Transferts caisse', 16, onWrite),
+    'Saisie aérien': fauxOnglet('Saisie aérien', 63, onWrite, options),
+    'Saisie maritime': fauxOnglet('Saisie maritime', 63, onWrite, options),
+    'Dépenses': fauxOnglet('Dépenses', 20, onWrite, options),
+    'Transferts caisse': fauxOnglet('Transferts caisse', 16, onWrite, options),
   };
+}
+
+function ecrireIdentiteCanonique(onglet, row, projection, keys) {
+  const identity = projection.identity;
+  const dossier = projection.dossier;
+  const valeurs = keys || {};
+  const writes = [
+    [C.plannedConsolidation, dossier.planned_consolidation],
+    [C.dossier, dossier.reference],
+    [C.shipmentId, identity.shipment_id],
+    [C.syncSourceKey, identity.sync_source_key],
+    [C.globalExternalReference, identity.global_external_reference],
+    [C.articleKey, valeurs.articleKey || ''],
+    [C.paymentKey, valeurs.paymentKey || ''],
+    [C.syncStatus, 'Synchronisé'],
+    [C.lastSync, new Date('2026-09-12T03:35:36Z')],
+  ];
+  writes.forEach(([column, value]) => onglet.getRange(row, column).setValue(value));
+}
+
+function lancerPostFlush(projections, options) {
+  const opts = options || {};
+  const onglets = nouveauClasseur(opts.onWrite, {
+    onBulkRead: opts.onBulkRead,
+  });
+  const classeur = fauxClasseur(onglets);
+  if (opts.seed) opts.seed(onglets, classeur);
+
+  Object.values(onglets).forEach(onglet => {
+    onglet.setBufferedWrites(true);
+    onglet.setDropCommittedWrite(opts.dropCommittedWrite);
+  });
+
+  let accuse = null;
+  let flushCount = 0;
+  const transport = contexte({
+    getActive: () => classeur,
+    apiGet: () => ({projections: projections}),
+    flush: () => {
+      flushCount += 1;
+      if (opts.onFlush) opts.onFlush({onglets, classeur, flushCount});
+    },
+    apiPost: (_path, _property, body) => {
+      accuse = body;
+      if (opts.onAck) opts.onAck(body);
+    },
+  });
+  if (opts.decorate) opts.decorate(transport);
+
+  const resultat = transport.dallySheetProjectionPull();
+  return {onglets, classeur, transport, resultat,
+          accuse: () => accuse, flushCount: () => flushCount};
 }
 
 /* --- 1. Une projection neuve ajoute exactement une ligne ----------- */
@@ -1466,6 +1560,284 @@ function nouveauClasseur(onWrite) {
                      'Odoo doit recevoir un échec, jamais un faux succès');
   assert.strictEqual(accuse.results[0].permanent, true,
                      'l’ACK doit arrêter les retries impossibles');
+}
+
+/* --- 16.d. TEST B/M — A002 incomplet, lecture fraîche obligatoire - */
+{
+  const p = projectionAibDossier('A002', 3);
+  const onglets = nouveauClasseur(null, {
+    bufferValues: true,
+    dropCommittedWrite: event =>
+      event.sheet === 'Saisie aérien' && [4, 5].includes(event.row),
+  });
+  const classeur = fauxClasseur(onglets);
+  let accuse = null;
+  const transport = contexte({
+    getActive: () => classeur,
+    apiGet: () => ({projections: [p]}),
+    apiPost: (_path, _property, body) => { accuse = body; },
+  });
+
+  const resultat = transport.dallySheetProjectionPull();
+  const aerien = onglets['Saisie aérien'];
+  const clesCommises = aerien.lignes()
+    .map(row => aerien.valeurCommise(row, C.articleKey))
+    .filter(Boolean);
+
+  assert.deepStrictEqual(clesCommises, [p.articles[0].article_key],
+                         'le Sheet commité ne contient qu’un article sur trois');
+  assert.strictEqual(aerien.statistiques().bulkDisplayReads, 1,
+                     'le verifier doit reconstruire une grille après le flush');
+  assert.strictEqual(resultat.results[0].ok, false,
+                     'une projection incomplète doit rester réessayable');
+  assert.strictEqual(resultat.results[0].permanent, false);
+  assert.match(resultat.results[0].error,
+               /Projection Sheet incomplète après flush/);
+  assert.strictEqual(accuse.results[0].ok, false,
+                     'Odoo ne doit jamais recevoir un faux succès');
+}
+
+/* --- 16.e. TEST A — trois articles commis donnent un succès ------- */
+{
+  const p = projectionAibDossier('A002', 3);
+  const passage = lancerPostFlush([p]);
+  const aerien = passage.onglets['Saisie aérien'];
+  const cles = aerien.lignes()
+    .map(row => aerien.valeurCommise(row, C.articleKey))
+    .filter(Boolean);
+
+  assert.strictEqual(passage.resultat.results[0].ok, true);
+  assert.strictEqual(passage.accuse().results[0].ok, true);
+  assert.deepStrictEqual(cles, p.articles.map(article => article.article_key));
+}
+
+/* --- 16.f. TEST C — une clé article commise deux fois échoue ------ */
+{
+  const p = projectionAibDossier('A002', 1);
+  const passage = lancerPostFlush([p], {
+    onFlush: ({onglets, flushCount}) => {
+      if (flushCount !== 1) return;
+      ecrireIdentiteCanonique(onglets['Saisie aérien'], 4, p, {
+        articleKey: p.articles[0].article_key,
+      });
+    },
+  });
+
+  assert.strictEqual(passage.resultat.results[0].ok, false);
+  assert.strictEqual(passage.resultat.results[0].permanent, false);
+  assert.match(passage.resultat.results[0].error, /présente 2 fois/);
+}
+
+/* --- 16.g. TEST D — une ligne partielle résiduelle échoue -------- */
+{
+  const p = projectionAibDossier('A002', 3);
+  const passage = lancerPostFlush([p], {
+    onFlush: ({onglets, flushCount}) => {
+      if (flushCount === 1) {
+        ecrireLignePartielle(onglets['Saisie aérien'], 6, p);
+      }
+    },
+  });
+
+  assert.strictEqual(passage.resultat.results[0].ok, false);
+  assert.match(passage.resultat.results[0].error, /ligne partielle résiduelle/);
+}
+
+/* --- 16.h. TEST E — une identité technique incorrecte échoue ----- */
+{
+  const p = projectionAibDossier('A002', 1);
+  const passage = lancerPostFlush([p], {
+    onFlush: ({onglets, flushCount}) => {
+      if (flushCount === 1) {
+        onglets['Saisie aérien'].getRange(3, C.shipmentId).setValue(9999);
+      }
+    },
+  });
+
+  assert.strictEqual(passage.resultat.results[0].ok, false);
+  assert.match(passage.resultat.results[0].error, /shipmentId/);
+}
+
+/* --- 16.i. TEST F — lastSync absent échoue ----------------------- */
+{
+  const p = projectionAibDossier('A002', 1);
+  const passage = lancerPostFlush([p], {
+    dropCommittedWrite: event =>
+      event.sheet === 'Saisie aérien' && event.col === C.lastSync,
+  });
+
+  assert.strictEqual(passage.resultat.results[0].ok, false);
+  assert.match(passage.resultat.results[0].error,
+               /dernière synchronisation absente/);
+}
+
+/* --- 16.j. TEST G — un paiement actif manquant échoue ------------ */
+{
+  const p = projectionAibDossier('A002', 1);
+  p.payments = [{
+    payment_key: 'A002|P|active', state: 'pending', amount_eur: 115.63,
+    amount_xof: 0, payment_method: 'wave', collected_by: 'Alain',
+  }];
+  const passage = lancerPostFlush([p], {
+    dropCommittedWrite: event =>
+      event.sheet === 'Saisie aérien' && event.col === C.paymentKey,
+  });
+
+  assert.strictEqual(passage.resultat.results[0].ok, false);
+  assert.match(passage.resultat.results[0].error,
+               /clé paiement A002\|P\|active présente 0 fois/);
+}
+
+/* --- 16.k. TEST H — un paiement annulé jamais écrit peut manquer -- */
+{
+  const p = projectionAibDossier('A002', 1);
+  p.payments = [{
+    payment_key: 'A002|P|cancelled-absent', state: 'cancelled',
+    amount_eur: 115.63, amount_xof: 0, payment_method: 'wave',
+    collected_by: 'Alain',
+  }];
+  const passage = lancerPostFlush([p]);
+
+  assert.strictEqual(passage.resultat.results[0].ok, true);
+  assert.strictEqual(passage.accuse().results[0].ok, true);
+}
+
+/* --- 16.l. TEST I — un paiement annulé existant est neutralisé ---- */
+{
+  const active = projectionAibDossier('A002', 1);
+  active.payments = [{
+    payment_key: 'A002|P|cancelled-existing', state: 'pending',
+    amount_eur: 115.63, amount_xof: 0, payment_method: 'wave',
+    collected_by: 'Alain',
+  }];
+  const cancelled = projectionAibDossier('A002', 1);
+  cancelled.payments = [Object.assign({}, active.payments[0], {
+    state: 'cancelled',
+  })];
+  const passage = lancerPostFlush([cancelled], {
+    seed: (_onglets, classeur) => ctx.applyDossierProjection_(classeur, active),
+  });
+  const aerien = passage.onglets['Saisie aérien'];
+  const row = aerien.lignes().find(candidate =>
+    aerien.valeurCommise(candidate, C.paymentKey) ===
+      cancelled.payments[0].payment_key);
+
+  assert.strictEqual(passage.resultat.results[0].ok, true);
+  assert.strictEqual(aerien.valeurCommise(row, C.paymentEur), '');
+  assert.strictEqual(aerien.valeurCommise(row, C.paymentXof), '');
+  assert.strictEqual(aerien.valeurCommise(row, C.paymentFlag), 0);
+}
+
+/* --- 16.m. TEST J — un batch mixte garde ses résultats isolés ---- */
+{
+  const projections = [
+    projectionAibDossier('A001', 1),
+    projectionAibDossier('A002', 1),
+    projectionAibDossier('A003', 1),
+  ];
+  const passage = lancerPostFlush(projections, {
+    dropCommittedWrite: event =>
+      event.sheet === 'Saisie aérien' && event.row === 4,
+  });
+  const etats = Array.from(
+    passage.accuse().results,
+    result => result.ok
+  );
+
+  assert.deepStrictEqual(etats, [true, false, true]);
+  assert.strictEqual(passage.accuse().results[1].permanent, false);
+}
+
+/* --- 16.n. TEST K — un flush en erreur interdit toute vérification */
+{
+  let verifications = 0;
+  const p = projectionAibDossier('A002', 1);
+  const passage = lancerPostFlush([p], {
+    onFlush: () => { throw new Error('flush final indisponible'); },
+    decorate: transport => {
+      const original = transport.verifyCommittedProjection_;
+      transport.verifyCommittedProjection_ = function () {
+        verifications += 1;
+        return original.apply(this, arguments);
+      };
+    },
+  });
+
+  assert.strictEqual(passage.resultat.results[0].ok, false);
+  assert.strictEqual(passage.resultat.results[0].permanent, false);
+  assert.strictEqual(verifications, 0,
+                     'aucune lecture de succès ne suit un flush en échec');
+}
+
+/* --- 16.o. TEST L — apply, flush, fresh-read, verify, ACK -------- */
+{
+  const evenements = [];
+  let flushed = false;
+  const p = projectionAibDossier('A002', 1);
+  const passage = lancerPostFlush([p], {
+    onBulkRead: event => {
+      if (flushed && event.sheet === 'Saisie aérien') {
+        evenements.push('fresh-read');
+      }
+    },
+    onFlush: () => {
+      flushed = true;
+      evenements.push('flush');
+    },
+    onAck: () => evenements.push('ack'),
+    decorate: transport => {
+      const apply = transport.applyProjection_;
+      transport.applyProjection_ = function () {
+        evenements.push('apply');
+        return apply.apply(this, arguments);
+      };
+      const verify = transport.verifyCommittedProjection_;
+      transport.verifyCommittedProjection_ = function () {
+        const result = verify.apply(this, arguments);
+        evenements.push('verify');
+        return result;
+      };
+    },
+  });
+
+  assert.strictEqual(passage.resultat.results[0].ok, true);
+  assert.deepStrictEqual(evenements,
+                         ['apply', 'flush', 'fresh-read', 'verify', 'ack']);
+}
+
+/* --- 16.p. TEST N — 1 canonique + 2 partielles deviennent 3 ------ */
+{
+  const full = projectionAibDossier('A002', 3);
+  const firstOnly = projectionAibDossier('A002', 1);
+  const passage = lancerPostFlush([full], {
+    seed: (onglets, classeur) => {
+      ctx.applyDossierProjection_(classeur, firstOnly);
+      ecrireLignePartielle(onglets['Saisie aérien'], 4, full);
+      ecrireLignePartielle(onglets['Saisie aérien'], 5, full);
+    },
+  });
+  const aerien = passage.onglets['Saisie aérien'];
+  const keys = [3, 4, 5].map(row => aerien.valeurCommise(row, C.articleKey));
+
+  assert.strictEqual(passage.resultat.results[0].ok, true);
+  assert.deepStrictEqual(keys, full.articles.map(article => article.article_key));
+}
+
+/* --- 16.q. TEST O — une quatrième ligne A002 résiduelle échoue --- */
+{
+  const p = projectionAibDossier('A002', 3);
+  const passage = lancerPostFlush([p], {
+    onFlush: ({onglets, flushCount}) => {
+      if (flushCount === 1) {
+        ecrireLignePartielle(onglets['Saisie aérien'], 6, p);
+      }
+    },
+  });
+
+  assert.strictEqual(passage.resultat.results[0].ok, false);
+  assert.strictEqual(passage.resultat.results[0].permanent, false);
+  assert.match(passage.accuse().results[0].error,
+               /ligne partielle résiduelle/);
 }
 
 /* --- 17. Sheet écrit, ACK perdu : rejeu sans doublon ---------------- */

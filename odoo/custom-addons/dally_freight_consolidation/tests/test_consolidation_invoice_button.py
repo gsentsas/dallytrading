@@ -85,6 +85,11 @@ class TestConsolidationInvoiceButton(AccountTestInvoicingCommon):
             shipments.append(shipment)
             primary_invoices |= invoice
 
+        # Charge le cache AVANT le complément : la création de celui-ci doit
+        # invalider le compteur et la liste sans invalidate_recordset() manuel.
+        self.assertEqual(self.consolidation.invoice_count, 4)
+        self.assertEqual(set(self.consolidation.invoice_ids.ids), set(primary_invoices.ids))
+
         target = shipments[2]
         reference = "BTN-INV-003"
         _data, same = self.Sync.upsert(self._payload(
@@ -102,9 +107,6 @@ class TestConsolidationInvoiceButton(AccountTestInvoicingCommon):
         self.assertEqual(kind, "supplement")
         supplement.action_post()
 
-        self.consolidation.invalidate_recordset([
-            "shipment_ids", "invoice_ids", "invoice_count",
-        ])
         expected = set(primary_invoices.ids + supplement.ids)
         self.assertEqual(self.consolidation.invoice_count, 5)
         self.assertEqual(set(self.consolidation.invoice_ids.ids), expected)

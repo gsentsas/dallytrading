@@ -2,7 +2,7 @@
 {
     "name": "DallyTrading Web Branding",
     "summary": "Identite DallyTrading pour les ecrans publics d'authentification",
-    "version": "19.0.1.0.0",
+    "version": "19.0.1.0.1",
     "category": "Website/Website",
     "author": "DallyTrading",
     "website": "https://dallytrading.com",

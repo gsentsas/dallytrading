@@ -62,10 +62,33 @@ class DallyShipment(models.Model):
     planned_consolidation_id = fields.Many2one("dally.freight.consolidation", string="Consolidation prévue", copy=False, index=True)
     collection_sequence = fields.Integer(string="N° collecte", copy=False, index=True)
     collection_local_ref = fields.Char(string="Référence locale", copy=False, index=True)
+    dossier_sort_key = fields.Char(
+        string="Clé tri dossier", compute="_compute_dossier_sort_key",
+        store=True, index=True, readonly=True,
+    )
     sync_source_key = fields.Char(string="Clé source de synchronisation", copy=False, index=True)
 
     _intake_sequence_unique = models.Constraint("UNIQUE(company_id, intake_consolidation_id, collection_sequence)", "Le numéro local doit être unique dans la consolidation d'entrée.")
     _sync_source_key_unique = models.Constraint("UNIQUE(company_id, sync_source, sync_source_key)", "La clé source doit être unique par société et source.")
+
+    @api.depends("collection_sequence", "collection_local_ref", "external_reference")
+    def _compute_dossier_sort_key(self):
+        """Natural numeric ordering for local dossier refs (A001, A002, ...)."""
+        for shipment in self:
+            sequence = int(shipment.collection_sequence or 0)
+            reference = (
+                shipment.collection_local_ref
+                or shipment.external_reference
+                or ""
+            ).strip().upper()
+            if sequence <= 0:
+                match = re.search(r"(?:^|-)A([0-9]+)$", reference)
+                if match:
+                    sequence = int(match.group(1))
+            shipment.dossier_sort_key = (
+                "A%012d" % sequence if sequence > 0
+                else "Z%s" % reference
+            )
 
     departure_payment_override_reason = fields.Text(
         string="Raison de dérogation paiement", readonly=True, copy=False,

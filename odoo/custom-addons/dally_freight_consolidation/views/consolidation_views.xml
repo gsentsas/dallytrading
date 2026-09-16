@@ -23,6 +23,23 @@
         </field>
     </record>
 
+    <record id="consolidation_shipment_view_list" model="ir.ui.view">
+        <field name="name">dally.shipment.consolidation.ordered.list</field>
+        <field name="model">dally.shipment</field>
+        <field name="arch" type="xml">
+            <list default_order="dossier_sort_key asc, id asc">
+                <field name="dossier_sort_key" column_invisible="True"/>
+                <field name="collection_local_ref" string="N° dossier"/>
+                <field name="external_reference"/>
+                <field name="partner_id"/>
+                <field name="state"/>
+                <field name="weight_kg"/>
+                <field name="invoice_id"/>
+                <field name="payment_control"/>
+            </list>
+        </field>
+    </record>
+
     <record id="consolidation_view_search" model="ir.ui.view">
         <field name="name">dally.freight.consolidation.search</field>
         <field name="model">dally.freight.consolidation</field>
@@ -109,13 +126,17 @@
                         </page>
                         <page string="Dossiers">
                             <field name="shipment_ids" readonly="1">
-                                <list><field name="external_reference"/><field name="reference"/><field name="partner_id"/>
+                                <list default_order="dossier_sort_key asc, id asc">
+                                    <field name="dossier_sort_key" column_invisible="True"/>
+                                    <field name="collection_local_ref" string="N° dossier"/>
+                                    <field name="external_reference"/><field name="reference"/><field name="partner_id"/>
                                     <field name="state"/><field name="weight_kg"/><field name="invoice_id"/><field name="payment_control"/></list>
                             </field>
                         </page>
                         <page string="Colis / manifeste">
                             <field name="line_ids" readonly="state != 'collecting'">
-                                <list editable="bottom">
+                                <list editable="bottom" default_order="shipment_dossier_sort_key asc, sequence asc, id asc">
+                                    <field name="shipment_dossier_sort_key" column_invisible="True"/>
                                     <field name="sequence" widget="handle"/><field name="shipment_id" readonly="1"/>
                                     <field name="package_id"/><field name="quantity_loaded"/>
                                     <field name="weight_loaded" sum="Poids"/><field name="volume_loaded" sum="Volume"/>

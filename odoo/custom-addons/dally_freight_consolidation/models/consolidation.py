@@ -574,8 +574,12 @@ class DallyFreightConsolidation(models.Model):
 
     def action_view_shipments(self):
         self.ensure_one()
+        list_view = self.env.ref(
+            "dally_freight_consolidation.consolidation_shipment_view_list"
+        )
         return {"type": "ir.actions.act_window", "name": _("Dossiers"),
                 "res_model": "dally.shipment", "view_mode": "list,form",
+                "views": [(list_view.id, "list"), (False, "form")],
                 "domain": [("id", "in", self.shipment_ids.ids)]}
 
     def action_view_packages(self):
@@ -612,9 +616,12 @@ class DallyFreightConsolidation(models.Model):
 class DallyFreightConsolidationLine(models.Model):
     _name = "dally.freight.consolidation.line"
     _description = "DallyTrading Freight Consolidation Line"
-    _order = "consolidation_id, sequence, id"
+    _order = "consolidation_id, shipment_dossier_sort_key, sequence, id"
 
     sequence = fields.Integer(default=10)
+    shipment_dossier_sort_key = fields.Char(
+        related="shipment_id.dossier_sort_key", store=True, index=True, readonly=True,
+    )
     consolidation_id = fields.Many2one(
         "dally.freight.consolidation", required=True, ondelete="restrict", index=True,
     )

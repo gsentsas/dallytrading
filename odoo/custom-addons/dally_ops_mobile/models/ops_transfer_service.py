@@ -204,20 +204,17 @@ class DallyOpsCashTransferService(models.AbstractModel):
 
     @api.model
     def list_transfers(self):
-        """Les remises qui concernent l'utilisateur connecté, et elles seules.
+        """Toutes les remises de caisse qui concernent l'acteur connecté.
 
-        Restreinte aux transferts nés dans Dally Ops. Les lignes venues du
-        tableur portent une référence de document (« TRF-20260822-0001 »)
-        qu'aucun mécanisme ne rend sûre à exposer ni à résoudre depuis un
-        téléphone ; les afficher demanderait d'inventer une identité opaque
-        pour une poignée de lignes historiques. L'écran le dit plutôt que de
-        laisser croire à un journal complet.
+        Les écritures historiques/tableur sont désormais visibles au même titre
+        que les remises nées dans Ops. Elles restent toutefois en lecture seule :
+        seul un transfert créé par Ops possède une demande d'origine pouvant
+        être accusée de réception depuis le téléphone.
         """
         self._exiger_role_ops()
         acteur = self.env["dally.ops.cash.actor.service"].current_actor()
         transferts = self.env["dally.cash.transfer"].sudo().search([
             ("company_id", "=", self.env.company.id),
-            ("external_transfer_key", "=like", "%s%%" % PREFIXE),
             "|",
             ("from_actor", "=ilike", acteur),
             ("to_actor", "=ilike", acteur),
@@ -521,6 +518,7 @@ class DallyOpsCashTransferService(models.AbstractModel):
         if acteur_courant is not None:
             sens = ("outgoing" if canonique(transfert.from_actor) == canonique(acteur_courant)
                     else "incoming")
+        cle_metier = transfert.external_transfer_key or ""
         dto = {
             "reference": reference or self._reference_publique(transfert),
             "transfer_date": transfert.transfer_date.isoformat(),
@@ -533,6 +531,15 @@ class DallyOpsCashTransferService(models.AbstractModel):
             "state": ETATS_PUBLICS.get(transfert.state, transfert.state),
             "acknowledged_at": (transfert.acknowledged_at.isoformat()
                                 if transfert.acknowledged_at else None),
+            # Une ligne historique peut être consultée mais jamais confirmée
+            # depuis Ops : elle ne possède pas la demande idempotente qui
+            # authentifie le geste du destinataire.
+            "can_acknowledge": bool(
+                acteur_courant is not None
+                and cle_metier.startswith(PREFIXE)
+                and transfert.state == "review"
+                and canonique(transfert.to_actor) == canonique(acteur_courant)
+            ),
         }
         if sens is not None:
             dto["direction"] = sens

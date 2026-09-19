@@ -3,8 +3,14 @@ import { redirect } from 'next/navigation';
 
 import { currentIdentity, readOpsSession } from '@/lib/auth/auth';
 import { OpsGatewayError } from '@/lib/auth/odoo-ops';
-import { fetchExpenseConsolidations, type DepartDepense } from '@/lib/ops/expenses';
+import {
+  fetchExpenseConsolidations,
+  fetchUnassignedExpenses,
+  type DepartDepense,
+  type ListeDepenses,
+} from '@/lib/ops/expenses';
 import { logger, newCorrelationId } from '@/lib/logger';
+import { DepensesNonAffectees } from '@/features/depenses/DepensesNonAffectees';
 import { ListeDepartsDepense } from '@/features/depenses/ListeDepartsDepense';
 import { Reessayer } from '@/features/reception/Reessayer';
 
@@ -20,8 +26,12 @@ export default async function PageDepenses() {
   if (!session) redirect('/connexion');
 
   let departs: DepartDepense[] | null = null;
+  let nonAffectees: ListeDepenses | null = null;
   try {
-    departs = await fetchExpenseConsolidations(session.odooSessionId, correlationId);
+    [departs, nonAffectees] = await Promise.all([
+      fetchExpenseConsolidations(session.odooSessionId, correlationId),
+      fetchUnassignedExpenses(session.odooSessionId, correlationId),
+    ]);
   } catch (erreur) {
     if (erreur instanceof OpsGatewayError && erreur.code === 'forbidden') {
       redirect('/connexion');
@@ -40,7 +50,7 @@ export default async function PageDepenses() {
         <div>
           <p className="ops-eyebrow">CAISSE</p>
           <h1>Déclarer une dépense</h1>
-          <p>Enregistrer une dépense engagée sur le terrain.</p>
+          <p>Enregistrer et consulter les dépenses de caisse, quelle que soit leur origine.</p>
         </div>
       </header>
 
@@ -53,18 +63,26 @@ export default async function PageDepenses() {
 
       {departs === null ? (
         <>
-          <p className="erreur" role="alert">Impossible de charger les départs.</p>
+          <p className="erreur" role="alert">Impossible de charger les dépenses.</p>
           <Reessayer />
         </>
-      ) : departs.length === 0 ? (
-        <section className="ops-empty-state">
-          <span aria-hidden="true">✓</span>
-          <p className="attenue">Aucun départ aérien ou maritime n’est actif actuellement.</p>
-        </section>
       ) : (
         <>
-          <div className="ops-section-heading"><h2>Choisissez le départ concerné</h2><p>{departs.length} disponible(s)</p></div>
-          <ListeDepartsDepense departs={departs} />
+          {departs.length === 0 ? (
+            <section className="ops-empty-state">
+              <span aria-hidden="true">✓</span>
+              <p className="attenue">Aucun départ aérien ou maritime n’est actif actuellement.</p>
+            </section>
+          ) : (
+            <>
+              <div className="ops-section-heading">
+                <h2>Choisissez le départ concerné</h2>
+                <p>{departs.length} disponible(s)</p>
+              </div>
+              <ListeDepartsDepense departs={departs} />
+            </>
+          )}
+          {nonAffectees ? <DepensesNonAffectees liste={nonAffectees} /> : null}
         </>
       )}
     </main>

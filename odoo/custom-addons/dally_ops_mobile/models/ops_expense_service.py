@@ -175,6 +175,28 @@ class DallyOpsExpenseService(models.AbstractModel):
             "summary": self._resume(lignes),
         }
 
+    @api.model
+    def list_unassigned_expenses(self):
+        """Les dépenses encore sans départ, visibles pour ne rien cacher.
+
+        Certaines écritures historiques n'embarquent aucune référence de
+        consolidation exploitable. Elles ne doivent pas être affectées au
+        hasard, mais elles doivent rester visibles dans Ops afin que la caisse
+        globale et le journal racontent la même histoire.
+        """
+        self._exiger_role_ops()
+        depenses = self.env["dally.cash.expense"].sudo().search([
+            ("company_id", "=", self.env.company.id),
+            ("consolidation_id", "=", False),
+            ("state", "!=", "cancelled"),
+        ], order="expense_date desc, id desc")
+        lignes = [self._en_dto(depense) for depense in depenses]
+        return {
+            "consolidation_reference": "",
+            "expenses": lignes,
+            "summary": self._resume(lignes),
+        }
+
     @staticmethod
     def _resume(lignes):
         totaux = {}

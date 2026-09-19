@@ -592,10 +592,25 @@ class TestOpsExpenses(TransactionCase):
         self.assertFalse(depense.has_receipt)
         self.assertEqual(depense.total_amount, 30000.0)
 
-        # Et elle n'apparaît dans aucune liste de départ.
+        # Elle n'apparaît dans aucune liste de départ, mais reste désormais
+        # visible dans le journal Ops « non affecté » : la caisse ne doit plus
+        # perdre les écritures historiques faute de consolidation.
+        non_affectees = self._service().list_unassigned_expenses()
+        self.assertEqual(len(non_affectees["expenses"]), 1)
+        self.assertEqual(
+            non_affectees["expenses"][0]["reference"],
+            depense.external_expense_key,
+        )
+        self.assertEqual(
+            non_affectees["summary"],
+            [{"currency_code": "XOF", "amount": 30000.0}],
+        )
+
         self._service().record_expense(self._charge())
         self.assertEqual(
             len(self._service().list_expenses(self.consolidation.name)["expenses"]), 1)
+        self.assertEqual(
+            len(self._service().list_unassigned_expenses()["expenses"]), 1)
 
     def test_une_depense_de_tableur_rattachee_ne_se_complete_pas_depuis_le_terrain(self):
         """Le back-office peut rattacher une ligne du tableur à un départ.

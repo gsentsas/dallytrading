@@ -93,6 +93,23 @@ class DallyOpsExpensesController(DallyOpsController):
         )
 
     @http.route(
+        "/api/v1/ops/expenses/unassigned",
+        type="http",
+        auth="user",
+        readonly=True,
+        methods=["GET"],
+        csrf=False,
+        save_session=False,
+    )
+    def ops_expense_unassigned(self, **kwargs):
+        """Les dépenses historiques encore sans consolidation certaine."""
+        return self._servir(
+            lambda: request.env[
+                "dally.ops.expense.service"].list_unassigned_expenses(),
+            "ops/expenses/unassigned",
+        )
+
+    @http.route(
         "/api/v1/ops/expenses/<string:reference>/receipt",
         type="http",
         auth="user",

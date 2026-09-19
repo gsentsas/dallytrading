@@ -17,3 +17,5 @@ from . import test_sheet_bindings_endpoint
 
 from . import test_master_shipment
 from . import test_dossier_order
+
+from . import test_cash_expense_consolidation

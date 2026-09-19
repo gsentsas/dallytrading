@@ -556,13 +556,12 @@ class TestOpsCashTransferList(SocleTransferts):
         self.assertEqual(
             len(self._service(self.gilles).list_transfers()["transfers"]), 1)
 
-    def test_la_liste_s_en_tient_aux_remises_nees_dans_dally_ops(self):
-        """Une ligne du tableur n'a pas de référence sûre à exposer.
+    def test_la_liste_inclut_les_remises_historiques_en_lecture_seule(self):
+        """Le journal Ops reflète aussi les mouvements venus du tableur.
 
-        `TRF-20260822-0001` est un numéro de document, pas une identité
-        opaque : le servir laisserait deviner un volume et proposerait une
-        référence que l'accusé de réception refuserait ensuite de résoudre.
-        L'écran le dit plutôt que de laisser croire à un journal complet.
+        Une remise historique peut être lue et compter dans le solde de caisse,
+        mais elle ne devient pas pour autant confirmable depuis le téléphone :
+        l'accusé de réception reste réservé aux remises nées dans Ops.
         """
         self._remettre()
         self.env["dally.cash.transfer"].sudo().with_company(self.societe).create({
@@ -570,11 +569,30 @@ class TestOpsCashTransferList(SocleTransferts):
             "external_transfer_key": "TRF-20260822-0001",
             "transfer_date": "2026-08-22", "from_actor": "Alain",
             "to_actor": "Gilles", "amount": 100000.0, "currency_id": self.xof.id,
-            "source": "google_sheets",
+            "source": "google_sheets", "state": "validated",
         })
         liste = self._service(self.gilles).list_transfers()
-        self.assertEqual(len(liste["transfers"]), 1)
-        self.assertNotIn("TRF-", json.dumps(liste))
+        self.assertEqual(len(liste["transfers"]), 2)
+        historique = next(
+            ligne for ligne in liste["transfers"]
+            if ligne["reference"] == "TRF-20260822-0001"
+        )
+        self.assertEqual(historique["direction"], "incoming")
+        self.assertEqual(historique["state"], "received")
+        self.assertFalse(historique["can_acknowledge"])
+        self.assertIn(
+            {"direction": "incoming", "currency_code": "XOF", "amount": 100000.0},
+            liste["summary"],
+        )
+
+    def test_seule_une_remise_ops_en_attente_est_confirmable(self):
+        reference = self._remettre()
+        dalanda = self._service(self.dalanda).list_transfers()["transfers"][0]
+        self.assertEqual(dalanda["reference"], reference)
+        self.assertTrue(dalanda["can_acknowledge"])
+
+        gilles = self._service(self.gilles).list_transfers()["transfers"][0]
+        self.assertFalse(gilles["can_acknowledge"])
 
 
 # ══════════════════════════════════════════════════════════════════════

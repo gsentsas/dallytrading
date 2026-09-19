@@ -131,6 +131,14 @@ export async function fetchExpenses(
   return listeDepenses.parse(brut);
 }
 
+export async function fetchUnassignedExpenses(
+  sessionId: string,
+  correlationId: string,
+): Promise<ListeDepenses> {
+  const brut = await opsGet<unknown>('expenses/unassigned', sessionId, correlationId);
+  return listeDepenses.parse(brut);
+}
+
 export async function recordExpense(
   demande: DemandeDepense,
   sessionId: string,

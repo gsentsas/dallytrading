@@ -8,7 +8,7 @@ facture soit émise ou non, que le canal soit correctement paramétré ou non.
 Le moteur `dally.freight.collection` tient déjà cette règle : une défaillance
 de configuration n'annule pas la collecte, elle se dépose sur
 l'enregistrement. Ce service ne la réécrit pas, il s'appuie dessus et traduit
-son verdict en trois mots que le terrain comprend.
+son verdict en un statut métier que le terrain comprend.
 
 ## Pourquoi Ops n'appelle pas la route Freight
 
@@ -35,6 +35,7 @@ from odoo import SUPERUSER_ID, _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
 from .ops_errors import DallyOpsConflict, DallyOpsError, DallyOpsInternal, DallyOpsNotFound
+from .ops_payment_accounting_status import accounting_status
 
 #: Les seules clés acceptées dans une demande d'encaissement.
 CHAMPS_REQUIS_PAIEMENT = frozenset({
@@ -48,14 +49,6 @@ CHAMPS_INTERDITS = frozenset({
     "source", "external_payment_key", "shipment_id", "partner_id", "invoice_id",
     "collection_id", "account_payment_id", "journal_id", "currency_id", "company_id",
 })
-
-#: L'état de la comptabilisation, tel que le comptoir a besoin de le lire.
-STATUT_COMPTABLE = {
-    "registered": "registered",
-    "pending": "pending",
-    "error": "needs_review",
-}
-
 
 class DallyOpsPaymentService(models.AbstractModel):
     _name = "dally.ops.payment.service"
@@ -408,6 +401,10 @@ class DallyOpsPaymentService(models.AbstractModel):
             "payment_request_replayed", ligne.collection_id, request_uuid)
         dto = json.loads(ligne.result_snapshot)
         dto["status"] = "replayed"
+        # Le verdict comptable peut évoluer après le premier encaissement :
+        # facture postée, canal corrigé, pièce soldée. Un rejeu relit donc la
+        # collecte au lieu de resservir un statut périmé.
+        dto["payment"]["accounting_status"] = accounting_status(ligne.collection_id)
         return dto
 
     @api.model
@@ -463,7 +460,7 @@ class DallyOpsPaymentService(models.AbstractModel):
                 "name": canal.name or collection.source_method,
             },
             "collector": collection.collected_by_name or "",
-            "accounting_status": STATUT_COMPTABLE.get(collection.state, "needs_review"),
+            "accounting_status": accounting_status(collection),
         }
 
     @staticmethod

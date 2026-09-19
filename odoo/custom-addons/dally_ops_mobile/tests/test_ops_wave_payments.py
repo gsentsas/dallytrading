@@ -684,7 +684,7 @@ class TestOpsWavePayments(AccountTestInvoicingCommon):
         resultat = self._service().record_wave_payment(reference, self._demande())
         self.assertIn(
             resultat["payment"]["accounting_status"],
-            ("registered", "pending", "needs_review"))
+            ("registered", "awaiting_invoice", "channel_setup_required", "invoice_already_paid_review", "needs_review"))
         self.assertEqual(resultat["payment"]["beneficiary"], "Gilles")
         self.assertEqual(resultat["payment"]["payment_method"], "wave")
 

@@ -23,9 +23,7 @@
 import { z } from 'zod';
 
 import { opsGet, opsPost } from '@/lib/auth/odoo-ops';
-
-/** Le verdict comptable, en trois mots — jamais le message du moteur. */
-const statutComptable = z.enum(['registered', 'pending', 'needs_review']);
+import { accountingStatusSchema } from '@/lib/ops/accounting-status';
 
 export const encaissementLu = z
   .object({
@@ -37,7 +35,7 @@ export const encaissementLu = z
     beneficiary: z.string(),
     wave_reference: z.string(),
     note: z.string(),
-    accounting_status: statutComptable,
+    accounting_status: accountingStatusSchema,
   })
   .strict();
 

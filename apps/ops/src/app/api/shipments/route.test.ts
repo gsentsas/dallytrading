@@ -22,7 +22,7 @@ const CONTEXTE = { params: Promise.resolve({ reference: AXXX }) };
 const PAIEMENT = {
   reference: UUID, amount: 100000, currency_code: 'XOF', paid_at: '2026-08-28',
   payment_method: 'wave', beneficiary: 'Gilles', wave_reference: 'TWXYZ12345',
-  note: '', accounting_status: 'pending',
+  note: '', accounting_status: 'awaiting_invoice',
 };
 
 const DEMANDE = {

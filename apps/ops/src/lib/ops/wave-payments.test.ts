@@ -22,7 +22,7 @@ const PAIEMENT = {
   beneficiary: 'Gilles',
   wave_reference: 'TWXYZ12345',
   note: '',
-  accounting_status: 'pending' as const,
+  accounting_status: 'awaiting_invoice' as const,
 };
 
 const CONTEXTE = {
@@ -130,7 +130,7 @@ describe('enregistrement', () => {
     const resultat = await recordWavePayment(AXXX, DEMANDE, 'sX', 'corr');
     expect(resultat.payment.beneficiary).toBe('Gilles');
     expect(resultat.payment.payment_method).toBe('wave');
-    expect(resultat.payment.accounting_status).toBe('pending');
+    expect(resultat.payment.accounting_status).toBe('awaiting_invoice');
   });
 
   it('accepte un rejeu', async () => {

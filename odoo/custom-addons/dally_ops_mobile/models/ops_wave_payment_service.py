@@ -30,7 +30,7 @@ transfert reçu sur son téléphone et l'enregistre ; le serveur ne prétend rie
 vérifier auprès de Wave.
 
 Aucune comptabilité inventée non plus. Le moteur tente l'écriture native et
-dépose son verdict sur l'enregistrement ; ce service le traduit en trois mots.
+dépose son verdict sur l'enregistrement ; ce service le traduit en un statut métier.
 Une facture existante n'est ni créée, ni postée, ni modifiée.
 """
 
@@ -42,6 +42,7 @@ from odoo import SUPERUSER_ID, _, api, fields, models
 from odoo.exceptions import AccessError
 
 from .ops_errors import DallyOpsConflict, DallyOpsError, DallyOpsInternal, DallyOpsNotFound
+from .ops_payment_accounting_status import accounting_status
 
 #: Les seules clés acceptées dans une demande d'encaissement Wave.
 CHAMPS_REQUIS = frozenset({
@@ -67,13 +68,6 @@ CHAMPS_INTERDITS = frozenset({
 #: Le moyen de paiement de cette étape. Une constante de service, pas une
 #: donnée reçue : le canal correspondant doit exister dans la société.
 MOYEN = "wave"
-
-#: L'état de la comptabilisation, tel que le comptoir a besoin de le lire.
-STATUT_COMPTABLE = {
-    "registered": "registered",
-    "pending": "pending",
-    "error": "needs_review",
-}
 
 #: Ce qu'une référence Wave peut contenir.
 #:
@@ -516,8 +510,8 @@ class DallyOpsWavePaymentService(models.AbstractModel):
         dto["status"] = "replayed"
         # Le verdict comptable a pu évoluer depuis : on relit plutôt que de
         # resservir une photographie périmée.
-        dto["payment"]["accounting_status"] = STATUT_COMPTABLE.get(
-            ligne.collection_id.state, "needs_review")
+        dto["payment"]["accounting_status"] = accounting_status(
+            ligne.collection_id)
         return dto
 
     @api.model
@@ -566,7 +560,7 @@ class DallyOpsWavePaymentService(models.AbstractModel):
             "beneficiary": collection.collected_by_name or "",
             "wave_reference": collection.wave_reference or "",
             "note": collection.ops_note or "",
-            "accounting_status": STATUT_COMPTABLE.get(collection.state, "needs_review"),
+            "accounting_status": accounting_status(collection),
         }
 
     @staticmethod

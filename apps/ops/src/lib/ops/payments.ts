@@ -10,6 +10,7 @@
 import { z } from 'zod';
 
 import { opsGet, opsPost } from '@/lib/auth/odoo-ops';
+import { accountingStatusSchema } from '@/lib/ops/accounting-status';
 
 /** Un canal, réduit à ce qui se choisit au comptoir. */
 export const canalPaiement = z
@@ -47,8 +48,8 @@ export const paiementLu = z
     payment_date: z.string(),
     payment_method: z.object({ code: z.string(), name: z.string() }).strict(),
     collector: z.string(),
-    // Trois mots, jamais l'état brut du moteur ni son message d'erreur.
-    accounting_status: z.enum(['registered', 'pending', 'needs_review']),
+    // Un verdict métier précis, jamais l'état brut ni le message technique.
+    accounting_status: accountingStatusSchema,
   })
   .strict();
 

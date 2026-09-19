@@ -1,3 +1,4 @@
+import { accountingStatusLabel, accountingStatusNeedsAttention } from '@/features/reception/accounting-status';
 import type { FicheLegacy } from '@/lib/ops/legacy-intake';
 
 /**
@@ -111,8 +112,15 @@ export function FicheLectureSeule({ fiche }: { fiche: FicheLegacy }) {
                 paiement.payment_date,
                 paiement.payment_method.name,
                 paiement.collector,
-                paiement.accounting_status,
               ].filter(Boolean).join(' · ')}
+            </p>
+            <p
+              className={accountingStatusNeedsAttention(paiement.accounting_status)
+                ? 'alerte' : 'attenue'}
+              style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}
+            >
+              {accountingStatusNeedsAttention(paiement.accounting_status) ? '⚠ ' : ''}
+              {accountingStatusLabel(paiement.accounting_status)}
             </p>
           </section>
         ))}

@@ -17,7 +17,7 @@ const PAIEMENT = {
   payment_date: '2026-08-28',
   payment_method: { code: 'wave', name: 'Wave' },
   collector: 'Gilles',
-  accounting_status: 'pending' as const,
+  accounting_status: 'awaiting_invoice' as const,
 };
 const DEMANDE = {
   request_uuid: '11111111-2222-4333-8444-555555555555',
@@ -97,7 +97,7 @@ describe('enregistrement', () => {
   it('rend le paiement et son statut comptable', async () => {
     vi.mocked(opsPost).mockResolvedValue({ status: 'created', payment: PAIEMENT });
     const resultat = await recordPayment('AIR-1', DEMANDE, 'sX', 'corr');
-    expect(resultat.payment.accounting_status).toBe('pending');
+    expect(resultat.payment.accounting_status).toBe('awaiting_invoice');
     expect(resultat.payment.collector).toBe('Gilles');
   });
 
@@ -107,7 +107,7 @@ describe('enregistrement', () => {
     expect(resultat.status).toBe('replayed');
   });
 
-  it.each(['registered', 'pending', 'needs_review'])(
+  it.each(['registered', 'awaiting_invoice', 'channel_setup_required', 'invoice_already_paid_review', 'needs_review'])(
     'accepte le statut comptable %s', async (statut) => {
       vi.mocked(opsPost).mockResolvedValue({
         status: 'created', payment: { ...PAIEMENT, accounting_status: statut },

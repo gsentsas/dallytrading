@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { accountingStatusLabel, accountingStatusNeedsAttention } from '@/features/reception/accounting-status';
 import type { Dossier, LigneLue } from '@/lib/ops/intake-lines';
 import type { FamilleTarifaire } from '@/lib/ops/intakes';
 import type { CanalPaiement } from '@/lib/ops/payments';
@@ -33,12 +34,6 @@ function montantDevise(valeur: number, devise: string): string {
     maximumFractionDigits: devise === 'XOF' ? 0 : 2,
   }).format(valeur);
 }
-
-const LIBELLE_COMPTABLE: Record<string, string> = {
-  registered: 'Comptabilisé',
-  pending: 'En attente de facturation',
-  needs_review: 'Comptabilisation à vérifier par un responsable',
-};
 
 function argent(valeur: number | null): string {
   // « À définir » et non « 0 € » : un montant absent n'est pas un montant nul.
@@ -302,12 +297,12 @@ export function DossierArticles({
               {paiement.payment_date}
             </p>
             <p
-              className={paiement.accounting_status === 'needs_review'
+              className={accountingStatusNeedsAttention(paiement.accounting_status)
                 ? 'alerte' : 'attenue'}
               style={{ margin: '0.25rem 0 0' }}
             >
-              {paiement.accounting_status === 'needs_review' ? '⚠ ' : ''}
-              {LIBELLE_COMPTABLE[paiement.accounting_status]}
+              {accountingStatusNeedsAttention(paiement.accounting_status) ? '⚠ ' : ''}
+              {accountingStatusLabel(paiement.accounting_status)}
             </p>
           </section>
         ))

@@ -317,7 +317,7 @@ class TestOpsPayments(AccountTestInvoicingCommon):
         reference = self._creer_dossier()
         resultat = self._paiements().record_payment(reference, self._demande())
 
-        self.assertEqual(resultat["payment"]["accounting_status"], "pending")
+        self.assertEqual(resultat["payment"]["accounting_status"], "awaiting_invoice")
         collection = self._collections(reference)
         self.assertEqual(collection.state, "pending")
         self.assertFalse(collection.payment_id)
@@ -382,6 +382,64 @@ class TestOpsPayments(AccountTestInvoicingCommon):
         self.assertEqual(len(correspondant), 1)
         # L'encaissement existe et se signale comme à vérifier.
         self.assertEqual(correspondant[0]["accounting_status"], "needs_review")
+
+    def test_un_canal_manquant_est_annonce_comme_configuration_a_faire(self):
+        reference = self._creer_dossier()
+        shipment = self._shipment(reference)
+        facture = shipment.sudo().action_prepare_native_freight_invoice()
+        facture.action_post()
+        collection = self.env["dally.freight.collection"].sudo().create({
+            "external_payment_key": "sheet:canal-manquant",
+            "shipment_id": shipment.id,
+            "amount": 1000.0, "currency_id": self.xof.id,
+            "payment_date": "2026-08-28",
+            "source_method": "Non précisé (cahier)",
+            "source": "google_sheets",
+        })
+        collection.write({
+            "state": "pending",
+            "error_message": "No payment channel is configured for Non précisé (cahier) / XOF.",
+        })
+
+        paiement = self._paiements().payments_for(shipment)[0]
+        self.assertEqual(paiement["accounting_status"], "channel_setup_required")
+
+    def test_une_facture_deja_soldee_est_annoncee_comme_rapprochement(self):
+        reference = self._creer_dossier()
+        shipment = self._shipment(reference)
+        collection = self.env["dally.freight.collection"].sudo().create({
+            "external_payment_key": "sheet:facture-soldee",
+            "shipment_id": shipment.id,
+            "amount": 1000.0, "currency_id": self.xof.id,
+            "payment_date": "2026-08-28", "source_method": "wave",
+            "source": "google_sheets",
+        })
+        collection.write({
+            "state": "error",
+            "error_message": "There is nothing left to pay for the selected journal items.",
+        })
+
+        paiement = self._paiements().payments_for(shipment)[0]
+        self.assertEqual(
+            paiement["accounting_status"], "invoice_already_paid_review")
+
+    def test_un_rejeu_relit_le_verdict_comptable_courant(self):
+        reference = self._creer_dossier()
+        demande = self._demande()
+        premier = self._paiements().record_payment(reference, demande)
+        self.assertEqual(premier["payment"]["accounting_status"], "awaiting_invoice")
+
+        collection = self._collections(reference)
+        collection.write({
+            "state": "error",
+            "error_message": "There is nothing left to pay for the selected journal items.",
+        })
+        rejeu = self._paiements().record_payment(reference, demande)
+        self.assertEqual(rejeu["status"], "replayed")
+        self.assertEqual(
+            rejeu["payment"]["accounting_status"],
+            "invoice_already_paid_review",
+        )
 
     def test_le_dto_ne_recopie_pas_le_message_comptable(self):
         reference = self._creer_dossier()

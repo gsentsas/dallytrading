@@ -306,7 +306,10 @@ class DallyFreightSyncService(models.AbstractModel):
                 name = self._text(client.get("name"), 200)
                 if not name:
                     raise ValidationError(_("client.name is required for a new customer."))
-                partner = Partner.create({"name": name})
+                partner = Partner.create({
+                    "name": name,
+                    "lang": self.env.company.partner_id.lang or "fr_FR",
+                })
 
         updates = {}
         for source_name, target_name, limit in (
